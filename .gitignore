@@ -1,0 +1,32 @@
+# Game data ripped from the disc — copyrighted, and large.
+/extract/
+
+# The emulator, its unpacked AppImage, and a symlink to the disc image.
+/emu/squashfs-root/
+/emu/*.AppImage
+/emu/*.zip
+/emu/*.img
+/emu/*.cue
+/emu/*.log
+/emu/*.pid
+/emu/*.html
+/emu/*.js
+
+# Everything derived: RAM snapshots, decoded images, rendered maps, caches.
+# All of it regenerates from the disc with the tools in tools/.
+/out/
+
+__pycache__/
+*.pyc
+
+# LibreOffice scratch
+.~lock.*#
+
+# PCSX-Redux runtime state that it regenerates on its own.
+/emu/*.mcd
+/emu/*.frag
+/emu/*.vert
+/emu/offscreen.lua
+/emu/output.lua
+/emu/pcsx.json
+/emu/*.err
