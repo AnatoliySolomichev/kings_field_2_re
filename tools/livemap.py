@@ -19,9 +19,10 @@ import threading
 import urllib.request
 
 sys.path.insert(0, "tools")
-from objects import (find_table, table, names, which_level, valid,       # noqa: E402
+from objects import (find_table, table, names, which_level, slots,       # noqa: E402
                      CELL, EMPTY, RAM_BASE, STRIDE)
 from maps import levels, W, H                                            # noqa: E402
+import player                                                            # noqa: E402
 from build_levelmap import KNOWN, CATS, cat, naming                      # noqa: E402
 import level_map                                                         # noqa: E402
 import tim                                                               # noqa: E402
@@ -55,15 +56,11 @@ def ram():
 
 
 def signature(buf, tbl):
-    """Cheap fingerprint of the table: its length and the first few ids."""
-    if tbl is None or not valid(buf, tbl):
+    """Cheap fingerprint of the table: how many live records and their first ids."""
+    if tbl is None:
         return None
-    ids, off, n = [], tbl, 0
-    while valid(buf, off) and n < 400:
-        ids.append(struct.unpack_from("<H", buf, off + 2)[0])
-        off += STRIDE
-        n += 1
-    return (n, tuple(ids[:6]))
+    ids = [struct.unpack_from("<H", buf, off + 6)[0] for _, off in slots(buf, tbl)]
+    return (len(ids), tuple(ids[:6])) if ids else None
 
 
 STICKY = 0.08          # a rival level must beat the current one by this much
@@ -71,11 +68,7 @@ MIN_RECORDS = 20       # a real level table is far longer than this
 
 
 def runlen(buf, tbl):
-    n, off = 0, tbl
-    while valid(buf, off) and n < 2000:
-        n += 1
-        off += STRIDE
-    return n
+    return sum(1 for _ in slots(buf, tbl))
 
 
 def note_transition(old_lv, new_lv, px, pz):
@@ -130,18 +123,15 @@ def refresh(buf, px=0, pz=0):
         tbl=tbl, level=lv, conf=round(conf * 100, 1), sig=signature(buf, tbl),
         gen=_state["gen"] + 1 if changed else _state["gen"],
         objs=[{"id": o["id"], "x": o["x"], "y": o["y"], "z": o["z"],
-               "name": naming(o["id"], _names)[0], "script": o.get("script"),
+               "name": naming(o["id"], _names)[0], "gold": o.get("gold"),
                "sure": o["id"] in KNOWN, "cat": cat(o["id"])} for o in objs])
 
 
 def digests(buf, tbl):
     """One fingerprint per record, so a record that changes can be flagged.
     The coordinate block is skipped: things that walk would flag constantly."""
-    out, off = [], tbl
-    while valid(buf, off):
-        out.append(buf[off:off + 0x10] + buf[off + 0x1C:off + STRIDE])
-        off += STRIDE
-    return out
+    return [buf[off:off + 0x14] + buf[off + 0x20:off + STRIDE]
+            for _, off in slots(buf, tbl)]
 
 
 def poll():
@@ -170,7 +160,11 @@ def poll():
         # The byte is authoritative when it agrees with the terrain match;
         # both are reported so a disagreement is visible rather than hidden.
         lv = lvid if lvid < 28 else _state["level"]
+        stats = player.read(buf)
         return {"ok": True, "changed": sorted(_state["changed"]),
+                "stats": {k: stats[k] for k in
+                          ("level", "hp", "hp_max", "mp", "mp_max", "gold",
+                           "exp", "exp_next")},
                 "levelId": lvid, "guessed": _state["level"],
                 "gen": _state["gen"], "level": lv,
                 "conf": _state["conf"], "player": [px, py, pz],
@@ -246,7 +240,7 @@ def terrain_png(lv):
         global _grids
         if _grids is None:
             _grids = dict(levels())
-        w, h, px = level_map.render(_grids[lv], SCALE)
+        w, h, px = level_map.render(_grids[lv], SCALE, lv=lv)
         os.makedirs("out/maps", exist_ok=True)
         tim.write_png(path, w, h, px)
     return open(path, "rb").read()
@@ -301,6 +295,11 @@ button{font:inherit;font-size:12.5px;background:var(--panel);color:var(--ink);
       <div class="big" id="cell">--</div>
       <div class="muted" id="lvl">waiting for the emulator...</div>
       <div class="muted" id="pos"></div>
+    </div>
+    <div class="card">
+      <h1>You</h1>
+      <div class="big" id="hp">--</div>
+      <div class="muted" id="stats"></div>
     </div>
     <div class="card">
       <h1>Map</h1>
@@ -440,12 +439,12 @@ function drawObjs(){
     p.className='pin'+(o.sure?' big':''); p.dataset.i=i;
     p.hidden=ignored.has(o.id);
     p.style.left=X(o).toFixed(1)+'px'; p.style.top=Y(o).toFixed(1)+'px';
-    if(o.script!=null){ p.classList.add('sc'); p.textContent='\u2605';
+    if(o.gold!=null){ p.classList.add('sc'); p.textContent='\u2605';
       p.style.color=COL[o.cat]||'#888'; }
     else p.style.background=COL[o.cat]||'#888';
     if(changed.has(i)) p.classList.add('chg');
     if(hidden.has(keyOf(o))) p.hidden=true;
-    p.title='id '+o.id+(o.name?' - '+o.name:'')+(o.script!=null?'  [script '+o.script+']':'');
+    p.title='id '+o.id+(o.name?' - '+o.name:'')+(o.gold!=null?'  ['+o.gold+' gold]':'');
     p.onclick=()=>select(i);
     map.appendChild(p); return p;
   });
@@ -467,8 +466,7 @@ function showSel(){
     '<div class="big" style="font-size:17px">'+(o.name||'unidentified')+'</div>'+
     '<div class="muted">type id '+o.id+' &middot; cell '+Math.floor(o.x/CELL)+','+
       Math.floor(o.z/CELL)+' &middot; height '+o.y+'</div>'+
-    (o.script!=null?'<div class="muted">&#9733; script '+o.script+' attached</div>':
-      '<div class="muted">no script &mdash; scenery</div>')+
+    (o.gold!=null?'<div class="muted">&#9733; picks up as '+o.gold+' gold</div>':'')+
     (d!=null?'<div class="muted">'+d.toFixed(1)+' cells from you</div>':'')+
     (changed.has(sel)?'<div style="color:#ffd166">record changed since you arrived</div>':'')+
     '<div style="display:flex;gap:6px;margin-top:6px">'+
@@ -487,7 +485,7 @@ function updateNear(px,pz){
     .sort((a,b)=>a.d-b.d).slice(0,12);
   near.innerHTML=list.map(({o,i,d})=>
     '<li data-i="'+i+'"><span class="dot" style="background:'+(COL[o.cat]||'#888')+'"></span>'+
-    '<span>'+(o.name||('id '+o.id))+(o.script!=null?' \u2605':'')+
+    '<span>'+(o.name||('id '+o.id))+(o.gold!=null?' \u2605':'')+
     (changed.has(i)?' <b style="color:#ffd166">changed</b>':'')+
     '</span><span class="d">'+Math.round(d/CELL*10)/10+' cells</span></li>').join('');
   near.querySelectorAll('li').forEach(li=>li.onclick=()=>select(+li.dataset.i));
@@ -521,6 +519,11 @@ async function tick(){
       '';
     if(!rename.matches(':focus')) rename.value=lvNames[locked?shownLv:s.level]||'';
     document.getElementById('pos').textContent='x '+px+'  y '+s.player[1]+'  z '+pz;
+    if(s.stats){ const t=s.stats;
+      document.getElementById('hp').textContent=
+        'HP '+t.hp+'/'+t.hp_max+'   MP '+t.mp+'/'+t.mp_max;
+      document.getElementById('stats').textContent=
+        'level '+t.level+' - '+t.gold+' gold - exp '+t.exp+'/'+t.exp_next; }
     if(s.changed){ const before=changed.size; changed=new Set(s.changed);
       if(changed.size!==before) drawObjs(); }
     last3=[px,s.player[1],pz];

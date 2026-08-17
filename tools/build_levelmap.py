@@ -90,7 +90,7 @@ def level_payload(snap, nm, mo):
             "id": i, "x": o["x"], "y": o["y"], "z": o["z"],
             "name": naming(i, nm)[0],
             "sure": i in KNOWN,
-            "script": o.get("script"),
+            "gold": o.get("gold"),
             "cat": cat(i),
             "model": (mo.off[i + 1] - mo.off[i]) * 2048 if i + 1 < len(mo.off) else 0,
         })
@@ -298,8 +298,7 @@ function select(i) {{
     'type id ' + o.id + ' &middot; cell ' + Math.floor(o.x / CELL) + ',' +
     Math.floor(o.z / CELL) + ' &middot; height ' + o.y +
     ' &middot; model ' + o.model + ' bytes' +
-    (o.script != null ? ' &middot; &#9733; script ' + o.script
-                      : ' &middot; no script, scenery');
+    (o.gold != null ? ' &middot; &#9733; ' + o.gold + ' gold' : '');
   selcard.hidden = false;
 }}
 document.getElementById('unsel').onclick = () => {{

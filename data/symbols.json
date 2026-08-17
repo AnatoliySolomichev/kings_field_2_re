@@ -1,0 +1,960 @@
+{
+ "_note": "Names for every address we have established, so tools and notes can talk about meanings instead of hex. `kind` is code or data; `evidence` says why we believe the name. Loaded by tools/syms.py.",
+ "0x80011000": {
+  "name": "exe_base",
+  "kind": "data",
+  "evidence": "whichever of OPEN/GAME/END.EXE is resident"
+ },
+ "0x800144f8": {
+  "name": "entry_point",
+  "kind": "code",
+  "evidence": "GAME.EXE header"
+ },
+ "0x8009c800": {
+  "name": "text_end",
+  "kind": "data",
+  "evidence": "end of the GAME.EXE text section"
+ },
+ "0x80017678": {
+  "name": "archive_registration",
+  "kind": "code",
+  "evidence": "the block that names the nine .T archives"
+ },
+ "0x80017c78": {
+  "name": "object_trigger",
+  "kind": "code",
+  "evidence": "eight arguments read out of one object record; not the level setter",
+  "size": 1760
+ },
+ "0x80018358": {
+  "name": "level_load",
+  "kind": "code",
+  "evidence": "calls apply_level_state and stores the current level",
+  "size": 2312
+ },
+ "0x800187f0": {
+  "name": "read_pending_level",
+  "kind": "code",
+  "evidence": "lbu from pending_level, feeding the call below"
+ },
+ "0x800187f4": {
+  "name": "call_load_payload",
+  "kind": "code",
+  "evidence": "jal apply_level_state"
+ },
+ "0x800189bc": {
+  "name": "store_current_level",
+  "kind": "code",
+  "evidence": "the instruction a write watchpoint caught"
+ },
+ "0x800184bc": {
+  "name": "copy_tile_shapes",
+  "kind": "code",
+  "evidence": "forms tile_shapes while loading"
+ },
+ "0x80018f5c": {
+  "name": "block_copy",
+  "kind": "code",
+  "evidence": "(dest, src, words)"
+ },
+ "0x80019b1c": {
+  "name": "file_checksum",
+  "kind": "code",
+  "evidence": "seeds 0x12345678 and sums words; matches every checksummed entry on the disc",
+  "size": 160
+ },
+ "0x80019cc4": {
+  "name": "read_entry_a",
+  "kind": "code",
+  "evidence": "a0 archive, a1 entry, a2 destination",
+  "size": 132
+ },
+ "0x80019f14": {
+  "name": "entry_extent",
+  "kind": "code",
+  "evidence": "reads off[n] and off[n+1]"
+ },
+ "0x8001a154": {
+  "name": "read_entry_b",
+  "kind": "code",
+  "evidence": "same shape as read_entry_a",
+  "size": 148
+ },
+ "0x8001a34c": {
+  "name": "archive_open",
+  "kind": "code",
+  "evidence": "a0 archive index, a1 filename",
+  "size": 236
+ },
+ "0x80027d88": {
+  "name": "read_entry_c",
+  "kind": "code",
+  "evidence": "same shape as read_entry_a",
+  "size": 216
+ },
+ "0x800441d4": {
+  "name": "load_entry",
+  "kind": "code",
+  "evidence": "(archive, entry) into the buffer at load_buffer_ptr",
+  "size": 500
+ },
+ "0x80044204": {
+  "name": "load_entry_generic",
+  "kind": "code",
+  "evidence": "archive and entry both in registers"
+ },
+ "0x8002bee8": {
+  "name": "read_fdat_tail",
+  "kind": "code",
+  "evidence": "reads FDAT entry id+98 against a 68-byte-per-id table"
+ },
+ "0x80029188": {
+  "name": "level_state_writer",
+  "kind": "code",
+  "evidence": "holds a store into the current level block",
+  "size": 888
+ },
+ "0x8002b4bc": {
+  "name": "set_player_level",
+  "kind": "code",
+  "evidence": "sb into player_level"
+ },
+ "0x80031d60": {
+  "name": "checks_item_107",
+  "kind": "code",
+  "evidence": "has_item(107)"
+ },
+ "0x8003260c": {
+  "name": "tile_collision",
+  "kind": "code",
+  "evidence": "(x,y,z,radius,cell at 0x801e6464) -> mask of surfaces hit, in $v0 from $t4. Reproduced by tools/collision.py on 864 of 866 logged calls."
+ },
+ "0x80035808": {
+  "name": "form_player_pos",
+  "kind": "code",
+  "evidence": "one of six sites forming the player position"
+ },
+ "0x80041eec": {
+  "name": "announce",
+  "kind": "code",
+  "evidence": "called with a small kind code after pickups and refusals"
+ },
+ "0x80021298": {
+  "name": "shop_buy",
+  "kind": "code",
+  "evidence": "reads the inventory and subtracts gold",
+  "size": 1164
+ },
+ "0x80021724": {
+  "name": "shop_sell",
+  "kind": "code",
+  "evidence": "reads the inventory and adds gold",
+  "size": 904
+ },
+ "0x8004a824": {
+  "name": "object_trigger_args",
+  "kind": "code",
+  "evidence": "reads +0x32..+0x3a of an object into the trigger call"
+ },
+ "0x8004b288": {
+  "name": "object_motion",
+  "kind": "code",
+  "evidence": "walks the object table by 0x44 applying velocity from +0x36"
+ },
+ "0x8005cbe0": {
+  "name": "use_item",
+  "kind": "code",
+  "evidence": "selected item in $s5, branches on the faced object type",
+  "size": 3096
+ },
+ "0x8005d5f8": {
+  "name": "load_area_name",
+  "kind": "code",
+  "evidence": "loads ITEM.T[810+n] with n from +0x3a"
+ },
+ "0x8005d7bc": {
+  "name": "has_item",
+  "kind": "code",
+  "evidence": "inventory_a[id] or inventory_b[id] non-zero"
+ },
+ "0x8005d7f8": {
+  "name": "take_item",
+  "kind": "code",
+  "evidence": "decrements inventory_a[id]",
+  "size": 160
+ },
+ "0x8005d898": {
+  "name": "give_item",
+  "kind": "code",
+  "evidence": "increments inventory_a[id] while under 99",
+  "size": 176
+ },
+ "0x8005db40": {
+  "name": "spawn_object",
+  "kind": "code",
+  "evidence": "allocates a record and fills it from the player position",
+  "size": 1936
+ },
+ "0x8005dcc0": {
+  "name": "award_gold",
+  "kind": "code",
+  "evidence": "gold += the object's +0x3a"
+ },
+ "0x8005e01c": {
+  "name": "pickup_gives_type_id",
+  "kind": "code",
+  "evidence": "give_item(object->type id)"
+ },
+ "0x8005f444": {
+  "name": "apply_level_state",
+  "kind": "code",
+  "size": 888,
+  "evidence": "interprets the level_state byte stream through the table at 0x80013640, overriding object slots"
+ },
+ "0x80060fec": {
+  "name": "build_str_name",
+  "kind": "code",
+  "evidence": "forms \\STR\\Snn.S"
+ },
+ "0x80061088": {
+  "name": "build_drm_name",
+  "kind": "code",
+  "evidence": "forms \\DRM\\Dnn.S, index clamped 0..17"
+ },
+ "0x800c85e8": {
+  "name": "inventory_a",
+  "kind": "data",
+  "evidence": "count per item id, 0..149, capped at 99"
+ },
+ "0x800c867e": {
+  "name": "inventory_b",
+  "kind": "data",
+  "evidence": "second array the same routines fall back to"
+ },
+ "0x80116e14": {
+  "name": "geometry_cache",
+  "kind": "data",
+  "evidence": "rewritten when the camera moves"
+ },
+ "0x80120000": {
+  "name": "gpu_packets",
+  "kind": "data",
+  "evidence": "rewritten every frame"
+ },
+ "0x8018fad8": {
+  "name": "current_level_block",
+  "kind": "data",
+  "evidence": "five bytes; store_current_level writes here"
+ },
+ "0x8018fad9": {
+  "name": "current_level",
+  "kind": "data",
+  "evidence": "the level number, agrees with the terrain match"
+ },
+ "0x8018fae4": {
+  "name": "pending_level",
+  "kind": "data",
+  "evidence": "read_pending_level reads it and passes it to the loader"
+ },
+ "0x8018fb3c": {
+  "name": "object_types",
+  "kind": "data",
+  "evidence": "332 entries of 24 bytes, byte +1 is the class"
+ },
+ "0x80191a5c": {
+  "name": "object_table",
+  "kind": "data",
+  "evidence": "396 records of 0x44, formed as object_types + 0x1f20. +0x06 the type id, +0x2c/+0x2e/+0x30 the scale with 0x1000 = 1.0 -- PER OBJECT, not per type: across level 0 it reads x1.00 on 271, x0.00 on 59, x1.99 on 34 and a scatter between on the graves. The record carries no pointer to the model. Its slots line up exactly with the 24-byte disc records: 347 of 347 agree on the type id, so placement is not the reason objects look like the wrong things"
+ },
+ "0x8019838c": {
+  "name": "object_table_end",
+  "kind": "data",
+  "evidence": "396 * 0x44 past the base"
+ },
+ "0x80199154": {
+  "name": "load_buffer_ptr",
+  "kind": "data",
+  "evidence": "load_entry reads its destination through this"
+ },
+ "0x801aec4c": {
+  "name": "player_pos_view",
+  "kind": "data",
+  "evidence": "a copy of player_pos, refreshed by 0x80028d54; the renderer and the camera read this one"
+ },
+ "0x801b0a10": {
+  "name": "player_pos_mirror1",
+  "kind": "data",
+  "evidence": "same values, written together"
+ },
+ "0x801b25f0": {
+  "name": "player_pos",
+  "kind": "data",
+  "evidence": "s32 X Y Z, the copy the code reads and writes: player_move (0x8002f320) commits here and everything from the pause menu to the monster AI reads it. The three at 0x801aec4c, 0x801b0a10 and 0x801fff98 are copies 0x80028d54 refreshes from it"
+ },
+ "0x801fff98": {
+  "name": "player_pos_mirror3",
+  "kind": "data",
+  "evidence": "same values, written together"
+ },
+ "0x801b24e0": {
+  "name": "player_stats",
+  "kind": "data",
+  "evidence": "the block the stat fields below sit in"
+ },
+ "0x801b24e4": {
+  "name": "player_exp",
+  "kind": "data",
+  "evidence": "0 then 48 then 59 as the character advances"
+ },
+ "0x801b24e8": {
+  "name": "player_exp_next",
+  "kind": "data",
+  "evidence": "50 at level 1, 110 at level 2"
+ },
+ "0x801b24f0": {
+  "name": "player_level",
+  "kind": "data",
+  "evidence": "set_player_level writes it"
+ },
+ "0x801b24fa": {
+  "name": "player_hp_max",
+  "kind": "data",
+  "evidence": "50 while the HUD read HP 022 against 22 below"
+ },
+ "0x801b24fc": {
+  "name": "player_hp",
+  "kind": "data",
+  "evidence": "matches the HUD in two screenshots"
+ },
+ "0x801b24fe": {
+  "name": "player_mp_max",
+  "kind": "data",
+  "evidence": "34 at level 2 while the HUD read MP 030"
+ },
+ "0x801b2500": {
+  "name": "player_mp",
+  "kind": "data",
+  "evidence": "matches the HUD in two screenshots"
+ },
+ "0x801b2502": {
+  "name": "weapon_meter",
+  "kind": "data",
+  "evidence": "5000 when full"
+ },
+ "0x801b2506": {
+  "name": "magic_meter",
+  "kind": "data",
+  "evidence": "5000 when full"
+ },
+ "0x801b2534": {
+  "name": "player_gold",
+  "kind": "data",
+  "evidence": "award_gold adds pickups to it"
+ },
+ "0x801b2538": {
+  "name": "offense_ratings",
+  "kind": "data",
+  "evidence": "9 u16, slash blow stab then the six magics"
+ },
+ "0x801b254a": {
+  "name": "defense_ratings",
+  "kind": "data",
+  "evidence": "9 u16, same order, butted against offense"
+ },
+ "0x801c172c": {
+  "name": "archive_descriptors",
+  "kind": "data",
+  "evidence": "12 bytes per archive"
+ },
+ "0x801d11ac": {
+  "name": "tile_shapes_staging",
+  "kind": "data",
+  "evidence": "where the block lands off the disc; nothing points at it"
+ },
+ "0x801d37a4": {
+  "name": "boot_block_a",
+  "kind": "data",
+  "evidence": "scattered from FDAT entries 96/97 at boot"
+ },
+ "0x801e4464": {
+  "name": "tile_shapes",
+  "kind": "data",
+  "evidence": "the working copy tile_shape_reader indexes"
+ },
+ "0x801e4660": {
+  "name": "tile_shape_data",
+  "kind": "data",
+  "evidence": "the shapes themselves, past the 254 offsets"
+ },
+ "0x801e64b8": {
+  "name": "boot_block_b",
+  "kind": "data",
+  "evidence": "scattered from FDAT entries 96/97 at boot"
+ },
+ "0x8018c7e8": {
+  "name": "entity_table",
+  "kind": "data",
+  "evidence": "FDAT 3n+1 records land here, 120-byte stride, 13 pieces of code reach them"
+ },
+ "0x80040d44": {
+  "name": "entity_reader_a",
+  "kind": "code",
+  "evidence": "one of the thirteen sites forming entity_table"
+ },
+ "0x8005c308": {
+  "name": "script_interpreter",
+  "kind": "code",
+  "evidence": "fetches a byte, dispatches 0xf0..0xff through the table at 0x80013160",
+  "size": 1248
+ },
+ "0x80013160": {
+  "name": "script_opcode_table",
+  "kind": "data",
+  "evidence": "16 handler pointers, one per opcode 0xf0..0xff"
+ },
+ "0x801ba988": {
+  "name": "story_flags",
+  "kind": "data",
+  "evidence": "byte array, saved and restored with the game; flags[0] is a progress counter object_trigger raises to the furthest level reached; opcodes 0xf7/0xf9 read and write it"
+ },
+ "0x8018daa8": {
+  "name": "entity_scripts",
+  "kind": "data",
+  "evidence": "the per-level script block; record offsets are relocated into pointers into it"
+ },
+ "0x8005ea64": {
+  "name": "reset_story_flags",
+  "kind": "code",
+  "evidence": "zeroes 0x40 bytes at story_flags and more at +0x100; called at new game",
+  "size": 196
+ },
+ "0x8005c1e8": {
+  "name": "script_prescan",
+  "kind": "code",
+  "evidence": "second reader of the 0xf9 conditional, resolving labels ahead of the interpreter",
+  "size": 288
+ },
+ "0x80061940": {
+  "name": "flag_gate",
+  "kind": "code",
+  "evidence": "tests story_flags[b & 0x7f], bit 0x80 picks which of two checks; returns 2 or 0x10",
+  "size": 644
+ },
+ "0x8001a774": {
+  "name": "pause_menu",
+  "kind": "code",
+  "evidence": "dispatches the three menu screens; one caller, 0x800305d8"
+ },
+ "0x8001d944": {
+  "name": "text_pager",
+  "kind": "code",
+  "evidence": "walks a list of STALK.T entry indices, fetching and drawing a page each"
+ },
+ "0x8001dbc4": {
+  "name": "text_fetch_page",
+  "kind": "code",
+  "evidence": "loads one STALK.T entry"
+ },
+ "0x8001dcd0": {
+  "name": "text_draw_page",
+  "kind": "code",
+  "evidence": "draws the page text_fetch_page returned"
+ },
+ "0x8001dd94": {
+  "name": "item_menu",
+  "kind": "code",
+  "evidence": "parent of the two inventory-reading routines"
+ },
+ "0x8005e2d0": {
+  "name": "object_interact",
+  "kind": "code",
+  "evidence": "the use/examine handler; shows ITEM.T[150 + object +0x38] when the player faces the object"
+ },
+ "0x80016a2c": {
+  "name": "facing_test",
+  "kind": "code",
+  "evidence": "angle comparison with a tolerance in a2; gates every examine"
+ },
+ "0x8005ee58": {
+  "name": "level_state_unpack",
+  "kind": "code",
+  "evidence": "turns 32 u16 offsets at level_state_index into pointers into level_state"
+ },
+ "0x8005ef18": {
+  "name": "level_state_pack",
+  "kind": "code",
+  "evidence": "the inverse of level_state_unpack, for saving"
+ },
+ "0x8005eea8": {
+  "name": "level_state_rebase_up",
+  "kind": "code",
+  "evidence": "walks the record chain adding a0 to the pointer at +8 of kinds 1..3"
+ },
+ "0x8005ef64": {
+  "name": "level_state_rebase_down",
+  "kind": "code",
+  "evidence": "the same walk, subtracting"
+ },
+ "0x801baa88": {
+  "name": "level_state",
+  "kind": "data",
+  "evidence": "0x5000 of chained records, per level; PROVEN save data - a herb pickup changed 144 bytes here and the same 144 changed identically on the memory card, and the region matches its save 6904/6904"
+ },
+ "0x801bfa88": {
+  "name": "level_state_index",
+  "kind": "data",
+  "evidence": "32 u16 offsets into level_state, 0xffff meaning the level has none yet"
+ },
+ "0x801e8308": {
+  "name": "level_overlay",
+  "kind": "data",
+  "evidence": "base of the per-level code from FDAT 3n+2; entry offset 132 lands at 0x801e838c in RAM"
+ },
+ "0x801eb9c4": {
+  "name": "save_buffer",
+  "kind": "data",
+  "evidence": "where the save block is assembled before the card; opens with the SC header"
+ },
+ "0x80045c7c": {
+  "name": "find_object",
+  "kind": "code",
+  "evidence": "scans object_table from the index in a0, bounded at 0x18c = 396, within limits passed in a1..a3; the overlays call it 27 times"
+ },
+ "0x80013640": {
+  "name": "level_build_opcode_table",
+  "kind": "data",
+  "evidence": "16 handler pointers for the level_state stream, opcodes 0xf0..0xff"
+ },
+ "0x800448b8": {
+  "name": "init_object_record",
+  "kind": "code",
+  "evidence": "zeroes a record and writes 0x1000 scale at +0x2c/+0x2e/+0x30, 0xff at +4 and +5"
+ },
+ "0x80185da8": {
+  "name": "actor_table",
+  "kind": "data",
+  "evidence": "0x88 per entry, the live monsters and NPCs: position at +0x2c, +0x30, +0x34, kind at +2, vertical state at +0xd, radius +0x1c, body height +0x1e, vertical velocity +0x52. The driver at 0x80052e5c hands entries to actor_select. The player is NOT here -- no entry matches player_pos in any snapshot"
+ },
+ "0x8005f7bc": {
+  "name": "save_serialise",
+  "kind": "code",
+  "size": 2064,
+  "evidence": "copies 57 globals into the save buffer; 98 writes, no reads"
+ },
+ "0x8005ffd0": {
+  "name": "save_restore",
+  "kind": "code",
+  "size": 2088,
+  "evidence": "the inverse; reads the same 57 offsets back into the same globals"
+ },
+ "0x80019d48": {
+  "name": "read_archive_entry",
+  "kind": "code",
+  "evidence": "the reader level_load uses for FDAT: a0=archive, a1=entry, a2=destination; never instrumented, which is why level loading looked archive-free"
+ },
+ "0x801c17a4": {
+  "name": "fdat_load_buffer",
+  "kind": "data",
+  "evidence": "where level_load reads FDAT entries before scattering them"
+ },
+ "0x80033c4c": {
+  "name": "grid_query_area",
+  "kind": "code",
+  "evidence": "the block of cells within a radius of a position"
+ },
+ "0x80043894": {
+  "name": "free_object_resource",
+  "kind": "code",
+  "evidence": "reads +0x10 of a record and hands it to 0x80014a18; level_load calls it while tearing the level down"
+ },
+ "0x80019518": {
+  "name": "free_resource",
+  "kind": "code",
+  "evidence": "wrapper around 0x80014a18, 10 callers, used in the same teardown"
+ },
+ "0x80014a18": {
+  "name": "heap_free",
+  "kind": "code",
+  "evidence": "the routine both free wrappers hand their pointer to"
+ },
+ "0x80053084": {
+  "name": "entity_table_init",
+  "kind": "code",
+  "evidence": "29 instructions over entity_table, one caller: level_load"
+ },
+ "0x80017aa4": {
+  "name": "world_shift",
+  "kind": "code",
+  "evidence": "adds (a0,a1,a2) to the player position, to 127 entries of the 0x4c table, to the 395 object records that are not empty, and to the 0x88 table; caught by a write watchpoint on an object X during a level change"
+ },
+ "0x801c80ec": {
+  "name": "shifted_table_4c",
+  "kind": "data",
+  "evidence": "127 entries of 0x4c that world_shift translates alongside the objects"
+ },
+ "0x80046034": {
+  "name": "find_free_slot",
+  "kind": "code",
+  "evidence": "scans the object array from a0 for count a1; returns the first record whose u16 at +0x06 is 0xff, else evicts the oldest by the counter at +0x3c"
+ },
+ "0x80046294": {
+  "name": "spawn_gold",
+  "kind": "code",
+  "evidence": "allocates a slot, initialises it, writes type 0x95 (149) at +0x06 and the amount from a0 at +0x3a"
+ },
+ "0x80044d9c": {
+  "name": "load_object_placement",
+  "kind": "code",
+  "evidence": "writes scale 0x1000 into +0x2c/+0x2e/+0x30 of every placed object, and negates the record rotation before storing it"
+ },
+ "0x801e6470": {
+  "name": "collision_scratch",
+  "kind": "data",
+  "evidence": "+0 base height, +4 nearest surface, +0x18 mask. Global: ten call sites share it, so reading it does not tell you about the player."
+ },
+ "0x80033b8c": {
+  "name": "collide_at_cell",
+  "kind": "code",
+  "evidence": "forms the cell address as 0x801d4464 + cz*800 + cx*10 and the base height as -128*cell[+6], then calls tile_collision"
+ },
+ "0x800328c0": {
+  "name": "tile_op_20_wall",
+  "kind": "code",
+  "evidence": "wall plane: lateral test per face, then the op1/op2 height band"
+ },
+ "0x80032f78": {
+  "name": "tile_op_30_ramp",
+  "kind": "code",
+  "evidence": "sloping floor, h = op0 + base - ((q/op5)+1)*op4"
+ },
+ "0x80032e14": {
+  "name": "tile_block",
+  "kind": "code",
+  "evidence": "shared tail: keeps the nearest surface in struct+4 and sets the mask"
+ },
+ "0x801d4464": {
+  "name": "level_grid",
+  "kind": "data",
+  "evidence": "80x80 cells of 10 bytes, live; 97% identical to FDAT.T entry 3n+0, the rest being level state"
+ },
+ "0x801e6464": {
+  "name": "collision_cell_ptr",
+  "kind": "data",
+  "evidence": "the cell tile_collision was given; +0xa is the layer offset, 5 for the main layer"
+ },
+ "0x8003be50": {
+  "name": "draw_cell_walk",
+  "kind": "code",
+  "evidence": "per cell: world position into the scratchpad at 0x1f800100, skip when cell[+5]>=0xf0, then draw_tile"
+ },
+ "0x8003bb04": {
+  "name": "draw_tile",
+  "kind": "code",
+  "evidence": "draws one cell: lighting from tile_look by cell[+9]&0x3f, rotation from 0x801aeb8c by cell[+7], and the model is TMD object cell[+5] out of the file based at 0x1f800010"
+ },
+ "0x801aeefc": {
+  "name": "tile_look",
+  "kind": "data",
+  "evidence": "64 lighting records of 108 bytes indexed by cell[+9]&0x3f: 4 x 20 light-direction matrices chosen by orientation, a 20-byte light-colour matrix at +0x50, RBK/GBK/BBK at +0x64. Zero in GAME.EXE, filled at runtime; snapshot out/tile_look.bin"
+ },
+ "0x80035954": {
+  "name": "tmd_prim_walk",
+  "kind": "code",
+  "evidence": "walks a TMD primitive list: packet length at byte +1, GPU command in the top byte, dispatched through 0x80011be0 as command-0x20; scales vertex halfwords by 8"
+ },
+ "0x80011be0": {
+  "name": "tmd_prim_table",
+  "kind": "data",
+  "evidence": "49 handlers indexed by GPU command - 0x20; real entries at 0x20, 0x24, 0x28, 0x2c, 0x30, 0x34, 0x38, 0x3c, the polygon primitives"
+ },
+ "0x80011b0c": {
+  "name": "tile_op_table",
+  "kind": "data",
+  "evidence": "49 handlers for the tile-shape bytecode, indexed by opcode - 0x10"
+ },
+ "0x801aeb8c": {
+  "name": "tile_rotations",
+  "kind": "data",
+  "evidence": "4 GTE rotation matrices of 32 bytes, chosen by cell[+7]&3"
+ },
+ "0x801aeb4c": {
+  "name": "view_matrix",
+  "kind": "data",
+  "evidence": "R11R12..R33 at +0, TRX/TRY/TRZ at +0x14 -- the camera, loaded before each cell"
+ },
+ "0x8003ab04": {
+  "name": "draw_tmd_object",
+  "kind": "code",
+  "evidence": "given a TMD object and its vertex block, draws it; the other branch at 0x80039d50 is the same call at a different level of detail"
+ },
+ "0x8014f164": {
+  "name": "tile_models",
+  "kind": "data",
+  "evidence": "RTMD.T[level] loaded whole: a TMD of 240 objects indexed by cell[+5]. Verified byte for byte against the disc over 182272 bytes on level 0."
+ },
+ "0x80033d08": {
+  "name": "collide_wrapper_actor",
+  "kind": "code",
+  "evidence": "the wrapper the player goes through; the fifth argument it passes is the body height ORed with (actor+0x28 & 0xc000) << 16, which is what the 0x0fffffff mask inside tile_collision is for"
+ },
+ "0x801b25f4": {
+  "name": "player_y",
+  "kind": "data",
+  "evidence": "the player's height. Written during walking by player_vertical alone, by player_move in the knockback states, and otherwise only by teleports: 0x80031d9c on item 107 and place_player_on_terrain on entering a level"
+ },
+ "0x801b266c": {
+  "name": "player_velocity",
+  "kind": "data",
+  "evidence": "three s16 dX dY dZ, added to player_pos by player_move. The set-state helpers at 0x800307f4..0x80030908 copy a vector in here as one eight-byte block. In the fall-over animation at 0x80031b14 the first halfword is reused as a spin angle instead"
+ },
+ "0x801b25e5": {
+  "name": "player_state",
+  "kind": "data",
+  "evidence": "byte written by each of the helpers at 0x800307f4, 0x80030810, 0x80030864, 0x800308b8, 0x800308f4 and 0x80030908 as 8, 7, 9, 3, 4 and 0x10; the controller at 0x80030fcc dispatches on it"
+ },
+ "0x8002f320": {
+  "name": "player_move",
+  "kind": "code",
+  "evidence": "moves the player when thrown: candidate = pos + velocity, collision at 0x31, commit or one of two retries; gravity +0x20 a frame, a step up of at most 0x100, a slide of 0x20 or 0x38. NOT ordinary walking -- emu/bp14.lua caught it running 69 times in a session, every one in player_state 0x10 or 0x11, while the player walked eight hundred frames without it. tools/movement.py reproduces all 69 exactly"
+ },
+ "0x80030fcc": {
+  "name": "player_controller",
+  "kind": "code",
+  "evidence": "the per-frame player state machine; calls player_move from three sites and holds the teleport at 0x80031d60 and the fall-over spin at 0x80031b14"
+ },
+ "0x8002b760": {
+  "name": "place_player_on_terrain",
+  "kind": "code",
+  "evidence": "sets the player's Y from collide_at_cell at the current X and Z; run when a level is entered"
+ },
+ "0x80028d54": {
+  "name": "sync_player_pos",
+  "kind": "code",
+  "evidence": "called at the end of player_move; the three copies of the position move in step because of this"
+ },
+ "0x80033f38": {
+  "name": "collide_query",
+  "kind": "code",
+  "evidence": "(x, y, z, radius, height, flags): flag 1 is the tile collision through collide_wrapper_actor, 2 the water check, 0x10 objects through 0x8004d644, 0x20 and 0x40 two more passes. The player passes 0x31, monsters 0x93 or 3"
+ },
+ "0x800324f0": {
+  "name": "select_cell_layer",
+  "kind": "code",
+  "evidence": "picks the cell and which of its two five-byte layers a query belongs to, from the height -(y >> 7), and writes the layer offset to 0x801e646e and the base height to 0x801e6470. Transcribed as collision.layer_of"
+ },
+ "0x80016c08": {
+  "name": "vec_length_2d",
+  "kind": "code",
+  "evidence": "isqrt((a>>3)^2 + (b>>3)^2) << 3; the slide in player_move divides by it"
+ },
+ "0x8018faac": {
+  "name": "collision_layers",
+  "kind": "data",
+  "evidence": "the sixth argument collide_query reads: which passes to run. Set to 3 or 0x93 per actor at 0x800500f8 by actor[+0x28] & 4; the player passes 0x31 as a literal"
+ },
+ "0x8018fab4": {
+  "name": "current_actor",
+  "kind": "data",
+  "evidence": "the actor every routine in the 0x8004b000-0x80053000 cluster works on; actor_select fills it, and the whole cluster reads it rather than taking a parameter"
+ },
+ "0x8018fab0": {
+  "name": "current_actor_def",
+  "kind": "data",
+  "evidence": "entity_table + 120 * actor[+2], formed by actor_select at 0x8004da48; byte +5 is the actor's fall acceleration and +6 a sound, both read by actor_move_vertical"
+ },
+ "0x8004da2c": {
+  "name": "actor_select",
+  "kind": "code",
+  "evidence": "(actor) -> fills current_actor, current_actor_def and, when the definition's +0x34 has bit 0x10, a second pair from actor[+0x22]. Called with zero it clears all five"
+ },
+ "0x8004e330": {
+  "name": "actor_move_vertical",
+  "kind": "code",
+  "evidence": "the half actor_move_horizontal does not do: a state machine on actor[+0xd] -- 0 grounded, 0x10 falling at the definition's own acceleration, 0x20 rising to the surface at 0x64 a frame decaying by 5, 0x30 a ballistic arc from actor[+0x3c] with +0x6a and +0x6c. Every write to an actor's +0x30 in ordinary motion is here"
+ },
+ "0x8004e094": {
+  "name": "actor_move_3d",
+  "kind": "code",
+  "evidence": "(velocity triple): moves an actor in all three axes at once and reflects the component that collided; the projectile path"
+ },
+ "0x80052e5c": {
+  "name": "actor_tick_driver",
+  "kind": "code",
+  "evidence": "selects an actor, then runs 0x800500a8 over it; also copies an object record's position out of object_table into the actor at +0x2c"
+ },
+ "0x800500a8": {
+  "name": "actor_tick",
+  "kind": "code",
+  "evidence": "the per-frame actor state machine; sets collision_layers and calls actor_move_vertical, actor_move_3d and the horizontal move"
+ },
+ "0x8004dbc8": {
+  "name": "actor_move_horizontal",
+  "kind": "code",
+  "evidence": "the monsters' horizontal move, on current_actor rather than on the player: probes collision at the X- and Z-displaced positions, keeps the MAXIMUM floor (the lowest surface), and rejects the step when the feet would end more than 0x44c above it. Writes X to +0x2c and Z to +0x34; the vertical is actor_move_vertical. 0x8004dca0 is an inner label, not the entry"
+ },
+ "0x8002ed60": {
+  "name": "player_vertical",
+  "kind": "code",
+  "evidence": "the player's height, a state machine on 0x801b25e8. Grounded it is a rate limiter towards the surface collide_surface leaves at 0x801e6474 -- 0x80/0x100/0x200 a frame, placed exactly inside 0x80, a fall past 0x400. States 0x10 and 0x40 are both falls, accelerating 0x50 and 0x28; 0x20 rises from -0x96 by 0xa; 0x50 is the landing recoil and falls through into state 0. emu/bp15.lua caught every store of the player's Y and all of them are in here; tools/movement.py picks the same instruction on 48 of 48"
+ },
+ "0x8002e3f8": {
+  "name": "player_horizontal",
+  "kind": "code",
+  "evidence": "(angle, distance): dx = cos(angle)*d >> 12 into X, dz = sin(angle)*d >> 12 into Z, committed at 0x8002e580/0x8002e588 if collide_query at 0x31 is clear, else slid along the wall's own facing out of 0x801e6498/0x801e649c. Called twice a frame from 0x8002fda0 and 0x8002fdb4, at the facing and a quarter turn off it"
+ },
+ "0x801b25e8": {
+  "name": "player_vstate",
+  "kind": "data",
+  "evidence": "player_vertical's state byte: 0 grounded, 0x10 and 0x40 falling, 0x20 rising, 0x50 unread"
+ },
+ "0x801b2656": {
+  "name": "player_vvel",
+  "kind": "data",
+  "evidence": "s16, the vertical velocity player_vertical integrates; +0x50 a frame in state 0x10, +0xa in 0x20, seeded 0x28 on a fall and -0x96 or -0x12c on a launch"
+ },
+ "0x801b2602": {
+  "name": "player_dy_applied",
+  "kind": "data",
+  "evidence": "the height change player_vertical actually applied this frame; zeroed at 0x8002eda0 and set on each moving path"
+ },
+ "0x80033b10": {
+  "name": "collide_surface",
+  "kind": "code",
+  "evidence": "(x, y, z, radius, height) -> the nearest surface out of 0x801e6474. Picks the layer from a flat y - 0x500 where collide_wrapper_actor halves the body height; player_vertical asks through this one"
+ },
+ "0x801b2654": {
+  "name": "player_crouch",
+  "kind": "data",
+  "evidence": "s16, spent down by state 0x50 of player_vertical after a landing; the state ends when this and player_bob are both non-positive"
+ },
+ "0x801b2628": {
+  "name": "player_bob",
+  "kind": "data",
+  "evidence": "s16 the camera dip: half the velocity on every state 0x40 frame, then wound down by state 0x50"
+ },
+ "0x8002ecbc": {
+  "name": "player_vertical_pre",
+  "kind": "code",
+  "evidence": "called first by each moving state of player_vertical; reads player Y. Not read"
+ },
+ "0x8002f9bc": {
+  "name": "player_walk",
+  "kind": "code",
+  "evidence": "the speed ramp and the two horizontal calls: forward and back accelerate the s16 at 0x801b2648 by max/4 a frame towards the cap at 0x801b2664, decaying to zero when neither is held"
+ },
+ "0x8002fe1c": {
+  "name": "player_turn",
+  "kind": "code",
+  "evidence": "first of the four routines the controller runs each frame; reads the button word and the binding table. The turn rate itself is not transcribed"
+ },
+ "0x801b265c": {
+  "name": "buttons",
+  "kind": "data",
+  "evidence": "the decoded button word, one store in the whole executable at 0x8002b754; 0x801b265e is the previous frame's, anded against to find a fresh press"
+ },
+ "0x801b2612": {
+  "name": "player_facing",
+  "kind": "data",
+  "evidence": "s16, 0x1000 to the turn. It is a quarter turn off the direction of travel: forward is player_horizontal at facing + 0x400 and strafing at facing, which the recording settled -- at facing 0 the game moves in +Z"
+ },
+ "0x801b2648": {
+  "name": "player_speed",
+  "kind": "data",
+  "evidence": "s16 forward speed. Accelerates by max/4 a frame while the button is held and decays by max/8 when it is not, clamping at zero by sign. The two rates differ, and a replay caught it: max/4 both ways overshot on 85 frames of a two-minute session, always while slowing down"
+ },
+ "0x801b264a": {
+  "name": "player_speed_mag",
+  "kind": "data",
+  "evidence": "isqrt(forward^2 + strafe^2), formed at 0x8002fd80; player_vertical tests it against 0xc9 when choosing a launch velocity"
+ },
+ "0x801b2664": {
+  "name": "player_speed_max",
+  "kind": "data",
+  "evidence": "s32 cap on the walking speed, and the acceleration is a quarter of it. Written only at 0x80031188 and 0x800313e4 -- if walking speed is a stat, that is where it is set"
+ },
+ "0x80081868": {
+  "name": "key_bindings",
+  "kind": "data",
+  "evidence": "14 u16 button masks, one per action, in order forward, back, act3, act4, start, l3, select, r3, turn right, turn left, look up, look down, l2, r1. Defaults: forward is TRIANGLE, back CROSS, turning the d-pad. The config menu rewrites them, so read the live copy"
+ },
+ "0x8009a2e0": {
+  "name": "sin_quarter",
+  "kind": "data",
+  "evidence": "1025 s16 of one quarter wave, 0x1000 to the turn and 4096 to the unit, reflected four ways by 0x80076cc4 (sine) and 0x80076da0 (cosine). Matches round(4096*sin) exactly over a full turn"
+ },
+ "0x80076cc4": {
+  "name": "game_sin",
+  "kind": "code",
+  "evidence": "sine over sin_quarter, odd in its argument"
+ },
+ "0x80076da0": {
+  "name": "game_cos",
+  "kind": "code",
+  "evidence": "cosine over sin_quarter, even in its argument"
+ },
+ "0x80074508": {
+  "name": "game_isqrt",
+  "kind": "code",
+  "evidence": "integer square root through the GTE leading-zero count and a 192-entry table at 0x80096150 -- the library's SquareRoot0, and NOT exact: a perfect square comes back one short, isqrt(40000) = 199. The walking step is speed^2/isqrt(speed^2), so that unit turns a speed of 200 into a step of 201, and a replay using an exact root disagreed with the game on 1394 frames of 3632 for that reason alone"
+ },
+ "0x80096150": {
+  "name": "isqrt_table",
+  "kind": "data",
+  "evidence": "192 s16 entries game_isqrt indexes after normalising"
+ },
+ "0x8002fc94": {
+  "name": "player_step_distances",
+  "kind": "code",
+  "evidence": "turns the two speeds into the two step distances: each is speed^2 / isqrt(strafe^2 + forward^2), keeping the speed's sign. Normalises a diagonal, and inherits the square root's shortfall"
+ },
+ "0x801b2646": {
+  "name": "player_strafe_speed",
+  "kind": "data",
+  "evidence": "s16, the sideways twin of player_speed; accelerated on the masks at 0x8008187c and 0x80081878. Feeds the call at the facing, where the forward speed feeds the one at facing + 0x400"
+ },
+ "0x801b264c": {
+  "name": "player_turn_rate",
+  "kind": "data",
+  "evidence": "the per-frame change in player_facing; observed ramping 0, 8, 16, 24, 32 while turning. The routine that fills it, 0x8002fe1c, is not transcribed"
+ },
+ "0x801b2652": {
+  "name": "player_bob_phase",
+  "kind": "data",
+  "evidence": "accumulates the magnitude of the step every frame, wrapped to 0xfff; drives player_bob"
+ },
+ "0x801b2650": {
+  "name": "player_bob",
+  "kind": "data",
+  "evidence": "the head bob itself, a function of player_bob_phase"
+ },
+ "0x8002f298": {
+  "name": "player_bob",
+  "kind": "code",
+  "evidence": "the tail of player_vertical, grounded only: phase at 0x801b2652 accumulates the step's magnitude every frame and wraps at 0xfff, and the lift at 0x801b2650 is three quarters of |sin(phase) >> 5| -- a rectified sine, so two lifts a stride. The phase accumulates whether or not the step landed, which is why walking into a wall still bobs the camera. Reported from play before it was found in the code"
+ },
+ "0x801b2640": {
+  "name": "camera_height",
+  "kind": "data",
+  "evidence": "formed in sync_player_pos at 0x80028e24 as (player Y + 0x640) less the bob and the landing crouch at 0x801b2654"
+ },
+ "_note_mo_wrapper": {
+  "name": "MO.T entry wrapper",
+  "kind": "data",
+  "evidence": "an MO.T entry is not a bare TMD: word 0 is the total size, word 1 a count of 1 to 3, and WORD 2 IS THE OFFSET OF THE TMD, with a table of further offsets from 0x14. Scanning the first 256 bytes for the TMD id found it only for the models that keep it near the front; 53 of level 0's 347 objects, the chests and statues among them, put it thousands of bytes in and were reported as having no model at all"
+ },
+ "0x801b2610": {
+  "name": "player_pitch",
+  "kind": "data",
+  "evidence": "s16 immediately before player_facing: where the player is looking up or down, 0x1000 to the turn. Found by logging nine candidates and recording one look up and down -- it was the only one that moved, over 136 values from -596 to +700, and it rests near -190. The first guess, 0x801b2614, reads zero for a whole session and is wrong. POSITIVE IS UP: the resting -190 was read as a downward tilt and the port was built on that, and a player looking up saw it look down"
+ },
+ "0x80040ae4": {
+  "name": "object_walk",
+  "kind": "code",
+  "evidence": "walks object_table by 0x44 in the render cluster, skipping records whose type id is 0xff and dispatching on the byte at +4 against 0xe9, 0x1f, 0xe5, 0xf0 and 0xf2. Where it picks the model is not read yet -- which is the open question behind objects drawn as the wrong things"
+ },
+ "_note_object_model": {
+  "name": "object type -> model",
+  "kind": "data",
+  "evidence": "an object of type N uses MO.T[N + 128], and past MO.T's 428 entries the numbering continues into MOF.T. The 128 was MEASURED, not reasoned: a player stood in the game beside the port and named four pairs off the model gallery -- helmet type 34 = model 162, healing grass 104 = 232, save point 227 = 355, bull's head 253 = 381 -- and all four differ by exactly 128. The sizes agree: the grass is 384x211x416 under the rule where MO.T[type] gave it 4176x4096x3808, which is what the player saw as a big white thing. MO.T[type], the previous assumption, had never been checked against anything"
+ }
+}

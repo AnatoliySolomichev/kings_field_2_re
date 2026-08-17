@@ -1,0 +1,230 @@
+{
+ "0x8009c22c": {
+  "save_offset": 23242,
+  "name": "0x8009c22c"
+ },
+ "0x8009c22d": {
+  "save_offset": 23243,
+  "name": "0x8009c22d"
+ },
+ "0x8009c22e": {
+  "save_offset": 23244,
+  "name": "0x8009c22e"
+ },
+ "0x80190004": {
+  "save_offset": 4,
+  "name": "0x80190004"
+ },
+ "0x801b24e4": {
+  "save_offset": 22192,
+  "name": "player_exp"
+ },
+ "0x801b24e8": {
+  "save_offset": 22196,
+  "name": "player_exp_next"
+ },
+ "0x801b24ec": {
+  "save_offset": 22204,
+  "name": "0x801b24ec"
+ },
+ "0x801b24f0": {
+  "save_offset": 22278,
+  "name": "player_level"
+ },
+ "0x801b24f1": {
+  "save_offset": 22279,
+  "name": "0x801b24f1"
+ },
+ "0x801b24fa": {
+  "save_offset": 22210,
+  "name": "player_hp_max"
+ },
+ "0x801b24fc": {
+  "save_offset": 22212,
+  "name": "player_hp"
+ },
+ "0x801b24fe": {
+  "save_offset": 22214,
+  "name": "player_mp_max"
+ },
+ "0x801b2500": {
+  "save_offset": 22216,
+  "name": "player_mp"
+ },
+ "0x801b2508": {
+  "save_offset": 22234,
+  "name": "0x801b2508"
+ },
+ "0x801b2514": {
+  "save_offset": 22246,
+  "name": "0x801b2514"
+ },
+ "0x801b2516": {
+  "save_offset": 22218,
+  "name": "0x801b2516"
+ },
+ "0x801b2522": {
+  "save_offset": 22230,
+  "name": "0x801b2522"
+ },
+ "0x801b2530": {
+  "save_offset": 22232,
+  "name": "0x801b2530"
+ },
+ "0x801b2534": {
+  "save_offset": 22200,
+  "name": "player_gold"
+ },
+ "0x801b255c": {
+  "save_offset": 22248,
+  "name": "0x801b255c"
+ },
+ "0x801b255e": {
+  "save_offset": 22250,
+  "name": "0x801b255e"
+ },
+ "0x801b2560": {
+  "save_offset": 22252,
+  "name": "0x801b2560"
+ },
+ "0x801b2562": {
+  "save_offset": 22254,
+  "name": "0x801b2562"
+ },
+ "0x801b2564": {
+  "save_offset": 22256,
+  "name": "0x801b2564"
+ },
+ "0x801b2566": {
+  "save_offset": 22258,
+  "name": "0x801b2566"
+ },
+ "0x801b2568": {
+  "save_offset": 22260,
+  "name": "0x801b2568"
+ },
+ "0x801b256a": {
+  "save_offset": 22262,
+  "name": "0x801b256a"
+ },
+ "0x801b256c": {
+  "save_offset": 22264,
+  "name": "0x801b256c"
+ },
+ "0x801b256e": {
+  "save_offset": 22266,
+  "name": "0x801b256e"
+ },
+ "0x801b2570": {
+  "save_offset": 22268,
+  "name": "0x801b2570"
+ },
+ "0x801b2572": {
+  "save_offset": 22270,
+  "name": "0x801b2572"
+ },
+ "0x801b2574": {
+  "save_offset": 22272,
+  "name": "0x801b2574"
+ },
+ "0x801b2576": {
+  "save_offset": 22274,
+  "name": "0x801b2576"
+ },
+ "0x801b2578": {
+  "save_offset": 22276,
+  "name": "0x801b2578"
+ },
+ "0x801b2588": {
+  "save_offset": 22188,
+  "name": "0x801b2588"
+ },
+ "0x801b25ab": {
+  "save_offset": 22287,
+  "name": "0x801b25ab"
+ },
+ "0x801b25ac": {
+  "save_offset": 22288,
+  "name": "0x801b25ac"
+ },
+ "0x801b25ad": {
+  "save_offset": 22289,
+  "name": "0x801b25ad"
+ },
+ "0x801b25af": {
+  "save_offset": 22290,
+  "name": "0x801b25af"
+ },
+ "0x801b25d4": {
+  "save_offset": 22280,
+  "name": "0x801b25d4"
+ },
+ "0x801b25d5": {
+  "save_offset": 22281,
+  "name": "0x801b25d5"
+ },
+ "0x801b25d6": {
+  "save_offset": 22282,
+  "name": "0x801b25d6"
+ },
+ "0x801b25d7": {
+  "save_offset": 22283,
+  "name": "0x801b25d7"
+ },
+ "0x801b25d8": {
+  "save_offset": 22284,
+  "name": "0x801b25d8"
+ },
+ "0x801b25d9": {
+  "save_offset": 22285,
+  "name": "0x801b25d9"
+ },
+ "0x801b25da": {
+  "save_offset": 22286,
+  "name": "0x801b25da"
+ },
+ "0x801b25db": {
+  "save_offset": 22291,
+  "name": "0x801b25db"
+ },
+ "0x801b25dc": {
+  "save_offset": 22292,
+  "name": "0x801b25dc"
+ },
+ "0x801b25dd": {
+  "save_offset": 22293,
+  "name": "0x801b25dd"
+ },
+ "0x801b25de": {
+  "save_offset": 22294,
+  "name": "0x801b25de"
+ },
+ "0x801b25df": {
+  "save_offset": 22295,
+  "name": "0x801b25df"
+ },
+ "0x801b25e0": {
+  "save_offset": 22296,
+  "name": "0x801b25e0"
+ },
+ "0x801b25e1": {
+  "save_offset": 22297,
+  "name": "0x801b25e1"
+ },
+ "0x801b25e2": {
+  "save_offset": 22298,
+  "name": "0x801b25e2"
+ },
+ "0x801b25e3": {
+  "save_offset": 22299,
+  "name": "0x801b25e3"
+ },
+ "0x801b25e4": {
+  "save_offset": 22300,
+  "name": "0x801b25e4"
+ },
+ "0x801b2644": {
+  "save_offset": 22208,
+  "name": "0x801b2644"
+ }
+}

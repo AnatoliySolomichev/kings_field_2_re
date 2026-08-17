@@ -164,8 +164,9 @@ if __name__ == "__main__":
     print(f"text {base:#010x}..{base + cs.size:#010x}, entry {entry:#010x}")
     print(f"disassembled {len(insns)} instructions "
           f"({len(insns) * 4 * 100 // cs.size}% of the section)")
+    import syms
     targets = [int(a, 0) for a in sys.argv[1:]] or [0x801AEC4C, 0x800C85E8]
     for t, lst in xrefs(insns, targets).items():
-        print(f"\n=== {t:#010x}: {len(lst)} references")
+        print(f"\n=== {syms.label(t)} ({t:#010x}): {len(lst)} references")
         for hiaddr, addr, mn, op in lst[:16]:
-            print(f"   {addr:#010x}  {mn:6s} {op}")
+            print(f"   {syms.label(addr):28s} {mn:6s} {syms.annotate(op)}")

@@ -16,10 +16,35 @@ import sys
 
 sys.path.insert(0, "tools")
 from maps import levels, cell, W, H          # noqa: E402
+import collision                              # noqa: E402
 import tim                                    # noqa: E402
 
 SOLID = 255
 FACE = 0x40
+CELLW = 0x800                                 # world units across one cell
+WALL_INK = (220, 139, 76, 255)
+
+
+def wall_segments(grid, lv):
+    """Every wall plane on the level, in cell-local units.
+
+    A wall is a plane *inside* the cell (FORMATS.md section 4), so it is drawn
+    where it actually stands rather than on the cell boundary -- `op[0]` of
+    1024, half a cell, is the commonest value there is.
+
+        face 0: x = op0          face 2: x = 0x800 - op0
+        face 3: z = op0          face 1: z = 0x800 - op0
+    """
+    lvl = collision.Level(lv, grid)
+    for cx, cz, face, off, _lo, _hi in collision.walls(lv, lvl):
+        if face == 0:
+            yield cx, cz, "x", off
+        elif face == 2:
+            yield cx, cz, "x", CELLW - off
+        elif face == 3:
+            yield cx, cz, "z", off
+        else:
+            yield cx, cz, "z", CELLW - off
 
 
 def field(grid, x, y, off):
@@ -42,7 +67,7 @@ def heights(grid):
     return (lo, hi if hi > lo else lo + 1)
 
 
-def render(grid, scale=12, grid_every=8, north_up=True):
+def render(grid, scale=12, grid_every=8, north_up=True, lv=None):
     """Draw the level. Community maps put north at the top, which is the grid
     with its Z axis flipped, so that is the default here too."""
     lo, hi = heights(grid)
@@ -94,6 +119,24 @@ def render(grid, scale=12, grid_every=8, north_up=True):
                     for k in range(scale):
                         put(cx * scale + k, ny * scale, edge)
 
+    if lv is not None:
+        for cx, cz, axis, off in wall_segments(grid, lv):
+            cy = (H - 1 - cz) if north_up else cz
+            if not (0 <= cx < W and 0 <= cy < H):
+                continue
+            d = off * scale // CELLW
+            if axis == "x":
+                x = cx * scale + max(0, min(scale - 1, d))
+                for k in range(scale):
+                    put(x, cy * scale + k, WALL_INK)
+            else:
+                # the drawn row runs the other way when north is up, so a plane
+                # measured from the cell's low-z edge is measured from its foot
+                d = (scale - 1 - d) if north_up else d
+                y = cy * scale + max(0, min(scale - 1, d))
+                for k in range(scale):
+                    put(cx * scale + k, y, WALL_INK)
+
     if grid_every:
         faint = (255, 255, 255, 255)
         for cy in range(0, H, grid_every):
@@ -120,7 +163,7 @@ if __name__ == "__main__":
     lo, hi = heights(grid)
     print(f"level {lv}: height {lo}..{hi}, "
           f"{sum(1 for y in range(H) for x in range(W) if solid(grid,x,y))} solid cells")
-    w, h, px = render(grid, scale)
+    w, h, px = render(grid, scale, lv=lv)
     out = f"out/maps/level{lv:02d}_detail.png"
     tim.write_png(out, w, h, px)
     print(f"wrote {out} {w}x{h}")

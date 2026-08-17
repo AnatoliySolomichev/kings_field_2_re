@@ -1,0 +1,291 @@
+extends Node3D
+# The game and the port, in one world, frame for frame.
+#
+#   C  compare on / off      L  locked / free      R  resync now
+#
+# While comparing, the camera takes both angles from the game: yaw from
+# 0x801b2612 and pitch from 0x801b2614.
+#   1  height only           2  ground and height  3  from the buttons
+#
+# `emu/bp16.lua` overwrites `res://live.txt` once per game frame with the
+# player's real position, facing, speeds and vertical state. This reads it,
+# stands a marker where the game's player is, and runs the port's own model over
+# the same input -- so the two can be looked at side by side and, more usefully,
+# subtracted.
+#
+# **Locked is the default and it is the instrument.** Every frame it takes the
+# state the game actually had, runs exactly one frame of the model, compares,
+# and then throws the answer away and takes the game's state again. That way
+# each disagreement is its own, and the cell it happened in gets a red marker
+# you can walk over and look at. Free running is the honest end-to-end test and
+# a poor diagnostic: after the first mistake the model is standing somewhere
+# else asking about different cells, so everything downstream disagrees for a
+# reason that has nothing to do with it.
+#
+# Resync puts back the **whole** state, not just the position: the vertical
+# state byte and its velocity too. Putting back the position alone leaves the
+# model mid-fall at the wrong height and it diverges again on the next frame.
+#
+# While comparing, the port's **facing is the game's**, not the mouse's: yaw
+# comes straight from 0x801b2612. Without it the port walks the right distances
+# in the wrong direction and every frame disagrees for a reason that has nothing
+# to do with the model -- which is exactly what the first look at this showed,
+# the copy always facing one way while the game turned. Godot's yaw is the
+# game's angle unchanged, rotation.y = ang * TAU / 4096: forward is a quarter
+# turn off the facing and Godot's Z is the negative of the game's, and the two
+# cancel.
+#
+# The rungs are the ladder from `tools/replay.py`, released one layer at a time:
+# 1 gives the model the game's own ground move and asks only about height;
+# 2 gives the facing and the speeds and computes the step; 3 derives the speeds
+# from the buttons. The facing is the game's in all three -- the turn rate at
+# 0x8002fe1c is not transcribed, and putting an unread layer under a checked one
+# would spoil the point of the ladder.
+
+const LIVE := "res://live.txt"
+const UNIT := 1000.0
+const MARKERS := 64
+
+var player: Node3D
+var marker: MeshInstance3D
+var flags: MeshInstance3D
+var compare := false
+var locked := true
+var rung := 2
+
+var last_frame := -1
+var prev := {}                     # the previous game frame
+var worst := 0
+var drift := Vector3.ZERO
+var bad_cells := {}
+var checked := 0
+var matched := 0
+
+
+func _ready() -> void:
+	player = get_node_or_null("../Player")
+	marker = MeshInstance3D.new()
+	var caps := CapsuleMesh.new()
+	caps.radius = 0.4
+	caps.height = 1.7
+	marker.mesh = caps
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.2, 0.9, 1.0, 0.45)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	marker.material_override = mat
+	marker.visible = false
+	add_child(marker)
+
+	flags = MeshInstance3D.new()
+	flags.mesh = ImmediateMesh.new()
+	var fm := StandardMaterial3D.new()
+	fm.albedo_color = Color(1.0, 0.25, 0.2, 0.5)
+	fm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	fm.cull_mode = BaseMaterial3D.CULL_DISABLED
+	flags.material_override = fm
+	add_child(flags)
+
+
+func _unhandled_input(e: InputEvent) -> void:
+	if not (e is InputEventKey and e.pressed and not e.echo):
+		return
+	match e.keycode:
+		KEY_C:
+			compare = not compare
+			marker.visible = compare
+			if compare:
+				_reset()
+		KEY_L:
+			locked = not locked
+			_reset()
+		KEY_R:
+			if prev.has("p"):
+				_resync(prev)
+		KEY_1:
+			rung = 1
+			_reset()
+		KEY_2:
+			rung = 2
+			_reset()
+		KEY_3:
+			rung = 3
+			_reset()
+
+
+func _reset() -> void:
+	worst = 0
+	checked = 0
+	matched = 0
+	drift = Vector3.ZERO
+	bad_cells.clear()
+	_redraw_flags()
+	if prev.has("p"):
+		_resync(prev)
+
+
+func _resync(f: Dictionary) -> void:
+	# The whole state, not just where it is standing.
+	var fp: Vector3i = f["p"]
+	player.gx = fp.x
+	player.gy = fp.y
+	player.gz = fp.z
+	player.vstate = int(f["vst"])
+	player.vvel = int(f["vv"])
+	player.fwd_speed = int(f["fwd"])
+	player.stf_speed = int(f["stf"])
+
+
+func _read() -> Dictionary:
+	var f := FileAccess.open(LIVE, FileAccess.READ)
+	if f == null:
+		return {}
+	var parts := f.get_as_text().strip_edges().split(" ", false)
+	if parts.size() < 11:
+		return {}
+	return {
+		"f": int(parts[0]),
+		"p": Vector3i(int(parts[1]), int(parts[2]), int(parts[3])),
+		"ang": int(parts[4]), "vst": int(parts[5]), "vv": int(parts[6]),
+		"fwd": int(parts[7]), "stf": int(parts[8]),
+		"btn": int(parts[9]), "lv": int(parts[10]),
+		"pitch": int(parts[11]) if parts.size() > 11 else 0,
+	}
+
+
+func _process(_dt: float) -> void:
+	if not compare or player == null:
+		return
+	var cur := _read()
+	if cur.is_empty() or int(cur["f"]) == last_frame:
+		return
+	last_frame = int(cur["f"])
+
+	# Where the game's player is, in Godot's axes.
+	var gp: Vector3i = cur["p"]
+	marker.position = Vector3(float(gp.x) / UNIT,
+		float(-gp.y) / UNIT + 0.85, float(-gp.z) / UNIT)
+	# Face where the game faces, and look where it looks. The mouse does not
+	# steer while comparing. The pitch is 0x801b2610, signed, the same 0x1000 to
+	# the turn as the facing, and it *is* negated. The sign was reasoned out from
+	# the resting value near -190 and the reasoning was wrong -- a player looked
+	# up and the port looked down. The measurement was right and the inference
+	# from it was not, which is the difference between the two kinds of number.
+	player.rotation.y = float(int(cur["ang"]) & 0xFFF) * TAU / 4096.0
+	var cam := player.get_node_or_null("Camera")
+	if cam:
+		var pitch := int(cur["pitch"])
+		if pitch > 2048:
+			pitch -= 4096
+		cam.rotation.x = -float(pitch) * TAU / 4096.0
+
+	if int(cur["lv"]) != player._level():
+		_hud("the game is on level %d; this build has only level %d" % [
+			cur["lv"], player._level()])
+		return
+	if prev.is_empty() or int(cur["f"]) != int(prev["f"]) + 1:
+		prev = cur
+		_resync(cur)
+		return
+
+	# One frame of the model over the input the game had, then compare.
+	_advance(prev, cur)
+	var got := Vector3i(player.gx, player.gy, player.gz)
+	var want: Vector3i = cur["p"]
+	var d := got - want
+	checked += 1
+	if d == Vector3i.ZERO:
+		matched += 1
+	else:
+		var pp: Vector3i = prev["p"]
+		var cell := Vector2i(pp.x >> 11, pp.z >> 11)
+		if not bad_cells.has(cell) and bad_cells.size() < MARKERS:
+			bad_cells[cell] = true
+			_redraw_flags()
+	drift = Vector3(d)
+	worst = maxi(worst, maxi(absi(d.x), maxi(absi(d.y), absi(d.z))))
+	if locked:
+		_resync(cur)
+	prev = cur
+	_hud("")
+
+
+# The rungs. The controller turns and accelerates before it steps, so the facing
+# and the speeds a frame used are the ones standing at the *next* frame's start.
+func _advance(a: Dictionary, b: Dictionary) -> void:
+	player.vstate = int(a["vst"])
+	player.vvel = int(a["vv"])
+	if rung == 1:
+		var bp: Vector3i = b["p"]
+		player.gx = bp.x
+		player.gz = bp.z
+		player._move(0, 0)
+		return
+	var fwd: int = int(b["fwd"])
+	var stf: int = int(b["stf"])
+	if rung == 3:
+		var btn: int = int(a["btn"])
+		fwd = player._ramp(int(a["fwd"]), (btn & 0x1000) != 0,
+			(btn & 0x4000) != 0, player.SPEED_MAX)
+		stf = player._ramp(int(a["stf"]), (btn & 0x0008) != 0,
+			(btn & 0x0004) != 0, player.SPEED_MAX, 2)
+	var h: int = player.coll.isqrt(fwd * fwd + stf * stf)
+	var fd := 0
+	var sd := 0
+	if h != 0:
+		fd = (fwd * fwd) / h
+		sd = (stf * stf) / h
+		if fwd < 0: fd = -fd
+		if stf < 0: sd = -sd
+	# Forward runs a quarter turn off the facing; strafe along it.
+	var af: int = (int(b["ang"]) + 0x400) & 0xFFF
+	var ax: int = int(b["ang"]) & 0xFFF
+	var dx: int = (player.coll.game_cos(af) * fd >> 12) \
+		+ (player.coll.game_cos(ax) * sd >> 12)
+	var dz: int = (player.coll.game_sin(af) * fd >> 12) \
+		+ (player.coll.game_sin(ax) * sd >> 12)
+	player._move(dx, dz)
+	# The bob rides on the step's magnitude, whether or not the step landed.
+	player._bob(player.coll.isqrt(fd * fd + sd * sd))
+
+
+func _redraw_flags() -> void:
+	var m: ImmediateMesh = flags.mesh
+	m.clear_surfaces()
+	if bad_cells.is_empty():
+		return
+	m.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	for cell in bad_cells:
+		var x0 := float(cell.x * 2048) / UNIT
+		var z0 := -float(cell.y * 2048) / UNIT
+		var x1 := float((cell.x + 1) * 2048) / UNIT
+		var z1 := -float((cell.y + 1) * 2048) / UNIT
+		var y := float(-player.gy) / UNIT + 0.05
+		m.surface_add_vertex(Vector3(x0, y, z0))
+		m.surface_add_vertex(Vector3(x1, y, z0))
+		m.surface_add_vertex(Vector3(x1, y, z1))
+		m.surface_add_vertex(Vector3(x0, y, z0))
+		m.surface_add_vertex(Vector3(x1, y, z1))
+		m.surface_add_vertex(Vector3(x0, y, z1))
+	m.surface_end()
+
+
+func _hud(note: String) -> void:
+	var hud := get_node_or_null("../UI/Compare")
+	if hud == null:
+		return
+	if not compare:
+		hud.text = "C  compare with the emulator"
+		return
+	var pct := 0
+	if checked > 0:
+		pct = matched * 100 / checked
+	hud.text = ("COMPARE  rung %d (%s)  %s\n" +
+		"%d of %d frames exact (%d %%)   now off by %d %d %d   worst %d\n" +
+		"%s\nC off   L lock/free   R resync   1/2/3 rung") % [
+		rung,
+		["", "height only", "ground and height", "from the buttons"][rung],
+		"locked" if locked else "FREE RUNNING",
+		matched, checked, pct, int(drift.x), int(drift.y), int(drift.z), worst,
+		note]
