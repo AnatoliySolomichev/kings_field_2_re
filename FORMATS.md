@@ -592,9 +592,35 @@ with no emulator:
   All three have `+9 = 0` in the snapshot, so the game was drawing none of them
   at that moment.
 
-What is still not read is what turns one of the three on and the others off,
-and whether the sword changes hands through `give_item` at all. `emu/bp17.lua`
-asks both, along with the STALK.T entries the conversation pages through.
+**The scene uses none of the game's ordinary machinery.** `emu/bp17.lua` sat on
+`give_item`, `take_item`, `object_interact` and `script_interpreter` while a
+player started a new game and played the handover through. **Not one of the
+four fired.** So the sword does not change hands the way every other item in
+the game does, and the conversation is not the entity-script interpreter
+either. That is a real result and it rules out four routines at once; what does
+do it is still unknown.
+
+`text_pager` shows three hits in the same log and they should not be believed:
+`$ra` points four bytes inside `text_pager` itself and `$a1` is a scratchpad
+address, so the routine was reached without a call and the registers are
+somebody else's. Nothing about them says a page of dialogue was drawn.
+
+**The three men are turned on by two different routines.** The alive byte at
+`+9` of each actor was watched across the same session:
+
+| actor | mesh | written from |
+| --- | --- | --- |
+| 0 | 32 — the one at the table | a call at `0x8004b698+0x14` |
+| 1 | 33 | a call at `0x8004c1f0+0xa4` |
+| 2 | 34 — the one with the watering can | the same `0x8004c1f0+0xa4` |
+
+`0x8004c1f0` reads the player's own X and Z at `0x801b25f0` and `0x801b25f8`,
+so it activates actors by how near the player is. Whatever `0x8004b698` is, it
+is not that, and it is what puts the man at the table there.
+
+`emu/bp18.lua` asks the next question of the value rather than of the code: a
+write watchpoint on `inventory_a`, on `inventory_b` and on `story_flags`, so
+whatever hands the sword over names itself.
 
 ### Objects the game places and does not draw
 
