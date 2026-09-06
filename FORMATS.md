@@ -652,9 +652,47 @@ either. Of the six archive-entry readers, exactly **one call site anywhere in
 So the opening's text reaches the screen by a path that is not the one every
 other conversation uses, and that is the next thing to find.
 
-What the same session did show is level 0's own overlay running: story flag 3
-was written from `0x801e9084`, an address inside the overlay area, and
-`game_main` wrote flag 9 at `0x80014ea4`.
+**The overlay write was not the scene.** `0x801e9084`, the address the log
+named, is `story_flags[3] = 0`, the else-branch of
+
+```
+if (has_item(2) && has_item(130) && has_item(131) && has_item(132))
+     story_flags[3] = 1; else story_flags[3] = 0;
+```
+
+Item 2 is the sword's final stage, so flag 3 is an endgame condition the
+overlay re-evaluates every time it runs. It says nothing about the opening.
+
+### The three men are entities 9, 10 and 11
+
+The number 676 is **nowhere in `GAME.EXE`'s code** — nothing loads it as a
+constant. It is in the data: three halfwords in level 0's entity block, at
+script-block offsets 1226, 1314 and 1440, which fall in the scripts of
+**entities 8, 9 and 10**. Each sits in an identical 24-byte context followed by
+bytes in the `0xf0`–`0xff` range interleaved with small ascending numbers —
+the shape of a script, with what look like page numbers relative to a base.
+
+The entities themselves tie the scene together. Byte 0 of an entity record is
+the **mesh id**, not a kind:
+
+| entity | byte 0 | the actor by the house |
+| --- | --- | --- |
+| 9 | `0x20` = 32 | slot 0, mesh 32 — the man at the table |
+| 10 | `0x21` = 33 | slot 1, mesh 33 |
+| 11 | `0x22` = 34 | slot 2, mesh 34 — the man with the watering can |
+
+and the live actor's kind at `+2` is 9, 10 and 11 — the entity index itself.
+Three for three, from two directions: the record's byte 0 equals the actor's
+`+1`, and the actor's `+2` equals the record's position.
+
+**Withdrawn, in `tools/escript.py`:** that byte is labelled the *kind* there and
+tested against `0x2b` to decide whether an entity is a talker whose `say`
+opcode reads `TALK.T[base + op]`. If byte 0 is the mesh id, the test is reading
+the wrong field, and the one entity in the whole game it matches — level 2's
+entity 8 — is simply the one whose mesh happens to be 43. So "no talkers on
+level 0" is not established, and neither is the talker rule as the tool applies
+it. The scene's dialogue is `TALK` 676 to 691 and beyond, a contiguous run;
+entry 679 is the line about the sword.
 
 ### Objects the game places and does not draw
 
