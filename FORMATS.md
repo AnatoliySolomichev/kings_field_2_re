@@ -685,14 +685,44 @@ and the live actor's kind at `+2` is 9, 10 and 11 — the entity index itself.
 Three for three, from two directions: the record's byte 0 equals the actor's
 `+1`, and the actor's `+2` equals the record's position.
 
-**Withdrawn, in `tools/escript.py`:** that byte is labelled the *kind* there and
-tested against `0x2b` to decide whether an entity is a talker whose `say`
-opcode reads `TALK.T[base + op]`. If byte 0 is the mesh id, the test is reading
-the wrong field, and the one entity in the whole game it matches — level 2's
-entity 8 — is simply the one whose mesh happens to be 43. So "no talkers on
-level 0" is not established, and neither is the talker rule as the tool applies
-it. The scene's dialogue is `TALK` 676 to 691 and beyond, a contiguous run;
-entry 679 is the line about the sword.
+The scene's dialogue is `TALK` 676 to 691 and beyond, a contiguous run; entry
+679 is the line where the sword is handed over.
+
+### How a script reaches its dialogue, read off the interpreter
+
+`script_interpreter` (`0x8005c308`) opens by turning an actor into a script:
+
+```
+kind   = actor[+2]                      /* the entity index */
+record = entity_table + 120 * kind      /* 0x8018c7e8 */
+script = *(void **)(record + 0x38)      /* and it must begin with 0x70 */
+base   = *(u16 *)(script + 0x0c)
+...for every opcode below 0xf0:  load_entry(7, base + opcode)
+```
+
+Checked in a RAM snapshot, following the game's own pointers: entities **9, 10
+and 11** — the three men by the house, meshes 32, 33 and 34 — each hold a
+script block beginning `0x70` whose `+0x0c` is **676**. Entity 8's is 292. So
+the opening conversation is `TALK.T[676 + opcode]`, said by the script bytes
+themselves.
+
+**Two corrections to `tools/escript.py`, which documents this mechanism.**
+
+*The base is read from the wrong structure.* The tool takes it from offset
+`0x0c` of the **entity record**, where every entity on level 0 reads 0. The
+interpreter takes it from offset `0x0c` of the **script block** the record's
+`+0x38` points at. That is why the tool reports base 0 everywhere and renders
+dialogue as animation frames.
+
+*The `0x2b` test does not gate the dialogue.* The tool's note says `TALK.T` is
+loaded "only when the entity's kind byte is `0x2b`". Reading the branch at
+`script_interpreter+0x2c4`: it compares byte 0 of the entity record against
+`0x2b` and, when they match, **skips the call to `0x800608ec`** — and the
+`load_entry(7, base + opcode)` at `+0x2f4` sits past the branch target, so it
+runs either way. Every opcode below `0xf0` fetches a line of text. The
+consequence is worth stating plainly: the **12 179** script instructions the
+tool counts as `say` across the game really are dialogue, and pairing each
+entity's base with its script bytes decodes all of it.
 
 ### Objects the game places and does not draw
 
