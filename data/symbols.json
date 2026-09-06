@@ -257,9 +257,9 @@
   "evidence": "read_pending_level reads it and passes it to the loader"
  },
  "0x8018fb3c": {
-  "name": "object_types",
+  "name": "object_type_table",
   "kind": "data",
-  "evidence": "332 entries of 24 bytes, byte +1 is the class"
+  "evidence": "332 records of 24 bytes, ending where object_table begins. Byte +0 is the class render_walk dispatches on -- checked against the live records of fifteen types, all fifteen matching -- and 0xe5 and 0xe9 send it straight to the loop tail, so those are never drawn. Type 158 carries 0xe5 and 159 carries 0x07: a treasure chest closed and the same chest open, and 19 cells across the 28 levels hold both while none holds either alone"
  },
  "0x80191a5c": {
   "name": "object_table",
@@ -1261,5 +1261,20 @@
   "name": "object_in_view",
   "kind": "code",
   "evidence": "(position at record+0x14, record[+0x38], record[+0x39]) -> nonzero to draw. The class 0xf2 path in render_walk skips the object when it answers zero"
+ },
+ "0x8001796c": {
+  "name": "enter_current_level",
+  "kind": "code",
+  "evidence": "sets 0x8018fad4 to 1, copies the five bytes of current_level_block to the pending block at 0x8018fae4 and calls level_load. game_main calls it once, after the save screen has answered, and object_trigger is the other route in -- this is the trigger the backlog's cross-level teleport was looking for"
+ },
+ "0x80017664": {
+  "name": "init_level_state",
+  "kind": "code",
+  "evidence": "registers the nine archives and then clears the level block: 0xff into 0x8018fad9, 0x8018fada and 0x8018fadb, then zero into 0x8018fad4 through 0x8018fadc. game_main calls it in the init chain, so a new game starts from an all-zero level block"
+ },
+ "0x8007311c": {
+  "name": "cue_sound",
+  "kind": "code",
+  "evidence": "(id, 0) into 0x8007304c and 0x8006d43c, which splits the id into a high and a low byte and indexes a 43-byte-stride table at 0x801e6cf8. game_main's new-game branch calls it and nothing about it reaches a movie or a model"
  }
 }

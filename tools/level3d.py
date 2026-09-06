@@ -352,6 +352,40 @@ def live_scales(lv):
     return out
 
 
+# The object type table: 332 records of 24 bytes, ending where object_table
+# begins. Byte +0 of a record is the class the renderer dispatches on.
+TYPE_TABLE, TYPE_STRIDE, TYPE_COUNT = 0x8018FB3C, 24, 332
+# render_walk (0x80040ae4) jumps straight to its loop tail for these two, at
+# 0x80040e60 and 0x80040e78. Nothing else in its dispatch skips a record.
+CLASS_NOT_DRAWN = (0xE5, 0xE9)
+
+
+def render_classes(lv):
+    """type id -> the byte the renderer dispatches on, from a RAM snapshot.
+
+    This is what decides which of a pair of objects standing in the same cell
+    is the one you see. Types 158 and 159 are a treasure chest closed and the
+    same chest open: **19 cells across the 28 levels hold both of them and not
+    one cell holds either alone**, so they are two states of one thing, and the
+    class byte is how the game picks -- 158 carries 0xe5, which render_walk
+    skips, and 159 carries 0x07, which it draws. Drawing both, which is what
+    this did before, is a chest open and closed at the same time, and a player
+    reported exactly that.
+
+    Taken from a snapshot, like the scales and the object textures, because
+    what fills the table has not been found: the 24-byte records are not a
+    verbatim run anywhere in GAME.EXE, so something builds them. That also
+    means this carries the *snapshot's* state rather than a new game's, which
+    is the honest limit of it -- in that session both big chests had been
+    opened.
+    """
+    if lv != 0 or not os.path.exists(SNAP_RAM):
+        return {}
+    ram = open(SNAP_RAM, "rb").read()
+    base = TYPE_TABLE & 0x1FFFFF
+    return {t: ram[base + t * TYPE_STRIDE] for t in range(TYPE_COUNT)}
+
+
 def object_vram(lv):
     """VRAM for the objects, which is not all in `RTIM.T[lv]`.
 
@@ -572,9 +606,15 @@ def build_objects_gltf(lv, out="out/godot"):
     groups = {}
     placed = missing = 0
     scales = live_scales(lv)
+    classes = render_classes(lv)
     hidden = 0
+    skipped_class = 0
     for o in placement.objects(lv):
         if o["type"] in NOT_DRAWN:
+            continue
+        # The renderer's own dispatch: two classes never reach a draw call.
+        if classes.get(o["type"]) in CLASS_NOT_DRAWN:
+            skipped_class += 1
             continue
         # x0.00 means the game does not draw it. 59 of level 0's objects.
         sc = scales.get(o["slot"], 0x1000)
@@ -636,7 +676,8 @@ def build_objects_gltf(lv, out="out/godot"):
         print("no objects placed")
         return None
     path, nbytes = g.write(f"{out}/objects{lv:02d}.gltf", prims, f"objects{lv}")
-    print(f"objects: {placed} placed, {missing} without a model, {ntri} triangles, "
+    print(f"objects: {placed} placed, {missing} without a model, "
+          f"{skipped_class} skipped by their render class, {ntri} triangles, "
           f"{len(prims)} materials -> {path}")
     return path
 

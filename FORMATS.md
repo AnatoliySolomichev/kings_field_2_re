@@ -987,6 +987,30 @@ correctly and appear exactly once each (one *Statue of the Hero*, one *Royal
 Emblem*, one *Rest in Peace*). Ids in the biography range resolve to names that
 repeat implausibly often, so the two archives share numbering only in part.
 
+### Byte +0 is the render class, and two values mean "never drawn"
+
+Separate from the use class above. `render_walk` (`0x80040ae4`) dispatches on
+the class byte the live record carries at `+0x04`, which is a copy of byte `+0`
+of the type's record here — checked against fifteen types, all fifteen
+matching. Two values jump straight to the loop tail:
+
+| Class | Types on level 0 | What |
+| --- | --- | --- |
+| `0xe5` | 158 | a treasure chest **closed** |
+| `0xe9` | 318 | — |
+
+Type 158 and type 159 are the same chest closed and open. **19 cells across
+the 28 levels hold both of them and not one cell holds either alone**, so they
+are two states of one object and this byte is how the game shows one of them.
+Drawing both, which `tools/level3d.py` did, is a chest open and closed at the
+same time — reported by a player looking at the port.
+
+What sets a live record's class, and so what would flip a chest from one state
+to the other, is not read. The 24-byte type records are not a verbatim run
+anywhere in `GAME.EXE`, so something builds the table; `tools/level3d.py` takes
+it from a RAM snapshot, which means it carries that session's state and not a
+new game's.
+
 ### Type ids confirmed by experiment
 
 Each was established by snapshotting either side of a deliberate action and

@@ -244,6 +244,89 @@ def load(name, entry, path=None):
     return flags, objs
 
 
+def render(objs, path, size=256, yaw=0.6, pitch=0.35, only=None):
+    """Draw a model to a PNG so it can be looked at without an engine.
+
+    Orthographic, painter's algorithm, flat shaded off the face normal. It
+    exists because "which model is this" is a question no amount of reading the
+    data answers, and the alternative -- building the Godot gallery and asking
+    a person -- costs a round trip every time. Colours are the primitive's own
+    when it carries them and grey when it does not; textures are ignored.
+
+        python3 tools/tmd.py MO 282 png            the whole entry
+        python3 tools/tmd.py MO 305 png 1          just its second object
+    """
+    import math
+    tris = []
+    for k, o in enumerate(objs):
+        if only is not None and k != only:
+            continue
+        tint = [(1.0, 1.0, 1.0), (1.0, 0.55, 0.55), (0.55, 0.75, 1.0),
+                (0.6, 1.0, 0.6)][k % 4]
+        for pr in o.prims:
+            v = [o.verts[i] for i in pr.verts if i < len(o.verts)]
+            if len(v) < 3:
+                continue
+            faces = [v[:3]] + ([[v[0], v[2], v[3]]] if len(v) >= 4 else [])
+            base = pr.rgb[0] if pr.rgb else (140, 140, 140)
+            for f in faces:
+                tris.append((f, base, tint))
+    if not tris:
+        return None
+    cy, sy = math.cos(yaw), math.sin(yaw)
+    cp, sp = math.cos(pitch), math.sin(pitch)
+
+    def project(v):
+        x, y, z = v
+        x, z = x * cy + z * sy, -x * sy + z * cy
+        y, z = y * cp - z * sp, y * sp + z * cp
+        return x, y, z
+
+    pts = [project(v) for f, _c, _t in tris for v in f]
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    lo = min(min(xs), min(ys))
+    hi = max(max(xs), max(ys))
+    span = max(hi - lo, 1)
+    m = size * 0.08
+
+    def to_px(p):
+        return ((p[0] - lo) / span * (size - 2 * m) + m,
+                (p[1] - lo) / span * (size - 2 * m) + m)
+
+    px = [(24, 24, 28, 255)] * (size * size)
+    order = []
+    for f, base, tint in tris:
+        pr3 = [project(v) for v in f]
+        order.append((sum(q[2] for q in pr3) / 3.0, pr3, base, tint))
+    order.sort(key=lambda r: -r[0])                 # far first
+    for _z, pr3, base, tint in order:
+        a, b, c = (to_px(q) for q in pr3)
+        # a normal in screen space, for a little shading
+        ux, uy = b[0] - a[0], b[1] - a[1]
+        vx, vy = c[0] - a[0], c[1] - a[1]
+        area = ux * vy - uy * vx
+        if abs(area) < 0.5:
+            continue
+        shade = 0.55 + 0.45 * min(1.0, abs(area) / (size * size * 0.02))
+        col = tuple(min(255, int(base[i] * tint[i] * shade)) for i in range(3))
+        xmin = max(0, int(min(a[0], b[0], c[0])))
+        xmax = min(size - 1, int(max(a[0], b[0], c[0])) + 1)
+        ymin = max(0, int(min(a[1], b[1], c[1])))
+        ymax = min(size - 1, int(max(a[1], b[1], c[1])) + 1)
+        for yy in range(ymin, ymax + 1):
+            for xx in range(xmin, xmax + 1):
+                w0 = (b[0] - a[0]) * (yy - a[1]) - (b[1] - a[1]) * (xx - a[0])
+                w1 = (c[0] - b[0]) * (yy - b[1]) - (c[1] - b[1]) * (xx - b[0])
+                w2 = (a[0] - c[0]) * (yy - c[1]) - (a[1] - c[1]) * (xx - c[0])
+                if (w0 >= 0 and w1 >= 0 and w2 >= 0) or \
+                   (w0 <= 0 and w1 <= 0 and w2 <= 0):
+                    px[yy * size + xx] = col + (255,)
+    import tim
+    tim.write_png(path, size, size, px)
+    return path
+
+
 def write_obj(path, obj, scale=1 / 256):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
@@ -260,6 +343,13 @@ if __name__ == "__main__":
     name = sys.argv[1] if len(sys.argv) > 1 else "RTMD"
     entry = int(sys.argv[2]) if len(sys.argv) > 2 else 0
     flags, objs = load(name, entry)
+    if len(sys.argv) > 3 and sys.argv[3] == "png":
+        only = int(sys.argv[4]) if len(sys.argv) > 4 else None
+        os.makedirs("out/tmd", exist_ok=True)
+        tag = f"{name}_{entry}" + ("" if only is None else f"_{only}")
+        print("wrote", render(objs, f"out/tmd/{tag}.png", only=only),
+              f"-- {len(objs)} object(s)")
+        sys.exit(0)
     if len(sys.argv) > 3:
         i = int(sys.argv[3])
         o = objs[i]
