@@ -569,6 +569,33 @@ nine archives — searching for the first rows of it finds nothing — so the lo
 packs or rearranges. `tools/level3d.py` fills those pages from a snapshot in the
 meantime and says so when it does.
 
+### The opening scene, found by its painting
+
+A player who had seen the game said the room where the sword is handed over has
+a painting of two knights on the wall, and that it looked like model **428** in
+the port's gallery. That is enough to locate the whole scene from the disc,
+with no emulator:
+
+* 428 in the gallery's continuous numbering is `MOF.T[0]`, which
+  `model_of_type` reaches from **object type 300**. Level 0 places exactly one
+  of those, slot 191, at **cell (62,3)**, at `h = -2000` — two metres up a
+  wall, which is where a painting hangs. The model is a framed flat panel; the
+  two knights are in its texture.
+* Beside it at cell (62,3) stands type 299, the readable marker, so the
+  painting is something the game lets you read.
+* One cell away, at **(62,4)**, is object slot 62, **type 0**, model
+  `MO.T[128]` — a sword, hanging at `h = -924`. That is the sword the port
+  draws floating in mid-air, and it is a real placed object, not an effect.
+* Three actors stand in the same corner: meshes **32, 33 and 34**, kinds 9, 10
+  and 11 — one man in three poses. Two of them share cell (62,4), which is why
+  the port draws him twice, once at the table and once with the watering can.
+  All three have `+9 = 0` in the snapshot, so the game was drawing none of them
+  at that moment.
+
+What is still not read is what turns one of the three on and the others off,
+and whether the sword changes hands through `give_item` at all. `emu/bp17.lua`
+asks both, along with the STALK.T entries the conversation pages through.
+
 ### Objects the game places and does not draw
 
 **Type 299 is a readable marker, not a model.** `MO.T[299]` is a box 2088 by

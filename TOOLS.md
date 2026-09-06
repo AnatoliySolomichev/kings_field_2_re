@@ -238,7 +238,15 @@ reading them wrongly is silent otherwise.
 ```
 python3 tools/tmd.py RTMD 0           what level 0's tiles contain
 python3 tools/tmd.py RTMD 0 174 obj   one tile, written out as .obj
+python3 tools/tmd.py MO 286 png       a model as a picture, to look at
+python3 tools/tmd.py MO 305 png 1     just its second object
 ```
+
+`png` is the cheap answer to "which model is this": orthographic, flat shaded,
+textures ignored. It is what showed that `MO.T[286]` and `MO.T[287]` are one
+treasure chest closed and open, that `MO.T[234]` is a padlock and not the
+keyhole plate the notes called it, and that `MO.T[128]` — the thing hanging in
+the air where the game hands you a sword — is a sword.
 
 **`rtim.py`** — a level's textures. Not TIM files: blocks to be pushed into
 video memory, each headed by its rect written twice.
