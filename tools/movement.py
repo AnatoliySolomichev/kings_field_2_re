@@ -587,4 +587,10 @@ if __name__ == "__main__":
         fall(int(sys.argv[2]) if len(sys.argv) > 2 else 0,
              *[int(a) for a in sys.argv[3:5]])
     else:
-        verify15(sys.argv[1] if len(sys.argv) > 1 else "out/lua_bp15.log")
+        # `movement.py bp15` is what AGENT.md and TOOLS.md tell you to run, and
+        # it was handing "bp15" to open() as a path -- so the acceptance test
+        # for the whole vertical model reported "no stores" whether or not a
+        # recording existed. A bare name means the log of that name under out/.
+        if arg and not os.path.sep in arg and not arg.endswith(".log"):
+            arg = f"out/lua_{arg}.log"
+        verify15(arg or "out/lua_bp15.log")

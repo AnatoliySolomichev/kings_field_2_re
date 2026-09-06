@@ -394,7 +394,7 @@
  "0x8018c7e8": {
   "name": "entity_table",
   "kind": "data",
-  "evidence": "FDAT 3n+1 records land here, 120-byte stride, 13 pieces of code reach them"
+  "evidence": "FDAT 3n+1 records land here, 120-byte stride, 13 pieces of code reach them. **The first halfword is 0x400 plus the model number**: kind 0 reads 0x432, which is model 50, and a player looking at the model catalogue named 50 as the flower enemy 'of which there are many on this level' -- kind 0 is eleven of the fifty-eight actors on level 0. Byte +5 is the fall acceleration and +6 a sound, both read by actor_move_vertical"
  },
  "0x80040d44": {
   "name": "entity_reader_a",
@@ -533,7 +533,7 @@
  "0x80185da8": {
   "name": "actor_table",
   "kind": "data",
-  "evidence": "0x88 per entry, the live monsters and NPCs: position at +0x2c, +0x30, +0x34, kind at +2, vertical state at +0xd, radius +0x1c, body height +0x1e, vertical velocity +0x52. The driver at 0x80052e5c hands entries to actor_select. The player is NOT here -- no entry matches player_pos in any snapshot"
+  "evidence": "0x88 per entry, the live monsters and NPCs: +0 is 0xff when free, +2 the kind, +0x1c radius, +0x1e body height, +0x22 the fine offset within the cell, position at +0x2c, +0x30, +0x34, vertical state +0xd, vertical velocity +0x52. 58 are live on level 0, in 14 kinds. The driver at 0x80052e5c hands entries to actor_select. The player is NOT here -- no entry matches player_pos in any snapshot. What fills it from the disc is still unfound: the level's own records carry the definitions, not the positions"
  },
  "0x8005f7bc": {
   "name": "save_serialise",
@@ -850,7 +850,7 @@
  "0x801b265c": {
   "name": "buttons",
   "kind": "data",
-  "evidence": "the decoded button word, one store in the whole executable at 0x8002b754; 0x801b265e is the previous frame's, anded against to find a fresh press"
+  "evidence": "this frame's button word, a set bit meaning pressed. player_controller stores PadRead's return here at 0x80031140 and clear_movement_state masks it down at 0x8002b754; 0x801b265e is last frame's, and a fresh press is set in one and clear in the other"
  },
  "0x801b2612": {
   "name": "player_facing",
@@ -873,9 +873,9 @@
   "evidence": "s32 cap on the walking speed, and the acceleration is a quarter of it. Written only at 0x80031188 and 0x800313e4 -- if walking speed is a stat, that is where it is set"
  },
  "0x80081868": {
-  "name": "key_bindings",
+  "name": "bind_forward",
   "kind": "data",
-  "evidence": "14 u16 button masks, one per action, in order forward, back, act3, act4, start, l3, select, r3, turn right, turn left, look up, look down, l2, r1. Defaults: forward is TRIANGLE, back CROSS, turning the d-pad. The config menu rewrites them, so read the live copy"
+  "evidence": "the first of fourteen u16 button masks, one per action; read by player_walk at 0x8002f9c8 and written by apply_control_scheme, which puts 0x1000 in it in all seven movement schemes. WITHDRAWN, the earlier entry here: it called this table key_bindings and read its masks against the raw hardware word, making 0x1000 TRIANGLE and 0x0800 R1. The two halves of that word are swapped by the time PadRead returns it, so 0x1000 is UP and 0x0800 is START. Four independent uses say so: the slot holding 0x0800 is read only by the pause menu, the one holding 0x0100 opens the map, play_movie skips a movie on 0x10/0x20/0x40/0x80 -- the four face buttons -- and everything on 0x800, and the title menu confirms on 0x20/0x40/0x800 and moves its cursor on 0x1000/0x4000. Under the raw reading those are, in order, R1 opening the menu, L2 the map, the four directions skipping a movie, and the cursor moving on TRIANGLE and CROSS"
  },
  "0x8009a2e0": {
   "name": "sin_quarter",
@@ -948,13 +948,318 @@
   "evidence": "s16 immediately before player_facing: where the player is looking up or down, 0x1000 to the turn. Found by logging nine candidates and recording one look up and down -- it was the only one that moved, over 136 values from -596 to +700, and it rests near -190. The first guess, 0x801b2614, reads zero for a whole session and is wrong. POSITIVE IS UP: the resting -190 was read as a downward tilt and the port was built on that, and a player looking up saw it look down"
  },
  "0x80040ae4": {
-  "name": "object_walk",
+  "name": "render_walk",
   "kind": "code",
-  "evidence": "walks object_table by 0x44 in the render cluster, skipping records whose type id is 0xff and dispatching on the byte at +4 against 0xe9, 0x1f, 0xe5, 0xf0 and 0xf2. Where it picks the model is not read yet -- which is the open question behind objects drawn as the wrong things"
+  "evidence": "two loops, not one. The first steps the ACTOR table at 0x80185da8 by 0x88 for 200 slots and draws a creature only when its +9 is 1; its model number is the mesh byte at +1 plus 0x80. The second steps object_table by 0x44 for 396 slots, skips a u16 type id of 0xff, clears bit 0x80 of +3 every frame and dispatches on the class byte at +4 -- 0xe9 and 0xe5 are skipped, 0x1f, 0xf0 and 0xf2 each have their own path. The old name here was object_walk, which described only the second half"
  },
  "_note_object_model": {
   "name": "object type -> model",
   "kind": "data",
   "evidence": "an object of type N uses MO.T[N + 128], and past MO.T's 428 entries the numbering continues into MOF.T. The 128 was MEASURED, not reasoned: a player stood in the game beside the port and named four pairs off the model gallery -- helmet type 34 = model 162, healing grass 104 = 232, save point 227 = 355, bull's head 253 = 381 -- and all four differ by exactly 128. The sizes agree: the grass is 384x211x416 under the rule where MO.T[type] gave it 4176x4096x3808, which is what the player saw as a big white thing. MO.T[type], the previous assumption, had never been checked against anything"
+ },
+ "0x80062488": {
+  "name": "cd_interrupt_callback",
+  "kind": "code",
+  "evidence": "forms the address of \"DiskError:\", which is that routine's own debug message"
+ },
+ "0x800629cc": {
+  "name": "CD_sync",
+  "kind": "code",
+  "evidence": "forms the address of \"CD_sync\", which is that routine's own debug message"
+ },
+ "0x80062c50": {
+  "name": "CD_ready",
+  "kind": "code",
+  "evidence": "forms the address of \"CD_ready\", which is that routine's own debug message"
+ },
+ "0x80062f20": {
+  "name": "CD_cw",
+  "kind": "code",
+  "evidence": "forms the address of \"CD_cw\", which is that routine's own debug message"
+ },
+ "0x8006376c": {
+  "name": "CD_init",
+  "kind": "code",
+  "evidence": "forms the address of \"CD_init:\", which is that routine's own debug message"
+ },
+ "0x80063a7c": {
+  "name": "CD_read_retry",
+  "kind": "code",
+  "evidence": "forms the address of \"CD read retry:\", which is that routine's own debug message"
+ },
+ "0x80063ef0": {
+  "name": "CD_read",
+  "kind": "code",
+  "evidence": "forms the address of \"CD_read\", which is that routine's own debug message"
+ },
+ "0x800641a8": {
+  "name": "CD_datasync",
+  "kind": "code",
+  "evidence": "forms the address of \"CD_datasync\", which is that routine's own debug message"
+ },
+ "0x80064650": {
+  "name": "CdInit",
+  "kind": "code",
+  "evidence": "forms the address of \"CdInit: Init failed\", which is that routine's own debug message"
+ },
+ "0x80064bd8": {
+  "name": "cd_read_directory",
+  "kind": "code",
+  "evidence": "forms the address of \"CD001\", which is that routine's own debug message"
+ },
+ "0x80073458": {
+  "name": "DecDCTReset",
+  "kind": "code",
+  "evidence": "forms the address of \"MDEC_rest:bad option(%d)\", which is that routine's own debug message"
+ },
+ "0x80073684": {
+  "name": "DecDCTinSync",
+  "kind": "code",
+  "evidence": "forms the address of \"MDEC_in_sync\", which is that routine's own debug message"
+ },
+ "0x8007371c": {
+  "name": "DecDCToutSync",
+  "kind": "code",
+  "evidence": "forms the address of \"MDEC_out_sync\", which is that routine's own debug message"
+ },
+ "0x80073cbc": {
+  "name": "DecDCTvlc",
+  "kind": "code",
+  "evidence": "forms the address of \"MDEC_vlec: invalid VLC ID\", which is that routine's own debug message"
+ },
+ "0x80079700": {
+  "name": "ResetGraph",
+  "kind": "code",
+  "evidence": "forms the address of \"ResetGraph(%d)...\", which is that routine's own debug message"
+ },
+ "0x8007985c": {
+  "name": "SetGraphReverse",
+  "kind": "code",
+  "evidence": "forms the address of \"SetGraphReverse(%d)...\", which is that routine's own debug message"
+ },
+ "0x80079970": {
+  "name": "SetGraphDebug",
+  "kind": "code",
+  "evidence": "forms the address of \"SetGraphDebug:level:%d,type:%d reverse:%d\", which is that routine's own debug message"
+ },
+ "0x800799dc": {
+  "name": "SetGraphQueue",
+  "kind": "code",
+  "evidence": "forms the address of \"SetGrapQue(%d)...\", which is that routine's own debug message"
+ },
+ "0x80079aa8": {
+  "name": "DrawSyncCallback",
+  "kind": "code",
+  "evidence": "forms the address of \"DrawSyncCallback(%08x)...\", which is that routine's own debug message"
+ },
+ "0x80079b04": {
+  "name": "SetDispMask",
+  "kind": "code",
+  "evidence": "forms the address of \"SetDispMask(%d)...\", which is that routine's own debug message"
+ },
+ "0x80079ba0": {
+  "name": "DrawSync",
+  "kind": "code",
+  "evidence": "forms the address of \"DrawSync(%d)...\", which is that routine's own debug message"
+ },
+ "0x80079d34": {
+  "name": "ClearImage",
+  "kind": "code",
+  "evidence": "forms the address of \"ClearImage\", which is that routine's own debug message"
+ },
+ "0x80079dc8": {
+  "name": "LoadImage",
+  "kind": "code",
+  "evidence": "forms the address of \"LoadImage\", which is that routine's own debug message"
+ },
+ "0x80079e2c": {
+  "name": "StoreImage",
+  "kind": "code",
+  "evidence": "forms the address of \"StoreImage\", which is that routine's own debug message"
+ },
+ "0x80079e90": {
+  "name": "MoveImage",
+  "kind": "code",
+  "evidence": "forms the address of \"MoveImage\", which is that routine's own debug message"
+ },
+ "0x80079f54": {
+  "name": "ClearOTag",
+  "kind": "code",
+  "evidence": "forms the address of \"ClearOTag(%08x,%d)...\", which is that routine's own debug message"
+ },
+ "0x8007a00c": {
+  "name": "ClearOTagR",
+  "kind": "code",
+  "evidence": "forms the address of \"ClearOTagR(%08x,%d)...\", which is that routine's own debug message"
+ },
+ "0x8007a104": {
+  "name": "DrawOTag",
+  "kind": "code",
+  "evidence": "forms the address of \"DrawOTag(%08x)...\", which is that routine's own debug message"
+ },
+ "0x8007a178": {
+  "name": "PutDrawEnv",
+  "kind": "code",
+  "evidence": "forms the address of \"PutDrawEnv(%08x)...\", which is that routine's own debug message"
+ },
+ "0x8007a274": {
+  "name": "PutDispEnv",
+  "kind": "code",
+  "evidence": "forms the address of \"PutDispEnv(%08x)...\", which is that routine's own debug message"
+ },
+ "0x8007c0ac": {
+  "name": "gpu_timeout_report",
+  "kind": "code",
+  "evidence": "forms the address of \"GPU timeout:que=%d,stat=%08x,chcr=%08x,madr=%08x,\", which is that routine's own debug message"
+ },
+ "0x80014bd4": {
+  "name": "game_main",
+  "kind": "code",
+  "evidence": "what entry_point jumps to: zeroes twelve tables, runs the whole game, and on the way out writes the shell's next_exe byte at 0x800102f0 from one of three exit paths"
+ },
+ "0x8007855c": {
+  "name": "PadInit",
+  "kind": "code",
+  "evidence": "wraps the BIOS OutdatedPadInitAndStart (B0 0x15)"
+ },
+ "0x800785ac": {
+  "name": "PadRead",
+  "kind": "code",
+  "evidence": "wraps the BIOS OutdatedPadGetButtons (B0 0x16) and returns NOT of the buffer, so a set bit is a pressed button. player_controller calls it once a frame"
+ },
+ "0x800785dc": {
+  "name": "PadStop",
+  "kind": "code",
+  "evidence": "wraps the BIOS StopPad (B0 0x14)"
+ },
+ "0x801b265e": {
+  "name": "buttons_prev",
+  "kind": "data",
+  "evidence": "player_controller copies buttons_now here at the end of its frame (0x80031e94); a menu press is a bit set in buttons_now and clear in this"
+ },
+ "0x8008186a": {
+  "name": "bind_back",
+  "kind": "data",
+  "evidence": "the pair of bind_forward; DOWN in all seven schemes"
+ },
+ "0x8008186c": {
+  "name": "bind_left",
+  "kind": "data",
+  "evidence": "read by the look routine at 0x8002f5cc; LEFT in schemes A, B, C and G and a shoulder button in D, E and F"
+ },
+ "0x8008186e": {
+  "name": "bind_right",
+  "kind": "data",
+  "evidence": "the pair of bind_left, read at 0x8002f634"
+ },
+ "0x80081870": {
+  "name": "bind_attack",
+  "kind": "data",
+  "evidence": "read by player_turn and by 0x8002d2a0; the action schemes put SQUARE or CROSS in it"
+ },
+ "0x80081872": {
+  "name": "bind_menu_alt",
+  "kind": "data",
+  "evidence": "read by 0x800305d8; only the fourth action scheme writes it, with CIRCLE"
+ },
+ "0x80081874": {
+  "name": "bind_action",
+  "kind": "data",
+  "evidence": "read by player_turn and 0x8002d2a0; SQUARE or TRIANGLE"
+ },
+ "0x80081876": {
+  "name": "bind_use",
+  "kind": "data",
+  "evidence": "the most widely read slot: player_turn, the script interpreter, load_entry and 0x8005db30. CIRCLE in three of the four action schemes"
+ },
+ "0x80081878": {
+  "name": "bind_strafe_left",
+  "kind": "data",
+  "evidence": "read by player_walk at 0x8002fba0, where it decelerates the strafe speed; L1 in the default scheme"
+ },
+ "0x8008187a": {
+  "name": "bind_look_a",
+  "kind": "data",
+  "evidence": "read by the look routine at 0x8002f758 and 0x8002f874"
+ },
+ "0x8008187c": {
+  "name": "bind_strafe_right",
+  "kind": "data",
+  "evidence": "read by player_walk at 0x8002fb3c, where it accelerates the strafe speed, so this is the positive direction; R1 in the default scheme"
+ },
+ "0x8008187e": {
+  "name": "bind_look_b",
+  "kind": "data",
+  "evidence": "read by the look routine at 0x8002f740; only scheme G writes it"
+ },
+ "0x80081880": {
+  "name": "bind_map",
+  "kind": "data",
+  "evidence": "SELECT, and the options screen never writes it: player_controller tests it at 0x8003112c and calls 0x80019f58(3)"
+ },
+ "0x80081882": {
+  "name": "bind_pause",
+  "kind": "data",
+  "evidence": "START, never written either: player_controller tests it at 0x80031154 and calls the pause menu at 0x8001a634"
+ },
+ "0x8001f4c0": {
+  "name": "apply_control_scheme",
+  "kind": "code",
+  "evidence": "fills the binding slots: four action schemes into 0x80081870..0x80081876 and seven movement schemes into 0x80081868..0x8008187e, every value an immediate in the code"
+ },
+ "0x80023fd4": {
+  "name": "options_screen",
+  "kind": "code",
+  "evidence": "copies the nine 16-byte action labels at 0x8001137c and the scheme names at 0x8001140c to the stack and draws them"
+ },
+ "0x8001137c": {
+  "name": "action_labels",
+  "kind": "data",
+  "evidence": "nine 16-byte strings: move{left, view{up, move{right, view{down, forward{back, turn, move, turn{left, turn{right"
+ },
+ "0x8001140c": {
+  "name": "scheme_labels",
+  "kind": "data",
+  "evidence": "eight-byte strings type{a to type{g, the seven movement schemes apply_control_scheme knows"
+ },
+ "0x8002b6f0": {
+  "name": "clear_movement_state",
+  "kind": "code",
+  "evidence": "zeroes the five speed and velocity halfwords at 0x801b2646..0x801b264e and masks buttons_now down to the attack, action, use and map bits"
+ },
+ "0x8002f5c0": {
+  "name": "player_look",
+  "kind": "code",
+  "evidence": "the routine that reads bind_left, bind_right, bind_look_a and bind_look_b; the turn and the view pitch, and its rate is not transcribed"
+ },
+ "0x8001fa60": {
+  "name": "read_overlay_arg2",
+  "kind": "code",
+  "evidence": "keeps 0x800102fa in $s3 and runs a screen of its own; game_main calls it once, straight after the init block, and branches on the result. What OPEN.EXE's menu chose arrives here"
+ },
+ "0x80018fbc": {
+  "name": "block_zero",
+  "kind": "code",
+  "evidence": "(dest, value, count); game_main's first twelve calls clear the object, actor, player and grid tables"
+ },
+ "0x80040568": {
+  "name": "model_of_type",
+  "kind": "code",
+  "evidence": "(type) -> model number. Below 300 it is type + 0x100 flat. From 300 up a bank is added: (bank << 5) + 0x100, where the bank is the byte at 0x8018fad8, or the one at 0x8018fae4 when 0x8018fad4 is 1 and 0x8018faeb is 1 and it is not 0xff. Since the resource table is offset by 128, type < 300 lands on MO.T[type + 128] -- the rule a player measured off the model gallery, now read off the code -- and type 301 with bank 0 lands on MOF.T[1], the Broken Cart, which is what the gallery said too"
+ },
+ "0x800405e8": {
+  "name": "model_ptr",
+  "kind": "code",
+  "evidence": "(model, out): reads model_table[model] and writes it to *out. A model below 0x68 is taken as-is; above that the resource has to answer 1 or 2 to 0x8001947c or the pointer is replaced by zero, which is how a model that is not resident is skipped rather than drawn"
+ },
+ "0x801a92b0": {
+  "name": "model_table",
+  "kind": "data",
+  "evidence": "pointers to loaded models, indexed by the model number model_of_type returns. Objects reach it as type + 0x100 and creatures as their mesh byte + 0x80, so the two numbering schemes meet here"
+ },
+ "0x800407cc": {
+  "name": "object_in_view",
+  "kind": "code",
+  "evidence": "(position at record+0x14, record[+0x38], record[+0x39]) -> nonzero to draw. The class 0xf2 path in render_walk skips the object when it answers zero"
  }
 }

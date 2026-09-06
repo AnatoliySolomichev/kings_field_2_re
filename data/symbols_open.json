@@ -1,0 +1,363 @@
+{
+ "_note": "Names in OPEN.EXE \u2014 logos, the opening movie, the title menu. Loads at 0x80011000, the same address as GAME.EXE and END.EXE, so these names are not interchangeable with data/symbols.json.",
+ "0x80014e54": {
+  "name": "DecDCTReset",
+  "kind": "code",
+  "evidence": "forms the address of \"MDEC_rest:bad option(%d)\", which is that routine's own debug message"
+ },
+ "0x80015080": {
+  "name": "DecDCTinSync",
+  "kind": "code",
+  "evidence": "forms the address of \"MDEC_in_sync\", which is that routine's own debug message"
+ },
+ "0x80015118": {
+  "name": "DecDCToutSync",
+  "kind": "code",
+  "evidence": "forms the address of \"MDEC_out_sync\", which is that routine's own debug message"
+ },
+ "0x800156d8": {
+  "name": "DecDCTvlc",
+  "kind": "code",
+  "evidence": "forms the address of \"MDEC_vlec: invalid VLC ID\", which is that routine's own debug message"
+ },
+ "0x80015cc8": {
+  "name": "ResetGraph",
+  "kind": "code",
+  "evidence": "forms the address of \"ResetGraph(%d)...\", which is that routine's own debug message"
+ },
+ "0x80015e24": {
+  "name": "SetGraphReverse",
+  "kind": "code",
+  "evidence": "forms the address of \"SetGraphReverse(%d)...\", which is that routine's own debug message"
+ },
+ "0x80015f38": {
+  "name": "SetGraphDebug",
+  "kind": "code",
+  "evidence": "forms the address of \"SetGraphDebug:level:%d,type:%d reverse:%d\", which is that routine's own debug message"
+ },
+ "0x80015fa4": {
+  "name": "SetGraphQueue",
+  "kind": "code",
+  "evidence": "forms the address of \"SetGrapQue(%d)...\", which is that routine's own debug message"
+ },
+ "0x80016070": {
+  "name": "DrawSyncCallback",
+  "kind": "code",
+  "evidence": "forms the address of \"DrawSyncCallback(%08x)...\", which is that routine's own debug message"
+ },
+ "0x800160cc": {
+  "name": "SetDispMask",
+  "kind": "code",
+  "evidence": "forms the address of \"SetDispMask(%d)...\", which is that routine's own debug message"
+ },
+ "0x80016168": {
+  "name": "DrawSync",
+  "kind": "code",
+  "evidence": "forms the address of \"DrawSync(%d)...\", which is that routine's own debug message"
+ },
+ "0x800162fc": {
+  "name": "ClearImage",
+  "kind": "code",
+  "evidence": "forms the address of \"ClearImage\", which is that routine's own debug message"
+ },
+ "0x80016390": {
+  "name": "LoadImage",
+  "kind": "code",
+  "evidence": "forms the address of \"LoadImage\", which is that routine's own debug message"
+ },
+ "0x800163f4": {
+  "name": "StoreImage",
+  "kind": "code",
+  "evidence": "forms the address of \"StoreImage\", which is that routine's own debug message"
+ },
+ "0x80016458": {
+  "name": "MoveImage",
+  "kind": "code",
+  "evidence": "forms the address of \"MoveImage\", which is that routine's own debug message"
+ },
+ "0x8001651c": {
+  "name": "ClearOTag",
+  "kind": "code",
+  "evidence": "forms the address of \"ClearOTag(%08x,%d)...\", which is that routine's own debug message"
+ },
+ "0x800165d4": {
+  "name": "ClearOTagR",
+  "kind": "code",
+  "evidence": "forms the address of \"ClearOTagR(%08x,%d)...\", which is that routine's own debug message"
+ },
+ "0x800166cc": {
+  "name": "DrawOTag",
+  "kind": "code",
+  "evidence": "forms the address of \"DrawOTag(%08x)...\", which is that routine's own debug message"
+ },
+ "0x80016740": {
+  "name": "PutDrawEnv",
+  "kind": "code",
+  "evidence": "forms the address of \"PutDrawEnv(%08x)...\", which is that routine's own debug message"
+ },
+ "0x8001683c": {
+  "name": "PutDispEnv",
+  "kind": "code",
+  "evidence": "forms the address of \"PutDispEnv(%08x)...\", which is that routine's own debug message"
+ },
+ "0x80018674": {
+  "name": "gpu_timeout_report",
+  "kind": "code",
+  "evidence": "forms the address of \"GPU timeout:que=%d,stat=%08x,chcr=%08x,madr=%08x,\", which is that routine's own debug message"
+ },
+ "0x8001ad4c": {
+  "name": "CdInit",
+  "kind": "code",
+  "evidence": "forms the address of \"CdInit: Init failed\", which is that routine's own debug message"
+ },
+ "0x8001b6a8": {
+  "name": "cd_interrupt_callback",
+  "kind": "code",
+  "evidence": "forms the address of \"DiskError:\", which is that routine's own debug message"
+ },
+ "0x8001bbec": {
+  "name": "CD_sync",
+  "kind": "code",
+  "evidence": "forms the address of \"CD_sync\", which is that routine's own debug message"
+ },
+ "0x8001be70": {
+  "name": "CD_ready",
+  "kind": "code",
+  "evidence": "forms the address of \"CD_ready\", which is that routine's own debug message"
+ },
+ "0x8001c140": {
+  "name": "CD_cw",
+  "kind": "code",
+  "evidence": "forms the address of \"CD_cw\", which is that routine's own debug message"
+ },
+ "0x8001c98c": {
+  "name": "CD_init",
+  "kind": "code",
+  "evidence": "forms the address of \"CD_init:\", which is that routine's own debug message"
+ },
+ "0x8001cc9c": {
+  "name": "CD_read_retry",
+  "kind": "code",
+  "evidence": "forms the address of \"CD read retry:\", which is that routine's own debug message"
+ },
+ "0x8001d110": {
+  "name": "CD_read",
+  "kind": "code",
+  "evidence": "forms the address of \"CD_read\", which is that routine's own debug message"
+ },
+ "0x8001d3c8": {
+  "name": "CD_datasync",
+  "kind": "code",
+  "evidence": "forms the address of \"CD_datasync\", which is that routine's own debug message"
+ },
+ "0x8001dd00": {
+  "name": "cd_read_directory",
+  "kind": "code",
+  "evidence": "forms the address of \"CD001\", which is that routine's own debug message"
+ },
+ "0x800136c8": {
+  "name": "entry_point",
+  "kind": "code",
+  "evidence": "OPEN.EXE header: sets $gp to 0x800403f4 and jumps to open_main"
+ },
+ "0x80011e14": {
+  "name": "open_main",
+  "kind": "code",
+  "evidence": "the only thing entry_point jumps to; runs the whole opening -- logos, the movies, the title menu -- and returns to the shell"
+ },
+ "0x800403f4": {
+  "name": "next_exe_ptr",
+  "kind": "data",
+  "evidence": "the word at $gp+0, holding 0x800102f0, the shell's next_exe byte. open_main stores 1 through it to make the shell load GAME.EXE"
+ },
+ "0x800136d8": {
+  "name": "play_movie",
+  "kind": "code",
+  "evidence": "copies the five-entry, 20-byte-per-entry name table at 0x80011028 to the stack, indexes it by $a0 and hands the name to CdSearchFile; the entries are \\\\OP\\\\M0.S, M1.S, M3.S, L0.S and L1.S"
+ },
+ "0x80011028": {
+  "name": "movie_names",
+  "kind": "data",
+  "evidence": "five 20-byte slots holding \\\\OP\\\\M0.S;1, M1.S;1, M3.S;1, L0.S;1 and L1.S;1 -- the argument to play_movie is an index into this"
+ },
+ "0x80011000": {
+  "name": "opd_name",
+  "kind": "data",
+  "evidence": "the string OP.D, used by load_opening_data"
+ },
+ "0x80011008": {
+  "name": "title_movie_name",
+  "kind": "data",
+  "evidence": "the string \\\\OP\\\\M2.S;1, referenced only by 0x8001273c -- the one movie play_movie's table does not carry"
+ },
+ "0x80012494": {
+  "name": "load_opening_data",
+  "kind": "code",
+  "evidence": "forms OP.D and reads it in a loop; open_main calls it once, guarded by a flag, before the title screen"
+ },
+ "0x8001d9f4": {
+  "name": "CdSearchFile",
+  "kind": "code",
+  "evidence": "the routine play_movie hands a filename to; it calls cd_read_directory, which is the one that matches CD001"
+ },
+ "0x8001f9a0": {
+  "name": "PadInit",
+  "kind": "code",
+  "evidence": "sets the pad buffer word at 0x800a664c to -1 and calls the BIOS OutdatedPadInitAndStart (B0 0x15)"
+ },
+ "0x8001f9f0": {
+  "name": "PadRead",
+  "kind": "code",
+  "evidence": "calls the BIOS OutdatedPadGetButtons (B0 0x16) and returns NOT of the buffer word at 0x800a664c, so a set bit means pressed"
+ },
+ "0x8001fa20": {
+  "name": "PadStop",
+  "kind": "code",
+  "evidence": "calls the BIOS StopPad (B0 0x14)"
+ },
+ "0x800a664c": {
+  "name": "pad_buffer",
+  "kind": "data",
+  "evidence": "the word PadInit hands to the BIOS and PadRead inverts; the BIOS writes both pads into it, active low"
+ },
+ "0x80014790": {
+  "name": "heap_init",
+  "kind": "code",
+  "evidence": "stores its two arguments into four globals at 0x80040458..0x80040470; open_main calls it with (0x80100000, 0xf8000), so the opening's heap is the top 992 KB of RAM"
+ },
+ "0x80014014": {
+  "name": "card_init",
+  "kind": "code",
+  "evidence": "BIOS InitCard, OpenEvent and EnableEvent"
+ },
+ "0x80014124": {
+  "name": "card_start",
+  "kind": "code",
+  "evidence": "BIOS StartCard and _bu_init"
+ },
+ "0x8001414c": {
+  "name": "card_stop",
+  "kind": "code",
+  "evidence": "BIOS StopCard"
+ },
+ "0x80014174": {
+  "name": "card_probe",
+  "kind": "code",
+  "evidence": "opens, closes and erases bu00:BASLUS-00255TEMP through the BIOS file calls -- a write test on the memory card"
+ },
+ "0x80014264": {
+  "name": "card_list_saves",
+  "kind": "code",
+  "evidence": "firstfile/nextfile over bu00:* comparing each name against BASLUS-00255"
+ },
+ "0x80020edc": {
+  "name": "spu_master_volume",
+  "kind": "code",
+  "evidence": "scales each argument by 129 (0x7f becomes 0x3fff) into a stack structure whose first word is 3, then calls 0x80029ff0 -- the mask-3 SpuSetCommonAttr"
+ },
+ "0x800a6f00": {
+  "name": "draw_env",
+  "kind": "data",
+  "evidence": "the address open_main hands to PutDrawEnv, with PutDispEnv taking it plus 0x5c -- the size of a DRAWENV"
+ },
+ "0x80012500": {
+  "name": "init_graphics",
+  "kind": "code",
+  "evidence": "ResetGraph(0), SetGraphDebug(0), then two draw and two display environments 640 wide and 240 tall at 0x800a6f00, and SetDispMask(1)"
+ },
+ "0x80012644": {
+  "name": "init_sound",
+  "kind": "code",
+  "evidence": "the SPU bring-up: spu_master_volume(0,0) and a CD volume of 0x30 in each ear before anything is played"
+ },
+ "0x8001273c": {
+  "name": "play_title_music",
+  "kind": "code",
+  "evidence": "CdSearchFile on \\\\OP\\\\M2.S;1 and a seek to it; M2.S is the one movie whose video track is 16x16, so what it carries is the title screen's music"
+ },
+ "0x800133c8": {
+  "name": "frame_begin",
+  "kind": "code",
+  "evidence": "ClearOTagR on the current buffer's 256-entry ordering table; first call of every frame in open_main, play_movie and the title loop"
+ },
+ "0x80013418": {
+  "name": "frame_end",
+  "kind": "code",
+  "evidence": "DrawSync(0), VSync, PutDrawEnv, PutDispEnv, DrawOTag -- the buffer swap that closes every frame"
+ },
+ "0x8001fe6c": {
+  "name": "VSync",
+  "kind": "code",
+  "evidence": "reads the vertical blank counters through the pointers at 0x8003fa34 and 0x8003fa38 and waits; frame_end calls it with 0"
+ },
+ "0x8001279c": {
+  "name": "title_layer_a",
+  "kind": "code",
+  "evidence": "the artwork and the logo: a full-screen 640x240 quad from the 8-bit page at VRAM (640,0), then KING'S at x 64..320 and FIELD II at x 320..576. The argument is the fade state and it returns 1 when the fade is done"
+ },
+ "0x80012b0c": {
+  "name": "title_layer_b",
+  "kind": "code",
+  "evidence": "three strips of the 4-bit page at VRAM (896,0): the two copyright lines, at x 124..379"
+ },
+ "0x80012ea0": {
+  "name": "title_layer_c",
+  "kind": "code",
+  "evidence": "the two menu entries out of the same page -- NEW is u 0..96 of the row at v 16 and CONTINUE u 96..192, each into a 96x8 rectangle at x 272..368, y 190 and 202. The argument is which is lit"
+ },
+ "0x800131ac": {
+  "name": "title_menu",
+  "kind": "code",
+  "evidence": "PadRead(1) with the previous word at 0x80040410: a new press of CIRCLE, CROSS or START returns 1 and plays sound 0x3a, a new press of UP or DOWN plays 0x5a and flips the choice through the pointer in a0 -- but only when a1, the number of saves, is not zero"
+ },
+ "0x800123cc": {
+  "name": "title_confirm_fade",
+  "kind": "code",
+  "evidence": "redraws the three layers with the chosen entry while fading the CD volume to zero, then CdControl(9), which is CdlPause"
+ },
+ "0x80013464": {
+  "name": "cd_read_file",
+  "kind": "code",
+  "evidence": "appends ;1 to the name, CdSearchFile, CdControl(0x02) Setloc and CdControl(0x06) ReadN, then 2048 bytes a sector into a0"
+ },
+ "0x800147d0": {
+  "name": "malloc",
+  "kind": "code",
+  "evidence": "walks the free list heap_init set up at 0x80040458; load_opening_data asks it for 0x32000 bytes for OP.D"
+ },
+ "0x8001a0a8": {
+  "name": "GetTPage",
+  "kind": "code",
+  "evidence": "(mode, abr, x, y) into a texture page word; the title screen calls it with (1,0,640,0) for the 8-bit artwork and (0,1,960,0) for the 4-bit loading screen, which are exactly where OP.D's TIMs say those images go"
+ },
+ "0x8001a990": {
+  "name": "SetDefDrawEnv",
+  "kind": "code",
+  "evidence": "(env, x, y, w, h) with h on the stack; called in pairs 240 apart for the two buffers"
+ },
+ "0x8001aa50": {
+  "name": "SetDefDispEnv",
+  "kind": "code",
+  "evidence": "the same shape, on the display environment 0x5c further on"
+ },
+ "0x8001b020": {
+  "name": "CdControl",
+  "kind": "code",
+  "evidence": "(command, parameter, result); called with 0x02 Setloc, 0x06 ReadN and 0x15 SeekL"
+ },
+ "0x8001362c": {
+  "name": "play_sound",
+  "kind": "code",
+  "evidence": "the sound id is in a3: the title menu plays 0x3a on a confirm and 0x5a on a cursor move"
+ },
+ "0x80040410": {
+  "name": "pad_prev",
+  "kind": "data",
+  "evidence": "$gp+0x1c: the button word title_menu saw last frame, which is what makes its tests edge triggered"
+ },
+ "0x80040494": {
+  "name": "opd_buffer",
+  "kind": "data",
+  "evidence": "$gp+0xa0: the 0x32000-byte allocation OP.D is read into"
+ }
+}

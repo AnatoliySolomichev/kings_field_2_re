@@ -71,7 +71,20 @@ def chain(raw):
 
 
 def objects(lv, path=FDAT):
-    """[{slot, type, cx, cz, x, z, text}] for every object placed on a level."""
+    """[{slot, type, cx, cz, x, z, h, rot, text}] for every object on a level.
+
+    `h` is the object's height **above the terrain**, a signed 16-bit at offset
+    12 of the record, and it is what makes a chest a chest: the body stands at
+    `h = 0`, the lid at `h = -640` -- one body-height up, since Y points down --
+    and the lock plate at `h = -256` on the front of it. Putting all three on
+    the floor, which is what this project did while the field was thought not
+    to exist, draws the lid inside the body.
+
+    Checked against the game: `y = -128 * cell[+6] + h` reproduces the live
+    object table's Y for **345 of level 0's 347 placed objects**. The two it
+    misses are both type 280, whose records are full of `0xff` filler and whose
+    live Y is a round -12800, so something else places them.
+    """
     raw = TArc(path).raw(lv * 3 + 1)
     if len(raw) < BLOCK + SLOTS * RECORD:
         return []
@@ -87,6 +100,7 @@ def objects(lv, path=FDAT):
                     "x": r[2] * 2048 + struct.unpack_from("<H", r, 8)[0],
                     "z": r[1] * 2048 + struct.unpack_from("<H", r, 10)[0],
                     "rot": struct.unpack_from("<H", r, 6)[0] % 4096,
+                    "h": struct.unpack_from("<h", r, 12)[0],
                     "text": None if f38 == EMPTY else f38})
     return out
 

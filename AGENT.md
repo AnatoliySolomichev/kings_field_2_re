@@ -4,9 +4,17 @@ You are continuing a reverse-engineering effort that turns King's Field II
 (SLUS-00255) into something a modern engine can run. A lot is already decoded.
 Your job is to keep going, mostly on your own, without breaking what works.
 
-Read [FORMATS.md](FORMATS.md) for what is known, [BACKLOG.md](BACKLOG.md) for
-what is not, [TOOLS.md](TOOLS.md) for how to run things, and
-`data/symbols.json` for every address that has a name and a reason.
+Read [FORMATS.md](FORMATS.md) for what is known, [BOOT.md](BOOT.md) for the
+chain from the entry point through the logos, the title menu and the buttons,
+[BACKLOG.md](BACKLOG.md) for what is not known, [TOOLS.md](TOOLS.md) for how to
+run things, and `data/symbols.json` for every address that has a name and a
+reason.
+
+One thing to have in mind before reading any address: **the disc has four
+executables and three of them load at `0x80011000`.** `data/symbols.json` is
+`GAME.EXE`'s alone, and `OPEN.EXE`, `END.EXE` and the shell have their own
+tables. Every tool takes the executable by nickname — `boot`, `open`, `game`,
+`end`.
 
 **Read those before touching anything.** Several hours were once lost to
 re-deriving a fact that was already written down, and twice a tool's own
@@ -66,8 +74,8 @@ A change is finished when all of these hold:
 2. `python3 tools/collision.py` still reports every logged call reproduced.
 3. If it touches the Godot build, `python3 tools/level3d.py 0` ends with
    `godot loads the project cleanly`.
-4. FORMATS.md, BACKLOG.md, TOOLS.md and `data/symbols.json` are updated to
-   match, including anything now withdrawn.
+4. FORMATS.md, BOOT.md, BACKLOG.md, TOOLS.md and the symbol tables are updated
+   to match, including anything now withdrawn.
 
 Do not report a step as complete without 1 and 4.
 
@@ -129,7 +137,13 @@ differs. Chests (`MO.T` 106) are one of them and are visibly missing.
 **5. Enemies.** The 265 entity records are definitions — stats and kind, no
 position. Nothing places them yet. Find what does before drawing anything.
 
-**6. Everything else in BACKLOG.md**, which is ordered roughly by what it
+**6. The boot chain — done, and it opened three new ones.** The shell, the
+opening, the title menu and the whole input path are read and in
+[BOOT.md](BOOT.md), with the port following them in `godot/boot.gd`,
+`godot/opening.gd` and `godot/pad.gd`. What it left open is `END.EXE`, the
+save-loading path on the `GAME.EXE` side (`0x8001fa60`), and sound.
+
+**7. Everything else in BACKLOG.md**, which is ordered roughly by what it
 unblocks.
 
 ---
@@ -173,6 +187,14 @@ Do not rediscover these.
   headless: `godot-4 --headless --path out/godot --import` then `--quit-after 60`.
   There is no display here; headless is the only way you can check your own work,
   and `tools/level3d.py` now runs it for you.
+* **An address without an executable is not a fact.** Three of the four
+  programs on the disc load at `0x80011000`, so `0x80013a20` names one routine
+  in `OPEN.EXE` and a different one in `GAME.EXE`. Say which.
+* **The button bits are the PSY-Q layout, not the hardware's.** `PadRead`
+  returns the two halves of the hardware word swapped, so `0x1000` is UP and
+  not TRIANGLE. An entry in `symbols.json` carried the raw reading for a while
+  and named the wrong physical button for every action in the game; BOOT.md
+  section 6 has the four independent places that settle it.
 * **capstone does not decode the GTE**, which is most of the renderer. Use
   `tools/fdis.py`, which names the coprocessor registers — `ctc2 $t5, L11L12`
   says "light matrix" where the raw form says nothing.

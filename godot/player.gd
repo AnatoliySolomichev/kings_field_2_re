@@ -80,6 +80,16 @@ const V_LAUNCH := -0x96              # 0x8002f1ac
 const BOB_SHIFT := 5                 # 0x8002f2c4
 const EYE_UNITS := 1600.0            # 0x640 at 0x80028e10
 
+# The buttons come through the game's own binding table now -- see godot/pad.gd
+# and BOOT.md. player_controller (0x80030fcc) reads the pad once a frame, keeps
+# the word at 0x801b265c and hands it to player_walk and player_turn, which ask
+# the table which button each of their slots holds. With the default scheme
+# that is: forward and back on UP and DOWN, strafe on L1 and R1, turn on LEFT
+# and RIGHT, and this port's keyboard stands in for those.
+const TURN_RATE := 24                # A GUESS. player_turn is 0x8002fe1c and
+                                     # its rate is not transcribed; nothing in
+                                     # a recording has settled it either.
+
 var coll := KFCollision.new()
 var have_coll := false
 var flying := true
@@ -122,6 +132,8 @@ func _refresh() -> void:
 	var hud := get_node_or_null("../UI/Hud")
 	if hud == null:
 		return
+	if KFPad.binding.is_empty():
+		KFPad.apply()
 	var cx := int(floor(float(gx) / CELL))
 	var cz := int(floor(float(gz) / CELL))
 	var note := "FLY" if flying else "WALK"
@@ -132,8 +144,15 @@ func _refresh() -> void:
 		above = str(last_surface - gy)
 	hud.text = ("%s   cell (%d, %d)   height %d\n" +
 		"state %d   vy %d   speed %d/%d   %s above the surface\n" +
-		"F walk/fly   G collision   Esc mouse") % [
-		note, cx, cz, -gy, vstate, vvel, fwd_speed, stf_speed, above]
+		"F walk/fly   G collision   Esc mouse   " +
+		"buttons: forward %s, strafe %s/%s, turn %s/%s, menu %s\n" ) % [
+		note, cx, cz, -gy, vstate, vvel, fwd_speed, stf_speed, above,
+		KFPad.name_of(KFPad.binding[KFPad.FORWARD]),
+		KFPad.name_of(KFPad.binding[KFPad.ALT_A]),
+		KFPad.name_of(KFPad.binding[KFPad.ALT_C]),
+		KFPad.name_of(KFPad.binding[KFPad.LEFT_SLOT]),
+		KFPad.name_of(KFPad.binding[KFPad.RIGHT_SLOT]),
+		KFPad.name_of(KFPad.binding[KFPad.PAUSE])]
 
 
 func _unhandled_input(e: InputEvent) -> void:
@@ -159,11 +178,15 @@ func _unhandled_input(e: InputEvent) -> void:
 
 
 func _process(dt: float) -> void:
+	# player_controller reads the pad once a frame and keeps this frame's word
+	# and last frame's. Here that happens once a *rendered* frame rather than
+	# once a game tick, which only matters to the edge detection.
+	KFPad.poll()
 	var dir := Vector3.ZERO
-	if Input.is_key_pressed(KEY_W): dir -= transform.basis.z
-	if Input.is_key_pressed(KEY_S): dir += transform.basis.z
-	if Input.is_key_pressed(KEY_A): dir -= transform.basis.x
-	if Input.is_key_pressed(KEY_D): dir += transform.basis.x
+	if KFPad.held(KFPad.FORWARD): dir -= transform.basis.z
+	if KFPad.held(KFPad.BACK): dir += transform.basis.z
+	if KFPad.held(KFPad.ALT_A): dir -= transform.basis.x
+	if KFPad.held(KFPad.ALT_C): dir += transform.basis.x
 
 	if flying:
 		if Input.is_key_pressed(KEY_Q): dir -= Vector3.UP
@@ -204,10 +227,20 @@ func _ramp(speed: int, pos: bool, neg: bool, cap: int, decay := 3) -> int:
 
 func _tick(dir: Vector3) -> void:
 	var cap := SPEED_MAX_RUN if Input.is_key_pressed(KEY_SHIFT) else SPEED_MAX
-	fwd_speed = _ramp(fwd_speed, Input.is_key_pressed(KEY_W),
-		Input.is_key_pressed(KEY_S), cap)
-	stf_speed = _ramp(stf_speed, Input.is_key_pressed(KEY_D),
-		Input.is_key_pressed(KEY_A), cap, 2)
+	# 0x8002f9bc reads the forward slot at 0x80081868 and the back one at
+	# 0x8008186a; the strafe pair is 0x8008187c, which accelerates the speed,
+	# and 0x80081878, which decelerates it -- so 0x7c is the positive
+	# direction and with the default scheme that makes R1 strafe right.
+	fwd_speed = _ramp(fwd_speed, KFPad.held(KFPad.FORWARD),
+		KFPad.held(KFPad.BACK), cap)
+	stf_speed = _ramp(stf_speed, KFPad.held(KFPad.ALT_C),
+		KFPad.held(KFPad.ALT_A), cap, 2)
+	# The turn, which 0x8002f5c0 takes from the two lateral slots. The rate is
+	# this port's guess, not the game's.
+	if KFPad.held(KFPad.LEFT_SLOT):
+		rotate_y(deg_to_rad(TURN_RATE) / TICK_HZ)
+	if KFPad.held(KFPad.RIGHT_SLOT):
+		rotate_y(-deg_to_rad(TURN_RATE) / TICK_HZ)
 	# 0x8002fc94: the distances are not the speeds. Each is
 	# speed^2 / isqrt(sum of squares), which normalises a diagonal and, because
 	# the root is a unit short, makes a straight walk one unit longer.

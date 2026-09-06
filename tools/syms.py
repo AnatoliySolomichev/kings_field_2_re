@@ -7,7 +7,13 @@ place those names live; this module loads it and annotates text or listings.
 
     python3 tools/syms.py                     list what is named
     python3 tools/syms.py 0x8005d7bc          look one up
+    python3 tools/syms.py open 0x80013a20     ... in OPEN.EXE's table
     ... | python3 tools/syms.py -             annotate a stream of output
+
+Four executables share one load address, so every table is per executable:
+`game` is `data/symbols.json`, and `open`, `boot` and `end` are their own
+files. Without a name in front, `game` is meant -- everything written before
+the boot chain was read assumes it.
 """
 import json
 import os
@@ -17,6 +23,14 @@ import sys
 SYMBOLS = os.path.join(os.path.dirname(__file__), "..", "data", "symbols.json")
 ADDR = re.compile(r"\b0x80[0-9a-fA-F]{6}\b")
 
+# The disc has four executables and three of them load at the same address, so
+# an address alone does not name code: `0x80013a20` is one routine in OPEN.EXE
+# and a different one in GAME.EXE. Each therefore gets its own table, and
+# `data/symbols.json` -- the one everything written before this existed reads --
+# is GAME.EXE's.
+FILES = {"game": "symbols.json", "open": "symbols_open.json",
+         "boot": "symbols_boot.json", "end": "symbols_end.json"}
+
 
 def load(path=SYMBOLS):
     raw = json.load(open(path))
@@ -24,6 +38,32 @@ def load(path=SYMBOLS):
 
 
 _TABLE = None
+_TABLES = {}
+
+
+def table(exe="game"):
+    """The address book for one executable, `{address: entry}`."""
+    if exe not in _TABLES:
+        path = os.path.join(os.path.dirname(__file__), "..", "data",
+                            FILES.get(exe, exe))
+        _TABLES[exe] = load(path) if os.path.exists(path) else {}
+    return _TABLES[exe]
+
+
+def label_in(exe, addr):
+    """`label`, but in a named executable's table."""
+    t = table(exe)
+    if addr in t:
+        return t[addr]["name"]
+    for a, e in t.items():
+        if "size" in e and a <= addr < a + e["size"]:
+            return f"{e['name']}+{addr - a:#x}"
+    return f"{addr:#010x}"
+
+
+def name_in(exe, addr, default=None):
+    e = table(exe).get(addr)
+    return e["name"] if e else (f"{addr:#010x}" if default is None else default)
 
 
 def name(addr, default=None):
@@ -74,18 +114,22 @@ def annotate(text, exact_only=False):
 
 if __name__ == "__main__":
     args = sys.argv[1:]
+    exe = "game"
+    if args and args[0] in FILES:
+        exe = args.pop(0)
+        globals()["_TABLE"] = table(exe)
     if args == ["-"]:
         sys.stdout.write(annotate(sys.stdin.read()))
     elif args:
         for a in args:
             addr = int(a, 16)
             print(f"{addr:#010x}  {label(addr)}")
-            e = load().get(addr)
+            e = table(exe).get(addr)
             if e:
                 print(f"            {e['kind']}: {e['evidence']}")
     else:
-        table = load()
+        t = table(exe)
         for kind in ("code", "data"):
             print(f"=== {kind} ===")
-            for a in sorted(k for k, v in table.items() if v["kind"] == kind):
-                print(f"  {a:#010x}  {table[a]['name']:24s} {table[a]['evidence']}")
+            for a in sorted(k for k, v in t.items() if v["kind"] == kind):
+                print(f"  {a:#010x}  {t[a]['name']:24s} {t[a]['evidence']}")

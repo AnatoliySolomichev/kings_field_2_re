@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 """Disassemble a stretch of GAME.EXE, including the GTE that capstone will not.
 
-    python3 tools/fdis.py 0x8003bb04 60      sixty instructions
+    python3 tools/fdis.py 0x8003bb04 60      sixty instructions of GAME.EXE
+    python3 tools/fdis.py open 0x800136c8 40 OPEN.EXE instead
     python3 tools/fdis.py 0x80011be0 49 t    read it as a pointer table instead
+
+The executable can be named first (`boot`, `open`, `game`, `end`); without one
+it is GAME.EXE, which is what every use of this written before the boot chain
+was read assumes. It matters: all three overlays load at `0x80011000`.
 
 Capstone stops dead at coprocessor 2, which is most of the renderer: a single
 `ctc2` at `0x8003bb90` ended every attempt to read the tile drawing routine.
@@ -53,8 +58,9 @@ def cop2(w):
     return None
 
 
-def run(start, n):
-    base, _entry, text = disasm.load_text()
+def run(start, n, exe="game"):
+    import mips
+    base, _entry, text = disasm.load_text(mips.load(exe).path)
     cs = disasm.Cs()
     cs.load(text, base)
     addr = start
@@ -65,21 +71,31 @@ def run(start, n):
         got = cs.at(off, 1)
         if got:
             _a, mn, ops = got[0]
-            print(f"{syms.label(addr):30s} {mn:8s} {syms.annotate(ops)}")
+            ops = syms.ADDR.sub(
+                lambda m: (f"{m.group(0)}({syms.label_in(exe, int(m.group(0), 16))})"
+                           if syms.label_in(exe, int(m.group(0), 16)) != m.group(0)
+                           else m.group(0)), ops)
+            print(f"{syms.label_in(exe, addr):30s} {mn:8s} {ops}")
         else:
             w = struct.unpack_from("<I", text, off)[0]
             d = cop2(w)
-            print(f"{syms.label(addr):30s} {d if d else f'.word    {w:#010x}'}")
+            print(f"{syms.label_in(exe, addr):30s} "
+                  f"{d if d else f'.word    {w:#010x}'}")
         addr += 4
 
 
 if __name__ == "__main__":
-    a = int(sys.argv[1], 0)
-    n = int(sys.argv[2]) if len(sys.argv) > 2 else 60
-    if len(sys.argv) > 3:
-        base, _e, text = disasm.load_text()
+    import mips
+    argv = sys.argv[1:]
+    exe = "game"
+    if argv and argv[0] in mips.EXES:
+        exe = argv.pop(0)
+    a = int(argv[0], 0)
+    n = int(argv[1]) if len(argv) > 1 else 60
+    if len(argv) > 2:
+        base, _e, text = disasm.load_text(mips.load(exe).path)
         for i in range(n):
             v = struct.unpack_from("<I", text, a - base + 4 * i)[0]
-            print(f"  [{i:2d}] {v:#010x}  {syms.label(v)}")
+            print(f"  [{i:2d}] {v:#010x}  {syms.label_in(exe, v)}")
     else:
-        run(a, n)
+        run(a, n, exe)

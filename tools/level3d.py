@@ -437,6 +437,105 @@ def emit_object(objs, place, colour, groups, normal_of=None):
                     bag[3].append((rgb[0], rgb[1], rgb[2], 1.0))
 
 
+ACTOR_TABLE, ACTOR_STRIDE, ACTOR_SLOTS = 0x80185DA8, 0x88, 128
+ENTITY_TABLE, ENTITY_STRIDE = 0x8018C7E8, 120
+MODEL_TAG = 0x400        # entity[+0] is 0x400 | model number
+
+
+def live_actors(lv):
+    """The creatures standing on the level, out of a RAM snapshot.
+
+    The actor table is 0x88 bytes an entry: `+0` is 0xff when the slot is free,
+    `+2` the kind, `+0x1c` the radius, `+0x1e` the body height, `+0x2c` the
+    position. The kind indexes `entity_table`, 120 bytes a record, and **the
+    record's first halfword is `0x400` plus the model number**.
+
+    That last part was confirmed the same way the object offset was: a player
+    looking at the model catalogue said number 50 is "the flower enemy, there
+    are many of them on this level", and kind 0 — which is eleven of the
+    fifty-eight actors here — resolves through `0x432` to exactly model 50.
+
+    Positions come from the snapshot because what places them on the disc has
+    not been found: the level's own records carry the definitions, not the
+    positions. Borrowed, not understood, and only level 0 has a snapshot.
+    """
+    if lv != 0 or not os.path.exists(SNAP_RAM):
+        return []
+    ram = open(SNAP_RAM, "rb").read()
+
+    def at(a, n):
+        return ram[(a & 0x1FFFFF):(a & 0x1FFFFF) + n]
+
+    out = []
+    for k in range(ACTOR_SLOTS):
+        r = at(ACTOR_TABLE + k * ACTOR_STRIDE, ACTOR_STRIDE)
+        if not r or r[0] == 0xFF:
+            continue
+        kind = r[2]
+        x, y, z = struct.unpack_from("<3i", r, 0x2C)
+        rec = at(ENTITY_TABLE + kind * ENTITY_STRIDE, ENTITY_STRIDE)
+        model = struct.unpack_from("<H", rec, 0)[0] - MODEL_TAG
+        out.append({"slot": k, "kind": kind, "model": model,
+                    "x": x, "y": y, "z": z,
+                    "radius": struct.unpack_from("<H", r, 0x1C)[0],
+                    "height": struct.unpack_from("<H", r, 0x1E)[0]})
+    return out
+
+
+def build_actors_gltf(lv, out="out/godot"):
+    """The creatures, placed where the game has them and drawn with their model."""
+    actors = live_actors(lv)
+    if not actors:
+        return None
+    vram = object_vram(lv)
+    look = open("out/tile_look.bin", "rb").read()
+    grid = grid_of(lv)
+    g = gltf.Gltf()
+    groups = {}
+    placed = missing = 0
+    for a in actors:
+        m = a["model"]
+        arch, entry = ("MO", m) if m < tmd.MO_COUNT else ("MOF", m - tmd.MO_COUNT)
+        try:
+            _flags, objs = tmd.load(arch, entry)
+        except Exception:
+            missing += 1
+            continue
+        cx, cz = a["x"] >> 11, a["z"] >> 11
+        if not (0 <= cx < W and 0 <= cz < W):
+            continue
+        c = grid[(cz * W + cx) * CELLB:(cz * W + cx) * CELLB + CELLB]
+        llm, lcm, bk = light_class(look, c[9] & 0x3F, c[7] & 3)
+        placed += 1
+
+        def place(v, a=a):
+            return ((a["x"] + v[0]) / UNIT, -(a["y"] + v[1]) / UNIT,
+                    -(a["z"] + v[2]) / UNIT)
+
+        emit_object(objs, place, lambda raw: shade(raw, llm, lcm, bk), groups)
+
+    os.makedirs(f"{out}/tex", exist_ok=True)
+    prims, ntri = [], 0
+    for (tpage, clut), (pos, nrm, uv, col) in groups.items():
+        name = f"tex_{tpage:04x}_{clut:04x}"
+        path = f"{out}/tex/{name}.png"
+        if not (tpage >> 7) & 3 and not os.path.exists(path):
+            tim.write_png(path, 256, 256, rtim.page4(vram, tpage, clut))
+        mat = (g.material(name, f"tex/{name}.png", double=True)
+               if os.path.exists(path)
+               else g.plain(name + "_flat", (0.8, 0.75, 0.7, 1.0)))
+        pr = g.primitive(pos, nrm, uv, col)
+        pr["material"] = mat
+        prims.append(pr)
+        ntri += len(pos) // 3
+    if not prims:
+        return None
+    path, _n = g.write(f"{out}/actors{lv:02d}.gltf", prims, f"actors{lv}")
+    print(f"creatures: {placed} placed, {missing} without a model, {ntri} "
+          f"triangles -> {path}")
+    return path
+
+
 def build_objects_gltf(lv, out="out/godot"):
     """Everything standing on the level: doors, chests, trees, save points.
 
@@ -448,8 +547,12 @@ def build_objects_gltf(lv, out="out/godot"):
     used before and which nothing had ever checked, put a two-cell model where
     the healing grass should be and armour where the doors are.
 
-    Height is not in the record: an object stands on the terrain, at
-    `-128 * cell[+6]`, the same rule as everything else here.
+    Height **is** in the record, at offset 12, signed, and it is measured from
+    the terrain: `y = -128 * cell[+6] + h`. That reproduces the live table for
+    345 of level 0's 347 objects. This file used to put every object on the
+    terrain, which stacked a chest's lid inside its body and left its lock
+    plate lying on the floor -- a player reported exactly that, as chests drawn
+    open and closed at once.
 
     **Type 299 is not drawn.** `MO.T[299]` is a box two cells across and two
     cells tall carrying fourteen primitives — a hundred times coarser than the
@@ -487,7 +590,9 @@ def build_objects_gltf(lv, out="out/godot"):
         if not (0 <= cx < W and 0 <= cz < W):
             continue
         c = grid[(cz * W + cx) * CELLB:(cz * W + cx) * CELLB + CELLB]
-        oy = -128 * c[6]
+        # The record's own height, offset 12, signed: the terrain is only where
+        # an object with h = 0 stands. See tools/placement.py.
+        oy = -128 * c[6] + o.get("h", 0)
         llm, lcm, bk = light_class(look, c[9] & 0x3F, c[7] & 3)
         # The record stores the rotation the way the loader will *negate* it:
         # `load_object_placement` does `negu` then masks to 0xfff before writing
@@ -540,7 +645,7 @@ PROJECT = """config_version=5
 
 [application]
 config/name="King's Field II - level {lv}"
-run/main_scene="res://world.tscn"
+run/main_scene="res://boot.tscn"
 config/features=PackedStringArray("4.2", "GL Compatibility")
 
 [rendering]
@@ -567,6 +672,7 @@ SCENE = """[gd_scene load_steps={load_steps} format=3]
 [ext_resource type="Script" path="res://player.gd" id="2"]
 [ext_resource type="PackedScene" path="res://collision{lv:02d}.gltf" id="3"]
 [ext_resource type="PackedScene" path="res://objects{lv:02d}.gltf" id="4"]
+[ext_resource type="PackedScene" path="res://actors{lv:02d}.gltf" id="7"]
 [ext_resource type="Script" path="res://ghost.gd" id="5"]
 [ext_resource type="Script" path="res://labels.gd" id="6"]
 {gallery_res}
@@ -581,6 +687,8 @@ ambient_light_source = 0
 [node name="Level" parent="." instance=ExtResource("1")]
 
 [node name="Objects" parent="." instance=ExtResource("4")]
+
+[node name="Creatures" parent="." instance=ExtResource("7")]
 
 [node name="CollisionView" parent="." instance=ExtResource("3")]
 visible = false
@@ -619,6 +727,14 @@ text = "F  walk / fly    N  object labels    K  the model gallery"
 offset_left = 12.0
 offset_top = 96.0
 text = "C  compare with the emulator"
+"""
+
+BOOT_SCENE = """[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://boot.gd" id="1"]
+
+[node name="Shell" type="Node"]
+script = ExtResource("1")
 """
 
 PLAYER = '''extends CharacterBody3D
@@ -738,18 +854,33 @@ def project(lv, out="out/godot", start=(57, 4)):
     gallery.build(out=out)
     gallery.world_labels(lv, out)
     pieces = sorted(glob.glob(f"{out}/gallery*.gltf"))
+    # The gallery's ids start at 8 because 1..7 are taken. They used to start
+    # at 7, which is the id the creatures were given, and a repeated id in a
+    # .tscn is not an error: Godot keeps the last one. So the Creatures node
+    # quietly instanced a slab of the model gallery and `actors00.gltf` was
+    # never placed in the world at all -- which reads, in the running port, as
+    # a level with no monsters in it.
     res = "\n".join(f'[ext_resource type="PackedScene" '
-                    f'path="res://{os.path.basename(q)}" id="{7 + i}"]'
+                    f'path="res://{os.path.basename(q)}" id="{8 + i}"]'
                     for i, q in enumerate(pieces))
     nodes = "\n".join(f'\n[node name="g{i}" parent="Gallery" '
-                       f'instance=ExtResource("{7 + i}")]'
+                       f'instance=ExtResource("{8 + i}")]'
                        for i in range(len(pieces)))
     open(f"{out}/world.tscn", "w").write(
         SCENE.format(lv=lv, px=px, py=py, pz=pz, gallery_res=res,
-                     gallery_nodes=nodes, load_steps=8 + len(pieces)))
+                     gallery_nodes=nodes, load_steps=9 + len(pieces)))
+    # The boot chain: the shell, the opening and the pad, which is where the
+    # project now starts. world.tscn is still the level and boot.gd hands over
+    # to it the way SLUS_002.55 hands over to GAME.EXE.
+    open(f"{out}/boot.tscn", "w").write(BOOT_SCENE)
     for name in ("player.gd", "collision.gd", "selftest.gd", "ghost.gd",
-                 "labels.gd"):
+                 "labels.gd", "pad.gd", "boot.gd", "opening.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
+    try:
+        import opening
+        opening.main(f"{out}/opening")
+    except Exception as e:                       # no disc image, no title screen
+        print(f"opening assets skipped: {e}")
     gdcoll.export(lv, out)
     print(f"godot project in {out}/ — player starts in cell ({cx},{cz})")
 
@@ -810,6 +941,7 @@ if __name__ == "__main__":
     else:
         build_gltf(lv, limit=limit)
         build_objects_gltf(lv)
+        build_actors_gltf(lv)
         build_collision_gltf(lv)
     project(lv)
     if "--no-check" not in sys.argv:

@@ -8,9 +8,15 @@ Units: `u8/u16/u32` little-endian, `s32` signed. Addresses are PlayStation
 KUSEG (`0x80000000`+). Offsets into RAM snapshots are `addr & 0x1FFFFF`.
 
 Companion files: [TOOLS.md](TOOLS.md) is how to run any of this,
-[EXTERNAL.md](EXTERNAL.md) holds what other projects published and how much of
-it we have been able to confirm here, [BACKLOG.md](BACKLOG.md) the open threads,
-and `data/symbols.json` a name and the evidence for every address below.
+[BOOT.md](BOOT.md) follows the call tree from the entry point through the
+logos, the title menu and the buttons, [EXTERNAL.md](EXTERNAL.md) holds what
+other projects published and how much of it we have been able to confirm here,
+[BACKLOG.md](BACKLOG.md) the open threads, and `data/symbols.json` a name and
+the evidence for every address below.
+
+**Addresses in this file are `GAME.EXE`'s.** `OPEN.EXE` and `END.EXE` load at
+the same `0x80011000` and their names live in `data/symbols_open.json` and
+`data/symbols_end.json`; see BOOT.md section 1.
 
 ---
 
@@ -36,8 +42,19 @@ Reader: `tools/psxiso.py`.
 | `OPEN.EXE` | 192 KB | opening sequence, loads at `0x80011000` |
 | `GAME.EXE` | 560 KB | the game, loads at `0x80011000`, entry `0x800144f8`, text `0x8b800` |
 | `CD/COM/*.T` | 9 archives | see below |
-| `DRM/D00..D17.S` | 18 × 1.5 MB | fixed-size streams, not yet identified |
-| `OP/`, `STR/` | ~340 MB | MDEC video |
+| `END.EXE` | 156 KB | the ending, loads at `0x80011000` |
+| `CD/COM/*.T` | 9 archives | see below |
+| `OP/OP.D` | 168 KB | the title screen: five TIMs and a VAB — BOOT.md section 3 |
+| `OP/L0.S`, `L1.S` | 2.9 MB | the ASCII and FromSoftware logos, as MDEC video |
+| `OP/M0..M3.S` | 118 MB | the attract movies, the opening story, and the title music |
+| `OP/M4..M6.S` | 91 MB | `END.EXE`'s three |
+| `STR/S03..S15.S` | 190 MB | thirteen in-game cutscenes |
+| `DRM/D00..D17.S` | 18 × 1.5 MB | eighteen more MDEC streams, 320×240, nine sectors a frame |
+
+`extract/` holds only `/CD` and `/DRM`; `/OP` and `/STR` were never unpacked,
+so anything that reads them goes to the disc image through `tools/psxiso.py`.
+All 28 `.S` files are Sony STR — `tools/str.py` lists and decodes them, and
+BOOT.md section 4 has the two version differences that matter.
 
 ---
 
@@ -1986,7 +2003,33 @@ given. Identical block sizes on every level.
 | +1 | cell Z |
 | +2 | cell X |
 | +4 | `u16` type id, `0xffff` for an empty slot |
+| +6 | `u16` rotation, negated by the loader before it reaches the live record |
+| +8 | `u16` fine X inside the cell |
+| +10 | `u16` fine Z |
+| +12 | **`s16` height above the terrain** |
 | +16 | `u16` that becomes the object's `+0x38` — the sign text index |
+
+**The height is in the record after all.** This document and `BACKLOG.md` both
+said it was not, and that an object simply stands on the terrain at
+`-128 * cell[+6]`. It does not: the terrain is only where an object with
+`h = 0` stands, and the live Y is
+
+```
+y = -128 * cell[+6] + s16(record[12])
+```
+
+which reproduces the live object table for **345 of level 0's 347 placed
+objects**. The two it misses are both type 280, whose records are mostly `0xff`
+filler and whose live Y is a round `-12800`, so something else positions them.
+
+That single field is what a chest is made of. A chest is not one object but
+three placed in the same cell: the body (type 155, 640 tall) at `h = 0`, the
+lid (type 154, 320 tall) at `h = -640` — one body-height up, Y pointing down —
+and the lock plate (type 106, 300 tall) at `h = -256` on the front of it. With
+every object put on the floor, which is what `tools/level3d.py` did while this
+was thought not to exist, the lid is drawn *inside* the body. A player looking
+at the port reported exactly that: chests drawn open and closed at the same
+time, and lock plates lying in mid-air with no chest under them.
 
 Checked against a RAM snapshot slot by slot: **350 of 350 type ids match**, and
 the block places 347 objects where the snapshot holds 346 — the difference being

@@ -1,0 +1,89 @@
+{
+ "_note": "Names in SLUS_002.55, the shell the BIOS boots. Its own address space: it loads at 0x80010000 and is the only executable that does.",
+ "0x80010000": {
+  "name": "exe_names",
+  "kind": "data",
+  "evidence": "three NUL-terminated paths at the very start of the text section: cdrom:END.EXE;1, cdrom:GAME.EXE;1, cdrom:OPEN.EXE;1"
+ },
+ "0x8001024c": {
+  "name": "exe_name_table",
+  "kind": "data",
+  "evidence": "three pointers into exe_names, in the order OPEN, GAME, END; shell_main indexes it by next_exe and hands the result to Load"
+ },
+ "0x80010260": {
+  "name": "next_index",
+  "kind": "data",
+  "evidence": "the word at $gp+0 that shell_main indexes exe_name_table with; zero in the file, which is why the disc boots into OPEN.EXE"
+ },
+ "0x80010264": {
+  "name": "next_index_ptr",
+  "kind": "data",
+  "evidence": "the word at $gp+4, holding 0x800102f0; shell_main reads the byte through it after every Exec returns"
+ },
+ "0x8001026c": {
+  "name": "exec_header",
+  "kind": "data",
+  "evidence": "the EXEC structure Load fills and Exec runs; shell_main zeroes its +0x20 and +0x24 (stack address and size) so the overlay keeps the current stack"
+ },
+ "0x800102f0": {
+  "name": "next_exe",
+  "kind": "data",
+  "evidence": "the byte shell_main reads after Exec returns and uses as the index into exe_name_table: 0 OPEN, 1 GAME, 2 END. Written by OPEN.EXE through its own $gp+0 pointer and by GAME.EXE at 0x80015000. Survives an overlay because the shell lives at 0x80010000 and the overlays load at 0x80011000"
+ },
+ "0x800102f8": {
+  "name": "overlay_arg",
+  "kind": "data",
+  "evidence": "cleared by shell_main at startup; OPEN.EXE keeps its address in $s7 for the whole of open_main and branches on it, GAME.EXE writes it beside next_exe. The overlays' argument to each other"
+ },
+ "0x800102fa": {
+  "name": "overlay_arg2",
+  "kind": "data",
+  "evidence": "the second such byte, kept in $s6 by open_main; open_main stores the title menu's choice into it before returning to the shell"
+ },
+ "0x80010038": {
+  "name": "shell_main",
+  "kind": "code",
+  "size": 224,
+  "evidence": "SetMem(2), CdRemove, CdInit, then forever: Load(exe_name_table[next_index], exec_header) until it returns 1, CdRemove, EnterCriticalSection, Exec, then next_index = *next_exe and CdInit again"
+ },
+ "0x80010120": {
+  "name": "entry_point",
+  "kind": "code",
+  "evidence": "SLUS_002.55 header; zeroes 0x80010268..0x800102a8, sets $sp from the table at 0x800101cc and $gp to 0x80010260, calls InitHeap and then shell_main"
+ },
+ "0x800101dc": {
+  "name": "EnterCriticalSection",
+  "kind": "code",
+  "evidence": "syscall with $a0 = 1"
+ },
+ "0x800101ec": {
+  "name": "SetMem",
+  "kind": "code",
+  "evidence": "BIOS thunk: jr 0xa0 with $t1 = 0x9f"
+ },
+ "0x800101fc": {
+  "name": "CdInit",
+  "kind": "code",
+  "evidence": "BIOS thunk: jr 0xa0 with $t1 = 0x71"
+ },
+ "0x8001020c": {
+  "name": "InitHeap",
+  "kind": "code",
+  "evidence": "BIOS thunk: jr 0xa0 with $t1 = 0x39"
+ },
+ "0x8001021c": {
+  "name": "Load",
+  "kind": "code",
+  "evidence": "BIOS thunk: jr 0xa0 with $t1 = 0x42"
+ },
+ "0x8001022c": {
+  "name": "Exec",
+  "kind": "code",
+  "evidence": "BIOS thunk: jr 0xa0 with $t1 = 0x43"
+ },
+ "0x8001023c": {
+  "name": "CdRemove",
+  "kind": "code",
+  "evidence": "BIOS thunk: jr 0xa0 with $t1 = 0x72"
+ }
+}

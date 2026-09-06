@@ -1,8 +1,35 @@
 # Backlog
 
 Open threads, roughly in the order they unblock other work. Everything here is
-described in more detail in [FORMATS.md](FORMATS.md); external material we have
-not verified ourselves is kept separately in [EXTERNAL.md](EXTERNAL.md).
+described in more detail in [FORMATS.md](FORMATS.md) and, for the boot chain,
+[BOOT.md](BOOT.md); external material we have not verified ourselves is kept
+separately in [EXTERNAL.md](EXTERNAL.md).
+
+## 0. What the boot chain left open
+
+The chain from the entry point to the first frame with a controller in it is
+read and written up in [BOOT.md](BOOT.md): the shell and its three shared
+bytes, `OPEN.EXE`'s logos, attract movies and title menu, the STR decoder, and
+the whole input path down to the seven control schemes. Four things it did not
+finish, none of them blocking:
+
+* **`END.EXE` is unread.** Only its Sony library is named, by `tools/psyq.py`.
+  Its own `play_movie` table names `\OP\M4.S`, `M5.S` and `M6.S`, so it is
+  built like `OPEN.EXE` and should read quickly.
+* **The save path.** `OPEN.EXE` counts the saves on the card and passes the
+  menu's answer in `overlay_arg2`; `0x8001fa60` in `GAME.EXE` is what reads it
+  and it has not been read. Until then the port always starts a new game, and
+  nothing here can load `tools/savemap.py`'s fields back into a running game.
+* **Sound.** `OP.D`'s trailing VAB is extracted and unparsed, the title music
+  is a streamed XA track inside `\OP\M2.S` that nothing decodes, and the two
+  menu sounds are ids `0x3a` and `0x5a` into that bank.
+* **The frame rate, again.** The title screen gives up after `0x178` frames.
+  Whether that is six seconds or twelve is the same open question as
+  `player.gd`'s `TICK_HZ`, and one timestamped recording would answer both.
+
+Also worth doing and cheap: the port shows a still where the game plays a
+movie. `tools/str.py` decodes any frame correctly but is pure Python, so
+playing one back wants either a faster decoder or a pre-rendered sequence.
 
 ## 1. Cross-level teleport
 
@@ -27,9 +54,15 @@ RAM snapshot is straightforward now that the block is located.
 
 **Done, and the backlog was out of date rather than the work undone**: the
 record's own reader already had cell, fine offset within the cell, rotation and
-type id, and notes that height is not in the record at all — an object stands on
-the terrain at `-128 * cell[+6]`. `tools/level3d.py` now places 294 of level 0's
-347 objects.
+type id. `tools/level3d.py` now places 294 of level 0's 347 objects.
+
+**Withdrawn: "height is not in the record at all."** It is, at offset 12, a
+signed 16-bit measured from the terrain, and `y = -128 * cell[+6] + h`
+reproduces the live table for 345 of level 0's 347 objects. The claim survived
+because every object it was checked against happened to have `h = 0`. What it
+cost was visible in the port: a chest is three objects in one cell — body, lid
+and lock plate at three different heights — and putting all three on the floor
+drew the lid inside the body. FORMATS.md section 16 has it.
 
 **The 53 without a model are found.** An `MO.T` entry is not a bare TMD: word 0
 is the total size, word 1 a count of one to three, and **word 2 is the offset of
@@ -267,6 +300,31 @@ metric against the map but **making the game state the answer**. The struct at
 `0x801e6470` looks like it holds that answer and does not — ten call sites share
 it — so the breakpoint takes the mask at the exit instead, before it is
 returned.
+
+## 5. Enemies — placed, and the model mapping found
+
+58 creatures are live on level 0 in 14 kinds, and `tools/level3d.py` now draws
+them. Two things fell out:
+
+* the actor table at `0x80185da8` is 0x88 a slot — `+0` is 0xff when free, `+2`
+  the kind, `+0x1c` and `+0x1e` the radius and body height, `+0x22` the fine
+  offset in the cell, `+0x2c` the position;
+* **`entity_table`'s first halfword is `0x400` plus the model number**. Kind 0
+  reads `0x432` — model 50 — and a player looking at the catalogue named 50 as
+  the flower enemy "of which there are many on this level". Kind 0 is eleven of
+  the fifty-eight.
+
+What is *not* found is what places them from the disc: the level's records carry
+the definitions and not the positions, so the port takes the positions from a
+RAM snapshot, labelled as such in `live_actors`, the same borrowed-not-understood
+arrangement as the object textures and scales. A 16-byte stride in `FDAT` entry
+`3n+1` around offset 13403 lines up with actor cells 24 times running, which is
+suggestive and not yet a reading.
+
+Movement is a separate matter and half done already: `actor_move_horizontal`
+(`0x8004dbc8`) and `actor_move_vertical` (`0x8004e330`) are both transcribed in
+FORMATS.md section 4, with gravity per monster kind out of the entity record.
+What is missing is the AI that decides where they go.
 
 ## 5b. Movement the player can change
 

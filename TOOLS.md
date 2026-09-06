@@ -27,6 +27,8 @@ the disc alone.
 | See who wants which item | `tools/overlay.py` |
 | Check an archive is intact | `tools/tsum.py extract/CD/COM/*.T` |
 | Watch the game while you play | `emu/run.sh` then `tools/livemap.py` |
+| Follow the boot chain from the entry point | `tools/calltree.py open entry -d 3` |
+| See what the opening plays | `tools/str.py list` |
 
 ---
 
@@ -38,8 +40,14 @@ the disc alone.
 ```
 python3 tools/syms.py                  every name we have
 python3 tools/syms.py 0x8005d7bc       one address, with why we believe it
+python3 tools/syms.py open 0x80011e14  the same, in OPEN.EXE's own table
 some_command | python3 tools/syms.py - annotate any output that contains addresses
 ```
+
+There are four tables, because three of the executables load at `0x80011000`
+and an address is meaningless without saying which one: `data/symbols.json` is
+`GAME.EXE`'s and is what a bare address means, and `symbols_open.json`,
+`symbols_boot.json` and `symbols_end.json` are the others.
 
 It will say `use_item+0x8c8` for an address inside a routine whose size we
 recorded, and plain hex otherwise — deliberately, because guessing "nearest
@@ -348,6 +356,84 @@ name the rule.
 **`walk.py`** — records where the player goes, for checking any of this against
 the running game.
 
+## The boot chain
+
+The disc holds four executables and three of them load at the same address, so
+none of these tools work on an address alone: every one takes the executable
+with it, by nickname — `boot` for `SLUS_002.55`, then `open`, `game` and `end`.
+What they found is in [BOOT.md](BOOT.md).
+
+**`mips.py`** — the four executables and enough MIPS to walk them. A library,
+not a command: `mips.load("open")` gives an `Exe` with its base, its entry
+point and its text, and `mips.resolve` pairs every `lui` with its `%lo` to say
+which absolute address each instruction forms.
+
+**`calltree.py`** — function discovery and the call graph.
+
+```
+python3 tools/calltree.py open                what is in it
+python3 tools/calltree.py open entry -d 3     the tree from the entry point
+python3 tools/calltree.py open 0x80011e14 -f  one routine's skeleton
+python3 tools/calltree.py open 0x800136d8 -u  who calls it
+python3 tools/calltree.py open 0x80012494 -s  its strings and constants
+python3 tools/calltree.py open --tables       pointer tables in the image
+```
+
+`-f` is the one to reach for. `open_main` is 366 instructions of which about
+sixty say what the opening does, and `-f` prints those sixty: every call with
+the constants going into it, every branch, and every absolute address touched.
+An argument it cannot trace to a constant prints `?` rather than a guess — an
+earlier version carried a stale `a0=3` down four calls that never set it, which
+reads as a finding and is not one.
+
+**`psyq.py`** — names the Sony library from the library's own words.
+
+```
+python3 tools/psyq.py open              what it can name
+python3 tools/psyq.py open --write      put those names in the symbol table
+```
+
+The PSY-Q libraries are linked in with their debug messages intact, and each
+message is built inside the routine it describes, so whatever forms the address
+of `"PutDrawEnv(%08x)..."` **is** `PutDrawEnv`. That names 31 routines in
+`OPEN.EXE`, 32 in `GAME.EXE` and 30 in `END.EXE`, and what is left standing is
+the game. It refuses to name a routine two messages print from, because that
+means the boundary swallowed a neighbour rather than that the routine has two
+names.
+
+**`str.py`** — the movies: 28 Sony STR streams under `/OP`, `/STR` and `/DRM`.
+
+```
+python3 tools/str.py list                  every movie on the disc
+python3 tools/str.py info /OP/L0.S         one, frame by frame
+python3 tools/str.py check /OP/L0.S 40     decode 40, and report the count
+python3 tools/str.py png /OP/M3.S 200 out/ one frame, as a PNG
+```
+
+The MDEC decoder is checked by decoding: every block has to be a valid Huffman
+code and the bitstream has to run out within a word of the frame's end. Twenty
+frames each of `L0.S`, `M0.S` and `M3.S` pass with at most 42 bits of padding
+left. Version 2 and version 3 differ in how the DC coefficient is stored and
+the difference is not optional — see BOOT.md section 4.
+
+**`opening.py`** — the opening's assets, into the port.
+
+```
+python3 tools/opening.py           into out/godot/opening/: the TIMs, the stills,
+                                   and the movies if ffmpeg is about
+python3 tools/opening.py video     just the transcodes, ~37 MB of Ogg Theora
+python3 tools/opening.py title     compose the title screen at the game's own coordinates
+```
+
+The movies play in the port because ffmpeg has a `psxstr` demuxer and an `mdec`
+decoder and will hand back Ogg Theora with the XA audio attached. That is not a
+substitute for `str.py`: reading the format ourselves is what established it,
+and it is what says the version 2 and version 3 frames differ. It is how the
+pixels get on screen without a decoder faster than Python.
+
+`title` is the check on the layout: the rectangles came off the primitives the
+three layer routines fill in, and if any were misread the picture says so.
+
 ## Disassembly
 
 **`disasm.py`** — MIPS disassembly of `GAME.EXE`, binding the capstone that
@@ -360,7 +446,8 @@ python3 tools/disasm.py 0x801ba988
 ```
 
 **`fdis.py`** — disassembles a stretch of code **including the GTE**, which
-capstone does not decode at all. A single `ctc2` ended every attempt to read the
+capstone does not decode at all. Name an executable first to read one of the
+others: `python3 tools/fdis.py open 0x80011e14 40`. A single `ctc2` ended every attempt to read the
 renderer until this existed, and the register names are the point: `ctc2 $t5,
 L11L12` says "light matrix" where `ctc2 $t5, $8` says nothing.
 
