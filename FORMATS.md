@@ -618,9 +618,43 @@ somebody else's. Nothing about them says a page of dialogue was drawn.
 so it activates actors by how near the player is. Whatever `0x8004b698` is, it
 is not that, and it is what puts the man at the table there.
 
-`emu/bp18.lua` asks the next question of the value rather than of the code: a
-write watchpoint on `inventory_a`, on `inventory_b` and on `story_flags`, so
-whatever hands the sword over names itself.
+**The sword never changes hands. You already have it.** `emu/bp18.lua` put a
+write watchpoint on the whole inventory and a player played the scene through
+again. Nothing wrote the inventory during it. What the watchpoint did catch is
+`reset_story_flags` (`0x8005ea64`), which clears 75 words over both inventory
+arrays and then writes four bytes into `inventory_a`:
+
+| item | count | what it is |
+| --- | --- | --- |
+| 0 | 1 | the sword — *the greatest achievement of Leon Shore, the first stage* |
+| 42 | 1 | body armour, standard issue for the soldiers of the Verdite army |
+| 104 | 2 | the healing herb |
+| 105 | 1 | the antidote herb |
+
+Read off the code at `reset_story_flags+0x88` to `+0xa0`, and caught by the
+watchpoint in the same order. `reset_story_flags` runs from `game_main` at the
+start of a **new game**, so all four are in the inventory before the first
+frame is drawn. The scene in the house is staging: the man appears to hand over
+a sword the game gave you at the title screen. That is why bp17 found no
+`give_item` and bp18 found no write — there is nothing to catch.
+
+It also settles an old note: FORMATS said "id 104 went 2 → 3 on pickup", and 2
+is where a new game starts it.
+
+**The subtitles are `TALK.T`, and one routine reads that archive.** A player
+quoted the line about the seal Alexander gave his life for; it is `TALK` entry
+**676**, matched exactly in the decoded text. Searching all three decoded
+archives, `STALK` holds none of that scene's text and `TALK` holds it — which
+is why `text_pager` (`0x8001d944`), a walker of *STALK* indices, never fired
+either. Of the six archive-entry readers, exactly **one call site anywhere in
+`GAME.EXE` passes archive 7, `TALK.T`: `0x8005c5fc`, inside
+`script_interpreter`** — and `script_interpreter` did not run during the scene.
+So the opening's text reaches the screen by a path that is not the one every
+other conversation uses, and that is the next thing to find.
+
+What the same session did show is level 0's own overlay running: story flag 3
+was written from `0x801e9084`, an address inside the overlay area, and
+`game_main` wrote flag 9 at `0x80014ea4`.
 
 ### Objects the game places and does not draw
 
