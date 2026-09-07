@@ -53,6 +53,13 @@ MOVIES = [
 # title screen. Its video track is 16x16, so what it carries is the music.
 TITLE_STREAM = ("/OP/M2.S", "the title screen's streamed music")
 
+# GAME.EXE's own cutscenes, played by 0x80060d20 out of \STR\SXX.S;1. Number 3
+# is the opening: game_main starts it at 0x80014e74 under `bne $s1, 1`, the
+# new-game flag, a few instructions after place_player_on_terrain. It is the
+# room with the table where the sword is handed over -- the same words the
+# three men there repeat afterwards, TALK 676 and on.
+CUTSCENES = [(3, "/STR/S03.S", "the opening: the sword handed over")]
+
 TIMS = [
     ("the title artwork", "8 bit, VRAM (640,0)"),
     ("KING'S", "8 bit, VRAM (640,256)"),
@@ -178,6 +185,7 @@ def video(out="out/godot/opening", only=None):
     disc = psxiso.Disc(IMG)
     jobs = [(f"movie{i}", p) for i, p, _f, _w in MOVIES]
     jobs.append(("title_music", TITLE_STREAM[0]))
+    jobs += [(f"cutscene{n:02d}", p) for n, p, _w in CUTSCENES]
     for name, path in jobs:
         if only and name != only:
             continue
@@ -229,6 +237,8 @@ def main(out="out/godot/opening"):
     # the ones that are not there yet.
     missing = [f"movie{i}" for i, _p, _f, _w in MOVIES
                if not os.path.exists(f"{out}/movie{i}.ogv")]
+    missing += [f"cutscene{n:02d}" for n, _p, _w in CUTSCENES
+                if not os.path.exists(f"{out}/cutscene{n:02d}.ogv")]
     if not os.path.exists(f"{out}/title_music.ogg"):
         missing.append("title_music")
     if not missing:

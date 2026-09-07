@@ -716,6 +716,7 @@ SCENE = """[gd_scene load_steps={load_steps} format=3]
 [ext_resource type="PackedScene" path="res://actors{lv:02d}.gltf" id="7"]
 [ext_resource type="Script" path="res://ghost.gd" id="5"]
 [ext_resource type="Script" path="res://labels.gd" id="6"]
+[ext_resource type="Script" path="res://cutscene.gd" id="14"]
 {gallery_res}
 
 [sub_resource type="Environment" id="Env"]
@@ -756,6 +757,9 @@ visible = false
 
 [node name="Labels" type="Node3D" parent="."]
 script = ExtResource("6")
+
+[node name="Cutscene" type="CanvasLayer" parent="."]
+script = ExtResource("14")
 
 [node name="UI" type="CanvasLayer" parent="."]
 
@@ -915,7 +919,8 @@ def project(lv, out="out/godot", start=(57, 4)):
     # to it the way SLUS_002.55 hands over to GAME.EXE.
     open(f"{out}/boot.tscn", "w").write(BOOT_SCENE)
     for name in ("player.gd", "collision.gd", "selftest.gd", "ghost.gd",
-                 "labels.gd", "pad.gd", "boot.gd", "opening.gd"):
+                 "labels.gd", "pad.gd", "boot.gd", "opening.gd",
+                 "cutscene.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening

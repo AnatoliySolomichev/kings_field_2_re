@@ -599,6 +599,31 @@ It has exactly two callers:
 So the opening plays on a new game and not on a loaded save, from `game_main`'s
 own init block, a few instructions after `place_player_on_terrain`.
 
+### The cutscene list is pairs of scene and gate flag
+
+`0x801e825c` holds a **cursor**, and `build_str_name` takes the scene number
+from the byte it points at. In a level 0 snapshot the cursor is `0x801e7f78`
+and the bytes there are `3, 9, 31, 3, 0xff`. `flag_gate` reads the *second*
+byte of each entry, so the list is **pairs**, terminated by `0xff`:
+
+```
+b = cursor[1];
+if (b == 0xff)          no gate
+else if (b & 0x80)      skip the scene when story_flags[b & 0x7f] is set
+else                    the same test the other way round
+```
+
+which reads the snapshot's list as **scene 3 gated by flag 9**, then scene 31
+gated by flag 3. And that closes a loop: `emu/bp18.lua` caught `game_main`
+writing **`story_flags[9]`** at `0x80014ea4`, thirty instructions after the
+call that starts the opening. So
+
+> **`story_flags[9]` means "the opening cutscene has been shown".**
+
+The cursor is not verbatim in any of level 0's three `FDAT` entries, so the
+list is assembled at run time and where it comes from is still open. Nothing in
+`GAME.EXE` writes the bytes either — only the cursor that walks them.
+
 ### The room itself, found by its painting
 
 A player who had seen the game said the room where the sword is handed over has
