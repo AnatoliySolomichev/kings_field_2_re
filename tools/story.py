@@ -4,6 +4,7 @@
     python3 tools/story.py               every talker in the game -> out/story.txt
     python3 tools/story.py 0             one level, on screen
     python3 tools/story.py flags         each story flag, with what sets and tests it
+    python3 tools/story.py cutscenes     the thirteen cutscenes and the flag each waits on
 
 Two things had to be right before any of this could be read, both off
 `script_interpreter` (`0x8005c308`):
@@ -72,6 +73,57 @@ def dump(lv, text, out=sys.stdout):
                 body = " / ".join(line.split("\n")) if line else "(not decoded)"
                 print(f"      [{entry}] {body}", file=out)
     return len(got)
+
+
+# The cutscene table: 16 records of 52 bytes at 0x801e7edc, unpacked by
+# init_level_state out of the seventh length-prefixed block of FDAT entry 97.
+CUT_TABLE_ENTRY, CUT_BLOCK, CUT_STRIDE = 97, 6, 52
+
+
+def cutscenes():
+    """Each `\\STR\\SNN.S` and the story flag that gates it.
+
+    `0x801e825c` holds a cursor into this table and `build_str_name`
+    (a label inside the player at `0x80060d20`) takes the scene number from the
+    byte it points at; `flag_gate` reads the byte after it, treats `0xff` as
+    "no gate", and lets bit `0x80` pick which way the flag is tested. The
+    record number *is* the scene number for 3 to 15 -- exactly the thirteen
+    files under `/STR` -- so the table is indexed by scene.
+
+    Byte 0 and byte 1 are what has been read. The other fifty bytes of each
+    record are not, and reading them as more scene-and-flag pairs produces
+    scene numbers like 158 and 252 that no file on the disc answers to, so
+    they are left alone.
+    """
+    import struct
+    from tarc import TArc
+    import placement
+    raw = TArc(placement.FDAT).raw(CUT_TABLE_ENTRY)
+    p, blocks = 0, []
+    while p + 4 <= len(raw):
+        ln = struct.unpack_from("<I", raw, p)[0]
+        if ln == 0 or p + 4 + ln > len(raw):
+            break
+        blocks.append(raw[p + 4:p + 4 + ln])
+        p += 4 + ln
+    t = blocks[CUT_BLOCK]
+    print(f"{len(t) // CUT_STRIDE} records of {CUT_STRIDE} bytes, "
+          f"from FDAT[{CUT_TABLE_ENTRY}] block {CUT_BLOCK}\n")
+    for i in range(len(t) // CUT_STRIDE):
+        r = t[i * CUT_STRIDE:(i + 1) * CUT_STRIDE]
+        scene, gate = r[0], r[1]
+        if scene != i:
+            print(f"  record {i:2d}: does not name itself (byte 0 is {scene}) "
+                  f"-- no \\STR\\S{i:02d}.S on the disc either")
+            continue
+        if gate == 0xFF:
+            how = "no gate: it plays whenever it is reached"
+        else:
+            how = (f"waits on story_flags[{gate & 0x7F}]"
+                   + (", skipped once that is set" if gate & 0x80 else ""))
+        note = "  <- the opening, started by game_main on a new game" \
+            if i == 3 else ""
+        print(f"  \\STR\\S{i:02d}.S   {how}{note}")
 
 
 def flags():
@@ -162,6 +214,8 @@ if __name__ == "__main__":
     arg = sys.argv[1] if len(sys.argv) > 1 else "all"
     if arg == "flags":
         flags()
+    elif arg == "cutscenes":
+        cutscenes()
     elif arg == "all":
         text = escript.talk_text()
         os.makedirs("out", exist_ok=True)

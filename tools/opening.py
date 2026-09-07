@@ -7,6 +7,7 @@ so `godot/opening.gd` can run the same sequence over the same pictures.
 
     python3 tools/opening.py                 into out/godot/opening/
     python3 tools/opening.py video           transcode the movies so they play
+    python3 tools/opening.py movies          every stream on the disc, with a page
     python3 tools/opening.py title           compose the title screen
     python3 tools/opening.py out/op          somewhere else
 
@@ -214,6 +215,75 @@ def video(out="out/godot/opening", only=None):
             os.unlink(tmp)
 
 
+def every_movie(out="out/movies"):
+    """Every STR stream on the disc: a transcode, a still, and a page to see
+    them on.
+
+    Forty of them -- nine under `/OP`, thirteen under `/STR` and eighteen under
+    `/DRM` -- and nothing here knows what most of them are, so the point is to
+    be able to look. The still comes from this project's own MDEC decoder and
+    the video from ffmpeg's, which is the same division of labour the opening
+    already uses: `tools/str.py` is how the format was established, ffmpeg is
+    how the pixels get on screen without a decoder faster than Python.
+    """
+    os.makedirs(f"{out}/thumbs", exist_ok=True)
+    disc = psxiso.Disc(IMG)
+    rlba, rsize, _pvd = psxiso.pvd_root(disc)
+    files = [(p, lba, size) for p, lba, size, isdir
+             in psxiso.walk(disc, rlba, rsize)
+             if not isdir and p.upper().endswith(".S")]
+    rows = []
+    for path, lba, size in files:
+        tag = path.strip("/").replace("/", "_").replace(".", "_")
+        png = f"{out}/thumbs/{tag}.png"
+        w = h = frame = 0
+        if not os.path.exists(png):
+            for num, w, h, data in strmod.frames(disc, lba, size):
+                if num < 30:                    # past the fade from black
+                    continue
+                img, _used, _decl, _left = strmod.decode(data, w, h)
+                if img is not None:
+                    strmod.write_png(png, w, h, img)
+                    frame = num
+                break
+        ogv = f"{out}/{tag}.ogv"
+        if not os.path.exists(ogv):
+            with tempfile.NamedTemporaryFile(suffix=".str", delete=False) as tf:
+                tmp = tf.name
+            try:
+                raw_stream(disc, path, tmp)
+                r = subprocess.run(
+                    ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+                     "-i", tmp, "-c:v", "libtheora", "-q:v", "6",
+                     "-c:a", "libvorbis", "-q:a", "3", ogv],
+                    capture_output=True, text=True)
+                if r.returncode:
+                    print(f"  {path}: ffmpeg failed")
+                    ogv = None
+            finally:
+                os.unlink(tmp)
+        mb = os.path.getsize(ogv) / 1e6 if ogv and os.path.exists(ogv) else 0
+        rows.append((path, tag, size, mb, frame))
+        print(f"  {path:16s} {size/1e6:6.1f} MB -> {mb:5.1f} MB  still at frame {frame}")
+    page = ["<!doctype html><meta charset=utf-8>",
+            "<title>King's Field II — every movie on the disc</title>",
+            "<style>body{background:#191b1f;color:#ddd;font:14px system-ui;"
+            "margin:24px}h1{font-weight:600}div.m{display:inline-block;"
+            "margin:0 18px 22px 0;vertical-align:top;width:340px}"
+            "img{width:320px;image-rendering:pixelated;background:#000}"
+            "video{width:320px;background:#000}code{color:#9cf}</style>",
+            f"<h1>{len(rows)} STR streams</h1>",
+            "<p>The still is decoded by <code>tools/str.py</code>; the video is "
+            "ffmpeg's transcode of the same sectors. See BOOT.md section 4.</p>"]
+    for path, tag, size, mb, frame in rows:
+        page.append(
+            f'<div class=m><b>{path}</b><br><code>{size/1e6:.1f} MB on the disc'
+            f'</code><br><video controls preload=none poster="thumbs/{tag}.png"'
+            f' src="{tag}.ogv"></video></div>')
+    open(f"{out}/index.html", "w").write("\n".join(page))
+    print(f"{len(rows)} streams -> {out}/index.html")
+
+
 def main(out="out/godot/opening"):
     os.makedirs(out, exist_ok=True)
     disc = psxiso.Disc(IMG)
@@ -254,6 +324,8 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "title":
         title(psxiso.Disc(IMG),
               sys.argv[2] if len(sys.argv) > 2 else "out/op/title.png")
+    elif len(sys.argv) > 1 and sys.argv[1] == "movies":
+        every_movie(sys.argv[2] if len(sys.argv) > 2 else "out/movies")
     elif len(sys.argv) > 1 and sys.argv[1] == "video":
         video(only=sys.argv[2] if len(sys.argv) > 2 else None)
     else:

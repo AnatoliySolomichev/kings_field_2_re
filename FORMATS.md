@@ -620,9 +620,42 @@ call that starts the opening. So
 
 > **`story_flags[9]` means "the opening cutscene has been shown".**
 
-The cursor is not verbatim in any of level 0's three `FDAT` entries, so the
-list is assembled at run time and where it comes from is still open. Nothing in
-`GAME.EXE` writes the bytes either — only the cursor that walks them.
+### Where that list lives: FDAT entry 97
+
+It is not per level and not assembled at run time. `init_level_state` reads
+**`FDAT.T` entry 97** through `read_entry_b(4, 0x61)` and unpacks it as a chain
+of length-prefixed blocks into fixed addresses; the **seventh block, 832
+bytes**, goes to `0x801e7edc`. Its first sixteen bytes are identical to that
+address in a RAM snapshot, which is what identifies it.
+
+832 bytes is **16 records of 52**, and the record number *is* the scene number
+for 3 to 15 — exactly the thirteen files under `/STR`. Records 0 to 2 do not
+name themselves and there is no `S00`–`S02` on the disc.
+
+| record | gate |
+| --- | --- |
+| `S03` | `story_flags[9]` — the opening, started by `game_main` on a new game |
+| `S04` | `story_flags[67]` |
+| `S05` | `story_flags[87]` |
+| `S06` | `story_flags[93]` |
+| `S07`, `S08`, `S11` | none: they play whenever reached |
+| `S09` | `story_flags[84]` |
+| `S10` | `story_flags[88]` |
+| `S12` | `story_flags[123]` |
+| `S13` | `story_flags[124]` |
+| `S14` | `story_flags[126]` |
+| `S15` | `story_flags[125]` |
+
+`python3 tools/story.py cutscenes` prints it from the disc.
+
+**Byte 0 and byte 1 are what has been read**; the other fifty bytes of each
+record are not. Reading them as further scene-and-flag pairs gives scene
+numbers like 158 and 252 that no file answers to, so they are left alone.
+
+**A correction that follows from it:** these indices reach 126, and `flag_gate`
+masks the byte with `0x7f`. So `story_flags` runs to **128 entries**, not the
+64 this document and `tools/story.py flags` assumed — `reset_story_flags`
+clearing "0x40 bytes and more at +0x100" fits that better than it fits 64.
 
 ### The room itself, found by its painting
 
