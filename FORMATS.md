@@ -719,10 +719,49 @@ loaded "only when the entity's kind byte is `0x2b`". Reading the branch at
 `script_interpreter+0x2c4`: it compares byte 0 of the entity record against
 `0x2b` and, when they match, **skips the call to `0x800608ec`** — and the
 `load_entry(7, base + opcode)` at `+0x2f4` sits past the branch target, so it
-runs either way. Every opcode below `0xf0` fetches a line of text. The
-consequence is worth stating plainly: the **12 179** script instructions the
-tool counts as `say` across the game really are dialogue, and pairing each
-entity's base with its script bytes decodes all of it.
+runs either way.
+
+**Withdrawn, and it was mine:** from that I said "the 12 179 instructions the
+tool counts as `say` are dialogue". They are not, and fixing the base is what
+showed it. **Only 42 of the game's 265 entities carry a base at all**, and
+those 42 hold **267** of the 12 179 opcodes, of which **242 land on text this
+project has decoded — 90 %**. The other 11 912 belong to entities whose base is
+zero. Every opcode does drive an animation *and* fetch `TALK.T[base + opcode]`,
+which is what the code says; what a zero base fetches is not dialogue anybody
+sees. The reading was right and the conclusion drawn from it was too wide.
+
+`tools/story.py` is the result: the game's talkers and their lines, level by
+level, into `out/story.txt`.
+
+### The story flags are allocated per level
+
+`tools/story.py flags` puts the two sources together — the 36 flags a level
+overlay writes and the 2 an entity script tests — and the condition comes out
+of **dominance** rather than of folding the code: this is straight-line MIPS
+with forward branches, so a store is reached only if every branch jumping over
+it fell through, and a store branches jump *to* is reached when they were
+taken. That answers 20 of the 47 writes with a real condition and says
+"nothing jumps over it" for the unconditional rest, instead of borrowing a
+guard from whatever test happened to be nearby.
+
+The numbers group by level, which is the flags' coarse meaning:
+
+| flags | written by the overlay of level |
+| --- | --- |
+| 1–7 | 0 |
+| 11 | 1 |
+| 16–21 | 2 |
+| 22–26 | 4 |
+| 30–32 | 5 |
+| 33–39 | 6 |
+| 42 | 7 |
+| 45–49 | 8 |
+| 50–54 | 9 |
+| 60 | 11 |
+
+and the conditions name the quest each one stands for — `story_flags[7]` on
+level 0 wants items 0, 100 and 133 together, `story_flags[3]` wants the sword's
+final stage and the three seals, `story_flags[48]` on level 8 wants item 16.
 
 ### Objects the game places and does not draw
 

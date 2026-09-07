@@ -42,6 +42,7 @@ wrong script base -- `entities.py` explains which -- and the claim is withdrawn.
 """
 import collections
 import pickle
+import struct
 import sys
 
 sys.path.insert(0, "tools")
@@ -98,26 +99,49 @@ def talk_text():
     return out
 
 
-TALKER = 0x2B          # the only entity kind whose bytes reach TALK.T
+TALKER = 0x2B          # what script_interpreter+0x2c4 compares byte 0 against
+
+
+def talk_base(raw, base, rec):
+    """The `TALK.T` index this entity's dialogue counts from, or None.
+
+    `script_interpreter` (`0x8005c308`) reaches it like this, read off the
+    code: the actor's `+2` is the entity index, `entity_table + 120 * index`
+    is the record, the record's **`+0x38`** points at the script block -- which
+    has to begin `0x70` -- and the base is the `u16` at **`+0x0c` of that
+    block**. In the file the `+0x38` is an offset from the script area rather
+    than a pointer, which is the same thing before relocation.
+
+    This used to be read from `+0x0c` of the *record*, where every entity on
+    level 0 holds zero -- so every line of dialogue in the game rendered as an
+    animation frame.
+    """
+    off = struct.unpack_from("<I", rec, 0x38)[0]
+    p = base + off
+    if not (0 <= p < len(raw) - 16) or raw[p] != 0x70:
+        return None
+    return struct.unpack_from("<H", raw, p + 0x0C)[0]
 
 
 def render(code, base=0, text=None, kind=None):
     """Human-readable lines for one script.
 
-    `kind` is the entity's byte +0. Only 0x2b reaches TALK.T; for every other
-    kind the same byte drives an animation, and printing a line of dialogue
-    beside it would be an invention.
+    Every opcode below `0xf0` fetches `TALK.T[base + opcode]`. The `0x2b` test
+    at `script_interpreter+0x2c4` does **not** gate that: it skips a call to
+    `0x800608ec` and the `load_entry` sits past the branch target, so the text
+    is fetched either way. An earlier note here said the opposite and rendered
+    all but one entity's dialogue as animation frames.
     """
     text = text or {}
-    talker = kind == TALKER
     lines = []
     for off, op, args, mn in decode(code):
-        if mn == "say" and talker:
+        if mn == "say" and base:
             entry = base + op
             said = text.get(entry, "")
             lines.append(f"  {off:3d}: say TALK[{entry}]" + (f"   {said[:66]}" if said else ""))
         elif mn == "say":
-            lines.append(f"  {off:3d}: frame {op}")
+            lines.append(f"  {off:3d}: say TALK[?+{op}]  (no base: the script "
+                         f"block was not found)")
         elif mn == "set_flag":
             lines.append(f"  {off:3d}: flags[{args[0]}] = {args[1]}"
                          if len(args) == 2 else f"  {off:3d}: set_flag ?")
@@ -180,9 +204,9 @@ if __name__ == "__main__":
         flat = sorted(v for _, o in recs for v in o)
         pieces = entities.cut(raw, base, flat)
         for k, (rec, offs) in enumerate(recs):
-            hdr = int.from_bytes(rec[0x0C:0x0E], "little")
-            tag = "talker" if rec[0] == TALKER else "not a talker"
-            print(f"=== level {lv} entity {k} (kind {rec[0]:#04x}, {tag}, base {hdr}, "
+            hdr = talk_base(raw, base, rec) or 0
+            tag = "0x2b" if rec[0] == TALKER else f"{rec[0]:#04x}"
+            print(f"=== level {lv} entity {k} (mesh {tag}, TALK base {hdr}, "
                   f"header at +{offs[0] if offs else '-'}) ===")
             for a in offs[1:]:
                 print(f" script +{a}")
