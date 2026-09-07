@@ -569,7 +569,37 @@ nine archives — searching for the first rows of it finds nothing — so the lo
 packs or rearranges. `tools/level3d.py` fills those pages from a snapshot in the
 meantime and says so when it does.
 
-### The opening scene, found by its painting
+### The opening scene is a movie, and this is what starts it
+
+**Withdrawn, and it was mine.** I said the scene was played by the engine
+because the sword, the painting and the three men are ordinary level 0 objects
+and actors. They are — and the scene is still a movie. `/STR/S03.S`, frame 60,
+decoded with `tools/str.py`, shows that room and carries the subtitle a player
+quoted from it. The same words are `TALK` entry 676 because the three men
+repeat them when you walk up and talk to them afterwards.
+
+That one fact explains every empty log at once: during a movie nothing
+interactive runs, so `give_item`, `object_interact` and `script_interpreter`
+were never going to fire, and the sword was already in the inventory from
+`reset_story_flags`.
+
+The player is **`0x80060d20`**. `build_str_name` (`0x80060fec`) is not a
+routine of its own but a label *inside* it, which is why nothing appeared to
+call it. It reads the scene number through the pointer at `0x801f825c` and
+splits it into two decimal digits with the usual multiply-by-`0xcccccccd`,
+filling in the `SXX` of the `\STR\SXX.S;1` template at `0x80013680`.
+
+It has exactly two callers:
+
+| caller | when |
+| --- | --- |
+| `flag_gate` (`0x80061a90`) | the story flags decide — which is how the rest of the game's thirteen cutscenes are reached |
+| `0x80061bc4`, a bare wrapper, from `game_main` at `0x80014e74` | guarded by `bne $s1, 1` — and `$s1` is the new-game flag, set when `read_overlay_arg2` returns −1 |
+
+So the opening plays on a new game and not on a loaded save, from `game_main`'s
+own init block, a few instructions after `place_player_on_terrain`.
+
+### The room itself, found by its painting
 
 A player who had seen the game said the room where the sword is handed over has
 a painting of two knights on the wall, and that it looked like model **428** in
