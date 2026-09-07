@@ -646,7 +646,24 @@ name themselves and there is no `S00`–`S02` on the disc.
 | `S14` | `story_flags[126]` |
 | `S15` | `story_flags[125]` |
 
-`python3 tools/story.py cutscenes` prints it from the disc.
+`python3 tools/story.py cutscenes` prints it from the disc, and now says which
+level's own code raises each gate:
+
+| cutscene | flag | raised by |
+| --- | --- | --- |
+| `S03` | 9 | `game_main` itself, on a new game — no overlay writes it |
+| `S04` | 67 | level 13's overlay |
+| `S05` | 87 | level 20's overlay |
+| `S06` | 93 | level 24's overlay |
+| `S09` | 84 | level 17's overlay |
+| `S10` | 88 | level 20's overlay |
+| `S12`–`S15` | 123–126 | **nothing in any overlay** — still to find |
+
+`S07`, `S08` and `S11` carry no gate at all.
+
+The four unaccounted flags are consecutive and gate the last four scenes, which
+is what the end of the game would look like; whatever raises them is the next
+thread.
 
 **Byte 0 and byte 1 are what has been read**; the other fifty bytes of each
 record are not. Reading them as further scene-and-flag pairs gives scene
@@ -656,6 +673,11 @@ numbers like 158 and 252 that no file answers to, so they are left alone.
 masks the byte with `0x7f`. So `story_flags` runs to **128 entries**, not the
 64 this document and `tools/story.py flags` assumed — `reset_story_flags`
 clearing "0x40 bytes and more at +0x100" fits that better than it fits 64.
+
+That was not a cosmetic limit. With it raised, the level overlays turn out to
+write **60** flags rather than 36: twenty-four writes were being discarded for
+falling outside a boundary that was never established. Flags 67, 84, 87, 88 and
+93 — five of the cutscene gates — are among them.
 
 ### The room itself, found by its painting
 

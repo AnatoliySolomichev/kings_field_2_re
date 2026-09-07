@@ -80,6 +80,23 @@ def dump(lv, text, out=sys.stdout):
 CUT_TABLE_ENTRY, CUT_BLOCK, CUT_STRIDE = 97, 6, 52
 
 
+def flag_writers():
+    """{flag: [(level, value)]} -- which level's own code sets each flag."""
+    import collections as _c
+    import decomp
+    out = _c.defaultdict(list)
+    for lv in range(28):
+        r = decomp.Reader(lv)
+        if not r.raw:
+            continue
+        for e in r.entries:
+            for _a, st in r.run(e):
+                if st[0] == "store" and st[1].startswith("story_flags["):
+                    n = int(st[1][12:st[1].index("]")])
+                    out[n].append((lv, st[2]))
+    return out
+
+
 def cutscenes():
     """Each `\\STR\\SNN.S` and the story flag that gates it.
 
@@ -107,6 +124,7 @@ def cutscenes():
         blocks.append(raw[p + 4:p + 4 + ln])
         p += 4 + ln
     t = blocks[CUT_BLOCK]
+    writers = flag_writers()
     print(f"{len(t) // CUT_STRIDE} records of {CUT_STRIDE} bytes, "
           f"from FDAT[{CUT_TABLE_ENTRY}] block {CUT_BLOCK}\n")
     for i in range(len(t) // CUT_STRIDE):
@@ -124,6 +142,11 @@ def cutscenes():
         note = "  <- the opening, started by game_main on a new game" \
             if i == 3 else ""
         print(f"  \\STR\\S{i:02d}.S   {how}{note}")
+        if gate != 0xFF:
+            who = sorted({lv for lv, _v in writers.get(gate & 0x7F, [])})
+            print("      its flag is raised by the overlay of "
+                  + (f"level {', '.join(str(x) for x in who)}" if who
+                     else "no level -- something else raises it"))
 
 
 def flags():
@@ -183,7 +206,7 @@ def flags():
             if mn == "if_flag" and len(args) == 3:
                 tested[args[0]].append(f"level {lv} entity {k} == {args[1]}")
 
-    print(f"{len(wrote)} of 64 story flags are written by a level overlay; "
+    print(f"{len(wrote)} of 128 story flags are written by a level overlay; "
           f"{len(tested)} are tested by an entity script.\n")
     print("The condition is worked out by dominance, not by folding the code:\n"
           "this is straight-line MIPS with forward branches, so to reach a\n"

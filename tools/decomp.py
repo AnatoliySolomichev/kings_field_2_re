@@ -35,7 +35,9 @@ import overlay as ov                                                 # noqa: E40
 import syms                                                          # noqa: E402
 
 STORY_FLAGS = 0x801BA988
-FLAG_COUNT = 0x40
+# 128, not 64: flag_gate masks the gate byte with 0x7f and the cutscene table
+# uses indices up to 126. See FORMATS.md, "Where that list lives".
+FLAG_COUNT = 0x80
 
 # The game routines a level overlay calls. overlay.py's list, plus the ones a
 # first pass over all twenty-eight levels turned up.
