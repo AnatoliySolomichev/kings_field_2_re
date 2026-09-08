@@ -76,6 +76,15 @@ static var binding := PackedInt32Array()
 static var now := 0
 static var prev := 0
 
+# The emulator can drive this instead of the keyboard. `emu/bp16.lua` writes the
+# game's own decoded button word -- 0x801b265c, the same word player_controller
+# reads -- into live.txt once per game frame, and godot/ghost.gd feeds it here.
+# Then one pair of hands playing in the emulator window drives both the game and
+# the port, which is the only direction that works: nothing here can press a
+# button in the emulator.
+static var live_word := 0
+static var from_emulator := false
+
 # What a keyboard stands in for. The port has no PlayStation pad, so each bit
 # gets a key; a real gamepad is read as well, below.
 const KEYS := {
@@ -117,6 +126,8 @@ static func apply(move_type := 0, action_type := 0) -> void:
 
 # PadRead: one word, a set bit meaning pressed.
 static func read() -> int:
+	if from_emulator:
+		return live_word
 	var w := 0
 	for bit in KEYS:
 		for k in KEYS[bit]:
@@ -159,6 +170,16 @@ static func hit(slot: int) -> bool:
 
 static func hit_mask(mask: int) -> bool:
 	return (now & mask) != 0 and (prev & mask) == 0
+
+
+# Every button in a word, named. For a readout that has to be glanced at.
+static func names_of(word: int) -> String:
+	var out := PackedStringArray()
+	for m in [UP, DOWN, LEFT, RIGHT, TRIANGLE, CIRCLE, CROSS, SQUARE,
+			L1, L2, R1, R2, SELECT, START]:
+		if word & m:
+			out.append(name_of(m))
+	return " ".join(out) if out.size() else "-"
 
 
 static func name_of(mask: int) -> String:

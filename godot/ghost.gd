@@ -2,6 +2,7 @@ extends Node3D
 # The game and the port, in one world, frame for frame.
 #
 #   C  compare on / off      L  locked / free      R  resync now
+#   B  take the buttons from the emulator
 #
 # While comparing, the camera takes both angles from the game: yaw from
 # 0x801b2612 and pitch from 0x801b2614.
@@ -12,6 +13,18 @@ extends Node3D
 # stands a marker where the game's player is, and runs the port's own model over
 # the same input -- so the two can be looked at side by side and, more usefully,
 # subtracted.
+#
+# **B sends the same buttons to both.** The line carries the game's own decoded
+# button word, so with B on the port stops reading the keyboard and takes that
+# instead: one pair of hands in the emulator window drives the game and the copy
+# at once. It only works in that direction. Nothing here can press a button in
+# the emulator -- there is no input to inject through, which is why every
+# breakpoint script in this repository ends by asking a person to play.
+#
+# B and C are worth having apart. With C on and locked, the port is reset to the
+# game's state every frame and the readout is a per-frame difference. With C off
+# and B on, the port walks on its own over the game's input and drifts, which is
+# the end-to-end question instead.
 #
 # **Locked is the default and it is the instrument.** Every frame it takes the
 # state the game actually had, runs exactly one frame of the model, compares,
@@ -53,6 +66,8 @@ var compare := false
 var locked := true
 var rung := 2
 
+var live_input := false
+var last_btn := 0
 var last_frame := -1
 var prev := {}                     # the previous game frame
 var worst := 0
@@ -100,6 +115,12 @@ func _unhandled_input(e: InputEvent) -> void:
 		KEY_L:
 			locked = not locked
 			_reset()
+		KEY_B:
+			live_input = not live_input
+			KFPad.from_emulator = live_input
+			if not live_input:
+				KFPad.live_word = 0
+			_hud("")
 		KEY_R:
 			if prev.has("p"):
 				_resync(prev)
@@ -155,10 +176,19 @@ func _read() -> Dictionary:
 
 
 func _process(_dt: float) -> void:
-	if not compare or player == null:
+	if player == null or not (compare or live_input):
 		return
 	var cur := _read()
-	if cur.is_empty() or int(cur["f"]) == last_frame:
+	if cur.is_empty():
+		return
+	# The buttons cross over whether or not the comparison is running, so B
+	# works on its own.
+	if live_input:
+		last_btn = int(cur["btn"])
+		KFPad.live_word = last_btn
+	if not compare:
+		return
+	if int(cur["f"]) == last_frame:
 		return
 	last_frame = int(cur["f"])
 
@@ -276,16 +306,26 @@ func _hud(note: String) -> void:
 	if hud == null:
 		return
 	if not compare:
-		hud.text = "C  compare with the emulator"
+		hud.text = ("C  compare with the emulator    B  take its buttons: %s\n%s"
+			% ["ON — " + KFPad.names_of(last_btn) if live_input else "off",
+			   "the emulator is driving this player" if live_input else ""])
 		return
 	var pct := 0
 	if checked > 0:
 		pct = matched * 100 / checked
-	hud.text = ("COMPARE  rung %d (%s)  %s\n" +
-		"%d of %d frames exact (%d %%)   now off by %d %d %d   worst %d\n" +
-		"%s\nC off   L lock/free   R resync   1/2/3 rung") % [
+	var gp: Vector3i = prev["p"] if prev.has("p") else Vector3i.ZERO
+	hud.text = ("COMPARE  rung %d (%s)  %s   buttons from the emulator: %s\n" +
+		"held: %s\n" +
+		"game  %8d %8d %8d\nport  %8d %8d %8d\ndiff  %8d %8d %8d" +
+		"      worst so far %d\n" +
+		"%d of %d frames exact (%d %%)\n%s\n" +
+		"C off   B buttons   L lock/free   R resync   1/2/3 rung") % [
 		rung,
 		["", "height only", "ground and height", "from the buttons"][rung],
 		"locked" if locked else "FREE RUNNING",
-		matched, checked, pct, int(drift.x), int(drift.y), int(drift.z), worst,
-		note]
+		"on" if live_input else "off",
+		KFPad.names_of(last_btn),
+		gp.x, gp.y, gp.z,
+		player.gx, player.gy, player.gz,
+		int(drift.x), int(drift.y), int(drift.z), worst,
+		matched, checked, pct, note]

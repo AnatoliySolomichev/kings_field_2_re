@@ -335,9 +335,28 @@ runs over the same input.
 godot-4 --path out/godot
 ```
 
-**C** compares, **L** switches locked against free running, **R** resyncs, and
-**1/2/3** pick the rung. Locked is the default and it is the instrument: it
-resets to the game's whole state — position, vertical state *and* velocity —
+**C** compares, **B** takes the buttons from the emulator, **L** switches
+locked against free running, **R** resyncs, and **1/2/3** pick the rung.
+
+**B is the one to reach for first.** The line `bp16.lua` writes carries the
+game's own decoded button word — `0x801b265c`, the same word
+`player_controller` reads — so with B on the port stops reading its keyboard
+and takes that instead. One pair of hands playing in the emulator window then
+drives the game and the port at once, and the readout shows, every frame, which
+buttons are down, where the game's player is, where the port's is, and the
+difference between them.
+
+It works in that direction only. Nothing here can press a button *in* the
+emulator: there is no input to inject through, which is why every breakpoint
+script in this repository ends by asking a person to play.
+
+B and C answer different questions and are worth using apart. **C on, locked**
+resets the port to the game's whole state every frame, so each line of the
+readout is one frame's disagreement and nothing carries over. **C off, B on**
+lets the port walk on its own over the game's input, which is the end-to-end
+question: it will drift, and where it starts drifting is the answer.
+
+Locked is the default and it is the instrument: it resets to the game's whole state — position, vertical state *and* velocity —
 every frame, so each disagreement is its own and the cell it happened in gets a
 red patch on the floor you can walk over and look at.
 
