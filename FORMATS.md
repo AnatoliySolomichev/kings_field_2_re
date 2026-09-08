@@ -646,24 +646,40 @@ name themselves and there is no `S00`–`S02` on the disc.
 | `S14` | `story_flags[126]` |
 | `S15` | `story_flags[125]` |
 
-`python3 tools/story.py cutscenes` prints it from the disc, and now says which
-level's own code raises each gate:
+**Withdrawn: the flag is not a key, it is an "already shown" mark.** This
+document said bit `0x80` meant "skipped once that is set", and I told a player
+that level 13's overlay *unlocks* `S04`. Both are backwards, and the answer is
+in the delay slots. At `flag_gate+0xc4` the branch taken when the flag is set
+carries `v0 = 2` in its slot while the fall-through carries `v0 = 0x10`, and
+the routine stores whichever it ends with into the state word at `0x801e824c`:
+**2 goes on to the scene, `0x10` does not.** So
 
-| cutscene | flag | raised by |
+| gate byte | the scene plays |
+| --- | --- |
+| `0xff` | always |
+| bit `0x80` clear — every gate in this table | **while the flag is clear**, and stops once it is set |
+| bit `0x80` set | only once the flag is set |
+
+The one case with independent evidence settles it: `game_main` sets flag 9
+*immediately after* starting the opening, which reads as "do not play it again"
+and cannot read as "now it may play".
+
+So the table is a list of scenes and the marks that retire them:
+
+| cutscene | mark | set by |
 | --- | --- | --- |
-| `S03` | 9 | `game_main` itself, on a new game — no overlay writes it |
+| `S03` | 9 | `game_main` and `player_controller` |
 | `S04` | 67 | level 13's overlay |
 | `S05` | 87 | level 20's overlay |
 | `S06` | 93 | level 24's overlay |
 | `S09` | 84 | level 17's overlay |
 | `S10` | 88 | level 20's overlay |
-| `S12`–`S15` | 123–126 | **nothing in any overlay** — still to find |
+| `S12`–`S15` | 123–126 | nothing found yet |
 
-`S07`, `S08` and `S11` carry no gate at all.
-
-The four unaccounted flags are consecutive and gate the last four scenes, which
-is what the end of the game would look like; whatever raises them is the next
-thread.
+`S07`, `S08` and `S11` carry no mark at all, and neither, in effect, do the
+last four: nothing this project has found sets 123 to 126, so nothing stops
+those scenes repeating. That is a smaller mystery than "four locked endgame
+scenes" was, and it is what the code actually says.
 
 **Byte 0 and byte 1 are what has been read**; the other fifty bytes of each
 record are not. Reading them as further scene-and-flag pairs gives scene

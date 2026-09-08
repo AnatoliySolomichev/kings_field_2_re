@@ -81,10 +81,29 @@ CUT_TABLE_ENTRY, CUT_BLOCK, CUT_STRIDE = 97, 6, 52
 
 
 def flag_writers():
-    """{flag: [(level, value)]} -- which level's own code sets each flag."""
+    """{flag: [(who, value)]} -- everything that sets a flag at a constant index.
+
+    Both sides: the levels' own overlays, and `GAME.EXE` itself. Leaving the
+    second out made the opening look unmarked, when `game_main` is exactly what
+    marks it.
+    """
     import collections as _c
     import decomp
+    import mips
+    import calltree
+    import syms
     out = _c.defaultdict(list)
+    e = mips.load("game")
+    g = calltree.Graph(e)
+    for a, v in mips.resolve(e).items():
+        if not (decomp.STORY_FLAGS <= v < decomp.STORY_FLAGS + decomp.FLAG_COUNT):
+            continue
+        _k, d = e.op(a)
+        if d.get("op") not in (0x28, 0x29, 0x2B):
+            continue
+        f = g.owner(a)
+        out[v - decomp.STORY_FLAGS].append(
+            (syms.label_in("game", f) if f else f"{a:#x}", None))
     for lv in range(28):
         r = decomp.Reader(lv)
         if not r.raw:
@@ -102,10 +121,19 @@ def cutscenes():
 
     `0x801e825c` holds a cursor into this table and `build_str_name`
     (a label inside the player at `0x80060d20`) takes the scene number from the
-    byte it points at; `flag_gate` reads the byte after it, treats `0xff` as
-    "no gate", and lets bit `0x80` pick which way the flag is tested. The
-    record number *is* the scene number for 3 to 15 -- exactly the thirteen
-    files under `/STR` -- so the table is indexed by scene.
+    byte it points at; `flag_gate` reads the byte after it and treats `0xff` as
+    "no gate". The record number *is* the scene number for 3 to 15 -- exactly
+    the thirteen files under `/STR` -- so the table is indexed by scene.
+
+    **The flag is an "already shown" mark, not a key.** With bit `0x80` clear -- which
+    every gate in this table has -- the scene plays while its flag is **clear**
+    and stops once the flag is set. Reading it the other way round is easy and
+    wrong, because the answer is in the delay slots: at `flag_gate+0xc4` the
+    branch taken when the flag is set carries `v0 = 2` in its slot and the
+    fall-through carries `v0 = 0x10`, and 2 is what makes the machinery go on.
+    The one case with independent evidence settles it: `game_main` sets flag 9
+    immediately *after* starting the opening, which only makes sense as "do not
+    play it again".
 
     Byte 0 and byte 1 are what has been read. The other fifty bytes of each
     record are not, and reading them as more scene-and-flag pairs produces
@@ -135,18 +163,20 @@ def cutscenes():
                   f"-- no \\STR\\S{i:02d}.S on the disc either")
             continue
         if gate == 0xFF:
-            how = "no gate: it plays whenever it is reached"
+            how = "no mark: it plays whenever it is reached"
+        elif gate & 0x80:
+            how = f"plays only once story_flags[{gate & 0x7F}] is set"
         else:
-            how = (f"waits on story_flags[{gate & 0x7F}]"
-                   + (", skipped once that is set" if gate & 0x80 else ""))
+            how = f"plays until story_flags[{gate & 0x7F}] is set"
         note = "  <- the opening, started by game_main on a new game" \
             if i == 3 else ""
         print(f"  \\STR\\S{i:02d}.S   {how}{note}")
         if gate != 0xFF:
-            who = sorted({lv for lv, _v in writers.get(gate & 0x7F, [])})
-            print("      its flag is raised by the overlay of "
-                  + (f"level {', '.join(str(x) for x in who)}" if who
-                     else "no level -- something else raises it"))
+            who = sorted({(f"level {w}'s overlay" if isinstance(w, int)
+                           else w) for w, _v in writers.get(gate & 0x7F, [])})
+            print("      the mark is set by "
+                  + (", ".join(who) if who
+                     else "nothing found yet, so nothing stops this one repeating"))
 
 
 def flags():
