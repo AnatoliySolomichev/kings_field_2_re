@@ -863,6 +863,20 @@ So a creature has a **yaw and nothing else**, and it comes from `+0x20`. In a
 level 0 snapshot 29 of the 58 actors carry one. The three men by the house
 carry zero, because none of them was spawned in that session.
 
+**`+9` is a small state machine, not a flag.** A player killed monsters and
+waited for them to come back with `emu/bp19.lua` armed, and the watchpoint saw
+the byte holding **0, 1 and 2** at different moments, while `0x8004b770` writes
+**3** into it — `ori $v0, 3` with the store in the delay slot of its call — and
+is reached from both `actor_tick` and `0x8004c1f0`. Four sites clear it to
+zero: `0x8004b6b4`, `0x8004c42c`, `0x8004c488` and `0x8004c4f4`, the last three
+all inside `0x8004c1f0`.
+
+> **How to read that log.** Its `alive->N` is the value the byte held *before*
+> the write, not after: a write watchpoint's callback runs before the store
+> lands. The first reading of it here said those sites set 1 and 2, and they do
+> not — all four write zero. The three values are real, but they are what was
+> there, not what was put there.
+
 **And the renderer draws one of a set, not all of them.** The first thing the
 actor loop does with a record is
 
