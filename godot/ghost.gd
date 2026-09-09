@@ -128,6 +128,11 @@ func _unhandled_input(e: InputEvent) -> void:
 				_reset()
 			else:
 				_flush()
+			# Say so immediately. Without this the readout only changed on the
+			# next frame that carried data, so with no live.txt at all -- a
+			# breakpoint script that does not write one -- pressing C looked
+			# like it did nothing.
+			_hud("")
 		KEY_L:
 			locked = not locked
 			_reset()
@@ -357,6 +362,12 @@ func _redraw_flags() -> void:
 func _hud(note: String) -> void:
 	var hud := get_node_or_null("../UI/Compare")
 	if hud == null:
+		return
+	if compare and _read().is_empty():
+		hud.text = ("COMPARE is on, but res://live.txt is not there.\n" +
+			"Only a breakpoint script that writes it feeds this: run\n" +
+			"  ./emu/run.sh debug bp16.lua      (or bp19.lua)\n" +
+			"C off   B buttons   V creatures")
 		return
 	if not compare:
 		hud.text = ("C  compare with the emulator    B  take its buttons: %s\n" +

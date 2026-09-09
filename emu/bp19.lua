@@ -106,4 +106,36 @@ for slot = 0, 2 do
     end)
 end
 
+-- The port reads res://live.txt once per game frame and stands a marker where
+-- the real player is. bp16 writes it; without it the Godot build's C key has
+-- nothing to compare against, which is exactly what happened the first time
+-- this script was run. So write it here too, from the same head-of-movement
+-- breakpoint bp16 uses.
+local LIVE = '/home/solo/my/projects/kings_field_2_english/out/godot/live.txt'
+local frame = 0
+local function s16(v) if v >= 0x8000 then return v - 0x10000 end return v end
+local function u16(a)
+    local b = a % 0x200000
+    return mem[b] + mem[b + 1] * 256
+end
+local function s32(a)
+    local b = a % 0x200000
+    local v = mem[b] + mem[b + 1] * 256 + mem[b + 2] * 65536 + mem[b + 3] * 16777216
+    if v >= 0x80000000 then v = v - 0x100000000 end
+    return v
+end
+
+arm(0x8002fe1c, 'live', 'Exec', 4, function()
+    frame = frame + 1
+    local f = io.open(LIVE .. '.tmp', 'w')
+    if f == nil then return end
+    f:write(string.format('%d %d %d %d %d %d %d %d %d %d %d %d\n',
+        frame, s32(0x801b25f0), s32(0x801b25f4), s32(0x801b25f8),
+        u16(0x801b2612), u8(0x801b25e8), s16(u16(0x801b2656)),
+        s16(u16(0x801b2648)), s16(u16(0x801b2646)), u16(0x801b265c),
+        u8(0x8018fad8), s16(u16(0x801b2610))))
+    f:close()
+    os.rename(LIVE .. '.tmp', LIVE)
+end)
+
 log('=== bp19 watching; stand near something that moves ===')

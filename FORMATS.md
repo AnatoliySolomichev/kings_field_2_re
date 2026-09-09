@@ -816,6 +816,17 @@ the table is `$t2 + 0x42a8`. In a level 0 snapshot a frame reads as 54 signed
 halfwords inside +/-4096 — **eighteen joints of three angles** — and frames 0
 and 1 are identical while frame 2 differs, which is what keyframes look like.
 
+**They come from `FDAT` entry 97, packed.** A write watchpoint named the
+filler: `0x800341e8`, called once by `game_main` at `0x80014d88`, and it is a
+straight copy loop — source `0x80081c8c`, destination `0x801aeefc`, 64
+iterations, advancing 46 bytes at the source and 106 at the destination. The
+source is **block 5 of `FDAT[97]`, 2304 bytes**, which is 36 bytes a frame on
+the disc expanded to 108 in memory; its first sixteen bytes match `0x80081c8c`
+in a snapshot exactly.
+
+So the animation data is readable from the disc after all, in a packed form,
+and the earlier search failed because it looked for the *expanded* bytes.
+
 **The frames are not on the disc in that form.** The bytes of frame 2 are not a
 verbatim run in `MO.T`, `MOF.T`, `FDAT.T`, `ITEM.T`, `RTMD.T`, `TALK.T` or
 `STALK.T`, so the table is built or unpacked at run time. Scanning for code
@@ -864,8 +875,13 @@ so an actor is drawn only while its byte `+9` is 1 — **4 of the 58** in that
 snapshot. `tools/level3d.py` ignores it and draws all 58, which is why a player
 sees the same man twice in the house, one crafting and one waiting, and a third
 outside. What sets `+9` is the chain `actor_tick_driver` → `0x8004c1f0` →
-`0x8004b868`, and `0x8004c1f0` reads the player's own X and Z, so part of it is
-proximity. The rest is not read.
+`0x8004b868`. A first reading of `0x8004c1f0`: it takes three globals at
+`0x8018fab0`, `0x8018fab4` and `0x8018fabc`, the player's own X and Z at
+`0x801b25f0` and `0x801b25f8`, hands a pair of them to `0x80016ec8` with
+`0xffff`, **rolls `rand`**, reads `0x801b24f2` out of the player's stat block,
+and only then calls the spawner. So it is distance *and* a die *and* something
+about the player — which is the shape a respawn rule has, and a player asked
+exactly that question: why some monsters come back and some never do.
 
 ### The three men are entities 9, 10 and 11
 
