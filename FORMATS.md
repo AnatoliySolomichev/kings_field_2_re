@@ -810,9 +810,22 @@ interpolates run to `+0x6a`, which fits inside the 108.
 *not* this: it is `facing_test` plus a frame of drawing in a loop — an NPC
 turning to face the player and waiting, not a walk cycle.
 
-None of this is in the port, where creatures are static meshes. What it would
-take is the frame table's base, which is an offset from a register this reading
-did not follow, and the actor field that says which frame and how far between.
+**The base is `0x801aeefc`**, read by following `$t2` up: it is set at
+`0x8003e3ac` as `lui 0x801b` and `addiu -0x53ac`, so `$t2 = 0x801aac54`, and
+the table is `$t2 + 0x42a8`. In a level 0 snapshot a frame reads as 54 signed
+halfwords inside +/-4096 — **eighteen joints of three angles** — and frames 0
+and 1 are identical while frame 2 differs, which is what keyframes look like.
+
+**The frames are not on the disc in that form.** The bytes of frame 2 are not a
+verbatim run in `MO.T`, `MOF.T`, `FDAT.T`, `ITEM.T`, `RTMD.T`, `TALK.T` or
+`STALK.T`, so the table is built or unpacked at run time. Scanning for code
+that names the address does not find the filler either — the region around it
+is a large graphics scratch that dozens of routines touch, and a fill through a
+pointer names no address at all. `emu/bp19.lua` asks the value instead: a write
+watchpoint on the first eight frames, beside one on an actor's `+0x0c`, which
+is what `EXTERNAL.md` calls the current animation.
+
+None of this is in the port, where creatures are static meshes.
 
 ### A creature carries one angle, and only one of a set is drawn
 
