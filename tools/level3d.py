@@ -51,6 +51,30 @@ UNIT = 1000.0            # world units per metre
 VOID = 0xF0              # cell[+5] at or above this is solid rock
 
 
+def _rot3(rx, ry, rz):
+    """A rotation matrix from the game's three angles, 4096 to the turn.
+
+    Composed Y, then X, then Z. That order is a choice this file makes and not
+    a reading: what the game does is build the matrix in the GTE and nobody has
+    transcribed it. It only matters for the three objects on level 0 that turn
+    about more than one axis.
+    """
+    def cs(a):
+        t = (a % 4096) / 4096.0 * 2.0 * math.pi
+        return math.cos(t), math.sin(t)
+    cx, sx = cs(rx)
+    cy, sy = cs(ry)
+    cz, sz = cs(rz)
+    ry_m = ((cy, 0.0, sy), (0.0, 1.0, 0.0), (-sy, 0.0, cy))
+    rx_m = ((1.0, 0.0, 0.0), (0.0, cx, -sx), (0.0, sx, cx))
+    rz_m = ((cz, -sz, 0.0), (sz, cz, 0.0), (0.0, 0.0, 1.0))
+
+    def mul(a, b):
+        return tuple(tuple(sum(a[i][k] * b[k][j] for k in range(3))
+                           for j in range(3)) for i in range(3))
+    return mul(rz_m, mul(rx_m, ry_m))
+
+
 def spin(v, rot):
     """Ry(rot * 90 degrees) in PlayStation axes."""
     x, y, z = v
@@ -386,6 +410,36 @@ def render_classes(lv):
     return {t: ram[base + t * TYPE_STRIDE] for t in range(TYPE_COUNT)}
 
 
+def live_rotations(lv):
+    """Each placed object's rotation, all three axes, out of a RAM snapshot.
+
+    The live record carries **three** halfwords at `+0x24`, `+0x26` and
+    `+0x28`, and this file used to turn objects by the middle one alone. Twelve
+    of level 0's objects are tilted -- nine about X, three about Z -- and a
+    player reported the visible half of it: a helmet standing on end in the
+    port where the game has it lying on its side.
+
+    The negated `u16` at +6 of the disc record reproduces the live Y for 336 of
+    347 objects, so the yaw is read. The other two axes are not: bytes 18 to 20
+    of the record scale by 64 into exactly the right angles for all nine tilted
+    objects and into nonsense for the rest, so that field is conditional on
+    something not yet found and is not used here. The triple is taken from the
+    snapshot instead -- borrowed, like the scales and the object textures, and
+    only for level 0.
+    """
+    if lv != 0 or not os.path.exists(SNAP_RAM):
+        return {}
+    ram = open(SNAP_RAM, "rb").read()
+    out = {}
+    for k in range(OBJECT_SLOTS):
+        off = (OBJECT_TABLE + k * OBJECT_STRIDE) & 0x1FFFFF
+        tid = struct.unpack_from("<H", ram, off + 6)[0]
+        if tid in (0xFFFF, 0xFFFE):
+            continue
+        out[k] = struct.unpack_from("<3h", ram, off + 0x24)
+    return out
+
+
 def object_vram(lv):
     """VRAM for the objects, which is not all in `RTIM.T[lv]`.
 
@@ -607,6 +661,7 @@ def build_objects_gltf(lv, out="out/godot"):
     placed = missing = 0
     scales = live_scales(lv)
     classes = render_classes(lv)
+    rots = live_rotations(lv)
     hidden = 0
     skipped_class = 0
     for o in placement.objects(lv):
@@ -638,22 +693,31 @@ def build_objects_gltf(lv, out="out/godot"):
         # `load_object_placement` does `negu` then masks to 0xfff before writing
         # the live record, so the disc value is the negative of the angle the
         # object actually stands at.
-        ang = (-o["rot"] % 4096) / 4096.0 * 2.0 * math.pi
-        ca, sa = math.cos(ang), math.sin(ang)
+        # All three angles when the snapshot has them, the disc's yaw otherwise.
+        # The order the three are composed in is **not established**; it hardly
+        # shows, because only three of level 0's objects turn about more than
+        # one axis at a time.
+        rx, ry, rz = rots.get(o["slot"], (0, (-o["rot"]) % 4096, 0))
+        m = _rot3(rx, ry, rz)
         placed += 1
 
         f = sc / 4096.0
 
-        def place(v, f=f):
+        def place(v, f=f, m=m):
             x, y, z = (c * f for c in v)
-            rx = x * ca + z * sa
-            rz = -x * sa + z * ca
-            return ((o["x"] + rx) / UNIT, -(oy + y) / UNIT, -(o["z"] + rz) / UNIT)
+            ax = m[0][0] * x + m[0][1] * y + m[0][2] * z
+            ay = m[1][0] * x + m[1][1] * y + m[1][2] * z
+            az = m[2][0] * x + m[2][1] * y + m[2][2] * z
+            return ((o["x"] + ax) / UNIT, -(oy + ay) / UNIT, -(o["z"] + az) / UNIT)
 
-        def spin_normal(n):
+        def spin_normal(n, m=m):
+            # The same matrix the vertices go through, so a tilted object is
+            # lit the way it is turned. Only the axis flip is applied after.
             nx, ny, nz = n
-            return ((nx * ca + nz * sa) / 4096.0, -ny / 4096.0,
-                    -(-nx * sa + nz * ca) / 4096.0)
+            ax = m[0][0] * nx + m[0][1] * ny + m[0][2] * nz
+            ay = m[1][0] * nx + m[1][1] * ny + m[1][2] * nz
+            az = m[2][0] * nx + m[2][1] * ny + m[2][2] * nz
+            return (ax / 4096.0, -ay / 4096.0, -az / 4096.0)
 
         emit_object(objs, place, lambda raw: shade(raw, llm, lcm, bk), groups,
                     spin_normal)

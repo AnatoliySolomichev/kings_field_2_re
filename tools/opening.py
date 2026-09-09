@@ -92,6 +92,27 @@ def opd(disc, out):
     return got
 
 
+def loading_screen(disc, out):
+    """`LOAD.MSG` -- the "Data Loading" card GAME.EXE puts up while it reads.
+
+    A single TIM at the root of the disc, 128x160, four bits with three CLUTs,
+    bound for VRAM (960, 256). `game_main` reaches it through `0x8003c9dc`,
+    which is the only place `\\LOAD.MSG;1` is formed. It comes *after*
+    OPEN.EXE's own "Program Loading", which is why a player saw one in both the
+    emulator and the port and the other only in the emulator.
+    """
+    lba, size = strmod.find(disc, "/LOAD.MSG")
+    d = disc.read(lba, size)
+    for _pos, r in tim.scan(d):
+        w, h, px, _nxt, (dx, dy), cluts = r
+        tim.write_png(f"{out}/loading.png", w, h, px)
+        print(f"  loading.png  {w}x{h} at VRAM ({dx},{dy}), "
+              f"{len(cluts)} CLUTs -- Data Loading")
+        return {"file": "loading.png", "w": w, "h": h, "vram": [dx, dy],
+                "what": "the Data Loading card, from LOAD.MSG"}
+    return None
+
+
 def stills(disc, out):
     got = []
     for idx, path, frame, what in MOVIES:
@@ -289,10 +310,12 @@ def main(out="out/godot/opening"):
     disc = psxiso.Disc(IMG)
     print(f"opening assets into {out}/")
     tims = opd(disc, out)
+    loading = loading_screen(disc, out)
     movies = stills(disc, out)
     manifest = {
         "_note": "The opening sequence, as OPEN.EXE runs it. See BOOT.md.",
         "tims": tims,
+        "loading": loading,
         "movies": movies,
         "title_stream": {"path": TITLE_STREAM[0], "what": TITLE_STREAM[1]},
         "menu": {"entries": ["NEW", "CONTINUE"],

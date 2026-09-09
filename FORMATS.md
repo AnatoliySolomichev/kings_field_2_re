@@ -2348,10 +2348,28 @@ given. Identical block sizes on every level.
 | +2 | cell X |
 | +4 | `u16` type id, `0xffff` for an empty slot |
 | +6 | `u16` rotation, negated by the loader before it reaches the live record |
-| +8 | `u16` fine X inside the cell |
-| +10 | `u16` fine Z |
+| +8 | `u16` fine **Z** inside the cell |
+| +10 | `u16` fine **X** |
 | +12 | **`s16` height above the terrain** |
 | +16 | `u16` that becomes the object's `+0x38` — the sign text index |
+
+**The two fine offsets are the other way round** from how this document and
+`tools/placement.py` had them: +8 is the offset along Z and +10 along X.
+Reading them the old way put 112 of level 0's 347 objects where the game has
+them; swapping puts **345 of 347** there. A player found it by looking — a
+healing herb sitting a little to one side — and every object whose offset is
+not the middle of its cell was displaced the same way.
+
+**Objects turn about three axes, not one.** The live record carries three
+halfwords at `+0x24`, `+0x26` and `+0x28`, and nine of level 0's objects are
+tilted about X and three about Z. The negated `u16` at +6 of the disc record
+reproduces the live Y for 336 of 347, so the yaw is read; the other two are
+not. Bytes 18 to 20 of the record scale by 64 into exactly the right angles for
+all nine tilted objects **and into nonsense for the rest** — 40 of 347 on the
+Y axis against the yaw field's 336 — so that field is conditional on something
+not yet found. `tools/level3d.py` takes the triple from a RAM snapshot instead,
+labelled borrowed like the scales and the object textures. A player found this
+one too: a helmet standing on end in the port and lying on its side in the game.
 
 **The height is in the record after all.** This document and `BACKLOG.md` both
 said it was not, and that an object simply stands on the terrain at

@@ -80,6 +80,13 @@ def objects(lv, path=FDAT):
     the floor, which is what this project did while the field was thought not
     to exist, draws the lid inside the body.
 
+    **The two fine offsets are the other way round from how this used to read
+    them.** The `u16` at +8 is the offset along **Z** and the one at +10 along
+    **X**; swapping them puts 345 of 347 objects where the game has them
+    instead of 112. A player spotted it first -- a healing herb sitting a little
+    to one side of where it should be -- and every object whose offset is not
+    the middle of its cell was displaced the same way.
+
     Checked against the game: `y = -128 * cell[+6] + h` reproduces the live
     object table's Y for **345 of level 0's 347 placed objects**. The two it
     misses are both type 280, whose records are full of `0xff` filler and whose
@@ -97,8 +104,8 @@ def objects(lv, path=FDAT):
         t = struct.unpack_from("<H", r, 4)[0]
         f38 = struct.unpack_from("<H", r, 16)[0]
         out.append({"slot": k, "type": t, "cx": r[2], "cz": r[1],
-                    "x": r[2] * 2048 + struct.unpack_from("<H", r, 8)[0],
-                    "z": r[1] * 2048 + struct.unpack_from("<H", r, 10)[0],
+                    "x": r[2] * 2048 + struct.unpack_from("<H", r, 10)[0],
+                    "z": r[1] * 2048 + struct.unpack_from("<H", r, 8)[0],
                     "rot": struct.unpack_from("<H", r, 6)[0] % 4096,
                     "h": struct.unpack_from("<h", r, 12)[0],
                     "text": None if f38 == EMPTY else f38})

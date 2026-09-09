@@ -66,6 +66,12 @@ var compare := false
 var locked := true
 var rung := 2
 
+# Disagreements go to a file as well as the screen, so a session can be handed
+# to somebody who was not watching it. One line per frame that differs: the
+# frame number, the buttons, where the game was, where the port went, and by
+# how much.
+const LOG := "res://compare.log"
+var log_buf := PackedStringArray()
 var live_input := false
 var last_btn := 0
 var last_frame := -1
@@ -112,6 +118,8 @@ func _unhandled_input(e: InputEvent) -> void:
 			marker.visible = compare
 			if compare:
 				_reset()
+			else:
+				_flush()
 		KEY_L:
 			locked = not locked
 			_reset()
@@ -235,6 +243,13 @@ func _process(_dt: float) -> void:
 			_redraw_flags()
 	drift = Vector3(d)
 	worst = maxi(worst, maxi(absi(d.x), maxi(absi(d.y), absi(d.z))))
+	if d != Vector3i.ZERO:
+		log_buf.append("f=%d rung=%d %s btn=%s game=%d,%d,%d port=%d,%d,%d diff=%d,%d,%d"
+			% [int(cur["f"]), rung, "locked" if locked else "free",
+			   KFPad.names_of(int(prev["btn"])),
+			   want.x, want.y, want.z, got.x, got.y, got.z, d.x, d.y, d.z])
+		if log_buf.size() >= 32:
+			_flush()
 	if locked:
 		_resync(cur)
 	prev = cur
@@ -278,6 +293,27 @@ func _advance(a: Dictionary, b: Dictionary) -> void:
 	player._move(dx, dz)
 	# The bob rides on the step's magnitude, whether or not the step landed.
 	player._bob(player.coll.isqrt(fd * fd + sd * sd))
+
+
+func _flush() -> void:
+	if log_buf.is_empty():
+		return
+	var f := FileAccess.open(LOG, FileAccess.READ_WRITE)
+	if f == null:
+		f = FileAccess.open(LOG, FileAccess.WRITE)
+	if f == null:
+		log_buf.clear()
+		return
+	f.seek_end()
+	for line in log_buf:
+		f.store_line(line)
+	f.close()
+	log_buf.clear()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_PREDELETE:
+		_flush()
 
 
 func _redraw_flags() -> void:

@@ -1276,5 +1276,10 @@
   "name": "cue_sound",
   "kind": "code",
   "evidence": "(id, 0) into 0x8007304c and 0x8006d43c, which splits the id into a high and a low byte and indexes a 43-byte-stride table at 0x801e6cf8. game_main's new-game branch calls it and nothing about it reaches a movie or a model"
+ },
+ "0x8003c9dc": {
+  "name": "load_data_screen",
+  "kind": "code",
+  "evidence": "the only place \\\\LOAD.MSG;1 is formed, at 0x8003c9f8. game_main calls it at 0x80014d18, in the init block. LOAD.MSG is one TIM at the root of the disc, 128x160, 4-bit with three CLUTs, bound for VRAM (960,256): the Data Loading card, which comes after OPEN.EXE's own Program Loading"
  }
 }

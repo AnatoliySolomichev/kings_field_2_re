@@ -1,5 +1,12 @@
 extends CanvasLayer
-# The opening cutscene, where the sword is handed over.
+# What GAME.EXE puts on screen before the level: the Data Loading card, and
+# then, on a new game, the cutscene where the sword is handed over.
+#
+# The card is `LOAD.MSG`, one TIM at the root of the disc, and `game_main`
+# reaches it through `load_data_screen` (0x8003c9dc) in its init block --
+# *after* OPEN.EXE has drawn its own "Program Loading" and returned. A player
+# comparing the two windows saw the first card in both and the second only in
+# the emulator, which is what put this here.
 #
 # `game_main` plays it at 0x80014e74, in its own init block a few instructions
 # after `place_player_on_terrain`, and the call is guarded by `bne $s1, 1` --
@@ -25,6 +32,13 @@ const SCENE := 3                  # \STR\S03.S
 
 var video: VideoStreamPlayer
 var started := false
+var card: TextureRect
+var card_frames := 0
+
+# The port has nothing to load, so the card would flash by. Ninety frames is
+# this port's, not the game's: there the card stays up for as long as the CD
+# takes.
+const CARD_FRAMES := 90
 
 
 func _ready() -> void:
@@ -37,7 +51,8 @@ func _ready() -> void:
 	if shell != null:
 		newgame = shell.overlay_arg2 == 0
 	var path := "res://opening/cutscene%02d.ogv" % SCENE
-	if not newgame or not ResourceLoader.exists(path):
+	var has_card := ResourceLoader.exists("res://opening/loading.png")
+	if (not newgame or not ResourceLoader.exists(path)) and not has_card:
 		queue_free()
 		return
 	layer = 10
@@ -58,8 +73,18 @@ func _ready() -> void:
 	hint.anchor_bottom = 1.0
 	hint.offset_top = -22
 	add_child(hint)
-	video.play()
-	started = true
+	if has_card:
+		card = TextureRect.new()
+		card.texture = load("res://opening/loading.png")
+		card.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		card.anchor_right = 1.0
+		card.anchor_bottom = 1.0
+		add_child(card)
+		card_frames = CARD_FRAMES
+		video.visible = false
+	else:
+		video.play()
+		started = true
 	# The world runs on behind the movie in the game too, but the player should
 	# not be walking about during it.
 	var p := get_node_or_null("/root/World/Player")
@@ -68,15 +93,33 @@ func _ready() -> void:
 
 
 func _process(_dt: float) -> void:
+	KFPad.poll()
+	if card_frames > 0:
+		# load_data_screen goes up first; the movie only follows it.
+		card_frames -= 1
+		if card_frames == 0:
+			if card:
+				card.queue_free()
+				card = null
+			if video.stream:
+				video.visible = true
+				video.play()
+				started = true
+			else:
+				_finish()
+		return
 	if not started:
 		return
-	KFPad.poll()
 	# play_movie's own rules: START ends it, and so does any of the four face
 	# buttons. Escape is this port's, for a keyboard with no pad.
 	var skip := KFPad.hit_mask(KFPad.START | KFPad.TRIANGLE | KFPad.SQUARE
 		| KFPad.CIRCLE | KFPad.CROSS) or Input.is_key_pressed(KEY_ESCAPE)
 	if skip or not video.is_playing():
-		var p := get_node_or_null("/root/World/Player")
-		if p:
-			p.set_process(true)
-		queue_free()
+		_finish()
+
+
+func _finish() -> void:
+	var p := get_node_or_null("/root/World/Player")
+	if p:
+		p.set_process(true)
+	queue_free()
