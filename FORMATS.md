@@ -789,6 +789,31 @@ if (has_item(2) && has_item(130) && has_item(131) && has_item(132))
 Item 2 is the sword's final stage, so flag 3 is an endgame condition the
 overlay re-evaluates every time it runs. It says nothing about the opening.
 
+### Creatures are animated by blending two 108-byte keyframes
+
+Their limbs move because `0x8003e34c`, the routine that draws a creature, is an
+interpolator. It forms two frame pointers the same way:
+
+```
+v1 = frame & 0x3f            a frame number, 0 to 63
+v0 = 108 * v1                built from shifts and subtractions
+v1 = t2 + 0x42a8             the base of the frame table
+s1 = v0 + v1                 and $s2 the same, for the second frame
+```
+
+and then walks the two with `0x80017158` — a lerp — with `$s7` as the factor,
+feeding the results to `0x80035358`. So an animation is **up to 64 frames of
+108 bytes**, and what is drawn is a blend of two of them. The fields it
+interpolates run to `+0x6a`, which fits inside the 108.
+
+`0x8005c0d4`, which `script_interpreter` calls before every dialogue line, is
+*not* this: it is `facing_test` plus a frame of drawing in a loop — an NPC
+turning to face the player and waiting, not a walk cycle.
+
+None of this is in the port, where creatures are static meshes. What it would
+take is the frame table's base, which is an offset from a register this reading
+did not follow, and the actor field that says which frame and how far between.
+
 ### A creature carries one angle, and only one of a set is drawn
 
 The actor branch of `render_walk` copies three halfwords into the scratchpad at

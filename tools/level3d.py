@@ -587,9 +587,20 @@ def live_actors(lv):
     return out
 
 
-def build_actors_gltf(lv, out="out/godot"):
-    """The creatures, placed where the game has them and drawn with their model."""
-    actors = live_actors(lv)
+def build_actors_gltf(lv, out="out/godot", alive_only=False):
+    """The creatures, placed where the game has them and drawn with their model.
+
+    Two meshes come out of this, because the game and the snapshot disagree
+    about how many creatures there are. `render_walk` draws an actor only while
+    its byte `+9` is 1 -- 4 of level 0's 58 in the snapshot -- so
+    `alive_only=True` writes just those, and the default writes all of them.
+    Neither is the whole truth: the snapshot is one moment of one session, and
+    what raises `+9` is a chain this project has only partly read. Having both
+    in the scene lets a player see the difference instead of being told about
+    it.
+    """
+    actors = [a for a in live_actors(lv) if a.get("alive") == 1] \
+        if alive_only else live_actors(lv)
     if not actors:
         return None
     vram = object_vram(lv)
@@ -654,9 +665,10 @@ def build_actors_gltf(lv, out="out/godot"):
         ntri += len(pos) // 3
     if not prims:
         return None
-    path, _n = g.write(f"{out}/actors{lv:02d}.gltf", prims, f"actors{lv}")
-    print(f"creatures: {placed} placed, {missing} without a model, {ntri} "
-          f"triangles -> {path}")
+    tag = "actorslive" if alive_only else "actors"
+    path, _n = g.write(f"{out}/{tag}{lv:02d}.gltf", prims, f"{tag}{lv}")
+    print(f"creatures{' the game draws' if alive_only else ''}: {placed} "
+          f"placed, {missing} without a model, {ntri} triangles -> {path}")
     return path
 
 
@@ -814,6 +826,7 @@ SCENE = """[gd_scene load_steps={load_steps} format=3]
 [ext_resource type="PackedScene" path="res://collision{lv:02d}.gltf" id="3"]
 [ext_resource type="PackedScene" path="res://objects{lv:02d}.gltf" id="4"]
 [ext_resource type="PackedScene" path="res://actors{lv:02d}.gltf" id="7"]
+[ext_resource type="PackedScene" path="res://actorslive{lv:02d}.gltf" id="15"]
 [ext_resource type="Script" path="res://ghost.gd" id="5"]
 [ext_resource type="Script" path="res://labels.gd" id="6"]
 [ext_resource type="Script" path="res://cutscene.gd" id="14"]
@@ -831,6 +844,9 @@ ambient_light_source = 0
 [node name="Objects" parent="." instance=ExtResource("4")]
 
 [node name="Creatures" parent="." instance=ExtResource("7")]
+
+[node name="CreaturesLive" parent="." instance=ExtResource("15")]
+visible = false
 
 [node name="CollisionView" parent="." instance=ExtResource("3")]
 visible = false
@@ -1088,6 +1104,7 @@ if __name__ == "__main__":
         build_gltf(lv, limit=limit)
         build_objects_gltf(lv)
         build_actors_gltf(lv)
+        build_actors_gltf(lv, alive_only=True)
         build_collision_gltf(lv)
     project(lv)
     if "--no-check" not in sys.argv:
