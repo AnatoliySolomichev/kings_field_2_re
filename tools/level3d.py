@@ -54,10 +54,25 @@ VOID = 0xF0              # cell[+5] at or above this is solid rock
 def _rot3(rx, ry, rz):
     """A rotation matrix from the game's three angles, 4096 to the turn.
 
-    Composed Y, then X, then Z. That order is a choice this file makes and not
-    a reading: what the game does is build the matrix in the GTE and nobody has
-    transcribed it. It only matters for the three objects on level 0 that turn
-    about more than one axis.
+    **M = Ry . Rx . Rz**, so a vertex is turned about Z first, then X, then Y.
+    That is read off `0x800166f4`, which builds it in this order:
+
+        temp = Rz(angle[+4])          0x80016680, the Z matrix
+        dest = Rx(angle[+0])          0x80016598, the X matrix
+        0x80074628(dest, temp)        writes into $a0: dest = dest . temp
+        temp = Ry(angle[+2])          0x8001660c, the Y matrix
+        0x80074734(temp, dest)        writes into $a1: dest = temp . dest
+
+    Each helper is named by the cells it fills -- the X one writes `0x1000`
+    into [0][0] and cos, -sin, sin, cos into the lower right, and so on. The
+    two multiplies are told apart by which argument they store through, which
+    is the whole difference between them.
+
+    An earlier version of this composed them the other way round and said so:
+    it was a choice, not a reading, and a player looking at a helmet in both
+    windows could see it was wrong. The angle triple is read at +0, +2 and +4
+    as X, Y and Z, which is also what the live record's +0x24, +0x26 and +0x28
+    hold.
     """
     def cs(a):
         t = (a % 4096) / 4096.0 * 2.0 * math.pi
@@ -72,7 +87,7 @@ def _rot3(rx, ry, rz):
     def mul(a, b):
         return tuple(tuple(sum(a[i][k] * b[k][j] for k in range(3))
                            for j in range(3)) for i in range(3))
-    return mul(rz_m, mul(rx_m, ry_m))
+    return mul(ry_m, mul(rx_m, rz_m))
 
 
 def spin(v, rot):

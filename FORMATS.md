@@ -2371,6 +2371,27 @@ not yet found. `tools/level3d.py` takes the triple from a RAM snapshot instead,
 labelled borrowed like the scales and the object textures. A player found this
 one too: a helmet standing on end in the port and lying on its side in the game.
 
+**And the three are composed `M = Ry . Rx . Rz`** — a vertex is turned about Z
+first, then X, then Y. Read off `0x800166f4`:
+
+```
+temp = Rz(angle[+4])       0x80016680 fills the Z matrix
+dest = Rx(angle[+0])       0x80016598 fills the X matrix
+0x80074628(dest, temp)     stores through $a0:  dest = dest . temp
+temp = Ry(angle[+2])       0x8001660c fills the Y matrix
+0x80074734(temp, dest)     stores through $a1:  dest = temp . dest
+```
+
+Each helper is named by the cells it fills — the X one puts `0x1000` in
+`[0][0]` and `cos, -sin, sin, cos` in the lower right — and the two multiplies
+are told apart by which argument they store through, which is the only
+difference between them. The angle triple is read at +0, +2 and +4 as X, Y and
+Z, which is what the live record's `+0x24`, `+0x26` and `+0x28` hold.
+
+The first version of this composed them in the opposite order and said in its
+own comment that the order was a choice rather than a reading. It was wrong,
+and a player comparing a helmet in the two windows could see it.
+
 **The height is in the record after all.** This document and `BACKLOG.md` both
 said it was not, and that an object simply stands on the terrain at
 `-128 * cell[+6]`. It does not: the terrain is only where an object with
