@@ -578,8 +578,10 @@ def live_actors(lv):
         x, y, z = struct.unpack_from("<3i", r, 0x2C)
         rec = at(ENTITY_TABLE + kind * ENTITY_STRIDE, ENTITY_STRIDE)
         model = struct.unpack_from("<H", rec, 0)[0] - MODEL_TAG
-        out.append({"slot": k, "kind": kind, "model": model,
-                    "x": x, "y": y, "z": z,
+        # the yaw the spawner copies into the rotation, actor+0x20
+        yaw = struct.unpack_from("<H", r, 0x20)[0]
+        out.append({"slot": k, "kind": kind, "model": model, "yaw": yaw,
+                    "alive": r[9], "x": x, "y": y, "z": z,
                     "radius": struct.unpack_from("<H", r, 0x1C)[0],
                     "height": struct.unpack_from("<H", r, 0x1E)[0]})
     return out
@@ -611,9 +613,28 @@ def build_actors_gltf(lv, out="out/godot"):
         llm, lcm, bk = light_class(look, c[9] & 0x3F, c[7] & 3)
         placed += 1
 
-        def place(v, a=a):
-            return ((a["x"] + v[0]) / UNIT, -(a["y"] + v[1]) / UNIT,
-                    -(a["z"] + v[2]) / UNIT)
+        # A creature's facing, read off the code rather than fitted. The actor
+        # branch of render_walk copies actor+0x40, +0x42 and +0x44 into the
+        # scratchpad at 0x1f800114..0x118, which is the same rotation triple
+        # the object branch fills, and the spawner at 0x8004b868 sets it:
+        #
+        #     v1 = actor[+0x20]
+        #     actor[+0x44] = 0        Z
+        #     actor[+0x40] = 0        X
+        #     actor[+0x42] = v1       Y
+        #
+        # so a creature carries one angle, its yaw, and it comes from +0x20.
+        # Where the snapshot holds zero the actor was never spawned in that
+        # session -- the three men by the house are all zero for that reason --
+        # and the port then draws them unturned, as it did before.
+        m = _rot3(0, a.get("yaw", 0), 0)
+
+        def place(v, a=a, m=m):
+            ax = m[0][0] * v[0] + m[0][1] * v[1] + m[0][2] * v[2]
+            ay = m[1][0] * v[0] + m[1][1] * v[1] + m[1][2] * v[2]
+            az = m[2][0] * v[0] + m[2][1] * v[1] + m[2][2] * v[2]
+            return ((a["x"] + ax) / UNIT, -(a["y"] + ay) / UNIT,
+                    -(a["z"] + az) / UNIT)
 
         emit_object(objs, place, lambda raw: shade(raw, llm, lcm, bk), groups)
 

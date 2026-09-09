@@ -789,6 +789,46 @@ if (has_item(2) && has_item(130) && has_item(131) && has_item(132))
 Item 2 is the sword's final stage, so flag 3 is an endgame condition the
 overlay re-evaluates every time it runs. It says nothing about the opening.
 
+### A creature carries one angle, and only one of a set is drawn
+
+The actor branch of `render_walk` copies three halfwords into the scratchpad at
+`0x1f800114`, `0x116` and `0x118` — the same slots the object branch fills, so
+the same matrix builder turns both:
+
+```
+lhu $v0, 0x3d($s0)   ->  sh $v0, 0x114($s5)      $s0 = actor + 3
+lhu $v0, 0x3f($s0)   ->  sh $v0, 0x116($s5)      so the fields are
+lhu $v0, 0x41($s0)   ->  sh $v0, 0x118($s5)      +0x40, +0x42, +0x44
+```
+
+and the spawner at `0x8004b868` fills them:
+
+```
+v1 = actor[+0x20]
+actor[+0x44] = 0        Z
+actor[+0x40] = 0        X
+actor[+0x42] = v1       Y
+```
+
+So a creature has a **yaw and nothing else**, and it comes from `+0x20`. In a
+level 0 snapshot 29 of the 58 actors carry one. The three men by the house
+carry zero, because none of them was spawned in that session.
+
+**And the renderer draws one of a set, not all of them.** The first thing the
+actor loop does with a record is
+
+```
+lbu $v0, 9($s0)          ; $s0 = actor + 3
+bne $v0, $s4, <loop tail>  ; $s4 = 1
+```
+
+so an actor is drawn only while its byte `+9` is 1 — **4 of the 58** in that
+snapshot. `tools/level3d.py` ignores it and draws all 58, which is why a player
+sees the same man twice in the house, one crafting and one waiting, and a third
+outside. What sets `+9` is the chain `actor_tick_driver` → `0x8004c1f0` →
+`0x8004b868`, and `0x8004c1f0` reads the player's own X and Z, so part of it is
+proximity. The rest is not read.
+
 ### The three men are entities 9, 10 and 11
 
 The number 676 is **nowhere in `GAME.EXE`'s code** — nothing loads it as a
