@@ -132,6 +132,20 @@ python3 tools/placement.py          # all 28 levels, counted
 python3 tools/placement.py 0        # one level, every object
 ```
 
+**`actors.py`** — every creature on every level, from the disc, and the game's
+rule for when each one is drawn. The table is link 1 of the same `FDAT.T` entry,
+200 records of 16 bytes; the rule is `0x8004c1f0` transcribed, with the death
+rule beside it. `--check` holds the table against a RAM snapshot (58 of 58 on
+level 0) and `--at` shows what arriving somewhere wakes. `godot/actors.gd` is
+the same machine in the port.
+
+```
+python3 tools/actors.py 0              # one level's table
+python3 tools/actors.py 0 --check      # against out/snap/b.ram
+python3 tools/actors.py 0 --at 62 8    # arriving in cell (62,8)
+python3 tools/actors.py --all          # every level, by category
+```
+
 **`readables.py`** — every object you can read, and what it says. This is the
 one that turns the world into text: signs, graves, plaques, with their cells.
 

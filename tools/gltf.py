@@ -120,14 +120,32 @@ class Gltf:
         the node, and a name ending in `-col` is what gives the level a
         collision body without a line of scene setup."""
         self.meshes.append({"name": name, "primitives": prims})
+        return self._dump(path, [{"mesh": len(self.meshes) - 1,
+                                  "name": node or name}])
+
+    def write_nodes(self, path, items):
+        """Many nodes, each with its own mesh and its own place.
+
+        `items` is [(name, primitives, translation, rotation)], the rotation a
+        quaternion (x, y, z, w). Godot imports each as a child it can find by
+        name, which is what lets a script show and hide creatures one at a time.
+        """
+        nodes = []
+        for name, prims, tr, rot in items:
+            self.meshes.append({"name": name, "primitives": prims})
+            nodes.append({"mesh": len(self.meshes) - 1, "name": name,
+                          "translation": list(tr), "rotation": list(rot)})
+        return self._dump(path, nodes)
+
+    def _dump(self, path, nodes):
         base = os.path.basename(path).rsplit(".", 1)[0] + ".bin"
         doc = {
             "asset": {"version": "2.0",
                       "generator": "kings_field_2 tools/gltf.py"},
             "extensionsUsed": ["KHR_materials_unlit"],
             "scene": 0,
-            "scenes": [{"nodes": [0]}],
-            "nodes": [{"mesh": 0, "name": node or name}],
+            "scenes": [{"nodes": list(range(len(nodes)))}],
+            "nodes": nodes,
             "meshes": self.meshes,
             "materials": self.materials,
             "textures": self.textures,

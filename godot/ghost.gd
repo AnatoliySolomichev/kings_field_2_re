@@ -73,13 +73,11 @@ var rung := 2
 # how much.
 const LOG := "res://compare.log"
 var log_buf := PackedStringArray()
-# Two creature meshes sit in the scene. `render_walk` draws an actor only while
-# its byte +9 is 1 -- 4 of level 0's 58 in the snapshot this is built from --
-# so one mesh has all of them and the other only those four. Neither is the
-# whole truth, and switching between them is the honest way to show that: the
-# snapshot is one moment of one session, and what raises +9 is a chain only
-# partly read.
-var only_drawn := false
+# The creatures are one node each and actors.gd runs the game's activation
+# machine over them: `render_walk` draws an actor only while its byte +9 is 1,
+# and 0x8004c1f0 decides when that is. V shows every one of them instead, which
+# is what this build drew before the machine was read.
+var only_drawn := true
 var live_input := false
 var last_btn := 0
 var last_frame := -1
@@ -138,12 +136,10 @@ func _unhandled_input(e: InputEvent) -> void:
 			_reset()
 		KEY_V:
 			only_drawn = not only_drawn
-			var all_n := get_node_or_null("../Creatures")
-			var few := get_node_or_null("../CreaturesLive")
-			if all_n:
-				all_n.visible = not only_drawn
-			if few:
-				few.visible = only_drawn
+			var act = get_node_or_null("../Actors")
+			if act:
+				act.show_all = not only_drawn
+				act.refresh()
 			_hud("")
 		KEY_B:
 			live_input = not live_input
@@ -370,10 +366,16 @@ func _hud(note: String) -> void:
 			"C off   B buttons   V creatures")
 		return
 	if not compare:
+		var who := "all of them"
+		var act = get_node_or_null("../Actors")
+		if only_drawn:
+			who = "as the game decides"
+			if act:
+				who += " -- " + act.summary()
 		hud.text = ("C  compare with the emulator    B  take its buttons: %s\n" +
 			"V  creatures: %s\n%s") % [
 			"ON — " + KFPad.names_of(last_btn) if live_input else "off",
-			"only the ones the game draws" if only_drawn else "all of them",
+			who,
 			"the emulator is driving this player" if live_input else ""]
 		return
 	var pct := 0

@@ -545,71 +545,40 @@ ENTITY_TABLE, ENTITY_STRIDE = 0x8018C7E8, 120
 MODEL_TAG = 0x400        # entity[+0] is 0x400 | model number
 
 
-def live_actors(lv):
-    """The creatures standing on the level, out of a RAM snapshot.
+def build_actors_gltf(lv, out="out/godot"):
+    """The creatures, one node each, standing where the disc puts them.
 
-    The actor table is 0x88 bytes an entry: `+0` is 0xff when the slot is free,
-    `+2` the kind, `+0x1c` the radius, `+0x1e` the body height, `+0x2c` the
-    position. The kind indexes `entity_table`, 120 bytes a record, and **the
-    record's first halfword is `0x400` plus the model number**.
+    `tools/actors.py` reads the level's actor table off its own FDAT entry the
+    way `0x800530f8` builds it, home and floor height included, and that agrees
+    with a RAM snapshot of level 0 in all 58 slots, to the unit. So this needs
+    no snapshot any more, and every level has its creatures. (It used to take
+    them from one, and said the disc did not place them. It does: link 1 of the
+    same chain the objects come from.)
 
-    That last part was confirmed the same way the object offset was: a player
-    looking at the model catalogue said number 50 is "the flower enemy, there
-    are many of them on this level", and kind 0 — which is eleven of the
-    fifty-eight actors here — resolves through `0x432` to exactly model 50.
+    Each actor is a node of its own, `a<slot>`, at its home and turned by its
+    placed yaw, so `actors.gd` can run the game's activation machine over them
+    and show only the ones the game would draw. What the machine needs goes
+    beside the mesh, in `actors<lv>.json`.
 
-    Positions come from the snapshot because what places them on the disc has
-    not been found: the level's own records carry the definitions, not the
-    positions. Borrowed, not understood, and only level 0 has a snapshot.
+    The node carries the turn rather than the vertices. A creature has one
+    angle: `render_walk` hands the actor's +0x40, +0x42 and +0x44 to the matrix
+    builder and the spawner zeroes two of them. With the axes flipped the way
+    this file flips them, x kept and y and z negated, the game's Ry(t) is a turn
+    of -t about Godot's up axis.
     """
-    if lv != 0 or not os.path.exists(SNAP_RAM):
-        return []
-    ram = open(SNAP_RAM, "rb").read()
-
-    def at(a, n):
-        return ram[(a & 0x1FFFFF):(a & 0x1FFFFF) + n]
-
-    out = []
-    for k in range(ACTOR_SLOTS):
-        r = at(ACTOR_TABLE + k * ACTOR_STRIDE, ACTOR_STRIDE)
-        if not r or r[0] == 0xFF:
-            continue
-        kind = r[2]
-        x, y, z = struct.unpack_from("<3i", r, 0x2C)
-        rec = at(ENTITY_TABLE + kind * ENTITY_STRIDE, ENTITY_STRIDE)
-        model = struct.unpack_from("<H", rec, 0)[0] - MODEL_TAG
-        # the yaw the spawner copies into the rotation, actor+0x20
-        yaw = struct.unpack_from("<H", r, 0x20)[0]
-        out.append({"slot": k, "kind": kind, "model": model, "yaw": yaw,
-                    "alive": r[9], "x": x, "y": y, "z": z,
-                    "radius": struct.unpack_from("<H", r, 0x1C)[0],
-                    "height": struct.unpack_from("<H", r, 0x1E)[0]})
-    return out
-
-
-def build_actors_gltf(lv, out="out/godot", alive_only=False):
-    """The creatures, placed where the game has them and drawn with their model.
-
-    Two meshes come out of this, because the game and the snapshot disagree
-    about how many creatures there are. `render_walk` draws an actor only while
-    its byte `+9` is 1 -- 4 of level 0's 58 in the snapshot -- so
-    `alive_only=True` writes just those, and the default writes all of them.
-    Neither is the whole truth: the snapshot is one moment of one session, and
-    what raises `+9` is a chain this project has only partly read. Having both
-    in the scene lets a player see the difference instead of being told about
-    it.
-    """
-    actors = [a for a in live_actors(lv) if a.get("alive") == 1] \
-        if alive_only else live_actors(lv)
-    if not actors:
-        return None
+    import json
+    import actors as act
+    grid = grid_of(lv)
+    table = act.table(lv, grid)
     vram = object_vram(lv)
     look = open("out/tile_look.bin", "rb").read()
-    grid = grid_of(lv)
     g = gltf.Gltf()
-    groups = {}
-    placed = missing = 0
-    for a in actors:
+    mats, items, rows = {}, [], []
+    placed = missing = ntri = 0
+    for a in table:
+        if a is None:
+            continue
+        rows.append(a)
         m = a["model"]
         arch, entry = ("MO", m) if m < tmd.MO_COUNT else ("MOF", m - tmd.MO_COUNT)
         try:
@@ -622,53 +591,40 @@ def build_actors_gltf(lv, out="out/godot", alive_only=False):
             continue
         c = grid[(cz * W + cx) * CELLB:(cz * W + cx) * CELLB + CELLB]
         llm, lcm, bk = light_class(look, c[9] & 0x3F, c[7] & 3)
+        groups = {}
+        emit_object(objs, lambda v: (v[0] / UNIT, -v[1] / UNIT, -v[2] / UNIT),
+                    lambda raw: shade(raw, llm, lcm, bk), groups)
+        prims = []
+        for (tpage, clut), (pos, nrm, uv, col) in groups.items():
+            name = f"tex_{tpage:04x}_{clut:04x}"
+            path = f"{out}/tex/{name}.png"
+            if name not in mats:
+                os.makedirs(f"{out}/tex", exist_ok=True)
+                if not (tpage >> 7) & 3 and not os.path.exists(path):
+                    tim.write_png(path, 256, 256, rtim.page4(vram, tpage, clut))
+                mats[name] = (g.material(name, f"tex/{name}.png", double=True)
+                              if os.path.exists(path)
+                              else g.plain(name + "_flat", (0.8, 0.75, 0.7, 1.0)))
+            pr = g.primitive(pos, nrm, uv, col)
+            pr["material"] = mats[name]
+            prims.append(pr)
+            ntri += len(pos) // 3
+        if not prims:
+            missing += 1
+            continue
+        half = -a["yaw"] * math.pi / 4096.0      # half of the turn, in radians
+        items.append((f"a{a['slot']:03d}", prims,
+                      (a["x"] / UNIT, -a["y"] / UNIT, -a["z"] / UNIT),
+                      (0.0, math.sin(half), 0.0, math.cos(half))))
         placed += 1
-
-        # A creature's facing, read off the code rather than fitted. The actor
-        # branch of render_walk copies actor+0x40, +0x42 and +0x44 into the
-        # scratchpad at 0x1f800114..0x118, which is the same rotation triple
-        # the object branch fills, and the spawner at 0x8004b868 sets it:
-        #
-        #     v1 = actor[+0x20]
-        #     actor[+0x44] = 0        Z
-        #     actor[+0x40] = 0        X
-        #     actor[+0x42] = v1       Y
-        #
-        # so a creature carries one angle, its yaw, and it comes from +0x20.
-        # Where the snapshot holds zero the actor was never spawned in that
-        # session -- the three men by the house are all zero for that reason --
-        # and the port then draws them unturned, as it did before.
-        m = _rot3(0, a.get("yaw", 0), 0)
-
-        def place(v, a=a, m=m):
-            ax = m[0][0] * v[0] + m[0][1] * v[1] + m[0][2] * v[2]
-            ay = m[1][0] * v[0] + m[1][1] * v[1] + m[1][2] * v[2]
-            az = m[2][0] * v[0] + m[2][1] * v[1] + m[2][2] * v[2]
-            return ((a["x"] + ax) / UNIT, -(a["y"] + ay) / UNIT,
-                    -(a["z"] + az) / UNIT)
-
-        emit_object(objs, place, lambda raw: shade(raw, llm, lcm, bk), groups)
-
-    os.makedirs(f"{out}/tex", exist_ok=True)
-    prims, ntri = [], 0
-    for (tpage, clut), (pos, nrm, uv, col) in groups.items():
-        name = f"tex_{tpage:04x}_{clut:04x}"
-        path = f"{out}/tex/{name}.png"
-        if not (tpage >> 7) & 3 and not os.path.exists(path):
-            tim.write_png(path, 256, 256, rtim.page4(vram, tpage, clut))
-        mat = (g.material(name, f"tex/{name}.png", double=True)
-               if os.path.exists(path)
-               else g.plain(name + "_flat", (0.8, 0.75, 0.7, 1.0)))
-        pr = g.primitive(pos, nrm, uv, col)
-        pr["material"] = mat
-        prims.append(pr)
-        ntri += len(pos) // 3
-    if not prims:
+    os.makedirs(out, exist_ok=True)
+    with open(f"{out}/actors{lv:02d}.json", "w") as f:
+        json.dump(rows, f, separators=(",", ":"))
+    if not items:
         return None
-    tag = "actorslive" if alive_only else "actors"
-    path, _n = g.write(f"{out}/{tag}{lv:02d}.gltf", prims, f"{tag}{lv}")
-    print(f"creatures{' the game draws' if alive_only else ''}: {placed} "
-          f"placed, {missing} without a model, {ntri} triangles -> {path}")
+    path, _n = g.write_nodes(f"{out}/actors{lv:02d}.gltf", items)
+    print(f"creatures: {placed} placed, one node each, {missing} without a "
+          f"model, {ntri} triangles -> {path}")
     return path
 
 
@@ -826,7 +782,7 @@ SCENE = """[gd_scene load_steps={load_steps} format=3]
 [ext_resource type="PackedScene" path="res://collision{lv:02d}.gltf" id="3"]
 [ext_resource type="PackedScene" path="res://objects{lv:02d}.gltf" id="4"]
 [ext_resource type="PackedScene" path="res://actors{lv:02d}.gltf" id="7"]
-[ext_resource type="PackedScene" path="res://actorslive{lv:02d}.gltf" id="15"]
+[ext_resource type="Script" path="res://actors.gd" id="16"]
 [ext_resource type="Script" path="res://ghost.gd" id="5"]
 [ext_resource type="Script" path="res://labels.gd" id="6"]
 [ext_resource type="Script" path="res://cutscene.gd" id="14"]
@@ -845,9 +801,6 @@ ambient_light_source = 0
 
 [node name="Creatures" parent="." instance=ExtResource("7")]
 
-[node name="CreaturesLive" parent="." instance=ExtResource("15")]
-visible = false
-
 [node name="CollisionView" parent="." instance=ExtResource("3")]
 visible = false
 
@@ -862,6 +815,9 @@ script = ExtResource("2")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
 current = true
 far = 400.0
+
+[node name="Actors" type="Node" parent="."]
+script = ExtResource("16")
 
 [node name="Ghost" type="Node3D" parent="."]
 script = ExtResource("5")
@@ -1015,17 +971,18 @@ def project(lv, out="out/godot", start=(57, 4)):
     gallery.build(out=out)
     gallery.world_labels(lv, out)
     pieces = sorted(glob.glob(f"{out}/gallery*.gltf"))
-    # The gallery's ids start at 8 because 1..7 are taken. They used to start
-    # at 7, which is the id the creatures were given, and a repeated id in a
-    # .tscn is not an error: Godot keeps the last one. So the Creatures node
-    # quietly instanced a slab of the model gallery and `actors00.gltf` was
-    # never placed in the world at all -- which reads, in the running port, as
-    # a level with no monsters in it.
+    # The gallery's ids start at 100. They once started at 7, which is the id
+    # the creatures were given, and a repeated id in a .tscn is not an error:
+    # Godot keeps the last one. So the Creatures node quietly instanced a slab
+    # of the model gallery and `actors00.gltf` was never placed in the world at
+    # all -- which reads, in the running port, as a level with no monsters in
+    # it. Then they started at 8, under ids 14 to 16 given out by hand, which
+    # holds only while the gallery has six pieces or fewer.
     res = "\n".join(f'[ext_resource type="PackedScene" '
-                    f'path="res://{os.path.basename(q)}" id="{8 + i}"]'
+                    f'path="res://{os.path.basename(q)}" id="{100 + i}"]'
                     for i, q in enumerate(pieces))
     nodes = "\n".join(f'\n[node name="g{i}" parent="Gallery" '
-                       f'instance=ExtResource("{8 + i}")]'
+                       f'instance=ExtResource("{100 + i}")]'
                        for i in range(len(pieces)))
     open(f"{out}/world.tscn", "w").write(
         SCENE.format(lv=lv, px=px, py=py, pz=pz, gallery_res=res,
@@ -1036,7 +993,7 @@ def project(lv, out="out/godot", start=(57, 4)):
     open(f"{out}/boot.tscn", "w").write(BOOT_SCENE)
     for name in ("player.gd", "collision.gd", "selftest.gd", "ghost.gd",
                  "labels.gd", "pad.gd", "boot.gd", "opening.gd",
-                 "cutscene.gd"):
+                 "cutscene.gd", "actors.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening
@@ -1104,7 +1061,6 @@ if __name__ == "__main__":
         build_gltf(lv, limit=limit)
         build_objects_gltf(lv)
         build_actors_gltf(lv)
-        build_actors_gltf(lv, alive_only=True)
         build_collision_gltf(lv)
     project(lv)
     if "--no-check" not in sys.argv:

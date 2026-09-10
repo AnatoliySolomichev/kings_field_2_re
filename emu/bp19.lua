@@ -1,8 +1,11 @@
--- Every change of state of every creature, with the value that is written.
+-- Every change of state of every creature, with the value that is written, and
+-- whatever changes the category of the two men by the house.
 --
 --   ./emu/run.sh debug bp19.lua
 --
--- Then kill some monsters, walk away, come back, and let them return.
+-- Then kill some monsters, walk away, come back, and let them return. What the
+-- first run of this found is FORMATS.md section 17: the state machine is read
+-- in full, and tools/actors.py and godot/actors.gd carry it.
 --
 -- The byte at actor+9 is a small state machine: render_walk draws a creature
 -- only while it is 1, 0x8004b770 puts 3 there, and four sites clear it. The
@@ -144,15 +147,29 @@ for _, site in ipairs(SITES) do
 end
 log(string.format('armed %d of %d state stores', armed, #SITES))
 
--- the roll inside the activator: $v0 is rand(), $s1 the threshold for >> 4
-arm(0x8004C304, 'roll', function()
-    local g, _pc = cpu()
-    if g == nil then return end
-    local raw = reg(g, 2)
-    rolls = rolls + 1
-    log(string.format('ROLL f=%d rand=%d  (rand>>4)=%d  threshold=%d  %s',
-        frame, raw, math.floor(raw / 16), reg(g, 17), where()))
-end)
+-- The two rolls inside actor_activate. At each address $v0 is the raw rand()
+-- and $s1 the actor's chance byte; the actor is the one *0x8018fab4 points at.
+--   0x8004c304  category 2: stays dormant if chance < rand>>4 (0xff skips it)
+--   0x8004c370  category 0: held if chance < rand>>7 (0 never gets this far)
+-- The first run watched only the category-2 one, which level 0 never reaches,
+-- and so logged no roll at all.
+for _, r in ipairs({{0x8004C304, 4, 'category 2'},
+                    {0x8004C370, 7, 'category 0'}}) do
+    local at, shift, what = r[1], r[2], r[3]
+    arm(at, 'roll', function()
+        local g, _pc = cpu()
+        if g == nil then return end
+        local raw = reg(g, 2)
+        local chance = reg(g, 17) % 256
+        local slot = (u32(0x8018FAB4) - ACTORS) / STRIDE
+        local roll = math.floor(raw / 2 ^ shift)
+        rolls = rolls + 1
+        log(string.format('ROLL f=%d %s actor %s  rand=%d  (rand>>%d)=%d  '
+            .. 'chance=%d  -> %s  %s', frame, what,
+            slot == math.floor(slot) and tostring(slot) or '?', raw, shift,
+            roll, chance, chance < roll and 'lost' or 'won', where()))
+    end)
+end
 
 -- the port's feed, from the head of the movement chain, once per game frame
 arm(0x8002FE1C, 'live', function()
@@ -172,5 +189,31 @@ arm(0x8002FE1C, 'live', function()
     f:close()
     os.rename(LIVE .. '.tmp', LIVE)
 end)
+
+-- Who turns the two men by the house from category 1 into 8. The disc says 1, a
+-- snapshot says 8, and nothing in GAME.EXE stores a literal 8 into an actor, so
+-- the value is computed somewhere. A write watchpoint on byte 0 of slots 1 and
+-- 2: the callback runs before the store lands, so memory still holds the old
+-- value and the new one is in the source register of the store at pc. A level
+-- load writes both bytes twice (the teardown's 0xff, then the disc's value),
+-- and those lines are expected.
+local cats = 0
+for _, slot in ipairs({1, 2}) do
+    local addr = ACTORS + slot * STRIDE
+    local ok, bp = pcall(PCSX.addBreakpoint, addr, 'Write', 1, 'cat' .. slot,
+        function()
+            local g, pc = cpu()
+            if g == nil then return end
+            cats = cats + 1
+            local w = u32(pc)
+            local new = '?'
+            if math.floor(w / 0x4000000) == 0x28 then          -- sb
+                new = tostring(reg(g, math.floor(w / 0x10000) % 32) % 256)
+            end
+            log(string.format('CAT f=%d actor %d  %d -> %s  pc=%08x ra=%08x  %s',
+                frame, slot, u8(addr), new, pc, reg(g, 31), where()))
+        end)
+    if ok then bp19[#bp19 + 1] = bp else log('arm category watch FAILED') end
+end
 
 log('=== bp19 watching: kill, walk away, come back ===')

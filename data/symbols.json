@@ -1281,5 +1281,85 @@
   "name": "load_data_screen",
   "kind": "code",
   "evidence": "the only place \\\\LOAD.MSG;1 is formed, at 0x8003c9f8. game_main calls it at 0x80014d18, in the init block. LOAD.MSG is one TIM at the root of the disc, 128x160, 4-bit with three CLUTs, bound for VRAM (960,256): the Data Loading card, which comes after OPEN.EXE's own Program Loading"
+ },
+ "0x800530f8": {
+  "name": "actor_table_build",
+  "kind": "code",
+  "evidence": "level_load+0x418 hands it link 1 of FDAT entry 3n+1: 200 records of 16 bytes, each copied into a 0x88-byte slot at 0x80185da8 -- category +0, kind +2, flags +5, floor +6, home cell +7/+8, chance +0x0a, yaw +0x20 (negated), fine z/x +0x22/+0x24, height +0x26 -- then actor_copy_kind and actor_stand_at_home. Against a level 0 snapshot, 58 of 58 slots equal in every field but the two men's category"
+ },
+ "0x8004c1f0": {
+  "name": "actor_activate",
+  "kind": "code",
+  "evidence": "the state machine on actor+9, run by actor_tick_driver on slot k when frame&3 == k&3 (every slot while spawn_anywhere is set): 0 wakes inside (entity+0x0a + 1) cells by category -- 0 in the rim only and on a rand()>>7 roll against actor+0x0a, 1 in the rim, 2 anywhere on a rand()>>4 roll, 3/4 with the leader -- else 2; 1 and 2 fall back to 0 beyond entity+0x0b cells; 3 never changes. Read in full, FORMATS section 17"
+ },
+ "0x8004b868": {
+  "name": "actor_spawn",
+  "kind": "code",
+  "evidence": "zeroes +0x40 and +0x44, copies the placed yaw +0x20 into +0x42, stands the actor at home and calls actor_wake; category 3 clears +3"
+ },
+ "0x8004b698": {
+  "name": "actor_wake",
+  "kind": "code",
+  "evidence": "+9 = 1, clears the AI bytes +0x0c..+0x11 and +0x18, a random yaw rand()>>3 into +0x42 unless actor+5 bit 0 is set, then marks its cells through grid_query_area"
+ },
+ "0x8004b624": {
+  "name": "actor_copy_kind",
+  "kind": "code",
+  "evidence": "copies model, +0x1a, radius (entity+0x12), height (entity+0x14), flags (entity+0x34) and +0x32 out of the entity record the actor's +2 names"
+ },
+ "0x8004b560": {
+  "name": "actor_stand_at_home",
+  "kind": "code",
+  "evidence": "x = cell x<<11 + fine x, z likewise, y = collide_at_cell on floor actor+6 (0 if not negative), then the base height instead under flag 0x400, plus the height +0x26 unless flag 0x10. Reproduces a level 0 snapshot's 54 idle actors to the unit"
+ },
+ "0x8004b770": {
+  "name": "actor_retire",
+  "kind": "code",
+  "evidence": "+9 = 3 and back home; a category-1 death, and nothing ever changes 3 again"
+ },
+ "0x8004b8fc": {
+  "name": "actor_table_clear",
+  "kind": "code",
+  "evidence": "all 200 slots: +0 = 0xff, +9 = 0, +0x5c = 0; called by game_main"
+ },
+ "0x8004b8c4": {
+  "name": "actor_spawn_slot",
+  "kind": "code",
+  "evidence": "(slot) -> actor_spawn on that slot, whatever its distance or category; no jal reaches it, so it is called through a table"
+ },
+ "0x8004b794": {
+  "name": "actors_retire_marked",
+  "kind": "code",
+  "evidence": "every category-1 actor that is up, whose +0x0c reads 0xf003xxxx and whose +0x70 is set or +0x18 exceeds 0x800, goes through the hook at (*0x8018fae0)+0x4c and then actor_retire; called by player_controller, 0x80047010 and 0x8005c864"
+ },
+ "0x80016ec8": {
+  "name": "in_range",
+  "kind": "code",
+  "evidence": "(pos*, x, y, z, r, top, own) -> distance or -1: |dx|,|dz| <= r, then SquareRoot0 of (dx>>3)^2+(dz>>3)^2, shifted back up by 3, <= r; y = 0xffff skips the height overlap test"
+ },
+ "0x8004d644": {
+  "name": "actor_spot_taken",
+  "kind": "code",
+  "evidence": "(x, y, z, radius, height) -> the first other actor that is up (+9 == 1) and overlaps, radius on radius and height on height, or -1. The activator asks it before every spawn"
+ },
+ "0x8005efd4": {
+  "name": "level_state_write",
+  "kind": "code",
+  "evidence": "writes into level_state, for every category-1 actor, its slot and 3 if it is gone or 0 if not, then 0xff, then the entity section; so a category-1 death is kept across visits and saves, and no other category is"
+ },
+ "0x800796c0": {
+  "name": "rand",
+  "kind": "code",
+  "evidence": "BIOS A0:2F thunk: next = next*0x41c64e6d + 0x3039, returns (next>>16) & 0x7fff"
+ },
+ "0x801b24f2": {
+  "name": "spawn_anywhere",
+  "kind": "data",
+  "evidence": "set to 1 by level loads and moves (call_load_payload, place_player_on_terrain, a script command); while set, actor_tick_driver runs actor_activate on every slot and actor_activate skips its too-near test; game_main clears it after one actor pass (0x80014f58)"
+ },
+ "0x8018fabc": {
+  "name": "actor_leader",
+  "kind": "data",
+  "evidence": "actor_select sets it to the slot actor+0x22 names when the definition's flags have 0x10; actor_activate wakes categories 3 and 4 only while it is up"
  }
 }

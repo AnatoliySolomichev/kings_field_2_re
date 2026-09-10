@@ -314,12 +314,27 @@ them. Two things fell out:
   the flower enemy "of which there are many on this level". Kind 0 is eleven of
   the fifty-eight.
 
-What is *not* found is what places them from the disc: the level's records carry
-the definitions and not the positions, so the port takes the positions from a
-RAM snapshot, labelled as such in `live_actors`, the same borrowed-not-understood
-arrangement as the object textures and scales. A 16-byte stride in `FDAT` entry
-`3n+1` around offset 13403 lines up with actor cells 24 times running, which is
-suggestive and not yet a reading.
+**Found since: the disc places them.** The 16-byte stride noticed in `FDAT`
+entry `3n+1` near offset 13403 was it: link 1 of the same chain the objects come
+from, starting at 13000 on level 0, is the actor table, read by
+`actor_table_build` (`0x800530f8`). `tools/actors.py` rebuilds a level 0
+snapshot's 58 slots from it, positions and heights to the unit, so the port no
+longer borrows the snapshot. The rule for when each one is drawn is read and
+ported too (`godot/actors.gd`), in FORMATS.md section 17. Still open:
+
+* **who makes the two men by the house category 8.** The disc says 1, a
+  snapshot says 8, and no store in GAME.EXE writes a literal 8 into an actor.
+  `emu/bp19.lua` now watches both bytes;
+* **the AI**, what an awake creature does (`actor_tick`, `0x800500a8`), so the
+  port's creatures stand where they woke;
+* followers (categories 3 and 4, entity flag `0x10`) and actors riding an
+  object (entity flag `0x10000`) are built but not placed right. Level 0 has
+  none; level 3 has three;
+* `0x801b25e5`, set by `player_turn`, makes the activator look at every slot on
+  every frame while it is 1. What it means is not read;
+* model 110 (kind 15, ten of them on level 0) has its `+3` cleared on every
+  frame unless `0x801b25d9` or `0x801b25da` holds `0x5c` and the halfword at
+  `0x801b2500` is non-zero. What `+3` does to the drawing is not read.
 
 Movement is a separate matter and half done already: `actor_move_horizontal`
 (`0x8004dbc8`) and `actor_move_vertical` (`0x8004e330`) are both transcribed in

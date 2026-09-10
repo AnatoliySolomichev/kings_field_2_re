@@ -731,8 +731,9 @@ do it is still unknown.
 address, so the routine was reached without a call and the registers are
 somebody else's. Nothing about them says a page of dialogue was drawn.
 
-**The three men are turned on by two different routines.** The alive byte at
-`+9` of each actor was watched across the same session:
+**Withdrawn: "the three men are turned on by two different routines."** The
+alive byte at `+9` of each actor was watched across the same session, and this
+table was read as two routines switching them on:
 
 | actor | mesh | written from |
 | --- | --- | --- |
@@ -740,9 +741,13 @@ somebody else's. Nothing about them says a page of dialogue was drawn.
 | 1 | 33 | a call at `0x8004c1f0+0xa4` |
 | 2 | 34 — the one with the watering can | the same `0x8004c1f0+0xa4` |
 
-`0x8004c1f0` reads the player's own X and Z at `0x801b25f0` and `0x801b25f8`,
-so it activates actors by how near the player is. Whatever `0x8004b698` is, it
-is not that, and it is what puts the man at the table there.
+Both entries are return addresses left over from the last call made, not the
+routine that stored, and the watchpoint reported the value from before the
+store. Read properly (section 17), all three went through one routine,
+`actor_activate` at `0x8004c1f0`. The man at the table was **woken**:
+`actor_spawn` calls `actor_wake` at `0x8004b698`, whose first call returns to
+`+0x14`. The other two were **held**, in state 2, because in that session their
+category was 8, and distance never wakes category 8.
 
 **The sword never changes hands. You already have it.** `emu/bp18.lua` put a
 write watchpoint on the whole inventory and a player played the scene through
@@ -886,16 +891,15 @@ bne $v0, $s4, <loop tail>  ; $s4 = 1
 ```
 
 so an actor is drawn only while its byte `+9` is 1 — **4 of the 58** in that
-snapshot. `tools/level3d.py` ignores it and draws all 58, which is why a player
-sees the same man twice in the house, one crafting and one waiting, and a third
-outside. What sets `+9` is the chain `actor_tick_driver` → `0x8004c1f0` →
-`0x8004b868`. A first reading of `0x8004c1f0`: it takes three globals at
-`0x8018fab0`, `0x8018fab4` and `0x8018fabc`, the player's own X and Z at
-`0x801b25f0` and `0x801b25f8`, hands a pair of them to `0x80016ec8` with
-`0xffff`, **rolls `rand`**, reads `0x801b24f2` out of the player's stat block,
-and only then calls the spawner. So it is distance *and* a die *and* something
-about the player — which is the shape a respawn rule has, and a player asked
-exactly that question: why some monsters come back and some never do.
+snapshot. `tools/level3d.py` used to ignore it and draw all 58, which is why a
+player saw the same man twice in the house, one crafting and one waiting, and a
+third outside; the port now runs the rule (section 17). What sets `+9` is the
+chain `actor_tick_driver` → `0x8004c1f0` → `0x8004b868`, and section 17 reads
+`0x8004c1f0` whole. Two things the first pass here got wrong: `0x801b24f2` is
+not "something about the player" out of its stat block but a one-pass flag that
+a level load sets, and the die is not a respawn rule of its own. It is the
+chance byte the disc gives each actor, rolled every time the actor could
+appear, first visit included.
 
 ### The three men are entities 9, 10 and 11
 
@@ -2575,4 +2579,187 @@ findings this session were mis-attributed that way before being caught.)*
 One more loose thread: `FDAT.T` entry `3n + 1` has a **second** script-like
 block at offset 12996, 15676 bytes of it, in the same shape as the entity
 scripts but referenced by no record pointer. That is the block an early pass
-mistook for the scripts proper.
+mistook for the scripts proper. *(Resolved in section 17: the word at 12996 is
+the length of the chain's link 1, and what follows it is the actor table and
+the links after it, not a script.)*
+
+---
+
+## 17. The creatures: where they stand and when they are drawn
+
+A player killed monsters with `emu/bp19.lua` armed, walked away and came back:
+one returned, another never did. This section is the machinery behind that,
+read whole out of `GAME.EXE`. `tools/actors.py` is its Python transcription and
+`godot/actors.gd` the port's.
+
+### The table comes off the disc
+
+`level_load` reads `FDAT.T` entry `3n + 1` and walks it as a chain of
+length-prefixed links, the same chain `tools/placement.py` takes the objects
+from:
+
+| link | level 0 | goes to |
+| --- | --- | --- |
+| 0 | 12992 bytes | `block_copy` into `entity_table` (`0xcb0` words): 40 records of 120 bytes, then their scripts |
+| 1 | 3200 bytes | **`actor_table_build`** (`0x800530f8`), 200 records of 16 bytes |
+| 2 | 768 bytes | `block_copy` to `0x8019175c` |
+| 3 | 8400 bytes | `load_object_placement`, 350 records of 24 bytes |
+| 4 | 2048 bytes | `0x80043a08` |
+| 5 | 640 bytes | `block_copy` |
+
+and then `apply_level_state` (section 14). `actor_table_build` turns each record
+into a 0x88-byte slot of the table at `0x80185da8`:
+
+| disc | slot | what |
+| --- | --- | --- |
+| +0 | +0 | **category**, the rule below; `0xff` is an empty slot |
+| +1 | +2 | kind: the entity record that says what it is |
+| +2 | +5 | flags; bit 0 keeps the placed yaw |
+| +3 | +7 | home cell z |
+| +4 | +8 | home cell x |
+| +5 | +0x0a | the **chance** of appearing |
+| +6 | +0x0b | copied; nothing below reads it |
+| +7 | +6 | which of the cell's two floors: 2 the upper (`cell[+6]`), else the lower (`cell[+1]`) |
+| +8 | +0x20 | yaw, stored negated: `-disc & 0xfff` |
+| +10 | +0x22 | fine z in the cell (a follower's leader slot instead) |
+| +12 | +0x24 | fine x |
+| +14 | +0x26 | height above the floor |
+
+It then calls `actor_copy_kind` (`0x8004b624`: model, radius `entity+0x12`,
+height `entity+0x14`, flags `entity+0x34`) and `actor_stand_at_home`
+(`0x8004b560`): x and z from the home cell and the fine offsets, y from
+`collide_at_cell` on the chosen floor, kept only if negative, plus the height —
+except that entity flag `0x400` stands it at the floor's base height instead and
+flag `0x10` (a follower) adds no height. A follower that is not category 3
+becomes category 4.
+
+**Checked:** against the RAM snapshot of level 0, all 58 slots agree in every
+field, and the 54 that were not awake stand exactly at the home this computes,
+to the unit — heights on sloping cells included, through the ported floor query
+in `tools/collision.py`. The one difference is the category of the two men by
+the house: 1 on the disc, 8 in memory. No store in `GAME.EXE` writes a literal 8
+into an actor, so something computes it; `emu/bp19.lua` now watches both bytes.
+
+Across the 28 levels the disc uses categories 0 and 1 almost everywhere, 2 on
+levels 15, 17, 25 and 27, and 3 on level 3. None carries 5 or 8.
+
+### The state machine on `+9`
+
+`actor_tick_driver` (`0x80052e5c`) runs **`actor_activate`** (`0x8004c1f0`) on
+slot *k* in the frames where `frame & 3 == k & 3`, so each slot is looked at
+once every four frames. It runs it on every slot on every frame while
+**`spawn_anywhere`** (`0x801b24f2`) is set or `0x801b25e5` is 1. A level load or
+a move sets `spawn_anywhere`, and `game_main` clears it at `0x80014f58`, right
+after the actor pass, so it lasts exactly one pass.
+
+Distances go through `in_range` (`0x80016ec8`): a box test, then the library's
+inexact `SquareRoot0` of `(dx>>3)² + (dz>>3)²`, shifted back up by three.
+Radii are in cells of 2048, from the entity record: **act** `entity+0x0a`,
+**deact** `entity+0x0b`. Every kind on level 0 has 16 and 17.
+
+| state | what it is | what moves it |
+| --- | --- | --- |
+| 0 | dormant | the player comes within `act + 1` cells: see below |
+| 1 | **drawn** — `render_walk` draws only this | the player is beyond `deact` cells: back to 0, at home (`0x8004c488`) |
+| 2 | held | the player is beyond `deact` cells: back to 0, at home (`0x8004c4f4`); a follower, when its leader is not up (`0x8004c4b8`) |
+| 3 | gone | nothing |
+
+A dormant actor inside `act + 1` cells, by category:
+
+```
+3, 4   the leader (actor_leader, 0x8018fabc) is up?   spawn
+2      chance == 0xff, or rand()>>4 <= chance?        try to spawn
+       else stay 0 and roll again next time
+       -- the rest check a second, inner radius first --
+       nearer than act cells, and not spawn_anywhere? held
+1      try to spawn
+0      chance == 0, or chance < rand()>>7?            held
+       else try to spawn
+5, 8, anything else                                  held
+```
+
+"Try to spawn" asks `actor_spot_taken` (`0x8004d644`) whether another actor that
+is up overlaps the spot, radius on radius and height on height. If one does,
+category 2 waits and the rest are held. So on level 0 a monster appears only
+in the ring between 16 and 17 cells away, never in front of the player, and
+only on the first pass after a load does the inner radius not count. That
+explains the short sight range in the port before this: everything was drawn,
+where the game draws what woke at the rim.
+
+The **chance** is per actor, not per kind. For category 0 it is out of 256 and
+rolled every time the actor could appear, first visit included: `0xff` always,
+`0xc0` three times in four, `0x80` one in two. For category 2 it is a roll out
+of 2048 on every look, so a category-2 actor appears after a random wait.
+
+**Spawning** is `actor_spawn` (`0x8004b868`) and then `actor_wake`
+(`0x8004b698`), which writes the 1 at `0x8004b6b4`. The earlier reading that "a
+creature's yaw comes from `+0x20`" holds only when bit 0 of its flags is set:
+otherwise `actor_wake` writes `rand() >> 3` over it, so most of level 0's
+monsters face a new random direction every time they wake.
+
+### What a death does, and what is remembered
+
+The death branch of `actor_tick`, at `0x80052b7c`, also goes by category:
+
+| category | state after death |
+| --- | --- |
+| 1 | 3, through `actor_retire` (`0x8004b770`) — gone |
+| 2 | 0 (`0x80052ba8`) — may wake again at once |
+| 5 | the slot is freed, `+0 = 0xff` (`0x80052bb8`) |
+| anything else, 0 included | 2 (`0x80052bc4`) — held until the player leaves |
+
+and all but category 5 are stood back at home. When a level is left,
+`level_state_write` (`0x8005efd4`) writes, for **every category-1 actor and no
+other**, its slot and 3 or 0 into `level_state`, and `apply_level_state` writes
+them back into `+9` on the next load (section 14, the stream's first section).
+So a category-1 monster that dies stays dead, across visits and in the save.
+A category-0 monster is rebuilt from the disc on the next visit. Within one
+visit it comes back once the player has been more than 17 cells away and
+returns to the rim, if its chance allows.
+
+### Checked against play
+
+The second `bp19` run logged 79 transitions, every one at an address this
+reading predicts:
+
+| transition | times | where |
+| --- | --- | --- |
+| 0 → 1 | 36 | `actor_wake` |
+| 1 → 0 | 30 | `actor_activate`, beyond `deact` |
+| 0 → 2 | 6 | `actor_activate`, held |
+| 2 → 0 | 5 | `actor_activate`, beyond `deact` |
+| 1 → 2 | 1 | `actor_tick`, a death |
+| 1 → 3 | 1 | `actor_retire`, a death |
+
+* **The one that came back** is slot 3, model 51, category 0, chance `0xff`:
+  killed at frame 730 (1 → 2), released at 980 when the player was 17 cells
+  off (2 → 0, standing at home again), woken at 1264 when the player came back
+  to the rim.
+* **The one that never did** is slot 5, model 51, **category 1**: 1 → 3 at
+  frame 928. Same model, different placement: whether a monster returns is a
+  byte of its record, not a property of its kind.
+* The two men by the house, category 8 in that session, went 0 → 2 and back
+  as the player came and went, never 1, as category 8 must.
+* The first pass after the load woke slots 0, 3 and 4. `tools/actors.py 0 --at
+  62 8` agrees for 0 and 3, and slot 4 sits right on the 17-cell rim, reached
+  from half of the player's cell.
+* No `ROLL` line appeared, and that was the script's fault: it watched the
+  category-2 roll at `0x8004c304`, and level 0 has no category 2. The
+  category-0 roll is at `0x8004c370`, and `bp19` now watches that as well.
+
+### In the port
+
+`tools/level3d.py` writes the creatures as one glTF node per slot, `a<slot>`,
+standing at home, with `actors<lv>.json` beside it. `godot/actors.gd` runs the
+machine above on the same 30 Hz clock as `player.gd`, so what is drawn is what
+the game would draw. V shows every actor instead. X kills the nearest awake
+one under the death rule, so the rules can be tried without combat, and a
+static keeps category-1 deaths when the world is loaded again.
+
+Not ported: the AI, so an awake creature stands at home; the cell marks
+through `grid_query_area`; where followers and object riders stand; the model
+110 rule in `actor_tick_driver`; `0x801b25e5`; and the game's `rand` seed. The
+port also uses the disc's category for the two men by the house, so it shows
+the man at (57,3), whom that session held. The one at (62,4) is held by
+`actor_spot_taken` in the port, because the man at the table stands on the
+same spot.
