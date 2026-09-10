@@ -511,6 +511,20 @@ the movement after two readings had picked the wrong routine. Prefer that shape
 of question: a breakpoint on a routine you chose can only confirm the choice,
 while a watchpoint on the value makes whatever writes it name itself. All three
 need somebody walking about — that is the whole point of them.
+
+**`bp19.lua`** is the one for the monsters. It puts an execution breakpoint on
+each of the 39 instructions in the actor cluster that store the state byte at
+`actor+9`, and logs every change as a transition — old value, new value, the
+routine that made it, which actor, where it stood, where the player was. It
+also logs the die `0x8004c1f0` rolls (`ROLL`), a heartbeat every 600 frames
+with the counts of everything that fired, and writes `live.txt` so the port
+can compare. Kill something, walk away, come back, and the log is the respawn
+rule.
+
+It watches **instructions, not memory**, on purpose. A write watchpoint's
+callback runs before the store lands, so reading memory there gives the value
+the byte *had*; the first version of this script did that and reported two
+`sb $zero` instructions as setting 1 and 2.
 There is no way to press a button from here, so anything needing input needs a
 person at the window. `POST /api/v1/lua` returns 404, so a script cannot be
 injected into a running emulator either — it has to be loaded from the
