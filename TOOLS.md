@@ -199,6 +199,25 @@ python3 tools/itemtext.py 104        one
 python3 tools/itemtext.py 104 png    write the image out to read by eye
 ```
 
+**`levelup.py`** — experience, and what a level gives you.
+
+```
+python3 tools/levelup.py            the table, and the model checked
+python3 tools/levelup.py 1 5000     what level 1 becomes after 5000 experience
+python3 tools/levelup.py --table    all 99 levels
+python3 tools/levelup.py --godot    write it out for the port
+```
+
+`award_exp` (`0x8002a310`) is short — add, cap at 999999, take a level while
+the total reaches the threshold — and the interesting part is that what a level
+*gives* is a table that **is not in `GAME.EXE`**. It sits at `0x8009f114`, past
+the end of the image, and it comes off the disc: `FDAT.T` entry 97 at offset
+12592. Found by searching every file for the first thirty-six bytes of the live
+table.
+
+Checked: **13 of 13** RAM snapshots hold what their level's record says, and
+`godot/levelup.gd` reproduces the Python model on **40 of 40** cases.
+
 **`savemap.py`** — what the game persists, field by field: 57 globals and the
 offset each occupies in a save, taken from the serialiser and its inverse and
 kept only where the two agree.

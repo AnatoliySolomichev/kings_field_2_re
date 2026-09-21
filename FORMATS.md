@@ -1701,6 +1701,49 @@ and 1000. Three round values in the one field, on the one class, is the
 strongest evidence yet that the reading is right. The earlier counts on this
 line came from the truncated walk and were roughly half of the truth.
 
+### Experience, and the table that is not in the executable
+
+`award_exp` (`0x8002a310`) is all of levelling and it is short: add the
+experience, cap it at **999999** (`0xf423f`), and while the total reaches
+`player_exp_next` and the level byte is below `0xff`, take a level. What a
+level *gives* is not computed — it is read out of a table of **99 records of
+twelve bytes**:
+
+```
++0  u16   HP maximum at this level          50 at level 1, 999 by level 97
++2  u16   MP maximum                        30 ... 999
++4  u16   added to the stat at +0x36        20 once, then 0, 1 or 2
++8  u32   experience for the next level     50, 110, 187, ... 999999
+```
+
+**The table is not in `GAME.EXE`.** It is at `0x8009f114`, which is `0x2914`
+past the end of the image, so it comes off the disc — and it is `FDAT.T` entry
+**97 at offset 12592**, the same shared blob that carries the cutscene list and
+the creature animation frames. Found by taking the first thirty-six bytes of
+the live table out of a RAM snapshot and searching every file on the disc for
+them; one hit.
+
+Checked against every snapshot in `out/snap`: **13 of 13** hold the HP maximum,
+the MP maximum and the next threshold their level's record says, and `+0x36`
+holds the running sum of the third column — 20 at level 1, 21 at level 2.
+
+Five more figures grow by a coin toss rather than by the table: the halfwords
+at `0x801b2518` to `0x801b2520`. For each one **that is not already zero**,
+`rand() < 0x6665` adds one — about four times in five. That is the only place
+levelling uses `rand`, and it is why two characters at the same level are not
+the same character. Everything is then clamped to 999.
+
+Above level 99 the table runs out and the routine extrapolates by the
+*difference between its last two records* (`0x8002a45c`): each further level
+repeats the last step, for ever. In an ordinary game it never runs, because
+record 98 asks for 1000000 experience and the total is capped at 999999.
+
+`tools/levelup.py` reads the table off the disc and carries the model;
+`godot/levelup.gd` is the same machine in the port, checked against it on 40 of
+40 cases with the rolled stats held at zero on both sides — the game's `rand`
+is not reproduced there, and comparing two different random sequences would
+say nothing.
+
 ### 5.1 The player stat block, `0x801b24e0`
 
 The starting addresses are the GameShark code list for SLUS-00255 on

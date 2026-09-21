@@ -180,12 +180,31 @@ def coverage():
     return rows, marked
 
 
-def nxt(out=sys.stdout, limit=25):
+# Routines the port does not need, because the engine already is them. The
+# Sony library, the CD reader, the memory card and the GPU queue are all
+# things Godot provides, and leaving them in the ranking buries the game under
+# them: the first eight entries were DrawSync and its neighbours.
+LIBRARY = ("frame_", "pad_", "Draw", "Put", "Set", "Clear", "Load", "Store", "Move", "Reset",
+           "Cd", "CD_", "Dec", "Pad", "card_", "gpu_", "cd_", "mem", "str",
+           "malloc", "free", "heap", "rand", "printf", "puts", "Sqrt", "Sin",
+           "Cos", "Matrix", "Vector", "Rot", "Trans", "Scale", "Apply")
+
+
+def _is_library(name):
+    return any(name.startswith(p) for p in LIBRARY)
+
+
+def nxt(out=sys.stdout, limit=25, everything=False):
     """What to port next: reached often, big enough to matter, not done.
 
     Ranked by callers first. A routine ten other routines call is load-bearing
     whatever its size, and a routine nothing calls is either dead or reached
     through a table -- both worth knowing before spending a day on it.
+
+    The Sony library and the routines that talk to hardware are left out unless
+    asked for. The port does not reimplement `DrawSync`; Godot is what
+    `DrawSync` was for, and with those in the list the first eight entries were
+    the GPU queue rather than the game.
     """
     db = database("game")
     if db is None:
@@ -193,15 +212,41 @@ def nxt(out=sys.stdout, limit=25):
         return
     _rows, marked = coverage()
     done = marked.get("game", {})
-    cand = []
+    prof = _profiles("game")
+    cand, skipped = [], 0
     for k, f in db["functions"].items():
         if f["start"] in done or f["insns"] < 12:
             continue
-        cand.append((len(f["callers"]), f["insns"], f["start"], f))
-    print(f"{len(cand)} routines in GAME.EXE with no marker in the port", file=out)
+        p = prof.get(f["start"], "")
+        if not everything and (_is_library(f["name"]) or "talks to " in p
+                               or "BIOS " in p):
+            skipped += 1
+            continue
+        cand.append((len(f["callers"]), f["insns"], f["start"], f, p))
+    print(f"{len(cand)} routines in GAME.EXE with no marker in the port"
+          + (f" ({skipped} library or hardware routines left out)"
+             if skipped else ""), file=out)
     print("  callers  insns  address     name", file=out)
-    for c, n, a, f in sorted(cand, reverse=True)[:limit]:
+    for c, n, a, f, p in sorted(cand, reverse=True)[:limit]:
         print(f"  {c:7d}  {n:5d}  {a:#010x}  {f['name']}", file=out)
+        if p:
+            print(f"                                  {p[:96]}", file=out)
+
+
+def _profiles(nick):
+    """The one-line profiles tools/rdis.py --describe wrote, by address."""
+    path = os.path.join(DB, f"{nick}.profiles.txt")
+    out = {}
+    if not os.path.exists(path):
+        return out
+    addr = None
+    for line in open(path):
+        if line.startswith("0x"):
+            addr = int(line.split()[0], 16)
+        elif addr is not None and line.startswith("    "):
+            out[addr] = line.strip()
+            addr = None
+    return out
 
 
 def report(addr, out=sys.stdout):
@@ -283,7 +328,12 @@ def document(path=None):
         buf = io.StringIO()
         nxt(buf, limit=30)
         for line in buf.getvalue().splitlines()[2:]:
-            c, n, a, *rest = line.split()
+            if not line.startswith("  0x") and not line[:9].strip().isdigit():
+                continue
+            parts = line.split()
+            if len(parts) < 4:
+                continue
+            c, n, a, *rest = parts
             p(f"| {c} | {n} | `{a}` | {' '.join(rest)} |")
         p()
     return path

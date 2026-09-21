@@ -993,7 +993,7 @@ def project(lv, out="out/godot", start=(57, 4)):
     open(f"{out}/boot.tscn", "w").write(BOOT_SCENE)
     for name in ("player.gd", "collision.gd", "selftest.gd", "ghost.gd",
                  "labels.gd", "pad.gd", "boot.gd", "opening.gd",
-                 "cutscene.gd", "actors.gd"):
+                 "cutscene.gd", "actors.gd", "levelup.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening
@@ -1001,6 +1001,11 @@ def project(lv, out="out/godot", start=(57, 4)):
     except Exception as e:                       # no disc image, no title screen
         print(f"opening assets skipped: {e}")
     gdcoll.export(lv, out)
+    try:
+        import levelup
+        levelup.export(out)
+    except Exception as e:                       # no disc image, no level table
+        print(f"level table skipped: {e}")
     print(f"godot project in {out}/ — player starts in cell ({cx},{cz})")
 
 
@@ -1041,7 +1046,8 @@ def verify(out="out/godot"):
                         "--script", "res://selftest.gd"],
                        capture_output=True, text=True, timeout=900)
     for line in (r.stdout + r.stderr).splitlines():
-        if line.startswith(("loaded:", "movement:", "FAIL", "  first")):
+        if line.startswith(("loaded:", "movement:", "levels:", "FAIL",
+                            "  first", "  level case")):
             print("   " + line.strip())
     if r.returncode != 0:
         print("the port and the Python model disagree")

@@ -134,4 +134,38 @@ func _init() -> void:
 		print("  first difference: " + first)
 		quit(1)
 		return
+	if not _levels():
+		quit(1)
+		return
 	quit(0)
+
+
+# The levelling, against the cases tools/levelup.py wrote beside the table. The
+# rolled stats are held at zero on both sides, because the game's rand is not
+# reproduced here -- so what is compared is the part that is the same every
+# time, which is everything the table decides.
+func _levels() -> bool:
+	if not FileAccess.file_exists("res://levelcheck.json"):
+		print("levels: no cases to check against")
+		return true
+	var cases = JSON.parse_string(
+		FileAccess.get_file_as_string("res://levelcheck.json"))
+	if typeof(cases) != TYPE_ARRAY:
+		print("levels: levelcheck.json is not a list")
+		return false
+	var bad_l := 0
+	for c in cases:
+		var got := KFLevels.award({
+			"exp": int(c["exp"]), "exp_next": int(c["exp_next"]),
+			"level": int(c["level"]), "hp_max": int(c["hp_max"]),
+			"mp_max": int(c["mp_max"]), "stat36": int(c["stat36"]),
+			"grow": [0, 0, 0, 0, 0]}, int(c["award"]))
+		for k in ["level", "hp_max", "mp_max", "stat36", "exp", "exp_next"]:
+			if int(got[k]) != int(c["want"][k]):
+				bad_l += 1
+				print("  level case %s: %s is %d, python says %d" % [
+					str(c["award"]), k, int(got[k]), int(c["want"][k])])
+				break
+	print("levels: %d of %d cases match tools/levelup.py exactly" % [
+		cases.size() - bad_l, cases.size()])
+	return bad_l == 0

@@ -29,7 +29,7 @@ that it reproduces it correctly.** `status` says how far that went:
 | --- | --- | --- | --- | --- | --- |
 | boot | 10 | 1 | 0 | 115 | 50 (43%) |
 | open | 293 | 6 | 0 | 19753 | 1066 (5%) |
-| game | 816 | 18 | 4 | 92169 | 5214 (5%) |
+| game | 816 | 19 | 5 | 92169 | 5400 (5%) |
 | end | 167 | 0 | 0 | 9966 | 0 (0%) |
 
 Those percentages are of *all* the code in the image, which includes
@@ -42,6 +42,7 @@ floor, not a score.
 | --- | --- | --- | --- |
 | [`godot/boot.gd:66`](godot/boot.gd#L66) | `func _exec` | `boot:0x80010038` shell_main | transcribed |
 | [`godot/actors.gd:253`](godot/actors.gd#L253) | `func _in_range` | `game:0x80016ec8` in_range | transcribed |
+| [`godot/levelup.gd:55`](godot/levelup.gd#L55) | `(the file)` | `game:0x8002a310` status | transcribed |
 | [`godot/player.gd:250`](godot/player.gd#L250) | `func _tick` | `game:0x8002e3f8` player_horizontal | partial |
 | [`godot/player.gd:338`](godot/player.gd#L338) | `func _move` | `game:0x8002ed60` player_vertical | verified |
 | [`godot/player.gd:320`](godot/player.gd#L320) | `func _bob` | `game:0x8002f298` player_bob | transcribed |
@@ -49,8 +50,9 @@ floor, not a score.
 | [`godot/player.gd:236`](godot/player.gd#L236) | `func _ramp` | `game:0x8002f9bc` player_walk | verified |
 | [`godot/player.gd:200`](godot/player.gd#L200) | `func _process` | `game:0x80030fcc` player_controller | partial |
 | [`godot/collision.gd:226`](godot/collision.gd#L226) | `func _layer` | `game:0x800324f0` select_cell_layer | transcribed |
-| [`godot/collision.gd:243`](godot/collision.gd#L243) | `func query` | `game:0x8003260c` tile_collision | verified |
-| [`godot/collision.gd:344`](godot/collision.gd#L344) | `func surface` | `game:0x80033b10` collide_surface | transcribed |
+| [`godot/collision.gd:243`](godot/collision.gd#L243) | `(the file)` | `game:0x8003260c` tile_collision | verified |
+| [`godot/collision.gd:372`](godot/collision.gd#L372) | `func _notch` | `game:0x80032d3c` status | transcribed |
+| [`godot/collision.gd:388`](godot/collision.gd#L388) | `func surface` | `game:0x80033b10` collide_surface | transcribed |
 | [`godot/actors.gd:208`](godot/actors.gd#L208) | `func _spawn` | `game:0x8004b868` actor_spawn | transcribed |
 | [`godot/actors.gd:142`](godot/actors.gd#L142) | `func _activate` | `game:0x8004c1f0` actor_activate | transcribed |
 | [`godot/actors.gd:192`](godot/actors.gd#L192) | `func _try` | `game:0x8004c380` status | transcribed |
@@ -77,12 +79,7 @@ load-bearing whatever its size.
 
 | callers | instructions | address | name |
 | --- | --- | --- | --- |
-| 36 | 69 | `0x80026fe4` | sub_80026fe4 |
-| 36 | 40 | `0x800270f8` | sub_800270f8 |
-| 36 | 12 | `0x80027a40` | sub_80027a40 |
 | 32 | 30 | `0x8002792c` | sub_8002792c |
-| 28 | 82 | `0x8007910c` | sub_8007910c |
-| 20 | 27 | `0x80079ba0` | DrawSync |
 | 19 | 84 | `0x80016ab8` | sub_80016ab8 |
 | 16 | 431 | `0x80025468` | sub_80025468 |
 | 15 | 316 | `0x800222fc` | sub_800222fc |
@@ -107,4 +104,9 @@ load-bearing whatever its size.
 | 11 | 20 | `0x80016928` | sub_80016928 |
 | 10 | 1970 | `0x80053c84` | sub_80053c84 |
 | 10 | 116 | `0x80025be8` | sub_80025be8 |
+| 10 | 33 | `0x80019cc4` | read_entry_a |
+| 10 | 31 | `0x80016c90` | sub_80016c90 |
+| 10 | 18 | `0x800168a8` | sub_800168a8 |
+| 10 | 14 | `0x80019538` | sub_80019538 |
+| 9 | 569 | `0x80018358` | level_load |
 

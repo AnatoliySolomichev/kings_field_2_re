@@ -49,8 +49,14 @@ FIELDS = [
     (0x24, "u16", "unknown_24"),        # 5000
     (0x26, "u16", "magic_meter"),       # 5000 full
     (0x28, "u16", "unknown_28"),        # grows as the character does
-    (0x36, "u16", "unknown_36"),        # 20 at level 1, 21 at level 2
-    (0x40, "u16", "unknown_40"),        # 10 -> 11
+    (0x36, "u16", "stat_36"),           # 20 at level 1, 21 at level 2 -- the
+                                        # running sum of the level table's
+                                        # third column. tools/levelup.py
+    (0x38, "u16", "grow_38"),           # the five award_exp rolls for: one
+    (0x3a, "u16", "grow_3a"),           # added on each level if the stat is
+    (0x3c, "u16", "grow_3c"),           # not zero and rand() < 0x6665, about
+    (0x3e, "u16", "grow_3e"),           # four times in five. 0x8002a408
+    (0x40, "u16", "grow_40"),           # 10 -> 11 between the two snapshots
     (0x44, "u16", "unknown_44"),        # 20 -> 21
     (0x4e, "u16", "unknown_4e"),        # 10 -> 11
     (0x54, "u32", "gold"),              # 0x8002b518 writes it

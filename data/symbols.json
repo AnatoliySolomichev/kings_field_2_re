@@ -1441,5 +1441,65 @@
   "name": "depth_under_plane_19",
   "kind": "data",
   "evidence": "sync_player_pos: surface_plane_19 + 0x640 less the eye. At or below zero it calls player_throw"
+ },
+ "0x80026fe4": {
+  "name": "frame_begin",
+  "kind": "code",
+  "evidence": "flips the byte at 0x801aeae8 between 0 and 1, selects the 12-byte record at 0x80199158 + i*12 into 0x80199170 and the ordering table at 0x80199174 + i*0x8000, then calls ClearOTagR. 36 callers, and the same shape as OPEN.EXE's frame_begin at 0x800133c8"
+ },
+ "0x800270f8": {
+  "name": "frame_end",
+  "kind": "code",
+  "evidence": "DrawSync(0), then PutDispEnv(disp_env + i*20) and PutDrawEnv(draw_env + i*92) for the buffer 0x801aeae8 names -- the PSY-Q sizes of DISPENV and DRAWENV, which is what fixes both arrays. 36 callers"
+ },
+ "0x80027a40": {
+  "name": "pad_wait_release",
+  "kind": "code",
+  "evidence": "loops on PadRead(1) until the low half is zero -- it waits for every button to be let go, not for one to be pressed. 36 callers, all of them after a menu choice"
+ },
+ "0x801aeae8": {
+  "name": "draw_buffer_index",
+  "kind": "data",
+  "evidence": "0 or 1, flipped by frame_begin with `sltiu $v0, $v0, 1` and read by frame_end to pick which display and drawing environment to hand the GPU"
+ },
+ "0x801a9274": {
+  "name": "disp_env",
+  "kind": "data",
+  "evidence": "two DISPENVs, 20 bytes each: frame_end forms 0x801a9274 + i*20 and passes it to PutDispEnv"
+ },
+ "0x801a91bc": {
+  "name": "draw_env",
+  "kind": "data",
+  "evidence": "two DRAWENVs, 92 bytes each: frame_end forms 0x801a91bc + i*92 and passes it to PutDrawEnv"
+ },
+ "0x80199174": {
+  "name": "ordering_table",
+  "kind": "data",
+  "evidence": "two ordering tables, 0x8000 bytes each, selected by draw_buffer_index; frame_begin clears the chosen one with ClearOTagR"
+ },
+ "0x80199170": {
+  "name": "current_draw_slot",
+  "kind": "data",
+  "evidence": "frame_begin writes 0x80199158 + draw_buffer_index*12 here, and the drawing routines read it -- 0x8003f304 takes its +8 for the primitive buffer"
+ },
+ "0x8002a310": {
+  "name": "award_exp",
+  "kind": "code",
+  "evidence": "(s16 delta). Adds to player_exp, caps it at 0xf423f = 999999, and while the total reaches player_exp_next and the level byte is below 0xff, takes a level: HP max, MP max, the stat at +0x36 and the next threshold all come out of the 12-byte record at level_table + level*12, the five halfwords at 0x801b2518..0x801b2520 each grow by one if they are not zero and rand() < 0x6665, and everything is clamped to 999. Past the table's 99 records it extrapolates by the difference between the last two. Checked: 13 of 13 RAM snapshots hold what their level's record says"
+ },
+ "0x8009f114": {
+  "name": "level_table",
+  "kind": "data",
+  "evidence": "99 records of 12 bytes -- HP max, MP max, the gain for 0x801b2516, then a u32 of experience for the next level. Past the end of GAME.EXE's image, so it comes off the disc: FDAT.T entry 97 at offset 12592, found by searching every file for the first 36 bytes of the live table. tools/levelup.py reads it"
+ },
+ "0x801b2516": {
+  "name": "player_stat_36",
+  "kind": "data",
+  "evidence": "the stat the level table's third column adds to: 20 at level 1 and 21 at level 2, which is the running sum of that column. Clamped to 999 by award_exp like the maxima. What it is called in the game is not established"
+ },
+ "0x801b2518": {
+  "name": "player_grow_stats",
+  "kind": "data",
+  "evidence": "five halfwords, 0x801b2518 to 0x801b2520, that award_exp grows by a coin toss on each level -- one added if the stat is not already zero and rand() < 0x6665, about four times in five. 0x801b2520 is player.py's unknown_40, which goes 10 -> 11 between the level 1 and level 2 snapshots. They are the only random part of levelling"
  }
 }
