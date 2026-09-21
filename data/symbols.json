@@ -770,7 +770,7 @@
  "0x8004e330": {
   "name": "actor_move_vertical",
   "kind": "code",
-  "evidence": "the half actor_move_horizontal does not do: a state machine on actor[+0xd] -- 0 grounded, 0x10 falling at the definition's own acceleration, 0x20 rising to the surface at 0x64 a frame decaying by 5, 0x30 a ballistic arc from actor[+0x3c] with +0x6a and +0x6c. Every write to an actor's +0x30 in ordinary motion is here"
+  "evidence": "the half actor_move_horizontal does not do: a state machine on actor[+0xd] -- 0 grounded, 0x10 falling at the definition's own acceleration (def+5), 0x20 rising to the surface at 0x64 a frame, 0x30 a ballistic arc. Position is actor[+0x2c/+0x30/+0x34], radius +0x1c, velocity +0x52. It builds the collision's fifth argument as actor[+0x1e] | ((actor[+0x28] & 0xc000) << 16), so the body height is in the low bits and the creature's own two bits land on 0x80000000 and 0x40000000 -- the pair collision opcode 0x18 tests. player_vertical passes a plain 0x6a4 with nothing on top"
  },
  "0x8004e094": {
   "name": "actor_move_3d",

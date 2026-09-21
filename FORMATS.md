@@ -300,6 +300,20 @@ So these are planes that do something to you when you are under them, and that
 is why no recording in this repository has ever hit one: nobody drowned while a
 breakpoint was armed.
 
+**Where those two flag bits come from.** `actor_move_vertical` builds its
+fifth argument as
+
+```
+arg5 = actor[+0x1e] | ((actor[+0x28] & 0xc000) << 16)
+```
+
+-- the body height in the low bits and the creature's own two bits in the top,
+landing exactly on `0x80000000` and `0x40000000`, which is what `0x18` tests.
+`player_vertical` passes a plain `0x6a4` with nothing on top. So the planes act
+on the *player* only through `sync_player_pos` and the eye height, and on a
+*creature* through the mask, according to two bits in its record -- which is
+how one thing can walk on a surface another drowns in.
+
 `0x18` also takes part in the mask, and it is the only handler in the routine
 that reads the **top nibble of the fifth argument**. `0x800326b0` splits `arg5`
 into `arg5 & 0xf0000000` (kept in `$fp`) and `arg5 & 0x0fffffff` (the body
