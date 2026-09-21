@@ -1361,5 +1361,40 @@
   "name": "actor_leader",
   "kind": "data",
   "evidence": "actor_select sets it to the slot actor+0x22 names when the definition's flags have 0x10; actor_activate wakes categories 3 and 4 only while it is up"
+ },
+ "0x80074910": {
+  "name": "ScaleMatrix",
+  "kind": "code",
+  "evidence": "PSY-Q's ScaleMatrix, read off the code: for each of the nine matrix cells it does `multu cell, scale[col]` then `sra 12` and packs the halves back. So a scale of 0x1000 is exactly 1.0 and applies nothing. It is how an object's +0x2c..+0x30 triple reaches the renderer; called from 0x8003c35c, 0x8003e34c, 0x8003f304 and 0x80042eb0"
+ },
+ "0x8003f304": {
+  "name": "draw_model_lit",
+  "kind": "code",
+  "evidence": "the model draw render_walk uses for an object standing in the world: view_matrix composed with the angle triple, ScaleMatrix by the object's +0x2c, a dynamic range shift in $s5 that halves the translation until it fits in 0x7fff and shifts the rotation matrix to match, then the vertices through the GTE"
+ },
+ "0x8003e34c": {
+  "name": "draw_model_plain",
+  "kind": "code",
+  "evidence": "the other model draw: render_walk calls it for every creature in the 0x88 table, and for an object whose record[+3] has bit 0x40 -- which is drawn against the matrix at 0x801aec0c with its position zeroed, the held-item path"
+ },
+ "0x801aec0c": {
+  "name": "hand_matrix",
+  "kind": "data",
+  "evidence": "the matrix render_walk draws an object against instead of view_matrix when record[+3] bit 0x40 is set, with the object's position written as zero -- so the object is placed in camera space, not world space (0x800413c4..0x800413dc)"
+ },
+ "0x80040694": {
+  "name": "object_flags_for_draw",
+  "kind": "code",
+  "evidence": "render_walk calls it with object_table+0x14 and ANDs the result with the record's own +0 byte to decide whether to draw at all"
+ },
+ "0x80044b40": {
+  "name": "object_set_present",
+  "kind": "code",
+  "evidence": "(record, present, restore). Present writes 0xfc into the terrain grid cell the object stands in -- level_grid + cz*800 + cx*10, +5 when record[+0] == 1 -- and 0x1000 into the scale triple at +0x2c/+0x2e/+0x30; absent writes the caller's byte into the cell and zeroes the triple. So the triple is a visible/not-visible switch and the cell byte is the object's collision. Read off the routine in full; load_object_placement passes present=0 with the restore byte from the disc record's +23"
+ },
+ "0x801b2574": {
+  "name": "objects_forced_present",
+  "kind": "data",
+  "evidence": "a half that object_set_present tests on its remove path: non-zero takes the present branch instead (0x80044b4c)"
  }
 }

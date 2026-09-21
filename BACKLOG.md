@@ -78,8 +78,16 @@ Across level 0 it reads x1.00 on 271 objects, **x0.00 on 59**, x1.99 on 34 and a
 scatter between on the graves, so some of what the port drew at the wrong size
 was drawn at the wrong size and some of what it drew is not drawn by the game at
 all. `tools/level3d.py` takes it from a snapshot for now and skips the zeroes,
-the same borrowed-not-understood arrangement as the object textures. What fills
-it is still to find; the disc record's `+8` and `+10` look like the object's own
+the same borrowed-not-understood arrangement as the object textures.
+
+**What fills it is found, and it is not a size.** `object_set_present`
+(`0x80044b40`) writes `0x1000` into all three when an object is present and `0`
+when it is not, and at the same time stamps `0xfc` into the terrain grid cell
+the object stands in or puts back the byte from the disc record's `+23`. So the
+triple is a visible/not-visible switch, the 59 objects at `x0.00` are switched
+off rather than tiny, and **an object's collision is a terrain cell** — a door
+*is* a wall while it is shut. FORMATS.md, "The scale triple is a switch".
+The old note, which the reading replaces: the disc record's `+8` and `+10` look like the object's own
 radius and height instead — `0x320` and `0x6a4` shapes, which is what the
 object-collision gap needs.
 

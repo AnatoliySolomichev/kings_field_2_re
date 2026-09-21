@@ -1467,6 +1467,65 @@ Names confirmed this way are written with a trailing `!` in the tools; a name
 merely taken from `ITEM.T` at the same index gets a `?`, because that archive
 shares numbering with the object types only in part.
 
+### The scale triple is a switch, and an object stamps itself into the terrain
+
+`+0x2c`, `+0x2e` and `+0x30` were read as the object's size, `0x1000` being
+1.0, and across level 0 they came out `x1.00` on 271 objects, **`x0.00` on 59**
+and a scatter between. The zeroes were the clue and they are not a size at all.
+
+One routine writes all three, `0x80044b40`, and it does exactly two things:
+
+```
+object_set_present(record, present, restore):
+    cell = level_grid + (record.z >> 11) * 800 + (record.x >> 11) * 10
+    if record[+0] == 1:  cell += 5           the upper of the cell's two layers
+    if present:
+        *cell = 0xfc                         the object's own tile id
+        record[+0x2c] = record[+0x2e] = record[+0x30] = 0x1000
+    else:
+        *cell = restore                      the byte the caller hands it
+        record[+0x2c] = record[+0x2e] = record[+0x30] = 0
+```
+
+So the triple is a **visible / not visible switch** that reaches the renderer
+through `ScaleMatrix` (`0x80074910`, PSY-Q's, which multiplies each matrix cell
+by the scale and shifts right 12): `0x1000` draws the model at 1:1 and `0`
+collapses it to nothing. The 59 objects at `x0.00` are not tiny. They are
+switched off, which is what the backlog suspected when it said "some of what
+the port drew is not drawn by the game at all".
+
+**And it is also the object collision.** Being present writes `0xfc` into the
+terrain grid cell the object stands in, and going away writes back the byte the
+caller supplies — which `load_object_placement` takes from the disc placement
+record's **byte +23**, `0xff` on 4517 of the 4838 objects in the game and a
+real tile id (26, 27, 0, ...) on the rest. That is how a door blocks a doorway
+without the collision knowing anything about objects: the door *is* a terrain
+cell while it is there, and opening it puts the floor back.
+
+Which layer it writes is chosen by `record[+0] == 1`, so an object either owns
+the lower five bytes of its cell or the upper five. What byte 0 of a layer
+means beyond "the shape", and why `0xfc` rather than a shape in the ordinary
+range, is not settled here — but `0xfc` is above the `0xf0` that
+`draw_cell_walk` skips at, so nothing draws it.
+
+Read off `0x80044b40` in full, with the two call sites that pass `present = 1`
+(`0x800489ec`, `0x8004995c`, in the object interpreter) and the one that passes
+`0` (`0x80045570`, in `load_object_placement`, with `restore` from the disc
+record). One wrinkle kept because it is in the code: on the "remove" path a
+non-zero half at `0x801b2574` takes the *present* branch instead.
+
+**What this does not answer** is the port's half-size objects. The draw path
+applies the scale triple and nothing else — `ScaleMatrix` by `0x1000` is
+exactly 1.0, the position at `+0x14..+0x1c` goes in unhalved, and the only
+halving anywhere near it is in the class `0xf2` path, which draws at the
+midpoint of the record's world position and a cell-anchored one. So the factor
+is not applied at draw time by the game, and the remaining candidates are the
+model's own units and the port's placement.
+
+One thing the same reading does settle: **the Y angle is drawn with `0x800`
+added** — half a turn, since `0x1000` is the full circle — at `0x80041374` on
+the ordinary path and `0x80040f04` on the class `0xf2` one.
+
 ### The parameter block, `+0x38..+0x3f`
 
 Offsets here are four higher than they were written before the realignment
