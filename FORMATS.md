@@ -556,6 +556,31 @@ number, every placed object in the world with its slot and its type, and a
 player to say which is which. No static check could have done it — the wrong
 model parsed, placed, scaled and lit exactly as cleanly as the right one.
 
+### From type 300 up, the level is part of the model number
+
+`model_of_type` (`0x80040568`) is eleven lines and it says the whole rule:
+
+```
+type <  300    model = type + 0x100
+type >= 300    model = type + 0x100 + 32 * level
+```
+
+where the level is the byte at `current_level_block` (`0x8018fad8`), or
+`pending_level` during the handover when `0x8018fad4` and `0x8018faeb` are both
+1. The `+0x100` is the 128 a player measured off the model gallery, seen from
+the other side of the resource table's own offset.
+
+So past `MO.T`'s 428 entries, **`MOF.T` is banked, 32 models to a level**, and
+the arithmetic puts level *n* in bank *n + 4*. Checked against the placement
+records: over **all 1424 placed objects of type 300 and above, across 25
+levels, the bank comes out as `level + 4` every time**. `MOF.T` has 992
+entries, which is 31 banks; the first four belong to no level.
+
+`tools/tmd.py` ignored the level, which is right on level 0 and picks a model
+32 banks wrong on level 1 — and level 0 is the only one the port has ever
+built, which is why it survived. With the level in, 1423 of the 1424 land on an
+entry that holds a model, against 1410 before.
+
 ### An MO.T entry is not a bare TMD
 
 ```

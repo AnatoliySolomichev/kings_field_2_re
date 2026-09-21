@@ -207,26 +207,46 @@ def find_tmd(data):
 
 
 MO_COUNT = 428          # MO.T's entries; MOF.T continues the numbering
-MODEL_BIAS = 128        # an object of type N uses model N + 128
+MODEL_BIAS = 128
+# From this type up, the model number carries the level in it: model_of_type
+# (0x80040568) adds `32 * current_level_block`, so MOF.T is banked 32 to a
+# level and level n uses bank n + 4.
+LEVEL_BANKED = 300
+BANK = 32        # an object of type N uses model N + 128
 
 
-def model_of(type_id):
+def model_of(type_id, level=0):
     """Which archive and entry an object type's model is, as (name, entry).
 
-    **`MO.T[type + 128]`**, and the 128 is measured rather than reasoned: a
-    player stood in the game beside the port and named four pairs — a helmet at
-    type 34 is model 162, healing grass at 104 is 232, a save point at 227 is
-    355, a bull's head at 253 is 381 — and all four differ by exactly 128. The
-    sizes agree too: the grass comes out 384 x 211 x 416 under the rule where
-    the old assumption `MO.T[type]` gave it 4176 x 4096 x 3808, which is what
-    the player saw as "a big white thing where the grass should be".
+    Below type 300 it is **`MO.T[type + 128]`**, and the 128 was measured
+    before it was read: a player stood in the game beside the port and named
+    four pairs — a helmet at type 34 is model 162, healing grass at 104 is 232,
+    a save point at 227 is 355, a bull's head at 253 is 381 — all differing by
+    exactly that. The sizes agree too: the grass comes out 384 x 211 x 416
+    under the rule where the old assumption `MO.T[type]` gave it
+    4176 x 4096 x 3808, which is what the player saw as "a big white thing
+    where the grass should be".
 
-    Past `MO.T`'s 428 entries the numbering **continues into `MOF.T`**, which is
-    read from the shapes rather than confirmed: type 301 is the *Broken Cart*
-    and lands on `MOF.T[1]`, which is 1711 x 1092 x 2886 — long, low and about a
-    cell wide. That is a guess until somebody looks at it.
+    **From type 300 up the level decides the model**, which is now read off
+    `model_of_type` (`0x80040568`) rather than guessed:
+
+        type <  300   model = type + 0x100
+        type >= 300   model = type + 0x100 + 32 * level
+
+    and past `MO.T`'s 428 entries the numbering continues into `MOF.T`. So
+    `MOF.T` is **banked, 32 models to a level**, and the arithmetic says
+    level *n* uses bank *n + 4*. Over all 1424 placed objects of type 300 and
+    above in the game, across 25 levels, the bank comes out as `level + 4`
+    **every time** -- 992 entries is 31 banks, and the first four are not any
+    level's.
+
+    The old rule ignored the level, which is right only on level 0 and picks a
+    model 32 banks wrong on level 1 and so on. 1423 of the 1424 land on an
+    entry that holds a model; 1410 did before.
     """
     n = type_id + MODEL_BIAS
+    if type_id >= LEVEL_BANKED:
+        n += BANK * level
     return ("MO", n) if n < MO_COUNT else ("MOF", n - MO_COUNT)
 
 

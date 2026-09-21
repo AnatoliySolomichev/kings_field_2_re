@@ -91,6 +91,13 @@ The old note, which the reading replaces: the disc record's `+8` and `+10` look 
 radius and height instead — `0x320` and `0x6a4` shapes, which is what the
 object-collision gap needs.
 
+**And from type 300 up the level is part of it too.** `model_of_type`
+(`0x80040568`) adds `32 * current_level_block` for any type at or above 300, so
+`MOF.T` is banked 32 models to a level and level *n* uses bank *n + 4*. Over
+all 1424 such objects in the game the bank is `level + 4` every time. The old
+rule ignored the level, which is right on level 0 and wrong by 32 banks on
+level 1 — and level 0 is the only one the port has built.
+
 **Objects drawn as the wrong things — solved, and the answer was 128.** An
 object of type N uses `MO.T[N + 128]`, measured off four pairs a player named
 from the model gallery, with the sizes agreeing independently. `MO.T[type]` was

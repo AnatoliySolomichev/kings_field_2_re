@@ -639,6 +639,12 @@ def build_objects_gltf(lv, out="out/godot"):
     used before and which nothing had ever checked, put a two-cell model where
     the healing grass should be and armour where the doors are.
 
+    **From type 300 up the level is part of the model number** — `model_of_type`
+    (`0x80040568`) adds `32 * level` — so `MOF.T` is banked 32 models to a
+    level and level *n* uses bank *n + 4*. That holds for all 1424 such objects
+    in the game. Ignoring it is right only on level 0, which is why it survived
+    this long.
+
     Height **is** in the record, at offset 12, signed, and it is measured from
     the terrain: `y = -128 * cell[+6] + h`. That reproduces the live table for
     345 of level 0's 347 objects. This file used to put every object on the
@@ -681,7 +687,7 @@ def build_objects_gltf(lv, out="out/godot"):
             hidden += 1
             continue
         try:
-            _flags, objs = tmd.load(*tmd.model_of(o["type"]))
+            _flags, objs = tmd.load(*tmd.model_of(o["type"], lv))
         except Exception:
             missing += 1
             continue
