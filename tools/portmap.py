@@ -56,7 +56,10 @@ DB = os.path.join(ROOT, "out", "rdis")
 
 MARK = re.compile(
     r"#\s*@orig\s+(?P<exe>boot|open|game|end):(?P<addr>0x[0-9a-fA-F]+)"
-    r"(?:\s+(?P<name>[A-Za-z_][\w+]*))?"
+    # The name must not swallow `status:`. `[\w+]*` stops at the colon, so
+    # "status" read as a routine name and the port's own file reported itself
+    # broken. The lookahead is the fix and it is cheaper than it looks.
+    r"(?:\s+(?!status:)(?P<name>[A-Za-z_][\w+]*))?"
     r"(?:\s+status:(?P<status>\w+))?(?P<rest>[^\n]*)")
 
 STATUS = {

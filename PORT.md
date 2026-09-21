@@ -42,7 +42,7 @@ floor, not a score.
 | --- | --- | --- | --- |
 | [`godot/boot.gd:66`](godot/boot.gd#L66) | `func _exec` | `boot:0x80010038` shell_main | transcribed |
 | [`godot/actors.gd:253`](godot/actors.gd#L253) | `func _in_range` | `game:0x80016ec8` in_range | transcribed |
-| [`godot/levelup.gd:55`](godot/levelup.gd#L55) | `(the file)` | `game:0x8002a310` status | transcribed |
+| [`godot/levelup.gd:55`](godot/levelup.gd#L55) | `(the file)` | `game:0x8002a310` award_exp | transcribed |
 | [`godot/player.gd:250`](godot/player.gd#L250) | `func _tick` | `game:0x8002e3f8` player_horizontal | partial |
 | [`godot/player.gd:338`](godot/player.gd#L338) | `func _move` | `game:0x8002ed60` player_vertical | verified |
 | [`godot/player.gd:320`](godot/player.gd#L320) | `func _bob` | `game:0x8002f298` player_bob | transcribed |
@@ -51,16 +51,16 @@ floor, not a score.
 | [`godot/player.gd:200`](godot/player.gd#L200) | `func _process` | `game:0x80030fcc` player_controller | partial |
 | [`godot/collision.gd:226`](godot/collision.gd#L226) | `func _layer` | `game:0x800324f0` select_cell_layer | transcribed |
 | [`godot/collision.gd:243`](godot/collision.gd#L243) | `(the file)` | `game:0x8003260c` tile_collision | verified |
-| [`godot/collision.gd:372`](godot/collision.gd#L372) | `func _notch` | `game:0x80032d3c` status | transcribed |
+| [`godot/collision.gd:372`](godot/collision.gd#L372) | `func _notch` | `game:0x80032d3c` 0x80032d3c | transcribed |
 | [`godot/collision.gd:388`](godot/collision.gd#L388) | `func surface` | `game:0x80033b10` collide_surface | transcribed |
 | [`godot/actors.gd:208`](godot/actors.gd#L208) | `func _spawn` | `game:0x8004b868` actor_spawn | transcribed |
 | [`godot/actors.gd:142`](godot/actors.gd#L142) | `func _activate` | `game:0x8004c1f0` actor_activate | transcribed |
-| [`godot/actors.gd:192`](godot/actors.gd#L192) | `func _try` | `game:0x8004c380` status | transcribed |
-| [`godot/actors.gd:201`](godot/actors.gd#L201) | `func _block` | `game:0x8004c418` status | transcribed |
+| [`godot/actors.gd:192`](godot/actors.gd#L192) | `func _try` | `game:0x8004c380` 0x8004c380 | transcribed |
+| [`godot/actors.gd:201`](godot/actors.gd#L201) | `func _block` | `game:0x8004c418` 0x8004c418 | transcribed |
 | [`godot/actors.gd:219`](godot/actors.gd#L219) | `func _taken` | `game:0x8004d644` actor_spot_taken | transcribed |
-| [`godot/actors.gd:233`](godot/actors.gd#L233) | `func _kill` | `game:0x80052b7c` status | transcribed |
+| [`godot/actors.gd:233`](godot/actors.gd#L233) | `func _kill` | `game:0x80052b7c` 0x80052b7c | transcribed |
 | [`godot/actors.gd:129`](godot/actors.gd#L129) | `func _pass` | `game:0x80052e5c` actor_tick_driver | transcribed |
-| [`godot/cutscene.gd:44`](godot/cutscene.gd#L44) | `func _ready` | `game:0x80060d20` status | transcribed |
+| [`godot/cutscene.gd:44`](godot/cutscene.gd#L44) | `func _ready` | `game:0x80060d20` 0x80060d20 | partial |
 | [`godot/collision.gd:98`](godot/collision.gd#L98) | `func isqrt` | `game:0x80074508` game_isqrt | transcribed |
 | [`godot/collision.gd:65`](godot/collision.gd#L65) | `func game_sin` | `game:0x80076cc4` game_sin | transcribed |
 | [`godot/collision.gd:81`](godot/collision.gd#L81) | `func game_cos` | `game:0x80076da0` game_cos | transcribed |

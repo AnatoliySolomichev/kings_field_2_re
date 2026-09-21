@@ -21,6 +21,7 @@ the disc alone.
 
 | Want to | Run |
 | --- | --- |
+| Rebuild everything derived, in order | `tools/build.py` |
 | See what an address is | `tools/syms.py 0x8005d7bc` |
 | Read what a sign in the world says | `tools/readables.py` |
 | Read a level's entity scripts | `tools/escript.py 0` |
@@ -33,6 +34,29 @@ the disc alone.
 | See what the opening plays | `tools/str.py list` |
 
 ---
+
+## Rebuilding all of it
+
+**`build.py`** — the whole pipeline, in the order it has to run.
+
+```
+python3 tools/build.py            everything
+python3 tools/build.py --quick    everything but the level geometry
+python3 tools/build.py --check    only the steps that report a number
+```
+
+Nothing in it is new work; the point is the *order*, which is not obvious and
+which produces output that is quietly a version behind when it is got wrong.
+`consts.py` reads the walk, `rdis.py`'s listings read the constants and the
+port markers, and `PORT.md` reads the walk again — so a listing regenerated
+before the symbol table was reloaded carries the old names and says nothing
+about it.
+
+It ends with the numbers that say whether anything is broken: every logged
+`tile_collision` call reproduced, every level in the table matching the
+snapshots, every frame of the movement recording reproduced, and every marker
+in the port resolving. A step that cannot run — no disc, no Godot — says so and
+does not stop the rest.
 
 ## Naming things
 
