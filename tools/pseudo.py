@@ -227,13 +227,19 @@ class Body:
         return live
 
     def flush(self, b, regs):
-        """Write out every folded value the next block will read."""
+        """Write out every folded value the next block will read.
+
+        Called before the block's branch, because after it the assignment
+        reads as something the branch skipped -- which is how a correct list of
+        statements gives a wrong account of the routine.
+        """
         out = set()
         for t in self.succ.get(b, []):
             out |= self.live.get(t, set())
         for r in sorted(x for x in regs if isinstance(x, int)):
             if r in out and regs[r] != "$" + G[r]:
                 self.emit(f"${G[r]} = {regs[r]};")
+                regs[r] = "$" + G[r]
 
     def label(self, text):
         self.out.append(text)
@@ -447,14 +453,15 @@ class Body:
                 i = self.w.insns[a]
                 if i.kind in ("branch", "call", "jump", "jr"):
                     slot = ins[n + 1] if n + 1 < len(ins) else None
-                    self.branch(a, slot, regs)
+                    self.branch(a, slot, regs, b)
                     n += 2
                     continue
                 self.step(a, regs)
                 n += 1
-            self.flush(b, regs)
+            else:
+                self.flush(b, regs)       # a block that just falls through
 
-    def branch(self, a, slot, regs):
+    def branch(self, a, slot, regs, b=None):
         """A branch and its delay slot, in the order they really run."""
         i = self.w.insns[a]
         si = self.w.insns.get(slot) if slot is not None else None
@@ -465,6 +472,8 @@ class Body:
                  and si.writes in getattr(i, "reads", ()))
         if si is not None and not clash and si.kind != "nop":
             self.step(slot, regs)
+        if b is not None:
+            self.flush(b, regs)
         if i.kind == "branch":
             self.emit(f"if ({self.cond(a, regs)}) goto "
                       f"{self.target(i.target)};")
