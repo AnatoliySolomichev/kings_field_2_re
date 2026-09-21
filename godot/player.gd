@@ -86,9 +86,22 @@ const EYE_UNITS := 1600.0            # 0x640 at 0x80028e10
 # the table which button each of their slots holds. With the default scheme
 # that is: forward and back on UP and DOWN, strafe on L1 and R1, turn on LEFT
 # and RIGHT, and this port's keyboard stands in for those.
-const TURN_RATE := 24                # A GUESS. player_turn is 0x8002fe1c and
-                                     # its rate is not transcribed; nothing in
-                                     # a recording has settled it either.
+# The turn, read off player_look (0x8002f5c0) and the cap the controller sets
+# before calling it (0x80031194). It is the same shape as the walk: a rate that
+# ramps towards a cap by a quarter of it each frame and decays to zero by the
+# same quarter, and the facing is that rate added to 0x801b2612 every frame,
+# wrapped to 0xfff.
+#
+# The cap is not constant, and this is a thing a player can feel: 0x28 standing
+# still and 0x20 with forward or back held (0x800311a8 writes 0x28 only when
+# neither `bind_forward` nor `bind_back` is down). So you turn about a fifth
+# faster when you are not walking. Out of 0x1000 to the circle, 0x20 is 2.81
+# degrees a frame and 0x28 is 3.52.
+#
+# There is a third case not reproduced here: while the counter at 0x801b2566
+# is running, 0x80031254 halves the cap every frame and counts it down.
+const TURN_MAX_STILL := 0x28         # 0x800311a8
+const TURN_MAX_MOVING := 0x20        # 0x8003118c
 
 var coll := KFCollision.new()
 var have_coll := false
@@ -104,6 +117,9 @@ var vvel := 0
 # 0x801b2648 and 0x801b2646: the two ground speeds the ramp drives
 var fwd_speed := 0
 var stf_speed := 0
+# 0x801b264c, the turn rate the ramp drives, and 0x801b2612, the facing itself
+var turn_rate := 0
+var facing := 0
 # 0x801b2652 and 0x801b2650: the bob's phase and the lift it produces
 var bob_phase := 0
 var bob := 0
@@ -117,6 +133,7 @@ func _ready() -> void:
 	gx = int(position.x * UNIT)
 	gy = int(-position.y * UNIT)
 	gz = int(-position.z * UNIT)
+	facing = int(rotation.y / TAU * 4096.0) & 0xFFF
 	_refresh()
 
 
@@ -157,7 +174,10 @@ func _refresh() -> void:
 
 func _unhandled_input(e: InputEvent) -> void:
 	if e is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		rotate_y(-e.relative.x * 0.003)
+		# The mouse moves the game's own facing rather than the node, so that
+		# looking about and the turn buttons do not fight over the rotation.
+		facing = int(facing - e.relative.x * 2.0) & 0xFFF
+		rotation.y = float(facing) * TAU / 4096.0
 		pitch = clamp(pitch - e.relative.y * 0.003, -1.4, 1.4)
 		$Camera.rotation.x = pitch
 	elif e is InputEventKey and e.pressed and not e.echo:
@@ -230,6 +250,11 @@ func _ramp(speed: int, pos: bool, neg: bool, cap: int, decay := 3) -> int:
 # @orig game:0x8002e3f8 player_horizontal  status:partial -- the step; the slide along a refused wall is missing
 func _tick(dir: Vector3) -> void:
 	var cap := SPEED_MAX_RUN if Input.is_key_pressed(KEY_SHIFT) else SPEED_MAX
+	# The controller's own order, off its call list: player_turn (the button
+	# edges), player_look (the turn and the pitch), player_walk (the speeds),
+	# then player_vertical or player_move. So the facing for this frame's step
+	# is this frame's turn, not last frame's.
+	_turn()
 	# 0x8002f9bc reads the forward slot at 0x80081868 and the back one at
 	# 0x8008186a; the strafe pair is 0x8008187c, which accelerates the speed,
 	# and 0x80081878, which decelerates it -- so 0x7c is the positive
@@ -238,12 +263,6 @@ func _tick(dir: Vector3) -> void:
 		KFPad.held(KFPad.BACK), cap)
 	stf_speed = _ramp(stf_speed, KFPad.held(KFPad.ALT_C),
 		KFPad.held(KFPad.ALT_A), cap, 2)
-	# The turn, which 0x8002f5c0 takes from the two lateral slots. The rate is
-	# this port's guess, not the game's.
-	if KFPad.held(KFPad.LEFT_SLOT):
-		rotate_y(deg_to_rad(TURN_RATE) / TICK_HZ)
-	if KFPad.held(KFPad.RIGHT_SLOT):
-		rotate_y(-deg_to_rad(TURN_RATE) / TICK_HZ)
 	# 0x8002fc94: the distances are not the speeds. Each is
 	# speed^2 / isqrt(sum of squares), which normalises a diagonal and, because
 	# the root is a unit short, makes a straight walk one unit longer.
@@ -259,6 +278,40 @@ func _tick(dir: Vector3) -> void:
 	var r := transform.basis.x
 	_move(int(f.x * fd + r.x * sd), int(-(f.z * fd + r.z * sd)))
 	_bob(coll.isqrt(fd * fd + sd * sd))
+
+
+# The turn rate ramps to the cap and decays back to zero by a quarter of the cap
+# a frame -- the same rule player_walk uses for the ground speed, and the reason
+# a turn keeps going for a few frames after the button is let go. Then the
+# facing takes the rate and wraps: `facing = (facing + rate) & 0xfff`, at
+# 0x8002f738.
+#
+# The rate is kept in the game's own units, 0x1000 to the circle, so it can be
+# compared with 0x801b264c directly; the Godot rotation is derived from the
+# facing at the end, the way ghost.gd reads the game's own.
+# @orig game:0x8002f5c0 player_look  status:transcribed -- the yaw half; the pitch is not ported
+func _turn() -> void:
+	var cap := TURN_MAX_MOVING if (KFPad.held(KFPad.FORWARD)
+		or KFPad.held(KFPad.BACK)) else TURN_MAX_STILL
+	var step := cap >> 2
+	if KFPad.held(KFPad.LEFT_SLOT):                   # 0x8002f5e0
+		turn_rate += step
+		if turn_rate > cap:
+			turn_rate = cap
+	elif KFPad.held(KFPad.RIGHT_SLOT):                # 0x8002f648
+		turn_rate -= step
+		if turn_rate < -cap:
+			turn_rate = -cap
+	elif turn_rate > 0:                               # 0x8002f6b4, the decay
+		turn_rate -= step
+		if turn_rate < 0:
+			turn_rate = 0
+	elif turn_rate < 0:                               # 0x8002f6ec
+		turn_rate += step
+		if turn_rate > 0:
+			turn_rate = 0
+	facing = (facing + turn_rate) & 0xFFF             # 0x8002f738
+	rotation.y = float(facing) * TAU / 4096.0
 
 
 # 0x8002f298, the tail of player_vertical: the phase walks forward by the

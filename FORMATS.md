@@ -1022,6 +1022,43 @@ parsed, correctly placed and correctly lit.
 there is open; 299 is alone in being both always-readable and a coarse box, so
 nothing else is excluded on suspicion.
 
+### The turn, which was the last guess in the port's movement
+
+`godot/player.gd` carried `TURN_RATE = 24` with "A GUESS" written beside it.
+The real thing is in **`player_look` (`0x8002f5c0`)** and it is the same shape
+as the walk:
+
+```
+cap  = player_turn_max            0x801b2668, a word
+rate = player_turn_rate           0x801b264c, s16
+
+held left      rate += cap >> 2, clamped to  +cap     0x8002f5e0
+held right     rate -= cap >> 2, clamped to  -cap     0x8002f648
+neither        rate moves cap >> 2 towards zero       0x8002f6b4, 0x8002f6ec
+
+facing = (facing + rate) & 0xfff                      0x8002f738
+```
+
+So a turn keeps going for a few frames after the button is let go, exactly as
+the ground speed does — and `player_walk` uses the same quarter of the cap, which
+is now three places that rule turns up.
+
+**The cap is not constant, and a player can feel it.** `player_controller`
+writes `0x20` into it every frame (`0x8003118c`) and then **`0x28` instead when
+neither `bind_forward` nor `bind_back` is held** (`0x800311a4` branches past the
+write when either is down). Out of `0x1000` to the circle that is 2.81 degrees a
+frame walking and 3.52 standing still: **you turn about a fifth faster when you
+stop**.
+
+There is a third case, not in the port: while the counter at `0x801b2566` is
+running, `0x80031254` halves the cap every frame and `0x8003125c` counts it
+down. What starts it is not read yet.
+
+The order the four run in is off `player_controller`'s own call list —
+`player_turn` (the button edges), `player_look` (the turn and the pitch),
+`player_walk` (the speeds), then `player_vertical` or `player_move`. So the
+facing a step uses is *this* frame's turn, which is what the port now does.
+
 ### The head bob
 
 The tail of `player_vertical`, at `0x8002f298`, and worth writing down because it

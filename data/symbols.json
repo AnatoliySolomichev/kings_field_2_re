@@ -1396,5 +1396,15 @@
   "name": "objects_forced_present",
   "kind": "data",
   "evidence": "a half that object_set_present tests on its remove path: non-zero takes the present branch instead (0x80044b4c)"
+ },
+ "0x801b2668": {
+  "name": "player_turn_max",
+  "kind": "data",
+  "evidence": "the cap the turn rate ramps to, a word. player_controller writes 0x20 into it every frame (0x8003118c) and 0x28 instead when neither bind_forward nor bind_back is held (0x800311a8) -- so the player turns faster standing still than walking. While the counter at 0x801b2566 runs, 0x80031254 halves it each frame. player_look reads it six times and never writes it"
+ },
+ "0x801b2566": {
+  "name": "turn_slow_timer",
+  "kind": "data",
+  "evidence": "a half that player_controller counts down at 0x8003125c, halving player_turn_max each frame while it is non-zero (0x80031254); it also drives a separate ramp on 0x801b24f6 that is bounded at -0xce4"
  }
 }

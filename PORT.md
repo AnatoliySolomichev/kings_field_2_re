@@ -29,7 +29,7 @@ that it reproduces it correctly.** `status` says how far that went:
 | --- | --- | --- | --- | --- | --- |
 | boot | 10 | 1 | 0 | 115 | 50 (43%) |
 | open | 293 | 6 | 0 | 19753 | 1066 (5%) |
-| game | 816 | 17 | 4 | 92169 | 4959 (5%) |
+| game | 816 | 18 | 4 | 92169 | 5214 (5%) |
 | end | 167 | 0 | 0 | 9966 | 0 (0%) |
 
 Those percentages are of *all* the code in the image, which includes
@@ -42,11 +42,12 @@ floor, not a score.
 | --- | --- | --- | --- |
 | [`godot/boot.gd:66`](godot/boot.gd#L66) | `func _exec` | `boot:0x80010038` shell_main | transcribed |
 | [`godot/actors.gd:253`](godot/actors.gd#L253) | `func _in_range` | `game:0x80016ec8` in_range | transcribed |
-| [`godot/player.gd:230`](godot/player.gd#L230) | `func _tick` | `game:0x8002e3f8` player_horizontal | partial |
-| [`godot/player.gd:285`](godot/player.gd#L285) | `func _move` | `game:0x8002ed60` player_vertical | verified |
-| [`godot/player.gd:267`](godot/player.gd#L267) | `func _bob` | `game:0x8002f298` player_bob | transcribed |
-| [`godot/player.gd:216`](godot/player.gd#L216) | `func _ramp` | `game:0x8002f9bc` player_walk | verified |
-| [`godot/player.gd:180`](godot/player.gd#L180) | `func _process` | `game:0x80030fcc` player_controller | partial |
+| [`godot/player.gd:250`](godot/player.gd#L250) | `func _tick` | `game:0x8002e3f8` player_horizontal | partial |
+| [`godot/player.gd:338`](godot/player.gd#L338) | `func _move` | `game:0x8002ed60` player_vertical | verified |
+| [`godot/player.gd:320`](godot/player.gd#L320) | `func _bob` | `game:0x8002f298` player_bob | transcribed |
+| [`godot/player.gd:292`](godot/player.gd#L292) | `func _turn` | `game:0x8002f5c0` player_look | transcribed |
+| [`godot/player.gd:236`](godot/player.gd#L236) | `func _ramp` | `game:0x8002f9bc` player_walk | verified |
+| [`godot/player.gd:200`](godot/player.gd#L200) | `func _process` | `game:0x80030fcc` player_controller | partial |
 | [`godot/collision.gd:226`](godot/collision.gd#L226) | `func _layer` | `game:0x800324f0` select_cell_layer | transcribed |
 | [`godot/collision.gd:243`](godot/collision.gd#L243) | `func query` | `game:0x8003260c` tile_collision | verified |
 | [`godot/collision.gd:344`](godot/collision.gd#L344) | `func surface` | `game:0x80033b10` collide_surface | transcribed |

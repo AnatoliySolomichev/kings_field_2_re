@@ -114,6 +114,11 @@ height stores chosen exactly and **15 of 15** falling frames advancing by exactl
 the velocity. `godot/player.gd` carries the model and `godot/selftest.gd` proves
 the GDScript copy matches the Python one on 690 frames.
 
+The turn is read now too: `player_look` (`0x8002f5c0`) ramps a rate to a cap by
+a quarter of it a frame and adds it to the facing, and the cap is `0x20` while
+forward or back is held and `0x28` when neither is — you turn faster standing
+still. `godot/player.gd` carries it; FORMATS.md, "The turn".
+
 What is left of it, and neither blocks anything: **`0x8002e3f8` is not
 transcribed** (the horizontal step is 201 units a frame at speed and ramps up
 from a standstill), and **the frame rate is unknown** — a watchpoint log carries
