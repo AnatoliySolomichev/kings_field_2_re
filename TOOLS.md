@@ -27,7 +27,9 @@ the disc alone.
 | See who wants which item | `tools/overlay.py` |
 | Check an archive is intact | `tools/tsum.py extract/CD/COM/*.T` |
 | Watch the game while you play | `emu/run.sh` then `tools/livemap.py` |
-| Follow the boot chain from the entry point | `tools/calltree.py open entry -d 3` |
+| Follow the boot chain from the entry point | `tools/rdis.py open --tree entry -d 3` |
+| Read a routine, annotated | `tools/rdis.py game 0x8002ed60` |
+| Find out what a number means | `tools/consts.py 0x800` |
 | See what the opening plays | `tools/str.py list` |
 
 ---
@@ -476,6 +478,86 @@ pixels get on screen without a decoder faster than Python.
 three layer routines fill in, and if any were misread the picture says so.
 
 ## Disassembly
+
+**`rdis.py`** — the whole executable, walked from its entry point. This is the
+one to reach for: it finds the routines, decides where each one ends, resolves
+the switch tables, and writes an annotated listing of any of them.
+
+```
+python3 tools/rdis.py game                what is in it
+python3 tools/rdis.py game --build        out/rdis/game.json, the database
+python3 tools/rdis.py game 0x8002ed60     one routine, annotated
+python3 tools/rdis.py game --listing      every routine, into out/asm/game/
+python3 tools/rdis.py game --tree entry -d 4    the call tree
+python3 tools/rdis.py game --unnamed      the biggest routines with no name
+```
+
+It differs from `calltree.py` in where it starts. That one scans the whole
+image for `jal` targets and ends each routine where the next begins, which is
+the right first instrument and has two failures that matter: a word inside a
+texture that reads as `jal` invents a routine, and a listing runs off the end
+of a real one straight into data. Against capstone over GAME.EXE, **3161
+instructions inside what that method calls functions are opcodes the R3000A
+does not have**, every one of them past `0x80080000`.
+
+`rdis.py` follows control flow instead and decodes only what it reaches: 92175
+of 142848 words in GAME.EXE, in 816 routines, and **every instruction belongs to
+exactly one of them**. What it would otherwise lose — a routine reached only
+through a pointer — is put back by scanning the image for words pointing at a
+routine already walked, and for GAME.EXE by seeding it with every address the
+twenty-eight level overlays `jal`, since nothing inside the executable calls
+those.
+
+Three things it resolves that a linear disassembler cannot:
+
+* **`lui`/`%lo` pairs across basic blocks**, by constant propagation over the
+  control flow graph. `mips.resolve` pairs them only inside a straight line.
+* **Switch tables** — 40 in GAME.EXE, 2156 arms, every bound read off the
+  `sltiu` that guards the index. Tying the guard to the register it tests is
+  what settled it: taking the *nearest* `sltiu` read a 236-entry table out of
+  an unrelated comparison, and the arms swallowed four routines into one.
+* **What a call is given**, where the argument is a constant. Where it is not,
+  nothing is printed.
+
+It also found that **24 names in `data/symbols.json` are labels inside routines
+rather than routines**: `tile_op_20_wall` and `tile_op_30_ramp` are arms of
+`tile_collision`'s 49-way switch, and `player_bob` is inside `player_vertical`.
+The listing shows them that way.
+
+**`mipsdis.py`** — the decoder underneath it, and a library rather than a
+command. Written here rather than bound from the emulator's capstone for two
+reasons: capstone does not decode the GTE at all, and it hands back a string,
+which is the one thing an annotating pass cannot work with. It agrees with
+capstone on every R3000A instruction in GAME.EXE.
+
+**`consts.py`** — every number in the code, where it appears, and what it is
+doing there.
+
+```
+python3 tools/consts.py --build      walk all four, write the cross reference
+python3 tools/consts.py 0x800        every site of 2048, with its role
+python3 tools/consts.py --top        the commonest numbers with no name yet
+python3 tools/consts.py --switches   every switch, with the count its guard states
+python3 tools/consts.py --fields 0x44   what is read at +0x44 of something
+python3 tools/consts.py --doc        regenerate CONSTANTS.md
+```
+
+The names live in `data/constants.json` with the evidence for each and which
+kind of claim it is — **read**, **derived** or **guessed**. A number may have
+several meanings and they are all kept: `0x320` is the player's collision
+radius *and* the byte stride of a row of the terrain grid, and a file with one
+name per number would have to be wrong about one of them.
+
+The part that is not obvious: **the compiler takes numbers apart.**
+`collide_at_cell` indexes the grid at `cz * 800 + cx * 10` and neither 800 nor
+10 appears in its code — both are built out of shifts and adds. So the chains
+are read back and the multiplier is reported where it is *used*, not where it
+is built. That distinction is the whole thing: the routine finishes building
+`10 * cx` and then adds the grid's address with the same `addu` it has been
+using all along, and reading that as one more step turns 10 into 11 and loses
+the only place the number appears.
+
+[CONSTANTS.md](CONSTANTS.md) is the generated index of all of it.
 
 **`disasm.py`** — MIPS disassembly of `GAME.EXE`, binding the capstone that
 ships inside the emulator's AppImage. With no arguments it cross-references the
