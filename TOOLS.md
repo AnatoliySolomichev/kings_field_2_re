@@ -490,7 +490,17 @@ python3 tools/rdis.py game 0x8002ed60     one routine, annotated
 python3 tools/rdis.py game --listing      every routine, into out/asm/game/
 python3 tools/rdis.py game --tree entry -d 4    the call tree
 python3 tools/rdis.py game --unnamed      the biggest routines with no name
+python3 tools/rdis.py game --describe    what each routine touches
+python3 tools/rdis.py game --graph       the call graph, as .dot and as a tree
 ```
+
+`--describe` is the one for the 675 routines in GAME.EXE that have no name and
+mostly never will have one worth trusting. Each gets a *profile* instead — the
+named globals it touches, the named routines it calls, whether it uses the GTE,
+and which piece of hardware it writes to — all of it read off the code. It is
+what turns a list of `sub_8004a824` into something searchable: `sub_800227ec`
+reads `player_exp`, `player_level`, `player_hp` and `player_hp_max`, which says
+what it is without anyone having to name it.
 
 It differs from `calltree.py` in where it starts. That one scans the whole
 image for `jal` targets and ends each routine where the next begins, which is

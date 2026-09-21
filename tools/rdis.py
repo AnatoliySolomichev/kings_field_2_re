@@ -1083,6 +1083,89 @@ def listings(w, const_names=None, portmap=None):
     return d, n
 
 
+# --- what an unnamed routine is about ------------------------------------
+#
+# 675 of GAME.EXE's 816 routines have no name, and most of them never will have
+# one worth trusting. What they can have is a *profile*: the named globals they
+# touch, the named routines they call, and which of the machine's parts they
+# use. That is all read off the code, none of it is a guess, and it turns a list
+# of `sub_8004a824` into something a person can search.
+
+HARDWARE = {
+    (0x1F801810, 0x1F801818): "the GPU",
+    (0x1F801820, 0x1F801828): "the MDEC",
+    (0x1F801040, 0x1F801060): "the pads and the serial port",
+    (0x1F801070, 0x1F801078): "the interrupt controller",
+    (0x1F801080, 0x1F801100): "DMA",
+    (0x1F801100, 0x1F801130): "the timers",
+    (0x1F801800, 0x1F801804): "the CD drive",
+    (0x1F801C00, 0x1F802000): "the SPU",
+}
+
+
+def profile(w, fn):
+    """One line about a routine, entirely out of what it touches."""
+    bits = []
+    gte = sum(1 for a in fn.body if w.insns[a].kind in ("gte", "cop")
+              and w.insns[a].mn not in ("mfc0", "mtc0", "rfe"))
+    if gte:
+        cmds = {w.insns[a].mn for a in fn.body if w.insns[a].kind == "gte"}
+        bits.append("uses the GTE" + (f" ({', '.join(sorted(cmds))})"
+                                      if cmds else ""))
+    hw = set()
+    for _a, addr, _m, _wd in fn.refs:
+        for (lo, hi), what in HARDWARE.items():
+            if lo <= addr < hi:
+                hw.add(what)
+    if hw:
+        bits.append("talks to " + " and ".join(sorted(hw)))
+    named = []
+    for _a, t, _g in fn.calls:
+        nm = syms.name_in(w.nick, t, "")
+        if nm and nm not in named:
+            named.append(nm)
+    if named:
+        bits.append("calls " + ", ".join(named[:4])
+                    + (f" and {len(named) - 4} more" if len(named) > 4 else ""))
+    glob = []
+    for _a, addr, mode, _wd in fn.refs:
+        nm = syms.name_in(w.nick, addr, "")
+        if nm and (nm, mode) not in glob and mode in ("read", "write", "addr"):
+            glob.append((nm, mode))
+    if glob:
+        bits.append(", ".join(f"{m}s {n}" if m != "addr" else f"points at {n}"
+                              for n, m in glob[:4]))
+    b = bios_calls(w, fn)
+    if b:
+        bits.append("BIOS " + ", ".join(sorted(set(b))[:4]))
+    return "; ".join(bits)
+
+
+def bios_calls(w, fn):
+    out = []
+    for a in fn.body:
+        if w.insns[a].kind == "call":
+            got = bios_at(w.exe, a)
+            if got:
+                out.append(got[2])
+    return out
+
+
+def describe(w, out=sys.stdout, unnamed_only=True):
+    rows = []
+    for f, fn in sorted(w.funcs.items()):
+        if unnamed_only and fn.named:
+            continue
+        rows.append((len(fn.body), f, fn, profile(w, fn)))
+    print(f"{len(rows)} routines" + (" with no name" if unnamed_only else "")
+          + f" in {w.nick}", file=out)
+    for n, f, fn, p in sorted(rows, reverse=True):
+        print(f"{f:#010x}  {n:5d} insns  {len(fn.callers):3d} callers  "
+              f"{fn.name}", file=out)
+        if p:
+            print(f"            {p}", file=out)
+
+
 if __name__ == "__main__":
     argv = sys.argv[1:]
     nick = argv.pop(0) if argv and argv[0] in mips.EXES else "game"
@@ -1119,6 +1202,15 @@ if __name__ == "__main__":
         w = build(nick)
         d, n = listings(w, cn, pm)
         print(f"wrote {n} listings into {os.path.relpath(d, ROOT)}")
+    elif "--describe" in flags:
+        w = build(nick)
+        d = os.path.join(ROOT, "out", "rdis")
+        os.makedirs(d, exist_ok=True)
+        path = os.path.join(d, f"{nick}.profiles.txt")
+        with open(path, "w") as fh:
+            describe(w, fh, unnamed_only=False)
+        describe(w)
+        print(f"\nwrote {os.path.relpath(path, ROOT)}", file=sys.stderr)
     elif "--unnamed" in flags:
         w = build(nick)
         rows = [(len(fn.body), f, fn) for f, fn in w.funcs.items() if not fn.named]
