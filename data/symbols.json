@@ -1501,5 +1501,50 @@
   "name": "player_grow_stats",
   "kind": "data",
   "evidence": "five halfwords, 0x801b2518 to 0x801b2520, that award_exp grows by a coin toss on each level -- one added if the stat is not already zero and rand() < 0x6665, about four times in five. 0x801b2520 is player.py's unknown_40, which goes 10 -> 11 between the level 1 and level 2 snapshots. They are the only random part of levelling"
+ },
+ "0x8007dd08": {
+  "name": "AddPrim",
+  "kind": "code",
+  "evidence": "PSY-Q's addPrim, read off the code: takes the low 24 bits of the ordering table entry into the primitive's tag and the primitive's address into the entry, keeping each one's top byte. Two words in, two words out, no call"
+ },
+ "0x8007de70": {
+  "name": "SetPolyFT4",
+  "kind": "code",
+  "evidence": "writes 9 into the tag's length byte at +3 and 0x2c into the command byte at +7 -- the word count and the GPU code of a textured, blended four-point polygon. That pair is what names it"
+ },
+ "0x80027414": {
+  "name": "ui_prim_begin",
+  "kind": "code",
+  "evidence": "takes the primitive buffer from current_draw_slot +8, keeps it at gp+0x160 as the current primitive, calls SetPolyFT4 on it and writes the three colour bytes from gp+0x5c, gp+0x60 and gp+0x64 into its +4, +5 and +6. 14 callers, every one of them a menu"
+ },
+ "0x80027494": {
+  "name": "ui_prim_quad",
+  "kind": "code",
+  "evidence": "fills the current primitive's four corners at +8, +0x10, +0x18, +0x20 from (x, y, w, h) and the four UV pairs at +0xc, +0x14, +0x1c, +0x24 -- the POLY_FT4 layout exactly"
+ },
+ "0x80027530": {
+  "name": "ui_prim_add",
+  "kind": "code",
+  "evidence": "AddPrim(ot_pointer + a0*4, the current primitive) -- a0 is the depth the UI quad is filed at"
+ },
+ "0x801a9174": {
+  "name": "ot_pointer",
+  "kind": "data",
+  "evidence": "the ordering table ui_prim_add files into: it reads the word here and indexes it by the depth"
+ },
+ "0x800279a4": {
+  "name": "pad_read_latch",
+  "kind": "code",
+  "evidence": "PadRead(1), and if anything is held it sets gp+0x34 before returning the word. The latch is what tells a menu that a button has been touched since it opened"
+ },
+ "0x80016ab8": {
+  "name": "vec_angle",
+  "kind": "code",
+  "evidence": "the direction of (a0, a1) in the game's 0x1000-to-the-turn units. It compares |a0| and |a1|, divides the smaller by the larger shifted left 12, hands that to 0x800742ac, and folds the answer into one of the four quadrants with 0x800 and 0xfff. 19 callers, all of them things that turn towards something"
+ },
+ "0x800742ac": {
+  "name": "arctan_unit",
+  "kind": "code",
+  "evidence": "vec_angle's only callee: a ratio in 12-bit fixed point to an angle, iterating over the table at 0x8009591c with 0x1000 as its seed"
  }
 }

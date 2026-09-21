@@ -137,7 +137,38 @@ func _init() -> void:
 	if not _levels():
 		quit(1)
 		return
+	if not _angles():
+		quit(1)
+		return
 	quit(0)
+
+
+# The game's arctangent, against the same directions tools/movement.py put
+# through its copy. Nothing has ever logged a call to vec_angle, so what this
+# checks is that the two transcriptions agree exactly -- not that either is
+# right. That rests on the CORDIC table being atan(2**-i) and on the answers
+# tracking a real atan2 to within the table's own rounding, 4.37 of 4096.
+func _angles() -> bool:
+	if not FileAccess.file_exists("res://anglecheck.json"):
+		print("angles: no cases to check against")
+		return true
+	var rows = JSON.parse_string(
+		FileAccess.get_file_as_string("res://anglecheck.json"))
+	if typeof(rows) != TYPE_ARRAY:
+		print("angles: anglecheck.json is not a list")
+		return false
+	var c := KFCollision.new()
+	var bad_a := 0
+	for r in rows:
+		var got := c.vec_angle(int(r[0]), int(r[1]))
+		if got != int(r[2]):
+			bad_a += 1
+			if bad_a == 1:
+				print("  angle (%d, %d): godot %d, python %d" % [
+					int(r[0]), int(r[1]), got, int(r[2])])
+	print("angles: %d of %d directions match tools/movement.py exactly" % [
+		rows.size() - bad_a, rows.size()])
+	return bad_a == 0
 
 
 # The levelling, against the cases tools/levelup.py wrote beside the table. The

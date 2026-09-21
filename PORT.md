@@ -29,7 +29,7 @@ that it reproduces it correctly.** `status` says how far that went:
 | --- | --- | --- | --- | --- | --- |
 | boot | 10 | 1 | 0 | 115 | 50 (43%) |
 | open | 293 | 6 | 0 | 19753 | 1066 (5%) |
-| game | 816 | 19 | 5 | 92169 | 5400 (5%) |
+| game | 816 | 21 | 5 | 92169 | 5537 (6%) |
 | end | 167 | 0 | 0 | 9966 | 0 (0%) |
 
 Those percentages are of *all* the code in the image, which includes
@@ -41,6 +41,7 @@ floor, not a score.
 | in the port | what it is | in the game | status |
 | --- | --- | --- | --- |
 | [`godot/boot.gd:66`](godot/boot.gd#L66) | `func _exec` | `boot:0x80010038` shell_main | transcribed |
+| [`godot/collision.gd:135`](godot/collision.gd#L135) | `func vec_angle` | `game:0x80016ab8` vec_angle | transcribed |
 | [`godot/actors.gd:253`](godot/actors.gd#L253) | `func _in_range` | `game:0x80016ec8` in_range | transcribed |
 | [`godot/levelup.gd:55`](godot/levelup.gd#L55) | `(the file)` | `game:0x8002a310` award_exp | transcribed |
 | [`godot/player.gd:250`](godot/player.gd#L250) | `func _tick` | `game:0x8002e3f8` player_horizontal | partial |
@@ -49,10 +50,10 @@ floor, not a score.
 | [`godot/player.gd:292`](godot/player.gd#L292) | `func _turn` | `game:0x8002f5c0` player_look | transcribed |
 | [`godot/player.gd:236`](godot/player.gd#L236) | `func _ramp` | `game:0x8002f9bc` player_walk | verified |
 | [`godot/player.gd:200`](godot/player.gd#L200) | `func _process` | `game:0x80030fcc` player_controller | partial |
-| [`godot/collision.gd:226`](godot/collision.gd#L226) | `func _layer` | `game:0x800324f0` select_cell_layer | transcribed |
-| [`godot/collision.gd:243`](godot/collision.gd#L243) | `(the file)` | `game:0x8003260c` tile_collision | verified |
-| [`godot/collision.gd:372`](godot/collision.gd#L372) | `func _notch` | `game:0x80032d3c` 0x80032d3c | transcribed |
-| [`godot/collision.gd:388`](godot/collision.gd#L388) | `func surface` | `game:0x80033b10` collide_surface | transcribed |
+| [`godot/collision.gd:279`](godot/collision.gd#L279) | `func _layer` | `game:0x800324f0` select_cell_layer | transcribed |
+| [`godot/collision.gd:296`](godot/collision.gd#L296) | `(the file)` | `game:0x8003260c` tile_collision | verified |
+| [`godot/collision.gd:425`](godot/collision.gd#L425) | `func _notch` | `game:0x80032d3c` 0x80032d3c | transcribed |
+| [`godot/collision.gd:441`](godot/collision.gd#L441) | `func surface` | `game:0x80033b10` collide_surface | transcribed |
 | [`godot/actors.gd:208`](godot/actors.gd#L208) | `func _spawn` | `game:0x8004b868` actor_spawn | transcribed |
 | [`godot/actors.gd:142`](godot/actors.gd#L142) | `func _activate` | `game:0x8004c1f0` actor_activate | transcribed |
 | [`godot/actors.gd:192`](godot/actors.gd#L192) | `func _try` | `game:0x8004c380` 0x8004c380 | transcribed |
@@ -61,7 +62,8 @@ floor, not a score.
 | [`godot/actors.gd:233`](godot/actors.gd#L233) | `func _kill` | `game:0x80052b7c` 0x80052b7c | transcribed |
 | [`godot/actors.gd:129`](godot/actors.gd#L129) | `func _pass` | `game:0x80052e5c` actor_tick_driver | transcribed |
 | [`godot/cutscene.gd:44`](godot/cutscene.gd#L44) | `func _ready` | `game:0x80060d20` 0x80060d20 | partial |
-| [`godot/collision.gd:98`](godot/collision.gd#L98) | `func isqrt` | `game:0x80074508` game_isqrt | transcribed |
+| [`godot/collision.gd:107`](godot/collision.gd#L107) | `func arctan_unit` | `game:0x800742ac` arctan_unit | transcribed |
+| [`godot/collision.gd:151`](godot/collision.gd#L151) | `func isqrt` | `game:0x80074508` game_isqrt | transcribed |
 | [`godot/collision.gd:65`](godot/collision.gd#L65) | `func game_sin` | `game:0x80076cc4` game_sin | transcribed |
 | [`godot/collision.gd:81`](godot/collision.gd#L81) | `func game_cos` | `game:0x80076da0` game_cos | transcribed |
 | [`godot/actors.gd:293`](godot/actors.gd#L293) | `func _rand` | `game:0x800796c0` rand | transcribed |
@@ -80,15 +82,13 @@ load-bearing whatever its size.
 | callers | instructions | address | name |
 | --- | --- | --- | --- |
 | 32 | 30 | `0x8002792c` | sub_8002792c |
-| 19 | 84 | `0x80016ab8` | sub_80016ab8 |
 | 16 | 431 | `0x80025468` | sub_80025468 |
 | 15 | 316 | `0x800222fc` | sub_800222fc |
 | 15 | 40 | `0x80027688` | sub_80027688 |
 | 15 | 26 | `0x80019ab4` | sub_80019ab4 |
-| 14 | 39 | `0x80027494` | sub_80027494 |
-| 14 | 32 | `0x80027414` | sub_80027414 |
-| 14 | 13 | `0x800279a4` | sub_800279a4 |
-| 14 | 12 | `0x80027530` | sub_80027530 |
+| 14 | 39 | `0x80027494` | ui_prim_quad |
+| 14 | 32 | `0x80027414` | ui_prim_begin |
+| 14 | 12 | `0x80027530` | ui_prim_add |
 | 13 | 198 | `0x80024c70` | sub_80024c70 |
 | 13 | 137 | `0x80026570` | sub_80026570 |
 | 13 | 100 | `0x800261dc` | sub_800261dc |
@@ -109,4 +109,6 @@ load-bearing whatever its size.
 | 10 | 18 | `0x800168a8` | sub_800168a8 |
 | 10 | 14 | `0x80019538` | sub_80019538 |
 | 9 | 569 | `0x80018358` | level_load |
+| 9 | 405 | `0x800422b8` | sub_800422b8 |
+| 9 | 224 | `0x80026acc` | sub_80026acc |
 

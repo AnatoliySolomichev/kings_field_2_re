@@ -1046,8 +1046,8 @@ def verify(out="out/godot"):
                         "--script", "res://selftest.gd"],
                        capture_output=True, text=True, timeout=900)
     for line in (r.stdout + r.stderr).splitlines():
-        if line.startswith(("loaded:", "movement:", "levels:", "FAIL",
-                            "  first", "  level case")):
+        if line.startswith(("loaded:", "movement:", "levels:", "angles:",
+                            "FAIL", "  first", "  level case", "  angle (")):
             print("   " + line.strip())
     if r.returncode != 0:
         print("the port and the Python model disagree")

@@ -92,6 +92,59 @@ func game_cos(a: int) -> int:
 	return sin_table[a - 0xC00]
 
 
+# The game's own arctangent: vec_angle (0x80016ab8) with arctan_unit
+# (0x800742ac) under it. Twelve CORDIC iterations over a table of atan(2**-i)
+# in the game's 0x1000-to-the-turn units -- 511, 302, 159, 81, 41, 20, 10, 5,
+# 3, 1, 0, 0, against 512.00, 302.25, 159.70, 81.07 ... computed. The table's
+# own rounding is why this disagrees with a real atan2 by up to 4.37 units of
+# 4096: that is the game's answer, not an error in the copy.
+#
+# Nineteen routines in GAME.EXE call it, all of them things that turn towards
+# something.
+const CORDIC := [511, 302, 159, 81, 41, 20, 10, 5, 3, 1, 0, 0]
+
+
+# @orig game:0x800742ac arctan_unit  status:transcribed
+func arctan_unit(ratio: int) -> int:
+	var x := 0x1000
+	var y := ratio
+	var z := 0
+	for i in range(12):
+		var nx: int
+		var ny: int
+		if y >= 0:
+			nx = x + (y >> i)
+			ny = y - (x >> i)
+			z += CORDIC[i]
+		else:
+			nx = x - (y >> i)
+			ny = y + (x >> i)
+			z -= CORDIC[i]
+		x = nx
+		y = ny
+	return z
+
+
+# MIPS `div` truncates towards zero; GDScript's integer / does too, but the
+# shift has to happen first and stay exact, so both are written out.
+func _idiv(a: int, b: int) -> int:
+	var q := absi(a) / absi(b)
+	return -q if (a < 0) != (b < 0) else q
+
+
+# @orig game:0x80016ab8 vec_angle  status:transcribed -- within 4.37 of 4096 of atan2
+func vec_angle(u: int, v: int) -> int:
+	if absi(v) >= absi(u):
+		if v > 0:
+			return (-arctan_unit(_idiv(u << 12, v))) & 0xFFF
+		if v < 0:
+			return 0x800 - arctan_unit(_idiv(u << 12, v))
+		return 0
+	if u < 0:
+		return arctan_unit(_idiv(v << 12, u)) + 0x400
+	return arctan_unit(_idiv(v << 12, u)) + 0xC00
+
+
 # 0x80074508: the game's integer square root, through the GTE leading-zero count
 # and a 192-entry table. NOT floor(sqrt(x)) -- a perfect square comes back one
 # short, isqrt(40000) = 199, and the walking step depends on that unit.

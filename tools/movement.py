@@ -192,6 +192,69 @@ def game_cos(a):
     return _q(a - 0xC00)
 
 
+# The game's own arctangent: `vec_angle` (0x80016ab8) with `arctan_unit`
+# (0x800742ac) under it. Twelve CORDIC iterations over the table at
+# 0x8009591c, which holds atan(2**-i) in the game's 0x1000-to-the-turn units --
+# 511, 302, 159, 81, 41, 20, 10, 5, 3, 1, 0, 0, against 512.00, 302.25, 159.70,
+# 81.07 ... computed. Nineteen routines call it, all of them things that turn
+# towards something.
+
+CORDIC = 0x8009591C
+_C = None
+
+
+def _cordic_table():
+    global _C
+    if _C is None:
+        import struct
+        import disasm
+        base, _entry, text = disasm.load_text()
+        _C = list(struct.unpack_from("<12i", text, CORDIC - base))
+    return _C
+
+
+def arctan_unit(ratio):
+    """`0x800742ac`: a ratio in 12-bit fixed point to an angle.
+
+    CORDIC in vectoring mode -- rotate (0x1000, ratio) towards the axis and
+    accumulate what each rotation was worth. Twelve iterations, and the last
+    two table entries are zero, so the answer settles before it runs out.
+    """
+    t = _cordic_table()
+    x, y, z = 0x1000, ratio, 0
+    for i in range(12):
+        if y >= 0:
+            x, y, z = x + (y >> i), y - (x >> i), z + t[i]
+        else:
+            x, y, z = x - (y >> i), y + (x >> i), z - t[i]
+    return z
+
+
+def _idiv(a, b):
+    """MIPS `div`: truncating, not floor, which Python's // is not."""
+    q = abs(a) // abs(b)
+    return -q if (a < 0) != (b < 0) else q
+
+
+def vec_angle(u, v):
+    """`0x80016ab8`: the direction of (u, v), 0x1000 to the turn.
+
+    The larger component is the denominator, so the ratio never leaves
+    [-1, 1], and the quadrant is put back with 0x400, 0x800 and 0xc00. `u` is
+    the first argument and `v` the second; what they are in world terms is the
+    caller's business, and the nineteen callers do not agree with each other.
+    """
+    if abs(v) >= abs(u):
+        if v > 0:
+            return (-arctan_unit(_idiv(u << 12, v))) & 0xFFF
+        if v < 0:
+            return 0x800 - arctan_unit(_idiv(u << 12, v))
+        return 0
+    if u < 0:
+        return arctan_unit(_idiv(v << 12, u)) + 0x400
+    return arctan_unit(_idiv(v << 12, u)) + 0xC00
+
+
 # The game's own integer square root, and it is *not* floor(sqrt(x)).
 #
 # `0x80074508` normalises through the GTE's leading-zero count, indexes a

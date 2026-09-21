@@ -1701,6 +1701,43 @@ and 1000. Three round values in the one field, on the one class, is the
 strongest evidence yet that the reading is right. The earlier counts on this
 line came from the truncated walk and were roughly half of the truth.
 
+### The game's arctangent, and the UI's four calls
+
+`vec_angle` (`0x80016ab8`) is what nineteen routines use to turn towards
+something. It puts the larger of the two components underneath, so the ratio
+never leaves [-1, 1], and folds the quadrant back with `0x400`, `0x800` and
+`0xc00`:
+
+```
+|v| >= |u| and v > 0   ->  (-arctan((u << 12) / v)) & 0xfff
+|v| >= |u| and v < 0   ->  0x800 - arctan((u << 12) / v)
+|v| >= |u| and v == 0  ->  0
+|u| >  |v| and u < 0   ->  arctan((v << 12) / u) + 0x400
+|u| >  |v| and u >= 0  ->  arctan((v << 12) / u) + 0xc00
+```
+
+Underneath it, `arctan_unit` (`0x800742ac`) is **CORDIC**: twelve iterations
+rotating `(0x1000, ratio)` towards the axis and accumulating what each rotation
+was worth, out of the table at `0x8009591c` — `511, 302, 159, 81, 41, 20, 10,
+5, 3, 1, 0, 0` against `atan(2**-i)` computed as `512.00, 302.25, 159.70,
+81.07, 40.69, 20.37, 10.19, 5.09, 2.55, 1.27, 0.64, 0.32`. The last two entries
+are zero, so the answer settles before the loop runs out.
+
+Over 20000 random directions the transcription tracks a real `atan2` to within
+**4.37 of 4096 units**, and that is not slack in the copy: the table's own
+rounding errors sum to 4.66, so the game is that much off from the true angle
+and the copy is on it. `tools/movement.py` carries it and
+`godot/collision.gd` reproduces it on **400 of 400** directions.
+
+Four routines around `0x80027000` are the whole of how a menu draws, and they
+are worth naming because everything above them reads as nonsense otherwise:
+`ui_prim_begin` (`0x80027414`) takes the primitive buffer out of
+`current_draw_slot + 8`, calls `SetPolyFT4` on it and stamps the current
+colour; `ui_prim_quad` (`0x80027494`) fills its four corners and four UV pairs
+— the `POLY_FT4` layout exactly; `ui_prim_add` (`0x80027530`) files it into the
+ordering table at a depth the caller picks; and `pad_read_latch`
+(`0x800279a4`) reads the pad and sets a flag if anything at all is down.
+
 ### Experience, and the table that is not in the executable
 
 `award_exp` (`0x8002a310`) is all of levelling and it is short: add the

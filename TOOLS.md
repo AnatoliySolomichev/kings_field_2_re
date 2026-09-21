@@ -282,6 +282,15 @@ python3 tools/movement.py model       the constants, with their sources
 python3 tools/movement.py fall 0      a drop, frame by frame
 ```
 
+It also carries the game's own maths, because the movement needs it and
+nothing else had a home for it: `game_sin` and `game_cos` off the quarter-wave
+table, `isqrt` (which is one short on a perfect square, and that unit matters),
+and now **`vec_angle`** — `0x80016ab8` with the CORDIC `arctan_unit` under it,
+which nineteen routines use to turn towards something. It tracks a real `atan2`
+to within 4.37 of 4096 units, which is the game's own table rounding rather
+than slack in the copy, and `godot/collision.gd` reproduces it on 400 of 400
+directions.
+
 Two routines, and telling them apart cost two sessions. **`player_vertical`
 (`0x8002ed60`)** is walking: a rate limiter towards the surface, not a physics
 model. **`player_move` (`0x8002f320`)** runs only when you are thrown. And

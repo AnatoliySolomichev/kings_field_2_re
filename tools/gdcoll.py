@@ -125,4 +125,28 @@ def movecheck(lv, lvl, out="out/godot"):
         json.dump(doc, f, separators=(",", ":"))
     print(f"movement reference: {len(runs)} runs, "
           f"{sum(len(r['frames']) for r in runs)} frames -> {path}")
+    anglecheck(out)
+    return path
+
+
+def anglecheck(out="out/godot", n=400):
+    """Directions for `selftest.gd` to put through the game's arctangent.
+
+    `vec_angle` is a transcription of a transcription like the movement is,
+    and it has no recording behind it -- nothing in this repository has ever
+    logged a call to it. What can still be checked is that the two copies agree
+    exactly, which is what this is for; that they are both *right* rests on the
+    CORDIC table matching atan(2**-i) and on the answers tracking atan2 to
+    within the table's own rounding.
+    """
+    import random
+    rnd = random.Random(11)
+    rows = []
+    for _ in range(n):
+        u = rnd.randint(-100000, 100000)
+        v = rnd.randint(-100000, 100000)
+        rows.append([u, v, movement.vec_angle(u, v)])
+    path = f"{out}/anglecheck.json"
+    with open(path, "w") as f:
+        json.dump(rows, f, separators=(",", ":"))
     return path
