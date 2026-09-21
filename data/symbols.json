@@ -1546,5 +1546,15 @@
   "name": "arctan_unit",
   "kind": "code",
   "evidence": "vec_angle's only callee: a ratio in 12-bit fixed point to an angle, iterating over the table at 0x8009591c with 0x1000 as its seed"
+ },
+ "0x801e6474": {
+  "name": "collision_surface",
+  "kind": "data",
+  "evidence": "the nearest surface tile_collision finds, seeded to 100000 at its entry (0x80032658) and lowered by every floor, ramp and wall handler that the query reaches. player_vertical, player_move, player_horizontal, collide_surface, collide_at_cell and both actor movers read it as the ground height"
+ },
+ "0x801e6478": {
+  "name": "collision_ceiling",
+  "kind": "data",
+  "evidence": "the companion slot the wall and ceiling handlers leave the *lower* bound in; player_horizontal reads it at 0x8002e5e0"
  }
 }

@@ -586,6 +586,43 @@ rather than routines**: `tile_op_20_wall` and `tile_op_30_ramp` are arms of
 `tile_collision`'s 49-way switch, and `player_bob` is inside `player_vertical`.
 The listing shows them that way.
 
+**`pseudo.py`** — the same routine as statements instead of as instructions.
+
+```
+python3 tools/pseudo.py game 0x8002ed60      one routine
+python3 tools/pseudo.py game --all           every routine, into out/pseudo/
+python3 tools/pseudo.py game 0x8002ed60 -r   keep every register assignment
+```
+
+Reading MIPS is reading three instructions to learn that a byte was compared
+with `0x20`. This folds them: registers carry expressions rather than values,
+an absolute address prints as its name, a call prints with its arguments, a
+branch prints as the condition it tests, and the shift-and-add chains the
+compiler built print as the multiply they are — `collide_at_cell`'s first line
+comes out as `(800 * (a2 >> 11)) + ((10 * (a1 >> 11)) + &level_grid)`.
+
+What it does **not** do is invent structure. Every branch is a `goto`, every
+block keeps its label, and the order is the routine's own. Recovering `if` and
+`while` from a control flow graph is a separate job with its own failure mode,
+and a wrongly recovered loop reads exactly like a correct one — which is the
+worst shape a mistake can take here. `goto` is ugly and it cannot be wrong.
+
+Four things it is careful about, each because the obvious version is wrong:
+
+* **The delay slot runs first**, so it is printed above the branch — unless it
+  writes something the branch reads, in which case the branch saw the old
+  value, and the two are printed in their real order with a note.
+* **Nothing folded is ever lost.** A liveness pass says which registers the
+  next block reads, and those are written out at the block's end rather than
+  evaporating with the fold.
+* **A callee-saved register is never folded**, because it survives calls and
+  blocks, which is exactly where a reader loses track of where a value came
+  from.
+* **Only the prologue's own saves are hidden.** Hiding every store of a saved
+  register into the frame also hid `sw $s3, 0x10($sp)` — the fifth argument
+  going into `collide_surface`, and the one thing that call needed saying
+  about.
+
 **`mipsdis.py`** — the decoder underneath it, and a library rather than a
 command. Written here rather than bound from the emulator's capstone for two
 reasons: capstone does not decode the GTE at all, and it hands back a string,

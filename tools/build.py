@@ -76,6 +76,8 @@ def main(quick=False, only_check=False):
                 keep=["wrote"])
             run(["tools/rdis.py", e, "--describe"], f"{e} profiles",
                 keep=["wrote"])
+            run(["tools/pseudo.py", e, "--all"], f"{e} pseudocode",
+                keep=["wrote"])
 
         print("\nThe port, against the game")
         run(["tools/portmap.py", "--doc"], "PORT.md", keep=["wrote"])
