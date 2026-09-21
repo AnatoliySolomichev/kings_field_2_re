@@ -121,6 +121,7 @@ func _process(dt: float) -> void:
 	queue_redraw()
 
 
+# @orig open:0x80011e14 open_main  status:partial -- the sequence it runs, not the drawing
 func _tick() -> void:
 	frames += 1
 	match state:
@@ -155,6 +156,7 @@ func _tick() -> void:
 
 
 # play_movie (0x800136d8): open the file, stream it, and watch the pad.
+# @orig open:0x800136d8 play_movie  status:transcribed
 func _start_movie(idx: int) -> void:
 	movie = idx
 	frames = 0
@@ -169,6 +171,7 @@ func _start_movie(idx: int) -> void:
 		video.visible = false
 
 
+# @orig open:0x8001273c play_title_music  status:transcribed
 func _start_title_music() -> void:
 	# 0x8001273c: CdSearchFile on \OP\M2.S;1 and a seek to it. The file's
 	# video track is 16x16 filler; the music is its XA audio.
@@ -209,6 +212,7 @@ func _movie_tick() -> void:
 
 
 # The title screen's own loop, and title_menu (0x800131ac) inside it.
+# @orig open:0x800131ac title_menu  status:transcribed
 func _title_tick() -> void:
 	# Confirm: CIRCLE, CROSS or START, each on the frame it goes down.
 	if KFPad.hit_mask(KFPad.CIRCLE | KFPad.CROSS | KFPad.START):
@@ -258,6 +262,7 @@ func _draw_still() -> void:
 
 # layer_a (0x8001279c), layer_b (0x80012b0c) and layer_c (0x80012ea0), with the
 # rectangles they write into their primitives.
+# @orig open:0x8001279c title_layer_a  status:transcribed -- with title_layer_b 0x80012b0c and title_layer_c 0x80012ea0
 func _draw_title() -> void:
 	if art:
 		draw_texture_rect(art, Rect2(0, 0, 640, 240), false)          # full screen

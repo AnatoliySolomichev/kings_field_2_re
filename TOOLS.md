@@ -559,6 +559,43 @@ the only place the number appears.
 
 [CONSTANTS.md](CONSTANTS.md) is the generated index of all of it.
 
+**`portmap.py`** — what in the port corresponds to what in the game.
+
+```
+python3 tools/portmap.py              the coverage, in one screen
+python3 tools/portmap.py --check      every marker resolves; exit 1 if not
+python3 tools/portmap.py --next       what to port next, and why that
+python3 tools/portmap.py --doc        regenerate PORT.md
+python3 tools/portmap.py 0x8002ed60   what the port does with one routine
+```
+
+The two sides drifted apart in the obvious way: `godot/player.gd` opens with
+forty lines of prose saying it came from `player_vertical` at `0x8002ed60`,
+which is exactly right and which no tool can read. So the correspondence is
+written where both sides can carry it — a marker comment in the GDScript:
+
+```gdscript
+# @orig game:0x8002ed60 player_vertical  status:verified -- 48 of 48, bp15
+func _move(dx: int, dz: int) -> void:
+```
+
+and the same pairing comes back the other way, as a `; port:` line at the top
+of the listing `tools/rdis.py` prints. The marker names the executable as well
+as the address, because three of the four load at `0x80011000`.
+
+**A marker is a claim that the port reproduces that routine, not that it does
+so correctly.** `--check` only verifies the address is real. `status` says how
+far it went: **verified** (checked against a recording, with a count),
+**transcribed** (read off the MIPS), **partial**, or **guessed**.
+
+A marker may point *inside* a routine, and often should: `player_bob` and the
+death branch of `actor_tick` are labels, and the port has a function for each.
+Those count as parts rather than as the whole routine — counting `player_bob`
+as `player_vertical` would claim all 368 of its instructions for twelve lines.
+
+[PORT.md](PORT.md) is the generated index, and its last table is the queue:
+every routine with no marker, ordered by how many routines call it.
+
 **`disasm.py`** — MIPS disassembly of `GAME.EXE`, binding the capstone that
 ships inside the emulator's AppImage. With no arguments it cross-references the
 player position and the inventory; give it addresses to cross-reference those

@@ -52,6 +52,7 @@ func _ready() -> void:
 # twice as tall as it is wide. The port keeps the game's own coordinates and
 # does the stretching here, which is why every rectangle in opening.gd is the
 # number that is in OPEN.EXE.
+# @orig open:0x80012500 init_graphics  status:transcribed
 func _fit() -> void:
 	if screen == null:
 		return
@@ -62,6 +63,7 @@ func _fit() -> void:
 
 
 # Exec: run whichever overlay next_exe names.
+# @orig boot:0x80010038 shell_main  status:transcribed
 func _exec() -> void:
 	for c in screen.get_children():
 		c.queue_free()

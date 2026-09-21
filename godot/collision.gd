@@ -62,6 +62,7 @@ func load_from(path: String) -> bool:
 # 0x80076cc4 and 0x80076da0, over the game's own quarter wave: 0x1000 to the
 # turn, 4096 to the unit. Not Godot's sin() -- these are the values the
 # PlayStation actually multiplied by.
+# @orig game:0x80076cc4 game_sin  status:transcribed
 func game_sin(a: int) -> int:
 	if sin_table.is_empty():
 		return 0
@@ -77,6 +78,7 @@ func game_sin(a: int) -> int:
 	return -sin_table[0x1000 - a]
 
 
+# @orig game:0x80076da0 game_cos  status:transcribed
 func game_cos(a: int) -> int:
 	if sin_table.is_empty():
 		return 0
@@ -93,6 +95,7 @@ func game_cos(a: int) -> int:
 # 0x80074508: the game's integer square root, through the GTE leading-zero count
 # and a 192-entry table. NOT floor(sqrt(x)) -- a perfect square comes back one
 # short, isqrt(40000) = 199, and the walking step depends on that unit.
+# @orig game:0x80074508 game_isqrt  status:transcribed
 func isqrt(x: int) -> int:
 	if x <= 0 or isqrt_table.is_empty():
 		return 0
@@ -220,6 +223,7 @@ func _corner(f: int, tx: int, tz: int, a: Array, outer: bool) -> int:
 #
 # Exporting only layer 5 and skipping this put the lower room's floor under a
 # player standing on the bridge above it.
+# @orig game:0x800324f0 select_cell_layer  status:transcribed
 func _layer(i: int, ymid: int) -> int:
 	var ha := cells[i + 2]          # layer 0's height
 	var hb := cells[i + 5]          # layer 5's height
@@ -236,6 +240,7 @@ func _layer(i: int, ymid: int) -> int:
 # `ymid` overrides that last part, because the game has two wrappers and they
 # disagree: 0x80033d38 halves the body height, 0x80033b44 passes a flat y-0x500.
 # `surface()` below is the second one, which is what the walking code asks.
+# @orig game:0x8003260c tile_collision  status:verified -- every logged call reproduced, tools/collision.py
 func query(x: int, y: int, z: int, ymid := 0x7FFFFFFF) -> Dictionary:
 	if ymid == 0x7FFFFFFF:
 		ymid = y - (body >> 1)
@@ -336,5 +341,6 @@ func blocked(x: int, y: int, z: int) -> bool:
 
 
 # 0x80033b10: the nearest surface alone, the way player_vertical asks for it.
+# @orig game:0x80033b10 collide_surface  status:transcribed
 func surface(x: int, y: int, z: int) -> int:
 	return int(query(x, y, z, y - 0x500)["floor"])

@@ -126,6 +126,7 @@ func _unhandled_input(e: InputEvent) -> void:
 
 
 # actor_tick_driver: one game frame
+# @orig game:0x80052e5c actor_tick_driver  status:transcribed -- the loop over the 199 slots
 func _pass(px: int, pz: int) -> void:
 	for k in SLOTS:
 		var a = actors[k]
@@ -138,6 +139,7 @@ func _pass(px: int, pz: int) -> void:
 
 
 # 0x8004c1f0
+# @orig game:0x8004c1f0 actor_activate  status:transcribed -- the rule for when a creature appears
 func _activate(k: int, px: int, pz: int) -> void:
 	var a: Dictionary = actors[k]
 	var st: int = a["st"]
@@ -187,6 +189,7 @@ func _activate(k: int, px: int, pz: int) -> void:
 
 
 # 0x8004c380: spawn, unless 0x8004d644 finds the spot taken
+# @orig game:0x8004c380  status:transcribed -- a label inside actor_activate
 func _try(k: int) -> void:
 	if _taken(k) != -1:
 		_block(k, "spot taken")
@@ -195,12 +198,14 @@ func _try(k: int) -> void:
 
 
 # 0x8004c418: category 2 just waits; any other is held
+# @orig game:0x8004c418  status:transcribed -- a label inside actor_activate
 func _block(k: int, why: String) -> void:
 	if actors[k]["cat"] != 2:
 		_state(k, HELD, why)
 
 
 # 0x8004b868 and 0x8004b698
+# @orig game:0x8004b868 actor_spawn  status:transcribed
 func _spawn(k: int) -> void:
 	var a: Dictionary = actors[k]
 	a["ry"] = a["yaw"]
@@ -211,6 +216,7 @@ func _spawn(k: int) -> void:
 
 
 # 0x8004d644: another creature that is up and overlaps this one's place
+# @orig game:0x8004d644 actor_spot_taken  status:transcribed
 func _taken(k: int) -> int:
 	var me: Dictionary = actors[k]
 	for j in SLOTS:
@@ -224,6 +230,7 @@ func _taken(k: int) -> int:
 
 
 # the death branch of actor_tick, 0x80052b7c
+# @orig game:0x80052b7c  status:transcribed -- the death branch, a label inside actor_tick
 func _kill(k: int) -> void:
 	var a: Dictionary = actors[k]
 	match int(a["cat"]):
@@ -243,6 +250,7 @@ func _kill(k: int) -> void:
 
 # 0x80016ec8: the distance from (x, z) to the actor, or -1 beyond r. With y
 # other than 0xffff the bodies must also overlap in height.
+# @orig game:0x80016ec8 in_range  status:transcribed
 func _in_range(ax: int, ay: int, az: int, x: int, y: int, z: int, r: int,
 		top := 0, own := 0) -> int:
 	var dx := ax - x
@@ -282,6 +290,7 @@ func _home(a: Dictionary) -> void:
 
 # BIOS A0:2F, which is what rand at 0x800796c0 calls. The seed is not the
 # game's: every other caller of rand moves the same sequence along.
+# @orig game:0x800796c0 rand  status:transcribed -- BIOS A0:2F behind it; the seed is not the game's
 func _rand() -> int:
 	rand_next = (rand_next * 0x41C64E6D + 0x3039) & 0xFFFFFFFF
 	return (rand_next >> 16) & 0x7FFF

@@ -273,6 +273,24 @@ def names():
     return out
 
 
+def hints():
+    """`{value: [(name, [routines it holds in])]}`.
+
+    An empty routine list means the meaning holds everywhere. A listing uses
+    this to tell a claim from a cross-reference: `0xa` in `collide_at_cell` is
+    GRID_CELL_BYTES, and `addiu $v0, $v0, 0xa` in `player_vertical` is ten.
+    Annotating the second as the first is how a cross-reference turns into a
+    finding nobody made.
+    """
+    out = {}
+    for k, v in table().items():
+        vals = [(m["name"], m.get("routines", [])) for m in v["meanings"]]
+        out[int(k, 0)] = vals
+        if int(k, 0) > 0x7FFF:
+            out[int(k, 0) - 0x10000] = vals
+    return out
+
+
 def report(value, out=sys.stdout):
     x = xref()
     key = hex(value)

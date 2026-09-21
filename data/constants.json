@@ -1,5 +1,5 @@
 {
- "_note": "What each number in the code means, with the evidence and the kind of claim it is -- read off the code, derived from something read, or guessed. A number may have several meanings and they are all listed: 0x320 is the player's collision radius and also the byte stride of a row of the terrain grid. tools/consts.py reads this and cross-references every site in all four executables.",
+ "_note": "What each number in the code means, with the evidence and the kind of claim it is -- read off the code, derived from something read, or guessed. A number may have several meanings and they are all listed: 0x320 is the player's collision radius and also the byte stride of a row of the terrain grid. tools/consts.py reads this and cross-references every site in all four executables. A meaning with a `routines` list holds only inside those routines; elsewhere the number is shown as a cross-reference and not as a claim about that site.",
  "0x800": {
   "value": 2048,
   "meanings": [
@@ -7,7 +7,8 @@
     "name": "CELL",
     "kind": "read",
     "where": "game:0x80033b8c grid_cell_at, and everywhere a world coordinate is formed",
-    "evidence": "World X and Z are 2048 units to the grid cell: actor_stand_at_home forms x = cell_x << 11 + fine x. FORMATS.md, 'World X/Z = 2048 x cell'."
+    "evidence": "World X and Z are 2048 units to the grid cell: actor_stand_at_home forms x = cell_x << 11 + fine x. FORMATS.md, 'World X/Z = 2048 x cell'.",
+    "routines": []
    }
   ]
  },
@@ -18,7 +19,8 @@
     "name": "FIXED_ONE",
     "kind": "read",
     "where": "game:0x800448b8 and every GTE matrix build",
-    "evidence": "The fixed point this game multiplies in: `mult` then `sra` by 12, so 0x1000 is 1.0. An object record is initialised with 0x1000 in its three scale fields (+0x2c, +0x2e, +0x30), and a TMD's scale word is the same."
+    "evidence": "The fixed point this game multiplies in: `mult` then `sra` by 12, so 0x1000 is 1.0. An object record is initialised with 0x1000 in its three scale fields (+0x2c, +0x2e, +0x30), and a TMD's scale word is the same.",
+    "routines": []
    }
   ]
  },
@@ -29,13 +31,26 @@
     "name": "PLAYER_RADIUS",
     "kind": "read",
     "where": "game:0x8002f320 player_move, game:0x8002ed60 player_vertical",
-    "evidence": "The radius literal the player's movement passes to the collision: `li $a3, 0x320` immediately before `jal collide_surface`. FORMATS.md, 'radius 0x320, body height 0x6a4 and collision flags 0x31 are literals in the routine'."
+    "evidence": "The radius literal the player's movement passes to the collision: `li $a3, 0x320` immediately before `jal collide_surface`. FORMATS.md, 'radius 0x320, body height 0x6a4 and collision flags 0x31 are literals in the routine'.",
+    "routines": [
+     "player_move",
+     "player_vertical",
+     "player_horizontal",
+     "player_controller",
+     "place_player_on_terrain"
+    ]
    },
    {
     "name": "GRID_ROW_BYTES",
     "kind": "read",
     "where": "game:0x80033b8c",
-    "evidence": "The same number, unrelated: a terrain cell is at grid + cz*800 + cx*10, so a row of 80 cells of 10 bytes is 800 bytes. Confirmed from the code after first being guessed -- FORMATS.md, 'Two constants confirmed from the code'."
+    "evidence": "The same number, unrelated: a terrain cell is at grid + cz*800 + cx*10, so a row of 80 cells of 10 bytes is 800 bytes. Confirmed from the code after first being guessed -- FORMATS.md, 'Two constants confirmed from the code'.",
+    "routines": [
+     "collide_at_cell",
+     "grid_query_area",
+     "tile_collision",
+     "collide_surface"
+    ]
    }
   ]
  },
@@ -46,7 +61,13 @@
     "name": "GRID_CELL_BYTES",
     "kind": "read",
     "where": "game:0x80033b8c",
-    "evidence": "Ten bytes to a terrain cell, from the same index arithmetic."
+    "evidence": "Ten bytes to a terrain cell, from the same index arithmetic.",
+    "routines": [
+     "collide_at_cell",
+     "grid_query_area",
+     "tile_collision",
+     "collide_surface"
+    ]
    }
   ]
  },
@@ -57,7 +78,12 @@
     "name": "GRID_SIDE",
     "kind": "read",
     "where": "game:0x80033c4c grid_query_area",
-    "evidence": "The grid is 80 by 80 and grid_query_area bounds both axes by it."
+    "evidence": "The grid is 80 by 80 and grid_query_area bounds both axes by it.",
+    "routines": [
+     "collide_at_cell",
+     "grid_query_area",
+     "tile_collision"
+    ]
    }
   ]
  },
@@ -68,7 +94,13 @@
     "name": "PLAYER_HEIGHT",
     "kind": "read",
     "where": "game:0x8002f320 player_move, game:0x8002e3f8 player_horizontal",
-    "evidence": "The body height literal in the player's movement, passed to the collision beside the radius."
+    "evidence": "The body height literal in the player's movement, passed to the collision beside the radius.",
+    "routines": [
+     "player_move",
+     "player_vertical",
+     "player_horizontal",
+     "place_player_on_terrain"
+    ]
    }
   ]
  },
@@ -79,7 +111,12 @@
     "name": "PLAYER_COLLIDE_FLAGS",
     "kind": "read",
     "where": "game:0x8002f320 player_move",
-    "evidence": "The collision flag word the player's movement asks for. Only the sites inside the movement routines are this; 0x31 is also just 49."
+    "evidence": "The collision flag word the player's movement asks for. Only the sites inside the movement routines are this; 0x31 is also just 49.",
+    "routines": [
+     "player_move",
+     "player_vertical",
+     "player_horizontal"
+    ]
    }
   ]
  },
@@ -90,7 +127,8 @@
     "name": "OBJECT_STRIDE",
     "kind": "read",
     "where": "game:0x8004b288 object_motion, game:0x80045c7c find_object",
-    "evidence": "68 bytes to an object record. Every walk of the object table steps by it -- `$s2 += 0x44` -- and find_object forms object_table + a0 * 0x44."
+    "evidence": "68 bytes to an object record. Every walk of the object table steps by it -- `$s2 += 0x44` -- and find_object forms object_table + a0 * 0x44.",
+    "routines": []
    }
   ]
  },
@@ -101,7 +139,8 @@
     "name": "OBJECT_COUNT",
     "kind": "read",
     "where": "game:0x80045cc0 find_object",
-    "evidence": "396 object records, the bound on every index into the table at 0x80191a5c: `slti $v0, $a0, 0x18c`."
+    "evidence": "396 object records, the bound on every index into the table at 0x80191a5c: `slti $v0, $a0, 0x18c`.",
+    "routines": []
    }
   ]
  },
@@ -112,7 +151,8 @@
     "name": "ACTOR_STRIDE",
     "kind": "read",
     "where": "game:0x8004da2c, game:0x8004b624 actor_copy_kind",
-    "evidence": "136 bytes to a creature record in the table at 0x80185da8."
+    "evidence": "136 bytes to a creature record in the table at 0x80185da8.",
+    "routines": []
    }
   ]
  },
@@ -123,7 +163,8 @@
     "name": "ACTOR_COUNT",
     "kind": "read",
     "where": "game:0x80018620 level_load",
-    "evidence": "199 creature slots: the teardown at level load passes over exactly that many entries of the 0x88 table."
+    "evidence": "199 creature slots: the teardown at level load passes over exactly that many entries of the 0x88 table.",
+    "routines": []
    }
   ]
  },
@@ -134,7 +175,10 @@
     "name": "FLAG_MASK",
     "kind": "read",
     "where": "game:0x80061940 flag_gate",
-    "evidence": "flag_gate masks the gate byte with 0x7f, which is why the flag array is 128 long and not 64."
+    "evidence": "flag_gate masks the gate byte with 0x7f, which is why the flag array is 128 long and not 64.",
+    "routines": [
+     "flag_gate"
+    ]
    }
   ]
  },
@@ -145,7 +189,10 @@
     "name": "VSTEP_PLACE",
     "kind": "read",
     "where": "game:0x8002ed60 player_vertical",
-    "evidence": "Inside 0x80 of the surface the player is *placed* on it rather than eased towards it, and 0x80 is also the largest single step towards it. tools/movement.py reproduces 48 of 48 of the game's height stores with it."
+    "evidence": "Inside 0x80 of the surface the player is *placed* on it rather than eased towards it, and 0x80 is also the largest single step towards it. tools/movement.py reproduces 48 of 48 of the game's height stores with it.",
+    "routines": [
+     "player_vertical"
+    ]
    }
   ]
  },
@@ -156,7 +203,10 @@
     "name": "VSTEP_FALL",
     "kind": "read",
     "where": "game:0x8002ed60 player_vertical",
-    "evidence": "A gap wider than 0x400 stops being a step and becomes a fall: below the surface by more than this enters state 0x40, above it enters state 0x20."
+    "evidence": "A gap wider than 0x400 stops being a step and becomes a fall: below the surface by more than this enters state 0x40, above it enters state 0x20.",
+    "routines": [
+     "player_vertical"
+    ]
    }
   ]
  },
@@ -167,7 +217,8 @@
     "name": "OBJECT_OPCODES",
     "kind": "read",
     "where": "game:0x8004709c",
-    "evidence": "236 arms in the object interpreter's switch, stated by the guard `sltiu $v0, $v1, 0xec` on the opcode byte at object-1... the byte at -0x4 of the walking pointer. Read by tools/rdis.py, which resolves the table at 0x8001209c."
+    "evidence": "236 arms in the object interpreter's switch, stated by the guard `sltiu $v0, $v1, 0xec` on the opcode byte at object-1... the byte at -0x4 of the walking pointer. Read by tools/rdis.py, which resolves the table at 0x8001209c.",
+    "routines": []
    }
   ]
  }

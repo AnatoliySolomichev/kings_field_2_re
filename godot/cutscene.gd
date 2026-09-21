@@ -41,6 +41,7 @@ var card_frames := 0
 const CARD_FRAMES := 90
 
 
+# @orig game:0x80060d20  status:partial -- build_str_name is a label inside it
 func _ready() -> void:
 	# The shell's own byte: 0 is NEW, which is what open_main leaves in
 	# overlay_arg2 when the title menu's first entry was chosen. Without a

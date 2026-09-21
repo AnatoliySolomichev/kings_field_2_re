@@ -855,9 +855,36 @@ def render(w, fn, out=sys.stdout, const_names=None, portmap=None):
             refs[a] = (addr, mode, width)
     consts = {}
     for a, val, mn in fn.consts:
-        nm = (const_names or {}).get(val)
-        if nm and abs(val) > 8:
-            consts[a] = nm
+        got = (const_names or {}).get(val)
+        if not got or abs(val) <= 8:
+            continue
+        if isinstance(got, str):                   # a plain {value: name} map
+            consts[a] = got
+            continue
+        here = [nm for nm, where in got if not where or fn.name in where]
+        away = [nm for nm, where in got if where and fn.name not in where]
+        if here:
+            consts[a] = " or ".join(here)
+        elif away:
+            # Not a claim about this site: the number means that somewhere
+            # else, and saying so is the whole use of the cross reference.
+            consts[a] = f"= {' or '.join(away)} elsewhere"
+    # The numbers the compiler took apart. Without these a listing of
+    # `collide_at_cell` shows six shifts and adds and never the word 800.
+    chains = {}
+    try:
+        import consts as _consts
+        for a, kind, k, reg in _consts.chains(w, fn):
+            nm = ""
+            got = (const_names or {}).get(k)
+            if isinstance(got, list):
+                hit = [n for n, where in got if not where or fn.name in where]
+                nm = f"  {' or '.join(hit)}" if hit else ""
+            chains.setdefault(a, []).append(
+                f"{k} {'times' if kind == 'multiplier' else 'into'} "
+                f"${reg}{nm}")
+    except Exception:
+        pass
     size, saved = frame(w, fn)
     line = "; " + "=" * 68
     print(line, file=out)
@@ -906,6 +933,8 @@ def render(w, fn, out=sys.stdout, const_names=None, portmap=None):
                   file=out)
         i = w.insns[a]
         c = comment(w, fn, i, refs, consts, None)
+        if a in chains:
+            c = (c + "  " if c else "; ") + ", ".join(chains[a])
         txt = i.fmt(sym)
         print(f"  {a:#010x}  {txt:<38s}{c}".rstrip(), file=out)
         prev = a
@@ -967,7 +996,8 @@ def tree(w, root, depth=3, out=sys.stdout, _seen=None, _pre=""):
               if w.insns[a].kind == "call" and bios_at(w.exe, a)]
     names = []
     for t in kids:
-        names.append((syms.label_in(w.nick, t), t))
+        names.append((w.funcs[t].name if t in w.funcs
+                      else syms.label_in(w.nick, t), t))
     for b in seen_b:
         names.append((f"<{b[2]}>", None))
     if fn.indirect:
@@ -981,6 +1011,51 @@ def tree(w, root, depth=3, out=sys.stdout, _seen=None, _pre=""):
         if t is not None and not again:
             _seen.add(t)
             tree(w, t, depth - 1, out, _seen, _pre + ("    " if last else "|   "))
+
+
+def graph(w, out_dir=None):
+    """The call graph, in the two forms that get used.
+
+    A `.dot` for graphviz, and a plain tree from the entry point for reading.
+    The tree is the one that answers "what happens before what", which is the
+    question a static listing cannot: the shell before the logo, the logo
+    before the menu, the menu before the game.
+    """
+    d = out_dir or os.path.join(OUT)
+    os.makedirs(d, exist_ok=True)
+    dot = os.path.join(d, f"{w.nick}.dot")
+    with open(dot, "w") as fh:
+        print(f'digraph {w.nick} {{', file=fh)
+        print('  node [shape=box, fontname="monospace", fontsize=9];', file=fh)
+        for f, fn in sorted(w.funcs.items()):
+            shape = "doubleoctagon" if f == w.exe.entry else "box"
+            style = ',style=filled,fillcolor="#e8e8e8"' if not fn.named else ""
+            print(f'  "{f:#010x}" [label="{fn.name}\n{len(fn.body)}",'
+                  f'shape={shape}{style}];', file=fh)
+        seen = set()
+        for f, fn in sorted(w.funcs.items()):
+            for _a, t, _g in fn.calls:
+                if t in w.funcs and (f, t) not in seen:
+                    seen.add((f, t))
+                    print(f'  "{f:#010x}" -> "{t:#010x}";', file=fh)
+            for _a, t in fn.tail:
+                if t in w.funcs and (f, t, "tail") not in seen:
+                    seen.add((f, t, "tail"))
+                    print(f'  "{f:#010x}" -> "{t:#010x}" [style=dashed];',
+                          file=fh)
+        print("}", file=fh)
+    txt = os.path.join(d, f"{w.nick}.tree.txt")
+    with open(txt, "w") as fh:
+        print(f"{w.nick}: the call tree from {w.exe.entry:#010x}", file=fh)
+        print(w.funcs[w.exe.entry].name, file=fh)
+        tree(w, w.exe.entry, 12, fh)
+        print(file=fh)
+        print("Routines no call in this executable reaches -- a pointer table, "
+              "a level overlay or an interrupt gets to them:", file=fh)
+        for f, fn in sorted(w.funcs.items()):
+            if not fn.callers and f != w.exe.entry:
+                print(f"  {f:#010x}  {len(fn.body):5d}  {fn.name}", file=fh)
+    return dot, txt
 
 
 def save(nick, seeds=()):
@@ -1021,7 +1096,7 @@ if __name__ == "__main__":
     cn, pm = None, None
     try:
         import consts as _c
-        cn = _c.names()
+        cn = _c.hints()
     except Exception:
         pass
     try:
@@ -1035,6 +1110,11 @@ if __name__ == "__main__":
         print(f"{nick}: {len(w.funcs)} routines, {len(w.labels)} labels inside "
               f"them, {len(w.insns)} of {w.exe.size // 4} words reached")
         print(f"wrote {os.path.relpath(path, ROOT)}")
+    elif "--graph" in flags:
+        w = build(nick)
+        dot, txt = graph(w)
+        print(f"wrote {os.path.relpath(dot, ROOT)} and "
+              f"{os.path.relpath(txt, ROOT)}")
     elif "--listing" in flags:
         w = build(nick)
         d, n = listings(w, cn, pm)

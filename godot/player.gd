@@ -177,6 +177,7 @@ func _unhandled_input(e: InputEvent) -> void:
 				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
+# @orig game:0x80030fcc player_controller  status:partial -- the pad once a frame and the edge detection; the rest of the routine is not here
 func _process(dt: float) -> void:
 	# player_controller reads the pad once a frame and keeps this frame's word
 	# and last frame's. Here that happens once a *rendered* frame rather than
@@ -212,6 +213,7 @@ func _process(dt: float) -> void:
 # sign. The forward ramp decays by max/8 (sra 3 at 0x8002fad4) and the strafe by
 # max/4 (sra 2 at 0x8002fc38) -- two different rates, and a replay caught each of
 # them before either was read.
+# @orig game:0x8002f9bc player_walk  status:verified -- tools/replay.py: 6186 of 6682 ground frames, and all 496 that differ are the wall slide
 func _ramp(speed: int, pos: bool, neg: bool, cap: int, decay := 3) -> int:
 	if pos:
 		return mini(speed + (cap >> 2), cap)
@@ -225,6 +227,7 @@ func _ramp(speed: int, pos: bool, neg: bool, cap: int, decay := 3) -> int:
 	return 0
 
 
+# @orig game:0x8002e3f8 player_horizontal  status:partial -- the step; the slide along a refused wall is missing
 func _tick(dir: Vector3) -> void:
 	var cap := SPEED_MAX_RUN if Input.is_key_pressed(KEY_SHIFT) else SPEED_MAX
 	# 0x8002f9bc reads the forward slot at 0x80081868 and the back one at
@@ -261,6 +264,7 @@ func _tick(dir: Vector3) -> void:
 # 0x8002f298, the tail of player_vertical: the phase walks forward by the
 # magnitude of the step and the lift is three quarters of |sin| shifted down by
 # five, so it peaks at 96 units and never goes negative. Grounded only.
+# @orig game:0x8002f298 player_bob  status:transcribed -- a label inside player_vertical, not a routine of its own
 func _bob(mag: int) -> void:
 	if vstate != 0:
 		bob = 0
@@ -278,6 +282,7 @@ func _bob(mag: int) -> void:
 # player_vertical (0x8002ed60). The horizontal is the caller's; this is the
 # height, and the state machine that owns it. Every branch here was matched
 # against the instruction the game actually took -- see tools/movement.py bp15.
+# @orig game:0x8002ed60 player_vertical  status:verified -- 48 of 48 of the game's own height stores, tools/movement.py bp15
 func _move(dx: int, dz: int) -> void:
 	gx += dx
 	gz += dz
