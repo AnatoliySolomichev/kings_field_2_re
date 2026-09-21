@@ -246,6 +246,35 @@ def ramp(face, tx, tz, a3, t6, op):
     return op0 - (q // op5 + 1) * op4 if span else None
 
 
+def notch(face, tx, tz, a3, op):
+    """Handler 0x25: a wall whose footprint is an L rather than a rectangle.
+
+    207 uses on all 28 levels, and this routine ignored it entirely until the
+    switch table was read -- which is a good candidate for "some low walls can
+    be walked through". The dispatch indexes at `opcode - 0x10`, so the arm is
+    the one at `0x80032d3c`.
+
+    In the face's own frame -- `u` along it, `v` across, the same rotation the
+    other lateral handlers use -- the region is
+
+        u >= op0 - a3   and   v <= op3 + a3   and
+        not (u > op1 + a3 and v < op2 - a3)
+
+    so it is a quadrant with a bite taken out of the far corner. The first two
+    bounds are the outer edges and the third is the notch, and the code says it
+    in exactly that shape: a pair of tests that only reject together
+    (`0x80032da0` and `0x80032db8`) and then two that reject on their own.
+    """
+    u = (tx if face == 0 else 0x800 - tz if face == 1 else
+         0x800 - tx if face == 2 else tz)
+    v = (tz if face == 0 else tx if face == 1 else
+         0x800 - tz if face == 2 else 0x800 - tx)
+    op0, op1, op2, op3 = (s16(op[0]), s16(op[1]), s16(op[2]), s16(op[3]))
+    if op1 + a3 < u and v < op2 - a3:
+        return False
+    return not (u < op0 - a3 or op3 + a3 < v)
+
+
 def layer_of(c, ymid):
     """Which of a cell's two layers a query at `ymid` belongs to (`0x800324f0`).
 
@@ -268,8 +297,20 @@ FAR = 100000               # what the routine seeds the nearest surface with,
                            # 100000 rather than as a stale value
 
 
+# The three extra surfaces, at the addresses the routine leaves them at.
+# Opcodes 0x17, 0x18 and 0x19 write one each, and nothing else in the game
+# writes them. `sync_player_pos` (0x80028d54) is the only reader: each frame it
+# takes `surface + 0x640` less the player's eye -- Y plus the bob plus the
+# landing crouch -- into 0x801b2638, 0x801b263c and 0x801b2640, and when the
+# eye has gone past one it calls 0x80030a6c, which puts the player into state
+# 0x11 and plays sound 0x6e. So these are planes that do something to you when
+# you are under them, which is why no recording in this repository has ever hit
+# one: nobody drowned while a breakpoint was armed.
+SURFACES = {0x17: 0x801E6484, 0x18: 0x801E647C, 0x19: 0x801E6480}
+
+
 def collide(lvl, x, y, z, radius, base=None, cx=None, cz=None, arg5=None,
-            layer=5, nearest=False):
+            layer=5, nearest=False, extra=None):
     """The mask tile_collision would return for this position in this cell.
 
     With `nearest`, returns `(mask, cur)` instead: `cur` is the nearest surface
@@ -294,9 +335,13 @@ def collide(lvl, x, y, z, radius, base=None, cx=None, cz=None, arg5=None,
     t6 = 0x800 - a3
     tx, tz = x & 0x7FF, z & 0x7FF
     s3 = y - (HOFF if arg5 is None else (arg5 & 0x0FFFFFFF))
+    # The top nibble of arg5 is a flag field, split off at 0x800326b0 and used
+    # by exactly one handler, 0x18. The rest of the routine never looks at it.
+    flags = 0 if arg5 is None else (arg5 & 0xF0000000)
     cur, mask = FAR, 0
+    floor_locked = False              # [sp+0x10], which 0x18 sets and 0x10 obeys
     for op, args in ins:
-        if op == 0x10 and args:
+        if op == 0x10 and args and not floor_locked:
             h = s16(args[0]) + base
             cur = min(cur, h)
             if cur < y:
@@ -334,6 +379,30 @@ def collide(lvl, x, y, z, radius, base=None, cx=None, cz=None, arg5=None,
             if not slab((s16(args[4]) + rot) & 3, tx, tz, a3, args):
                 continue
             lo, hi = s16(args[2]) + base, s16(args[3]) + base
+            if s3 < lo and hi < cur:
+                cur = hi
+                if y > hi:
+                    mask |= WALL_BIT
+        elif op in SURFACES and args:
+            h = s16(args[0]) + base
+            if extra is not None:
+                extra[SURFACES[op]] = h
+            if op != 0x18:
+                continue
+            if flags & 0x80000000:                 # 0x80033a30, `bgez $fp`
+                cur = h                            # set, not reduced
+                if h < y:
+                    mask |= FLOOR_BIT
+                    floor_locked = True
+            if flags & 0x40000000:                 # 0x80033a5c
+                if extra is not None:
+                    extra[0x801E6478] = h
+                if not (h < s3):
+                    mask |= CEIL_BIT
+        elif op == 0x25 and len(args) >= 7:
+            if not notch((s16(args[6]) + rot) & 3, tx, tz, a3, args):
+                continue
+            lo, hi = s16(args[4]) + base, s16(args[5]) + base
             if s3 < lo and hi < cur:
                 cur = hi
                 if y > hi:
@@ -406,7 +475,12 @@ def walls(lv, lvl=None):
     """Every wall plane on a level, as (cx, cz, face, offset, low, high).
 
     `0x24` is included at its near bound: it is a slab from `op0` to `op1` and
-    the near face is what a plan view wants.
+    the near face is what a plan view wants. `0x25` is included at `op0` for
+    the same reason -- its footprint is an L and `op0` is the outer edge, the
+    one a plan view draws.
+
+    This walks the **upper** layer only (`c[8]`, `c[6]`, `c[7]`), which is what
+    it has always done; a shape in the lower layer contributes nothing here.
     """
     lvl = lvl or Level(lv)
     for cz in range(W):
@@ -422,6 +496,9 @@ def walls(lv, lvl=None):
                 elif op == 0x24 and len(args) >= 5:
                     yield (cx, cz, (s16(args[4]) + rot) & 3, s16(args[0]),
                            s16(args[2]) + base, s16(args[3]) + base)
+                elif op == 0x25 and len(args) >= 7:
+                    yield (cx, cz, (s16(args[6]) + rot) & 3, s16(args[0]),
+                           s16(args[4]) + base, s16(args[5]) + base)
 
 
 if __name__ == "__main__":

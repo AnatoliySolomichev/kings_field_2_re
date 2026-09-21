@@ -231,6 +231,90 @@ ceiling. Not inferred from how the maps look — transcribed from the handlers a
 then checked against the game's own answers: of the 4264 logged calls carrying
 the fifth argument, `tools/collision.py` reproduces the mask on **all of them**.
 
+**The whole table, read off the switch rather than off what the logs happened
+to contain.** `tile_collision` dispatches at `0x800327e8` through
+`tile_op_table` at `0x80011b0c`, indexed at **`opcode - 0x10`** and guarded by
+`sltiu $v0, $v1, 0x31` — so the table covers opcodes `0x10` to `0x40`, and
+anything outside that range falls straight through. Of the 49 arms, 31 point at
+the shared do-nothing tail; the other 18 are:
+
+| op | arm | what it is |
+| --- | --- | --- |
+| `0x10` | `0x800327f0` | floor |
+| `0x11` | `0x80032840` | ceiling |
+| `0x17` | `0x80033aa8` | publishes a surface into `0x801e6484` |
+| `0x18` | `0x80033a10` | publishes a surface into `0x801e647c`, and takes part in the mask |
+| `0x19` | `0x80033a80` | publishes a surface into `0x801e6480` |
+| `0x20` `0x21` `0x22` | `0x800328c0` `0x800329b8` `0x80032a90` | walls: one plane, either, both |
+| `0x23` | `0x80032b90` | diagonal wall |
+| `0x24` | `0x80032c3c` | slab |
+| `0x25` | `0x80032d3c` | **a wall with an L-shaped footprint** |
+| `0x30` | `0x80032f78` | ramp |
+| `0x31` | `0x800338c4` | runs only when the mask already has bit 0 — not transcribed |
+| `0x32` | `0x80033460` | diagonal ramp |
+| `0x33` `0x34` | `0x800331b0` `0x80033308` | corners, inner and outer |
+| `0x35` | `0x80033604` | not transcribed |
+| `0x40` | `0x800339a8` | switches to the cell's other layer and **restarts the shape** |
+
+Counted across every shape program in the game, the opcodes in use are exactly
+these eighteen minus `0x40`: `0x10` 1866, `0x11` 1325, `0x17` 13, `0x18` 42,
+`0x19` 143, `0x20` 2127, `0x21` 89, `0x22` 419, `0x23` 83, `0x24` 88,
+**`0x25` 207 on all 28 levels**, `0x30` 616, `0x31` 11, `0x32` 34, `0x33` 39,
+`0x34` 26, `0x35` 4. So **no shape in the game uses an opcode with no handler** —
+the 31 empty arms are unused values, not a gap.
+
+### The L-shaped wall, which was the hole
+
+`0x25` is the one that mattered. 207 uses across every level and
+`tools/collision.py` ignored it entirely, which is a good candidate for "some
+low walls can be walked through". In the face's own frame — `u` along it, `v`
+across, the same rotation the other lateral handlers use — the region is
+
+```
+u >= op0 - a3   and   v <= op3 + a3   and   not (u > op1 + a3 and v < op2 - a3)
+```
+
+a quadrant with a bite out of its far corner, and the code says it in exactly
+that shape: a pair of tests that reject only together (`0x80032da0`,
+`0x80032db8`) and then two that reject on their own. The height span is `op4`
+and `op5` and it joins the same shared tail every other wall uses, the one
+`tile_block` labels at `0x80032e14`.
+
+Transcribed into `tools/collision.py` and `godot/collision.gd`: level 0 goes
+from **1304 wall planes to 1345** — the 41 the queue had counted — and of 775
+probe points inside the 31 cells whose shapes use it, **622 change their mask**.
+`tools/collision.py` still reproduces 8075 of 8078 logged calls, unchanged,
+because no logged call ever stood in one of those cells.
+
+### Three planes that are not walls at all
+
+`0x17`, `0x18` and `0x19` each write one height into its own slot —
+`0x801e6484`, `0x801e647c`, `0x801e6480` — and nothing else in `GAME.EXE`
+writes those. The only reader is **`sync_player_pos` (`0x80028d54`)**, which
+every frame takes `surface + 0x640` less the player's eye (Y plus the bob at
+`0x801b2650` plus the landing crouch at `0x801b2654`) into `0x801b2638`,
+`0x801b263c` and `0x801b2640`, and when the eye has gone past one it calls
+`0x80030a6c` — which sets `player_state` to `0x11` and plays sound `0x6e`.
+
+So these are planes that do something to you when you are under them, and that
+is why no recording in this repository has ever hit one: nobody drowned while a
+breakpoint was armed.
+
+`0x18` also takes part in the mask, and it is the only handler in the routine
+that reads the **top nibble of the fifth argument**. `0x800326b0` splits `arg5`
+into `arg5 & 0xf0000000` (kept in `$fp`) and `arg5 & 0x0fffffff` (the body
+height everything else uses). With bit 31 set, `0x18` *sets* the nearest
+surface rather than reducing it, and locks `0x10` out for the rest of the shape
+(`[sp+0x10]`, which `0x10` tests at `0x800327f4`). With bit 30 set it can raise
+the ceiling bit instead. Nothing else in the routine looks at those bits.
+
+### `0x40` restarts the shape on the other layer
+
+`0x800339a8` toggles `0x801e646e` between 0 and 5, re-reads the cell at the new
+offset, sets the base from that layer's `+1`, and jumps back to the top of the
+instruction loop — once only, guarded by `[sp+0x18]`. It is how a shape could
+say "and now the other layer too". **No shape in the game uses it.**
+
 **But this is collision, not rendering, and the distinction is total.** The
 working copy of the shapes at `0x801e4464` has exactly three references in
 `GAME.EXE` — the routine that copies it in, and the two inside

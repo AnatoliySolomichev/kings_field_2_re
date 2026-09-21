@@ -134,10 +134,24 @@ transcribed** (the horizontal step is 201 units a frame at speed and ramps up
 from a standstill), and **the frame rate is unknown** — a watchpoint log carries
 no clock, so the port's 15 Hz is a guess. A timestamped recording settles it.
 
-**2. The three collision opcodes never seen in a log:** `0x25` (41 cells on
-level 0), `0x18`, `0x31`. They are silently ignored, which is why some low walls
-can be walked through. *Done when:* `tools/collision.py` still reproduces every
-logged call and a walk over cells using them is logged and reproduced too.
+**2. The collision opcodes never seen in a log — read, and two of the six are
+in.** The switch at `0x800327e8` indexes `tile_op_table` at `opcode - 0x10`, so
+the whole dispatch is readable without a log: 18 handlers, 31 empty arms, and
+**no shape in the game uses an opcode without a handler**.
+
+`0x25` is transcribed and in both copies: an L-shaped wall footprint, 207 uses
+on all 28 levels, and level 0 goes from 1304 wall planes to 1345 — the 41 the
+old note counted. 622 of 775 probe points inside its 31 cells change their mask.
+`0x17`, `0x18` and `0x19` are in too: they are not walls but **planes that
+throw the player into state `0x11` when the eye goes under them**, which is why
+no recording ever hit one.
+
+`tools/collision.py` still reproduces 8075 of 8078 logged calls, unchanged.
+
+*What is left:* `0x31` (11 uses) and `0x35` (4 uses) are located but not
+transcribed, and none of the six has been seen in a log yet — **that still
+wants a person walking over one of those cells with `emu/bp13.lua` armed.**
+`python3 tools/collision.py walls 0` lists where they are.
 
 **3. Object scale — answered, in the negative, and it opened something better.**
 The triple at `+0x2c` is not a size. `object_set_present` (`0x80044b40`) writes

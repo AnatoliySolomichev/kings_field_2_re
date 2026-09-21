@@ -670,7 +670,7 @@
  "0x80011b0c": {
   "name": "tile_op_table",
   "kind": "data",
-  "evidence": "49 handlers for the tile-shape bytecode, indexed by opcode - 0x10"
+  "evidence": "49 arms for tile_collision's switch at 0x800327e8, indexed at opcode - 0x10 and guarded by `sltiu $v0, $v1, 0x31`, so it covers opcodes 0x10..0x40. 31 arms are the shared do-nothing tail; the other 18 are the real handlers. Resolved by tools/rdis.py"
  },
  "0x801aeb8c": {
   "name": "tile_rotations",
@@ -935,7 +935,7 @@
  "0x801b2640": {
   "name": "camera_height",
   "kind": "data",
-  "evidence": "formed in sync_player_pos at 0x80028e24 as (player Y + 0x640) less the bob and the landing crouch at 0x801b2654"
+  "evidence": "formed in sync_player_pos at 0x80028e24 as (player Y + 0x640) less the bob and the landing crouch at 0x801b2654. It is the third of the same triple: surface_plane_17 + 0x640 less the eye, and at or below zero sync_player_pos calls player_throw -- so the name is about where it is used, not about what it measures"
  },
  "_note_mo_wrapper": {
   "name": "MO.T entry wrapper",
@@ -1406,5 +1406,40 @@
   "name": "turn_slow_timer",
   "kind": "data",
   "evidence": "a half that player_controller counts down at 0x8003125c, halving player_turn_max each frame while it is non-zero (0x80031254); it also drives a separate ramp on 0x801b24f6 that is bounded at -0xce4"
+ },
+ "0x801e647c": {
+  "name": "surface_plane_18",
+  "kind": "data",
+  "evidence": "written only by collision opcode 0x18 (0x80033a2c) and seeded to 100000 at tile_collision's entry; read only by sync_player_pos, which compares surface + 0x640 with the player's eye and calls 0x80030a6c when the eye is past it"
+ },
+ "0x801e6480": {
+  "name": "surface_plane_19",
+  "kind": "data",
+  "evidence": "the same, written by collision opcode 0x19 (0x80033a9c)"
+ },
+ "0x801e6484": {
+  "name": "surface_plane_17",
+  "kind": "data",
+  "evidence": "the same, written by collision opcode 0x17 (0x80033ac4)"
+ },
+ "0x801e646e": {
+  "name": "collision_layer_offset",
+  "kind": "data",
+  "evidence": "0 or 5, the offset into the cell's ten bytes that tile_collision is reading. Collision opcode 0x40 (0x800339a8) toggles it and restarts the shape on the other layer; no shape in the game uses it"
+ },
+ "0x80030a6c": {
+  "name": "player_throw",
+  "kind": "code",
+  "evidence": "sets player_state to 0x11, plays sound 0x6e through 0x8001576c(6, 0x6e) and, given a pointer, copies six bytes into player_velocity. sync_player_pos calls it when the eye goes under one of the three surface planes; player_vertical_pre and player_move also call it"
+ },
+ "0x801b2638": {
+  "name": "depth_under_plane_18",
+  "kind": "data",
+  "evidence": "sync_player_pos: surface_plane_18 + 0x640 less the eye. Below -1000 it calls player_throw"
+ },
+ "0x801b263c": {
+  "name": "depth_under_plane_19",
+  "kind": "data",
+  "evidence": "sync_player_pos: surface_plane_19 + 0x640 less the eye. At or below zero it calls player_throw"
  }
 }

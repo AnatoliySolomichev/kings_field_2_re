@@ -241,6 +241,12 @@ func _layer(i: int, ymid: int) -> int:
 # disagree: 0x80033d38 halves the body height, 0x80033b44 passes a flat y-0x500.
 # `surface()` below is the second one, which is what the walking code asks.
 # @orig game:0x8003260c tile_collision  status:verified -- every logged call reproduced, tools/collision.py
+# What opcodes 0x17, 0x18 and 0x19 left behind on the last query, by opcode.
+# The game keeps them at 0x801e6484, 0x801e647c and 0x801e6480 and nothing but
+# sync_player_pos reads them.
+var surfaces := {}
+
+
 func query(x: int, y: int, z: int, ymid := 0x7FFFFFFF) -> Dictionary:
 	if ymid == 0x7FFFFFFF:
 		ymid = y - (body >> 1)
@@ -264,6 +270,7 @@ func query(x: int, y: int, z: int, ymid := 0x7FFFFFFF) -> Dictionary:
 	var s3 := y - body
 	var cur := NO_SURFACE
 	var mask := 0
+	surfaces.clear()
 
 	for ins in sh["ins"]:
 		var op := int(ins[0])
@@ -316,6 +323,24 @@ func query(x: int, y: int, z: int, ymid := 0x7FFFFFFF) -> Dictionary:
 					cur = hi2
 					if y > hi2:
 						mask |= WALL_BIT
+		elif op == 0x25 and a.size() >= 7:
+			# A wall whose footprint is an L, not a rectangle: 207 uses across
+			# the 28 levels and nothing here handled it until the switch table
+			# at 0x80011b0c was read. tools/collision.py has the derivation.
+			if _notch((int(a[6]) + rot) & 3, tx, tz, a3, a):
+				var lo4 := int(a[4]) + base
+				var hi4 := int(a[5]) + base
+				if s3 < lo4 and hi4 < cur:
+					cur = hi4
+					if y > hi4:
+						mask |= WALL_BIT
+		elif (op == 0x17 or op == 0x18 or op == 0x19) and a.size() >= 1:
+			# The three planes that do something to you when you are under
+			# them. The game publishes each into its own slot and compares it
+			# with the eye in sync_player_pos (0x80028d54); 0x18 also takes
+			# part in the mask, but only when the caller sets the top bits of
+			# its fifth argument, which nothing in this port does yet.
+			surfaces[op] = int(a[0]) + base
 		elif (op == 0x20 or op == 0x21 or op == 0x22) and a.size() >= 4:
 			var f := (int(a[3]) + rot) & 3
 			var op0 := int(a[0])
@@ -334,6 +359,25 @@ func query(x: int, y: int, z: int, ymid := 0x7FFFFFFF) -> Dictionary:
 	out["mask"] = mask
 	out["floor"] = cur
 	return out
+
+
+# Handler 0x25, transcribed from 0x80032d3c. In the face's own frame -- `u`
+# along it and `v` across, the same rotation the other lateral handlers use --
+# the region is a quadrant with a bite out of its far corner:
+#
+#     u >= op0 - a3  and  v <= op3 + a3  and  not (u > op1 + a3 and v < op2 - a3)
+#
+# The code says it in exactly that shape: a pair of tests that only reject
+# together, then two that reject on their own.
+# @orig game:0x80032d3c  status:transcribed -- a label inside tile_collision, opcode 0x25
+func _notch(f: int, tx: int, tz: int, a3: int, a: Array) -> bool:
+	var u := tx if f == 0 else (CELL - tz if f == 1 else
+		(CELL - tx if f == 2 else tz))
+	var v := tz if f == 0 else (tx if f == 1 else
+		(CELL - tz if f == 2 else CELL - tx))
+	if int(a[1]) + a3 < u and v < int(a[2]) - a3:
+		return false
+	return not (u < int(a[0]) - a3 or int(a[3]) + a3 < v)
 
 
 func blocked(x: int, y: int, z: int) -> bool:
