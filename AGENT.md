@@ -20,6 +20,16 @@ tables. Every tool takes the executable by nickname — `boot`, `open`, `game`,
 re-deriving a fact that was already written down, and twice a tool's own
 docstring turned out to be more current than the backlog entry describing it.
 
+Four tools do most of the reading now, and reaching for them first saves the
+afternoon: **`tools/rdis.py`** walks an executable from its entry point and
+prints any routine annotated — names, resolved addresses, switch arms, what
+each call is given, and where the port's copy lives; **`tools/consts.py`** says
+what a number means and every other place it is used, including the ones the
+compiler built out of shifts and adds; **`tools/portmap.py`** says what is
+ported and what to do next; and `out/rdis/game.json` is all of it as data, which
+is how the last three findings here were made — by querying it rather than by
+reading listings.
+
 ---
 
 ## The method that got this far
@@ -129,11 +139,21 @@ level 0), `0x18`, `0x31`. They are silently ignored, which is why some low walls
 can be walked through. *Done when:* `tools/collision.py` still reproduces every
 logged call and a walk over cells using them is logged and reproduced too.
 
-**3. Object scale.** Placed objects come out about half the size they should be
-— a door is 900 units tall where a cell is 2048 and a wall 2560. The models
-carry `scale = 0`, and `load_object_placement` writes `0x1000` into the live
-record, so the factor is neither of those. Find where it is applied. *Done
-when:* the factor is read off the code, not fitted to look right.
+**3. Object scale — answered, in the negative, and it opened something better.**
+The triple at `+0x2c` is not a size. `object_set_present` (`0x80044b40`) writes
+`0x1000` into all three when an object is present and `0` when it is not, so it
+is a **visible / not visible switch**, and it reaches the renderer through
+`ScaleMatrix` (`0x80074910`), which by `0x1000` applies exactly nothing. The 59
+objects on level 0 at `x0.00` are switched off, not tiny.
+
+So the half-size objects are **not a factor the game applies at draw time**: the
+position at `+0x14..+0x1c` goes in unhalved and nothing else scales. What is
+left to check is the model's own units and the port's placement.
+
+The same routine turned out to be the object collision nobody had found: an
+object present writes `0xfc` into its terrain grid cell and going away writes
+back the byte at **+23 of the disc placement record**. A door *is* a wall while
+it is shut. FORMATS.md, "The scale triple is a switch".
 
 **4. The 53 objects with no model**, `MO.T` type 287 among them (28 instances on
 level 0). `tools/tmd.py` cannot find a TMD in those entries; their wrapper

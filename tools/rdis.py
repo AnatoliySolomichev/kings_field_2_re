@@ -339,6 +339,26 @@ class Walk:
 
     # --- what is inside one function ------------------------------------
 
+    def _dedupe(self, fn):
+        """One entry per site. The dataflow visits a block up to six times, so
+        without this every reference and every constant appears that often --
+        harmless in a listing, noise in the database and in any count taken
+        off it."""
+        seen = set()
+        refs = []
+        for r in fn.refs:
+            if r[:3] not in seen:
+                seen.add(r[:3])
+                refs.append(r)
+        fn.refs = refs
+        seen = set()
+        cs = []
+        for c in fn.consts:
+            if c not in seen:
+                seen.add(c)
+                cs.append(c)
+        fn.consts = cs
+
     def _analyse(self, fn):
         """Basic blocks, then constants over them, then everything annotated."""
         e = self.exe
@@ -383,6 +403,7 @@ class Walk:
         fn.refs, fn.consts, fn.tables = [], [], []
         fn.argsat = {}
         work = [fn.addr]
+        self._pending_dedupe = fn
         seen_count = {}
         while work:
             b = work.pop()
@@ -399,6 +420,7 @@ class Walk:
                 if merged != old:
                     state[s] = merged
                     work.append(s)
+        self._dedupe(fn)
 
     def _run_block(self, fn, b, regs):
         """Interpret one block for its constants; returns its successors."""

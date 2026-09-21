@@ -137,7 +137,7 @@ The radius literal the player's movement passes to the collision: `li $a3, 0x320
 The same number, unrelated: a terrain cell is at grid + cz*800 + cx*10, so a row of 80 cells of 10 bytes is 800 bytes. Confirmed from the code after first being guessed -- FORMATS.md, 'Two constants confirmed from the code'.
 
 49 sites: 33 loaded, 14 multiplier, 1 argument, 1 bound.
-In `game:use_item`, `game:player_vertical`, `game:sub_80047010`, `game:sub_800568bc`, `game:player_move`, `game:player_controller`, `game:place_player_on_terrain`, `game:player_horizontal`, `game:sub_800445b8`, `game:sub_80044b40`, `game:load_object_placement`, `game:sub_8004f414` and 13 more.
+In `game:use_item`, `game:player_vertical`, `game:sub_80047010`, `game:sub_800568bc`, `game:player_move`, `game:player_controller`, `game:place_player_on_terrain`, `game:player_horizontal`, `game:sub_800445b8`, `game:object_set_present`, `game:load_object_placement`, `game:sub_8004f414` and 13 more.
 
 `python3 tools/consts.py 0x320` for every site.
 
@@ -167,7 +167,7 @@ In `game:use_item`, `game:player_horizontal`, `game:player_vertical`, `game:sub_
 World X and Z are 2048 units to the grid cell: actor_stand_at_home forms x = cell_x << 11 + fine x. FORMATS.md, 'World X/Z = 2048 x cell'.
 
 219 sites: 95 divisor, 35 multiplier, 29 loaded, 25 bound, 24 mask, 10 argument, 1 compared with.
-In `game:sub_80047010`, `game:actor_tick`, `game:sub_800568bc`, `game:sub_80053c84`, `game:render_walk`, `game:load_object_placement`, `game:sub_8001aa84`, `game:grid_query_area`, `game:draw_cell_walk`, `game:sub_8003e34c`, `game:sub_800422b8`, `game:sub_80044b40` and 69 more.
+In `game:sub_80047010`, `game:actor_tick`, `game:sub_800568bc`, `game:sub_80053c84`, `game:render_walk`, `game:load_object_placement`, `game:sub_8001aa84`, `game:grid_query_area`, `game:draw_cell_walk`, `game:draw_model_plain`, `game:sub_800422b8`, `game:object_set_present` and 69 more.
 
 `python3 tools/consts.py 0x800` for every site.
 
@@ -177,7 +177,7 @@ In `game:sub_80047010`, `game:actor_tick`, `game:sub_800568bc`, `game:sub_80053c
 The fixed point this game multiplies in: `mult` then `sra` by 12, so 0x1000 is 1.0. An object record is initialised with 0x1000 in its three scale fields (+0x2c, +0x2e, +0x30), and a TMD's scale word is the same.
 
 365 sites: 129 loaded, 124 divisor, 39 argument, 29 mask, 23 bound, 18 multiplier, 3 compared with.
-In `game:sub_80053c84`, `game:player_horizontal`, `game:sub_800568bc`, `game:sub_80047010`, `game:sub_80076168`, `game:actor_tick`, `game:player_controller`, `game:sub_80074910`, `game:apply_control_scheme`, `game:sub_80034bf4`, `game:sub_8003d8ec`, `game:sub_8003da10` and 106 more.
+In `game:sub_80053c84`, `game:player_horizontal`, `game:sub_800568bc`, `game:sub_80047010`, `game:sub_80076168`, `game:actor_tick`, `game:player_controller`, `game:ScaleMatrix`, `game:apply_control_scheme`, `game:sub_80034bf4`, `game:sub_8003d8ec`, `game:sub_8003da10` and 106 more.
 
 `python3 tools/consts.py 0x1000` for every site.
 
