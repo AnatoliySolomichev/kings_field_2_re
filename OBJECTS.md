@@ -233,7 +233,7 @@ the same boundary `model_of_type` changes its mind at.
   0x8004a868  opcode 0xe1   -- 50 objects in the game
       107 instructions in 21 blocks
       calls player_in_rect, sub_800463bc
-      writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
+      writes current_object, points at object_type_table, writes current_object_type, points at object_op_table, reads level_hooks
 
   0x8004a954  opcode 0xe3   -- 63 objects in the game
       69 instructions in 8 blocks

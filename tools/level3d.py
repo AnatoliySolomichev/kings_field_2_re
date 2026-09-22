@@ -1000,7 +1000,7 @@ def project(lv, out="out/godot", start=(57, 4)):
     for name in ("player.gd", "collision.gd", "selftest.gd", "ghost.gd",
                  "labels.gd", "pad.gd", "boot.gd", "opening.gd",
                  "cutscene.gd", "actors.gd", "levelup.gd",
-                 "game.gd", "objects.gd", "escript.gd"):
+                 "game.gd", "objects.gd", "escript.gd", "items.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening
