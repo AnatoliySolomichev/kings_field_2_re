@@ -130,6 +130,38 @@ def profile(w, fn, blocks):
     return calls, glob, consts
 
 
+def export(out_dir, path=SNAP):
+    """The class of every type on level 0, where the port can read it.
+
+    **Borrowed, not understood.** `object_type_table` is not a straight copy of
+    anything on the disc: of the 819 non-zero rows in a level-0 snapshot only
+    32 appear verbatim in `FDAT.T` entry 1, at offset 9004, and the rows for
+    the low type ids read as item stats -- a weight and a value -- so the table
+    is built at load time out of at least two sources and the rest is not
+    found. Until it is, the port takes the class bytes out of a snapshot, the
+    same arrangement `tools/level3d.py` already has for the object scales and
+    the object textures, and says so here rather than in a comment nobody
+    reads.
+    """
+    if not os.path.exists(path):
+        return None
+    ram = open(path, "rb").read()
+    base = TYPE_TABLE - 0x80000000
+    rows = {}
+    for t in range(0x400):
+        row = ram[base + TYPE_ROW * t: base + TYPE_ROW * t + TYPE_ROW]
+        if any(row):
+            rows[str(t)] = row[0]
+    out = os.path.join(out_dir, "objclass.json")
+    with open(out, "w") as fh:
+        json.dump({"_note": "byte +0 of each type's row in object_type_table, "
+                            "out of out/snap/b.ram -- level 0 only, and "
+                            "borrowed rather than derived: see "
+                            "tools/objops.py export()",
+                   "level": 0, "class": rows}, fh, separators=(",", ":"))
+    return out
+
+
 def census(path=SNAP):
     """Which opcodes the level in a snapshot actually uses, and on what."""
     import placement
@@ -231,6 +263,10 @@ if __name__ == "__main__":
     a = sys.argv[1:]
     if a and a[0] == "--doc":
         print("wrote " + os.path.relpath(document(), ROOT))
+    elif a and a[0] == "--godot":
+        got = export("out/godot")
+        print("wrote " + os.path.relpath(got, ROOT) if got
+              else "no snapshot to take the classes from")
     elif a and a[0] == "--census":
         for c, v in sorted(census().items(), key=lambda kv: -kv[1]["objects"]):
             print(f"  opcode {c:#04x}  {v['objects']:4d} objects  types "

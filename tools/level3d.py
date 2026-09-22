@@ -1000,7 +1000,7 @@ def project(lv, out="out/godot", start=(57, 4)):
     for name in ("player.gd", "collision.gd", "selftest.gd", "ghost.gd",
                  "labels.gd", "pad.gd", "boot.gd", "opening.gd",
                  "cutscene.gd", "actors.gd", "levelup.gd",
-                 "game.gd"):
+                 "game.gd", "objects.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening
@@ -1008,6 +1008,11 @@ def project(lv, out="out/godot", start=(57, 4)):
     except Exception as e:                       # no disc image, no title screen
         print(f"opening assets skipped: {e}")
     gdcoll.export(lv, out)
+    try:
+        import objops
+        objops.export(out)
+    except Exception as e:                       # no snapshot, no object classes
+        print(f"object classes skipped: {e}")
     try:
         import levelup
         levelup.export(out)

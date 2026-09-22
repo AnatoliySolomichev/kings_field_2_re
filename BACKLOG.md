@@ -485,3 +485,21 @@ rebuilding the ISO. `tools/tarc.py` reads the container; there is no writer yet.
 **Prior art worth reading first:** the King's Field Texture Tool on
 romhacking.net (utility 1063) does exactly this job for the other games in the
 series, source included. See EXTERNAL.md.
+
+## Where `object_type_table` is built
+
+`0x8018fb3c`, 24-byte rows indexed by type id, and byte `+0` of each row is the
+object's behaviour opcode *and* its render class. It is not loaded whole from
+anywhere: 32 of the 819 non-zero rows in a level-0 snapshot appear verbatim in
+`FDAT.T` entry 1 at offset 9004 and the other 787 do not appear on the disc at
+all. The low rows read as item stats, so at least one source is `ITEM.T`.
+
+Finding the rest is what lets the port run object behaviour on any level
+instead of borrowing level 0's classes from a snapshot. Everything that touches
+the table is listed by
+
+    python3 -c "import json;d=json.load(open('out/rdis/game.json'));[print(f['name'],hex(r['at'])) for f in d['functions'].values() for r in f['refs'] if r['addr']==0x8018fb3c]"
+
+and `init_level_state` reading `archive 4` entries `0x60` and `0x61` is the
+first thing to look at.
+

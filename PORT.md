@@ -29,7 +29,7 @@ that it reproduces it correctly.** `status` says how far that went:
 | --- | --- | --- | --- | --- | --- |
 | boot | 10 | 1 | 0 | 115 | 50 (43%) |
 | open | 293 | 6 | 0 | 19753 | 1066 (5%) |
-| game | 816 | 23 | 5 | 92169 | 5859 (6%) |
+| game | 816 | 25 | 5 | 92169 | 9860 (10%) |
 | end | 167 | 0 | 0 | 9966 | 0 (0%) |
 
 Those percentages are of *all* the code in the image, which includes
@@ -56,6 +56,9 @@ floor, not a score.
 | [`godot/collision.gd:296`](godot/collision.gd#L296) | `(the file)` | `game:0x8003260c` tile_collision | verified |
 | [`godot/collision.gd:425`](godot/collision.gd#L425) | `func _notch` | `game:0x80032d3c` 0x80032d3c | transcribed |
 | [`godot/collision.gd:441`](godot/collision.gd#L441) | `func surface` | `game:0x80033b10` collide_surface | transcribed |
+| [`godot/objects.gd:85`](godot/objects.gd#L85) | `var pcx` | `game:0x80046884` player_in_rect | transcribed |
+| [`godot/objects.gd:43`](godot/objects.gd#L43) | `const SLOTS` | `game:0x80047010` object_interpreter | partial |
+| [`godot/objects.gd:96`](godot/objects.gd#L96) | `func tick` | `game:0x80047010` object_interpreter | partial |
 | [`godot/actors.gd:208`](godot/actors.gd#L208) | `func _spawn` | `game:0x8004b868` actor_spawn | transcribed |
 | [`godot/actors.gd:142`](godot/actors.gd#L142) | `func _activate` | `game:0x8004c1f0` actor_activate | transcribed |
 | [`godot/actors.gd:192`](godot/actors.gd#L192) | `func _try` | `game:0x8004c380` 0x8004c380 | transcribed |
