@@ -1773,5 +1773,15 @@
   "name": "damage_scale",
   "kind": "data",
   "evidence": "a halfword, 0x1000 in every snapshot; damage_of_type multiplies the stat by it and shifts right 8"
+ },
+ "0x8002b468": {
+  "name": "new_character",
+  "kind": "code",
+  "evidence": "level 1, experience 0, and HP max, MP max and player_stat_36 straight out of level_table's first row; all five growth stats from level_table + 6, which is zero; gold zero and the four equipment slots 0xff. player_controller calls it on death when the player has no item 107, together with reset_story_flags -- so dying without the crystal is a new character"
+ },
+ "0x801b2520": {
+  "name": "player_growth_stat",
+  "kind": "data",
+  "evidence": "the last of the five halfwords award_exp rolls for, and in practice the only live one: new_character seeds all five from level_table + 6, which is 0, and a level-1 snapshot has [0,0,0,0,10]. award_exp skips a stat that is zero, so four of the five never grow. sub_8002a10c and use_item also write it"
  }
 }

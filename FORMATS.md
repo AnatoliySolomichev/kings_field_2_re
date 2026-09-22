@@ -1965,6 +1965,49 @@ colour; `ui_prim_quad` (`0x80027494`) fills its four corners and four UV pairs
 ordering table at a depth the caller picks; and `pad_read_latch`
 (`0x800279a4`) reads the pad and sets a flag if anything at all is down.
 
+### Dying, and the crystal that stops it
+
+The recorded session includes a death, and `player_controller` says what
+happens. First **all 128 `ai_slots` are cleared to `0xff`** — every creature
+behaviour stops. Then:
+
+```
+if has_item(107):                     the total-recovery crystal
+    actors_retire_marked()
+    take_item(107)                    it is consumed
+    player_facing = 0x2d5
+    player_pos    = 0x1c800           cell 57 exactly, no fine offset
+    player_z      = 0xc000            cell 24
+    player_y      = -0x3a80
+    player_pitch  = 0
+    layer         = 5
+    level_state_write(current_level_block)
+else:
+    new_character()                   level 1, and the block seeded afresh
+    reset_story_flags()
+```
+
+**`-0x3a80` is `-128 × 117`, and 117 is the height byte of cell (57, 24) on
+level 0** — so the revival spot is a real place with the floor under it, and
+the branch is level 0's. Item 107 is *"this crystal gives total recovery to the
+injured body and mind"*, which is exactly what it does: one death, consumed.
+
+Without it the game makes a new character and clears the story flags, and the
+log shows the seven-state level load running straight afterwards. `has_item(0x6b)`
+is the last thing in the log before that load.
+
+### Four of the five rolled stats never grow
+
+`new_character` seeds the five halfwords at `0x801b2518`..`0x801b2520` from
+`level_table + 6`, which is **zero** — the first row is `50, 30, 20, 0, 50` and
+that fourth field is what all five are set to. And `award_exp` **tests a stat
+before it rolls for it**: a stat at zero is skipped.
+
+A level-1 snapshot has `[0, 0, 0, 0, 10]`, so one of the five is non-zero and
+the other four are not. Whatever sets that one — `sub_8002a10c` and `use_item`
+both write it — the consequence is that **the game has five slots for randomly
+growing stats and only ever grows one of them**.
+
 ### Experience, and the table that is not in the executable
 
 `award_exp` (`0x8002a310`) is all of levelling and it is short: add the

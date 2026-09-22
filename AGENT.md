@@ -219,13 +219,22 @@ wants one — so for each, the first move is an `emu/bp*.lua` that logs the
 routine's arguments and its answer, and a person at the emulator playing for a
 minute. Reading alone gets a transcription; it does not get a number.
 
-**`emu/bp20.lua` is that instrument for five of them at once** — the object
-interpreter's 43 real arms, the damage roll with the player's HP either side,
-`use_item` and the three inventory primitives, `script_interpreter`, and
-`level_load`'s state. It wants a short ordinary session: open a door, take
-something out of a chest, talk to somebody, use an item, get hit. **That one
-session unblocks more than anything else on this list**, and it is the thing to
-ask a person for first.
+**`emu/bp20.lua` is that instrument for five of them at once**, and one
+session has already been run through it. `out/lua_bp20.log` is in the
+repository's `out/`, which regenerates — so if it is gone, ask for another: the
+session is a minute of ordinary play, opening a door, taking things out of
+chests, picking up herbs, and dying once.
+
+What that one session settled: **the damage formula**, reproduced on 6 of 6
+recorded hits (`tools/damage.py`); **13 of the 44 object arms**, each on
+exactly the opcode the table says; the item ids, which name themselves against
+`tools/itemtext.py`; **the death branch** and the crystal that stops it; and
+two corrections to readings made without it.
+
+What would settle the rest is the same again with more logged: the five damage
+types `bp20.lua` does not print, `script_interpreter`'s opcode stream frame by
+frame, and a session that talks to somebody — the one recorded has two `TALK`
+entries and no conversation.
 
 **8. Everything else in BACKLOG.md**, which is ordered roughly by what it
 unblocks.

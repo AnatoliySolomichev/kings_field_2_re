@@ -100,6 +100,18 @@ const EYE_UNITS := 1600.0            # 0x640 at 0x80028e10
 #
 # There is a third case not reproduced here: while the counter at 0x801b2566
 # is running, 0x80031254 halves the cap every frame and counts it down.
+# Dying, out of player_controller. All 128 ai_slots go to 0xff, and then
+# either item 107 -- "this crystal gives total recovery to the injured body and
+# mind" -- is consumed and the player is put back at a fixed spot, or the
+# character is made anew and the story flags are cleared.
+#
+# -0x3a80 is -128 * 117, and 117 is the height byte of cell (57, 24) on level
+# 0, so the spot is a real place with the floor under it.
+const REVIVE_ITEM := 107             # 0x6b, at 0x8002a558 in player_controller
+const REVIVE_POS := Vector3i(0x1C800, -0x3A80, 0xC000)
+const REVIVE_FACING := 0x2D5
+const REVIVE_LAYER := 5
+
 const TURN_MAX_STILL := 0x28         # 0x800311a8
 const TURN_MAX_MOVING := 0x20        # 0x8003118c
 
