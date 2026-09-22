@@ -30,8 +30,8 @@ and the threshold each grow by the last step again, forever, and since the
 experience is capped at 999999 and record 98 asks for 1000000, that never runs
 in an ordinary game.
 
-Five more stats, the halfwords at `0x801b2518` to `0x801b2520`, grow by a coin
-toss: for each one that is not already zero, `rand() < 0x6665` adds one --
+Five more figures grow by a coin toss -- the **skills**, at `0x801b2518` to
+`0x801b2520`: for each one that is not already zero, `rand() < 0x6665` adds one --
 about four times in five. That is the only place `rand` is used in levelling,
 and it is why two characters at the same level are not the same character.
 

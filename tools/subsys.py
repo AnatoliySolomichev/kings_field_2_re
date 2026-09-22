@@ -43,7 +43,7 @@ ROOTS = [
     ("objects", 0x80047010, "the object interpreter and its 44 handlers"),
     ("player", 0x80030FCC, "the pad, the turn, the walk and the height"),
     ("actors", 0x80052E5C, "the 199 creature slots"),
-    ("ai", 0x8005BC50, "the 128 behaviour slots"),
+    ("effects", 0x8005BC50, "the 128 effect slots, and the 130 kinds they run"),
     ("level", 0x8005EB20, "the level's own code, and the fades"),
     ("level", 0x80018358, "the seven-state load"),
     ("flags", 0x80061940, "the story flags"),

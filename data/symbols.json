@@ -1495,9 +1495,9 @@
   "evidence": "the stat the level table's third column adds to: 20 at level 1 and 21 at level 2, which is the running sum of that column. Clamped to 999 by award_exp like the maxima. What it is called in the game is not established"
  },
  "0x801b2518": {
-  "name": "player_grow_stats",
+  "name": "player_skills",
   "kind": "data",
-  "evidence": "five halfwords, 0x801b2518 to 0x801b2520, that award_exp grows by a coin toss on each level -- one added if the stat is not already zero and rand() < 0x6665, about four times in five. 0x801b2520 is player.py's unknown_40, which goes 10 -> 11 between the level 1 and level 2 snapshots. They are the only random part of levelling"
+  "evidence": "five halfwords, 0x801b2518 to 0x801b2520, one per skill. award_exp rolls for each on a level -- one added if the skill is not zero and rand() < 0x6665 -- and then calls skill_unlock for each, which compares it with skill_thresholds. new_character seeds all five from level_table + 6, which is 0, and a level-1 snapshot holds [0,0,0,0,10], so four of the five never grow"
  },
  "0x8007dd08": {
   "name": "AddPrim",
@@ -1585,14 +1585,14 @@
   "evidence": "(kind, position, ..., radius, range): takes the distance from the listener mirror through game_isqrt, drops the cue when it is past the range, and scales the volume by what is left. The low twelve bits of the first argument are a bearing and 0x8000 is a flag"
  },
  "0x8005bc50": {
-  "name": "ai_driver",
+  "name": "effect_driver",
   "kind": "code",
-  "evidence": "walks 128 slots of 0x4c bytes at 0x801b80ec; for each live one it publishes the slot at 0x801ba6f0 and its 24-byte definition at 0x801b77ec + 24*slot[+1] into 0x801ba6ec, counts slot[+0x10] down, and calls actor_ai. Fifth in game_main's frame"
+  "evidence": "walks 128 slots of 0x4c bytes at effect_slots; for each live one it publishes the slot at 0x801ba6f0 and its 24-byte definition at spell_table + 24*slot[+1] into 0x801ba6ec, counts slot[+0x10] down, retires the slot at 0xff when it reaches zero, and calls effect_tick. Sixth in game_main's frame. Named effect rather than AI because render_walk has a third loop that *draws* these slots and the creatures are a different table"
  },
  "0x800568bc": {
-  "name": "actor_ai",
+  "name": "effect_tick",
   "kind": "code",
-  "evidence": "the 4584-instruction behaviour tick ai_driver calls once per live slot. Reads the player's position and state, rolls rand, asks collide_surface and actor_spot_taken, and writes the player's HP -- so it is where a creature decides and where it hits"
+  "evidence": "the 4584-instruction tick effect_driver calls once per live slot. It opens with a 130-arm switch on the slot's +1 byte through effect_kind_table, measures the distance to the player with game_isqrt, asks collide_surface, rolls rand and can write the player's HP -- so a thing in flight that can hit you. Previously called actor_ai, which was wrong: the creatures are the 0x88 table at actor_table and actor_tick is their machine"
  },
  "0x8005eb20": {
   "name": "level_overlay_tick",
@@ -1605,14 +1605,14 @@
   "evidence": "the last call in game_main's loop: the camera matrix (0x800357e8), then 0x800351fc, 0x80041f9c, 0x80034bf4, 0x80035630, 0x80043858 and 0x8003df50, then the GPU primitive state for the frame"
  },
  "0x801b80ec": {
-  "name": "ai_slots",
+  "name": "effect_slots",
   "kind": "data",
-  "evidence": "128 slots of 0x4c bytes; ai_driver walks them and byte +0 is 0xff when the slot is free"
+  "evidence": "128 slots of 0x4c bytes. Byte +0 is 0xff when free, +1 is the kind that effect_tick's 130-arm switch dispatches on, +0x10 a countdown effect_driver spends, +0x18 a position render_walk's third loop reads. player_controller clears all 128 to 0xff on death"
  },
  "0x801b77ec": {
-  "name": "ai_defs",
+  "name": "spell_table",
   "kind": "data",
-  "evidence": "24-byte records ai_driver indexes by a slot's +1 byte and publishes at 0x801ba6ec for actor_ai to read"
+  "evidence": "24-byte records, and +0x16 is the **MP cost**: cast_spell reads it, doubles it when equipment slot 0x801b25d4 holds 0x26, halves it when 0x801b25d5 holds 0x2e, and announces 9 when player_mp is below it. effect_driver indexes the same table by a slot's +1 byte and skill_unlock sets a record's +0 to 1 when a skill crosses a threshold -- so a record is a spell, a skill makes it available, and casting it puts an instance in effect_slots"
  },
  "0x801c1728": {
   "name": "sound_task",
@@ -1780,8 +1780,43 @@
   "evidence": "level 1, experience 0, and HP max, MP max and player_stat_36 straight out of level_table's first row; all five growth stats from level_table + 6, which is zero; gold zero and the four equipment slots 0xff. player_controller calls it on death when the player has no item 107, together with reset_story_flags -- so dying without the crystal is a new character"
  },
  "0x801b2520": {
-  "name": "player_growth_stat",
+  "name": "player_skill_4",
   "kind": "data",
-  "evidence": "the last of the five halfwords award_exp rolls for, and in practice the only live one: new_character seeds all five from level_table + 6, which is 0, and a level-1 snapshot has [0,0,0,0,10]. award_exp skips a stat that is zero, so four of the five never grow. sub_8002a10c and use_item also write it"
+  "evidence": "the fifth of player_skills and in practice the only live one: its thresholds are 10, 35, 50, 85, 115 where the other four are 20, 35, 50, 65, 80, and it is the only one a level-1 snapshot has above zero"
+ },
+ "0x80012ebc": {
+  "name": "effect_kind_table",
+  "kind": "data",
+  "evidence": "130 arms for effect_tick's switch, guarded by `sltiu $v0, $s4, 0x82` on the slot's +1 byte"
+ },
+ "0x80029f1c": {
+  "name": "skill_unlock",
+  "kind": "code",
+  "evidence": "(skill 0..4). Compares player_skills[k] against the five thresholds at skill_thresholds + 12*k, and for each one crossed walks the list at skill_unlock_list + 7*k, finds the first spell_table record whose +0 is zero, sets it to 1 and calls announce(3). award_exp calls it for each of the five on every level"
+ },
+ "0x80081884": {
+  "name": "skill_thresholds",
+  "kind": "data",
+  "evidence": "five skills of six halfwords: 20, 35, 50, 65, 80, 0 for the first four and 10, 35, 50, 85, 115, 0 for the fifth. skill_unlock reads them"
+ },
+ "0x800818c0": {
+  "name": "skill_unlock_list",
+  "kind": "data",
+  "evidence": "seven bytes per skill, each an index into spell_table, ended by 0xff. skill_unlock walks it to find what a threshold makes available"
+ },
+ "0x8002deec": {
+  "name": "cast_spell",
+  "kind": "code",
+  "evidence": "(spell). Takes spell_table + 24*spell, reads the MP cost at its +0x16, doubles or halves it for two pieces of equipment, announces 9 when player_mp is short, and otherwise spends it. player_turn calls it -- the routine that also reads the button edges"
+ },
+ "0x801b25d4": {
+  "name": "equipped_a",
+  "kind": "data",
+  "evidence": "one of four equipment bytes at 0x801b25d4..0x801b25da, all set to 0xff by new_character. cast_spell doubles a spell's MP cost when this one holds 0x26; player_take_hit reads all four to scale its timings"
+ },
+ "0x801b25d5": {
+  "name": "equipped_b",
+  "kind": "data",
+  "evidence": "the second of the four. cast_spell halves a spell's MP cost when it holds 0x2e"
  }
 }

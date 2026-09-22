@@ -1996,17 +1996,55 @@ Without it the game makes a new character and clears the story flags, and the
 log shows the seven-state level load running straight afterwards. `has_item(0x6b)`
 is the last thing in the log before that load.
 
-### Four of the five rolled stats never grow
+### The five "rolled stats" are skills, and they unlock spells
 
-`new_character` seeds the five halfwords at `0x801b2518`..`0x801b2520` from
-`level_table + 6`, which is **zero** — the first row is `50, 30, 20, 0, 50` and
+`award_exp` rolls for five halfwords at `0x801b2518`..`0x801b2520` on every
+level, and then calls **`skill_unlock` (`0x80029f1c`)** for each of them. That
+routine compares the skill with five thresholds at `skill_thresholds`
+(`0x80081884`, twelve bytes per skill):
+
+```
+skills 0-3   20, 35, 50, 65, 80
+skill  4     10, 35, 50, 85, 115
+```
+
+and for each threshold crossed it walks a seven-byte list at
+`skill_unlock_list + 7*k`, finds the first record in **`spell_table`**
+(`0x801b77ec`, 24 bytes each) whose `+0` is zero, sets it to 1 and calls
+`announce(3)`. So a skill reaching a number **makes a spell available**.
+
+`cast_spell` (`0x8002deec`) settles what that table is: it takes
+`spell_table + 24 * spell`, reads the **MP cost at `+0x16`**, doubles it when
+the equipment byte at `0x801b25d4` holds `0x26` and halves it when
+`0x801b25d5` holds `0x2e`, and announces 9 when `player_mp` is short.
+
+And casting puts an instance in **`effect_slots`** (`0x801b80ec`): 128 slots of
+`0x4c` bytes, `0xff` at `+0` when free, a kind at `+1`, a countdown at `+0x10`
+that `effect_driver` spends, and a position at `+0x18`. `effect_driver`
+(`0x8005bc50`) ticks them once a frame through **`effect_tick`**
+(`0x800568bc`), whose first instruction is a **130-arm switch** on that kind
+byte, and **`render_walk` has a third loop that draws them** — which is what
+says they are things in the world rather than bookkeeping. `player_controller`
+clears all 128 on death.
+
+**This subsystem was called "AI" in this repository until now**, on the
+strength of `effect_tick` reading the player's position and writing the
+player's HP. It does both because a fireball in flight does both. The
+creatures are somewhere else entirely: the `0x88` table at `actor_table`, ticked
+by `actor_tick`.
+
+### Four of the five skills never grow
+
+`new_character` seeds the five skills from `level_table + 6`, which is
+**zero** — the first row is `50, 30, 20, 0, 50` and
 that fourth field is what all five are set to. And `award_exp` **tests a stat
 before it rolls for it**: a stat at zero is skipped.
 
 A level-1 snapshot has `[0, 0, 0, 0, 10]`, so one of the five is non-zero and
 the other four are not. Whatever sets that one — `sub_8002a10c` and `use_item`
-both write it — the consequence is that **the game has five slots for randomly
-growing stats and only ever grows one of them**.
+both write it — the consequence is that **the game has five skills and only ever
+grows one of them** — and since a skill that never grows never crosses a
+threshold, four fifths of the spell list is unreachable by levelling.
 
 ### Experience, and the table that is not in the executable
 
