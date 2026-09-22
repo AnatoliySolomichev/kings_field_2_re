@@ -250,13 +250,29 @@ python3 tools/entities.py           # every level, one line each
 python3 tools/entities.py 0         # level 0 in full
 ```
 
-**`escript.py`** — the entity script language, decoded.
+**`escript.py`** — the entity script language, decoded, and run.
 
 ```
 python3 tools/escript.py            # the opcode table, then a summary
 python3 tools/escript.py 0          # level 0, every script
 python3 tools/escript.py flags      # which flag is set where and tested where
 ```
+
+The opcode table is read off the sixteen arms of `script_opcode_table`
+(`0x80013160`) rather than off what the scripts seem to do, and three of them
+were wrong before that: `0xf3`, `0xf4` and `0xf5` were all down as "skip one
+byte", which is what they look like from outside. `0xf5` sets a **no-wait
+count** — the interpreter stops after every line until the use button, and that
+count is how a script says several lines in a row — `0xf3` spends one of it,
+and **`0xf4` calls the level's own code**, which is how a conversation makes
+something happen in the world. There are six of those in the game.
+
+`run()` steps a script the way the interpreter does, reproducing the control
+flow and the flags and not the waiting. Over all **1086 scripts in the game**:
+870 reach an `end`, 198 run off the end of their slice and 18 loop for ever,
+which is what an idle NPC does. `godot/escript.gd` is the same machine and
+`selftest.gd` holds the two together — **1086 of 1086** stop in the same place,
+for the same reason, after the same number of steps, leaving the same flags.
 
 To dump the whole game at once:
 

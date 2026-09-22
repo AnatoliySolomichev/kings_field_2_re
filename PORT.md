@@ -29,7 +29,7 @@ that it reproduces it correctly.** `status` says how far that went:
 | --- | --- | --- | --- | --- | --- |
 | boot | 10 | 1 | 0 | 115 | 50 (43%) |
 | open | 293 | 6 | 0 | 19753 | 1066 (5%) |
-| game | 816 | 25 | 5 | 92169 | 9860 (10%) |
+| game | 816 | 26 | 5 | 92169 | 10170 (11%) |
 | end | 167 | 0 | 0 | 9966 | 0 (0%) |
 
 Those percentages are of *all* the code in the image, which includes
@@ -66,6 +66,8 @@ floor, not a score.
 | [`godot/actors.gd:219`](godot/actors.gd#L219) | `func _taken` | `game:0x8004d644` actor_spot_taken | transcribed |
 | [`godot/actors.gd:233`](godot/actors.gd#L233) | `func _kill` | `game:0x80052b7c` 0x80052b7c | transcribed |
 | [`godot/actors.gd:129`](godot/actors.gd#L129) | `func _pass` | `game:0x80052e5c` actor_tick_driver | transcribed |
+| [`godot/escript.gd:32`](godot/escript.gd#L32) | `const FLAG_COUNT` | `game:0x8005c308` script_interpreter | partial |
+| [`godot/escript.gd:48`](godot/escript.gd#L48) | `var f: Array = flags.duplicate` | `game:0x8005c308` script_interpreter | partial |
 | [`godot/cutscene.gd:44`](godot/cutscene.gd#L44) | `func _ready` | `game:0x80060d20` 0x80060d20 | partial |
 | [`godot/collision.gd:107`](godot/collision.gd#L107) | `func arctan_unit` | `game:0x800742ac` arctan_unit | transcribed |
 | [`godot/collision.gd:151`](godot/collision.gd#L151) | `func isqrt` | `game:0x80074508` game_isqrt | transcribed |

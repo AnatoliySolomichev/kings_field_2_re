@@ -76,6 +76,8 @@ An earlier pass reported *zero* conditionals across 1350 scripts. That was the
 wrong script base -- `entities.py` explains which -- and the claim is withdrawn.
 """
 import collections
+import json
+import os
 import pickle
 import struct
 import sys
@@ -142,6 +144,96 @@ def decode(code):
         if op == 0xFF:
             break
     return out
+
+
+FLAG_COUNT = 0x80
+
+
+def run(code, flags=None, limit=2000):
+    """Step a script the way `script_interpreter` steps it.
+
+    What is reproduced is the **control flow and the flags** -- the part that
+    is the same every time. The waiting is not: the interpreter stops after
+    every line until the use button is pressed, and the no-wait count decides
+    how many it runs through first. Here every line is taken at once and the
+    count is tracked so the two copies can still be compared on it.
+
+    Returns `(trace, flags, why)`, where trace is `[(pc, opcode)]` in the order
+    executed and `why` is `end`, `limit` or `off` -- ran off the end.
+    """
+    f = list(flags) if flags is not None else [0] * FLAG_COUNT
+    pc, trace, no_wait = 0, [], 0
+    for _step in range(limit):
+        if not 0 <= pc < len(code):
+            return trace, f, "off"
+        op = code[pc]
+        trace.append((pc, op))
+        if op < 0xF0 or op in (0xF1, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE):
+            pc += 1                                  # a line, then the wait
+            no_wait = max(no_wait - 1, 0)
+            continue
+        if op == 0xFF:
+            return trace, f, "end"
+        if op in (0xF0, 0xF8):                       # jump back by the next byte
+            pc -= code[pc + 1] if pc + 1 < len(code) else 0
+            continue
+        if op == 0xF7:                               # story_flags[i] = v
+            i, v = code[pc + 1], code[pc + 2]
+            if i < len(f):
+                f[i] = v
+            pc += 3
+            no_wait = max(no_wait - 1, 0)
+            continue
+        if op == 0xF9:                               # if story_flags[i] == v
+            i, v, label = code[pc + 1], code[pc + 2], code[pc + 3]
+            if i < len(f) and f[i] == v:
+                pc = label                           # 0x8005c18c resolves it
+            else:
+                pc += 4
+            continue
+        if op == 0xF5:
+            no_wait = code[pc + 1]
+            pc += 2
+            continue
+        if op == 0xF4:
+            no_wait = code[pc + 2] if pc + 2 < len(code) else 0
+            pc += 3
+            continue
+        if op == 0xF3:
+            pc += 1
+            if no_wait:
+                no_wait -= 1
+            continue
+        if op == 0xF6:
+            pc += 1
+            continue
+        pc += OPS.get(op, (1, ""))[0]
+    return trace, f, "limit"
+
+
+def export(out_dir, levels=range(28)):
+    """Every script in the game, and what `run` makes of it, for the port.
+
+    The reference is a trace rather than an output: what two copies of an
+    interpreter can be held to without the text, the animation and the button
+    is the order they execute in and the flags they leave.
+    """
+    rows = []
+    for lv, k, a, code, _rec in walk(levels):
+        trace, flags, why = run(bytes(code))
+        rows.append({"level": lv, "entity": k, "at": a,
+                     "code": list(bytes(code))[:256],
+                     "steps": len(trace), "why": why,
+                     "flags": [i for i, v in enumerate(flags) if v],
+                     "last": trace[-1][0] if trace else -1})
+    path = os.path.join(out_dir, "escript.json")
+    with open(path, "w") as fh:
+        json.dump({"_note": "every entity script in the game, with the trace "
+                            "tools/escript.py run() makes of it: how many "
+                            "steps, why it stopped, where it stopped and which "
+                            "flags it set",
+                   "scripts": rows}, fh, separators=(",", ":"))
+    return path
 
 
 def talk_text():

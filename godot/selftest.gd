@@ -140,7 +140,48 @@ func _init() -> void:
 	if not _angles():
 		quit(1)
 		return
+	if not _scripts():
+		quit(1)
+		return
 	quit(0)
+
+
+# Every entity script in the game, through both copies of the interpreter. What
+# is compared is where each one stopped, why, how many steps it took and which
+# flags it left -- the part that does not depend on the text, the animation or
+# anyone pressing a button.
+func _scripts() -> bool:
+	if not FileAccess.file_exists("res://escript.json"):
+		print("scripts: no cases to check against")
+		return true
+	var d = JSON.parse_string(
+		FileAccess.get_file_as_string("res://escript.json"))
+	if typeof(d) != TYPE_DICTIONARY:
+		print("scripts: escript.json is not a dictionary")
+		return false
+	var rows: Array = d.get("scripts", [])
+	var bad_s := 0
+	for r in rows:
+		var code := PackedByteArray()
+		for b in r["code"]:
+			code.append(int(b))
+		var got := KFScript.run(code)
+		var flags: Array = []
+		for i in range(got["flags"].size()):
+			if int(got["flags"][i]) != 0:
+				flags.append(i)
+		var last: int = int(got["trace"][-1][0]) if got["trace"].size() else -1
+		if got["why"] != r["why"] or got["trace"].size() != int(r["steps"]) \
+				or last != int(r["last"]) or flags != Array(r["flags"]):
+			bad_s += 1
+			if bad_s == 1:
+				print("  script level %d entity %d at %d: godot %s/%d/%d, python %s/%d/%d" % [
+					int(r["level"]), int(r["entity"]), int(r["at"]),
+					got["why"], got["trace"].size(), last,
+					r["why"], int(r["steps"]), int(r["last"])])
+	print("scripts: %d of %d run the same as tools/escript.py" % [
+		rows.size() - bad_s, rows.size()])
+	return bad_s == 0
 
 
 # The game's arctangent, against the same directions tools/movement.py put
