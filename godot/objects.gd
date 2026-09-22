@@ -26,6 +26,11 @@ extends Node
 #   0x51, 0x52, 0x55    call object_set_present -- things that come and go
 #   0x60-0x62           call collide_surface -- things that follow the floor
 #   0xe0                calls object_trigger
+#
+# Note on object_set_present, which three of those arms call: it writes the
+# *drawn* tile index of the cell -- the layer's +0 -- and not the collision
+# shape at +3. An earlier note in this repository said an object's collision is
+# a terrain cell. It is not, and nothing here relies on it.
 #   0x09, 0x12, 0x16,   a handful of instructions each
 #   0x31, 0x56
 #

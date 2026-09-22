@@ -1388,7 +1388,7 @@
  "0x80044b40": {
   "name": "object_set_present",
   "kind": "code",
-  "evidence": "(record, present, restore). Present writes 0xfc into the terrain grid cell the object stands in -- level_grid + cz*800 + cx*10, +5 when record[+0] == 1 -- and 0x1000 into the scale triple at +0x2c/+0x2e/+0x30; absent writes the caller's byte into the cell and zeroes the triple. So the triple is a visible/not-visible switch and the cell byte is the object's collision. Read off the routine in full; load_object_placement passes present=0 with the restore byte from the disc record's +23"
+  "evidence": "(record, present, restore). Present writes 0xfc into the terrain grid cell the object stands in and 0x1000 into the scale triple at +0x2c/+0x2e/+0x30; absent writes the caller's byte into the cell and zeroes the triple, which makes the triple a visible/not-visible switch. **The cell byte is the layer's +0 -- the tile index the drawing uses, which draw_cell_walk skips on above 0xf0 -- and not the shape at +3 the collision reads.** An earlier note here called it the object's collision and that is withdrawn. The restore byte is type_row[+0x17] at load_object_placement's call site, zero for 296 of the 300 types, not the placement record's +23"
  },
  "0x801b2574": {
   "name": "objects_forced_present",

@@ -164,10 +164,12 @@ So the half-size objects are **not a factor the game applies at draw time**: the
 position at `+0x14..+0x1c` goes in unhalved and nothing else scales. What is
 left to check is the model's own units and the port's placement.
 
-The same routine turned out to be the object collision nobody had found: an
-object present writes `0xfc` into its terrain grid cell and going away writes
-back the byte at **+23 of the disc placement record**. A door *is* a wall while
-it is shut. FORMATS.md, "The scale triple is a switch".
+The same routine writes a byte into the terrain cell as well, and the first
+reading of *that* was wrong: it is the layer's `+0`, the tile index the drawing
+uses, not the shape at `+3` the collision reads, and the restore byte comes
+from the type row rather than from the placement record. **So an object's
+collision is still not found** — withdrawn in full in FORMATS.md, "The scale
+triple is a switch".
 
 **4. The objects with no model — the rule is read now.** `model_of_type`
 (`0x80040568`) says it in eleven instructions: below type 300 the model is

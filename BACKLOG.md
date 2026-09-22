@@ -82,11 +82,15 @@ the same borrowed-not-understood arrangement as the object textures.
 
 **What fills it is found, and it is not a size.** `object_set_present`
 (`0x80044b40`) writes `0x1000` into all three when an object is present and `0`
-when it is not, and at the same time stamps `0xfc` into the terrain grid cell
-the object stands in or puts back the byte from the disc record's `+23`. So the
-triple is a visible/not-visible switch, the 59 objects at `x0.00` are switched
-off rather than tiny, and **an object's collision is a terrain cell** — a door
-*is* a wall while it is shut. FORMATS.md, "The scale triple is a switch".
+when it is not, so the triple is a visible/not-visible switch and the 59
+objects at `x0.00` are switched off rather than tiny.
+
+The same routine also writes a byte into the terrain cell the object stands in,
+and **the first reading of that was wrong and is withdrawn**: it is the layer's
+`+0`, the tile index the *drawing* uses, not the shape at `+3` the collision
+reads, and the byte it restores comes from the type row rather than from the
+placement record. So an object's collision is still not found. FORMATS.md, "The
+scale triple is a switch", has it in full.
 The old note, which the reading replaces: the disc record's `+8` and `+10` look like the object's own
 radius and height instead — `0x320` and `0x6a4` shapes, which is what the
 object-collision gap needs.

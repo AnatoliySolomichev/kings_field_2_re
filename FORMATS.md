@@ -1755,19 +1755,35 @@ collapses it to nothing. The 59 objects at `x0.00` are not tiny. They are
 switched off, which is what the backlog suspected when it said "some of what
 the port drew is not drawn by the game at all".
 
-**And it is also the object collision.** Being present writes `0xfc` into the
-terrain grid cell the object stands in, and going away writes back the byte the
-caller supplies — which `load_object_placement` takes from the disc placement
-record's **byte +23**, `0xff` on 4517 of the 4838 objects in the game and a
-real tile id (26, 27, 0, ...) on the rest. That is how a door blocks a doorway
-without the collision knowing anything about objects: the door *is* a terrain
-cell while it is there, and opening it puts the floor back.
+**Withdrawn: this is not the object collision.** The first reading of it here
+said the cell byte was the tile *shape* and therefore that a door "is a terrain
+cell while it is shut". Both halves were wrong and the way they were wrong is
+worth keeping.
 
-Which layer it writes is chosen by `record[+0] == 1`, so an object either owns
-the lower five bytes of its cell or the upper five. What byte 0 of a layer
-means beyond "the shape", and why `0xfc` rather than a shape in the ordinary
-range, is not settled here — but `0xfc` is above the `0xf0` that
-`draw_cell_walk` skips at, so nothing draws it.
+The byte it writes is the layer's **+0** — `cell + 0` when the live record's
+`+0` is 1 and `cell + 5` otherwise — and in a cell's five-byte layer that is
+the **tile index the drawing uses**, the one `draw_tile` takes the TMD object
+from and `draw_cell_walk` skips on when it is `0xf0` or above. The *shape* the
+collision reads is `+3` of the layer, `cell[+8]`, and nothing here touches it.
+So being present sets the cell's drawn tile to `0xfc`, which is above `0xf0`
+and therefore not drawn at all, and going away writes back the caller's byte.
+
+And that byte does not come from the placement record. At
+`load_object_placement`'s call site it is `type_row[+0x17]` — **byte 23 of the
+object's 24-byte row in the type table**, which is `0` for 296 of the 300
+types, `125` for three and `20` for one. The earlier note said "byte +23 of the
+disc placement record", which is a different 24-byte record entirely, and the
+resemblance is why it went unchecked: 321 placed objects have a non-`0xff`
+byte there, and only 22 of them match their cell's own `+5`.
+
+**What is left standing**, because it was established separately: the scale
+triple is a visible/not-visible switch, `0x1000` or `0`, reaching the renderer
+through `ScaleMatrix` which by `0x1000` applies nothing. The 59 objects on
+level 0 at `x0.00` are switched off.
+
+What the cell byte is *for* is now open again. It is a drawing change, not a
+collision one, and the thing to find out is which objects call it with
+`present = 1` -- `emu/bp20.lua` logs exactly that.
 
 Read off `0x80044b40` in full, with the two call sites that pass `present = 1`
 (`0x800489ec`, `0x8004995c`, in the object interpreter) and the one that passes
