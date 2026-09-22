@@ -7,7 +7,7 @@ class_name KFLevels
 # 99 records of twelve bytes which is not in GAME.EXE at all. It lives at
 # 0x8009f114, past the end of the image, and it comes off the disc: FDAT.T
 # entry 97 at offset 12592, the same shared blob that carries the cutscene list
-# and the creature animation frames. tools/levelup.py writes it out beside the
+# the object type table and the spell table. tools/levelup.py writes it beside the
 # level geometry as levels.json, so this file holds no copy of it.
 #
 #   +0  u16  HP maximum at this level       50 at level 1, 999 by level 97

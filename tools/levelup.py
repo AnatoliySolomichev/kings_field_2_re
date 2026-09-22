@@ -11,7 +11,7 @@ take a level. What a level gives is not computed -- it is **read out of a
 table of 99 records of twelve bytes**, and the table is not in GAME.EXE. It sits
 at `0x8009f114`, which is past the end of the image, and it comes off the disc:
 **`FDAT.T` entry 97 at offset 12592**, the same shared blob that carries the
-cutscene list and the creature animation frames.
+cutscene list, the object type table and the spell table.
 
 ```
 +0  u16   HP maximum at this level          50 at level 1, 999 by level 97

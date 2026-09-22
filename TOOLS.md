@@ -159,7 +159,7 @@ format that holds 28 times is a format rather than a reading.
            40 entity records of 120 and their scripts; the actor table,
            200 x 16; ?; the placement, 350 x 24; the tile shapes; ?
 entry 97  the shared data: the object type table, the level table,
-           the creature animation frames, and eight blocks not yet named
+           the spell table, the lighting table's source, and five not yet named
 ```
 
 [FDAT.md](FDAT.md) is the generated map. Naming one of the unknown blocks is a

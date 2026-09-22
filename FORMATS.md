@@ -2125,8 +2125,8 @@ twelve bytes**:
 
 **The table is not in `GAME.EXE`.** It is at `0x8009f114`, which is `0x2914`
 past the end of the image, so it comes off the disc — and it is `FDAT.T` entry
-**97 at offset 12592**, the same shared blob that carries the cutscene list and
-the creature animation frames. Found by taking the first thirty-six bytes of
+**97 at offset 12592**, the same shared blob that carries the cutscene list, the object
+type table and the spell table. Found by taking the first thirty-six bytes of
 the live table out of a RAM snapshot and searching every file on the disc for
 them; one hit.
 
