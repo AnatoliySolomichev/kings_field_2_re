@@ -35,11 +35,15 @@ extends Node
 # opcode and reports what it would dispatch to, and each group says plainly
 # that nothing runs. `tools/objops.py 0x1f` prints the arm to write next.
 #
-# The class bytes are **borrowed**: object_type_table is built at load time out
-# of at least two sources and only 32 of its 819 rows were found on the disc,
-# so tools/objops.py takes them from a RAM snapshot of level 0 and writes
-# objclass.json. The same arrangement the object scales and textures already
-# have, for the same reason.
+# The class bytes come off the disc, for every level: object_type_table is
+# FDAT.T entry 97 at offset 4, behind a length word of 7200 = 300 * 24, and all
+# 300 rows match a RAM snapshot byte for byte. tools/objops.py writes them to
+# objclass.json.
+#
+# **An object of type 300 or above has no row**, so no class and no opcode --
+# 1424 of the game's 4838 placed objects. 300 is also where model_of_type
+# starts adding the level to the model number, which is the same boundary seen
+# from the other side.
 # @orig game:0x80047010 object_interpreter  status:partial -- the walk and the dispatch, none of the arms
 
 const SLOTS := 396                   # OBJECT_COUNT, 0x18c

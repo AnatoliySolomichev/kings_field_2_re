@@ -130,58 +130,76 @@ def profile(w, fn, blocks):
     return calls, glob, consts
 
 
-def export(out_dir, path=SNAP):
-    """The class of every type on level 0, where the port can read it.
+TYPES_ENTRY, TYPES_OFFSET = 97, 4     # FDAT.T entry 97, past its length word
 
-    **Borrowed, not understood.** `object_type_table` is not a straight copy of
-    anything on the disc: of the 819 non-zero rows in a level-0 snapshot only
-    32 appear verbatim in `FDAT.T` entry 1, at offset 9004, and the rows for
-    the low type ids read as item stats -- a weight and a value -- so the table
-    is built at load time out of at least two sources and the rest is not
-    found. Until it is, the port takes the class bytes out of a snapshot, the
-    same arrangement `tools/level3d.py` already has for the object scales and
-    the object textures, and says so here rather than in a comment nobody
-    reads.
+
+def type_rows(path=None):
+    """The object type table, off the disc: 300 rows of 24 bytes.
+
+    `FDAT.T` entry 97 opens with a length word of **7200 = 300 * 24** and the
+    table follows it. All 300 rows are byte for byte what a level-0 RAM
+    snapshot holds at `object_type_table`, so it is loaded whole and it is the
+    same on every level -- there is nothing per-level about it.
+
+    **300 is where `model_of_type` changes its mind too.** Below that type the
+    model is `type + 0x100`; from 300 up the level is added, and from 300 up
+    there is no row here either. The two facts are the same boundary seen from
+    either side, and either one on its own reads like a coincidence.
     """
-    if not os.path.exists(path):
-        return None
-    ram = open(path, "rb").read()
-    base = TYPE_TABLE - 0x80000000
-    rows = {}
-    for t in range(0x400):
-        row = ram[base + TYPE_ROW * t: base + TYPE_ROW * t + TYPE_ROW]
-        if any(row):
-            rows[str(t)] = row[0]
+    import struct
+    from tarc import TArc
+    raw = TArc(path or os.path.join(ROOT, "extract", "CD", "COM",
+                                    "FDAT.T")).raw(TYPES_ENTRY)
+    n = struct.unpack_from("<I", raw, 0)[0] // TYPE_ROW
+    return [raw[TYPES_OFFSET + TYPE_ROW * t:
+                TYPES_OFFSET + TYPE_ROW * (t + 1)] for t in range(n)]
+
+
+def export(out_dir):
+    """The class of every type, where the port can read it.
+
+    Off the disc and for every level, not borrowed from a snapshot: the table
+    is one block and the same everywhere.
+    """
+    rows = type_rows()
     out = os.path.join(out_dir, "objclass.json")
     with open(out, "w") as fh:
-        json.dump({"_note": "byte +0 of each type's row in object_type_table, "
-                            "out of out/snap/b.ram -- level 0 only, and "
-                            "borrowed rather than derived: see "
-                            "tools/objops.py export()",
-                   "level": 0, "class": rows}, fh, separators=(",", ":"))
+        json.dump({"_note": f"byte +0 of each row of the object type table -- "
+                            f"FDAT.T entry {TYPES_ENTRY} at offset "
+                            f"{TYPES_OFFSET}, {len(rows)} rows of {TYPE_ROW} "
+                            "bytes. The behaviour opcode and the render class "
+                            "are the same byte",
+                   "types": len(rows),
+                   "class": {str(t): r[0] for t, r in enumerate(rows)}}, fh,
+                  separators=(",", ":"))
     return out
 
 
-def census(path=SNAP):
-    """Which opcodes the level in a snapshot actually uses, and on what."""
+def census(levels=range(28)):
+    """Which opcodes the game actually uses, over every level, from the disc.
+
+    An object of type 300 or above has no row -- the table stops there -- and
+    those are counted separately rather than read off the end of it, which is
+    what an earlier pass did: it took whatever followed the table in RAM as
+    three hundred more type rows and reported classes for types that have none.
+    """
     import placement
-    if not os.path.exists(path):
-        return {}
-    ram = open(path, "rb").read()
-    base = TYPE_TABLE - 0x80000000
-    cls = {}
-    for t in range(0x400):
-        row = ram[base + TYPE_ROW * t: base + TYPE_ROW * t + TYPE_ROW]
-        if any(row):
-            cls[t] = row[0]
-    out = collections.defaultdict(lambda: {"objects": 0, "types": set()})
-    for o in placement.objects(0):
-        c = cls.get(o["type"])
-        if c is None:
-            continue
-        out[c]["objects"] += 1
-        out[c]["types"].add(o["type"])
-    return dict(out)
+    rows = type_rows()
+    out = collections.defaultdict(lambda: {"objects": 0, "types": set(),
+                                           "levels": set()})
+    over = {"objects": 0, "types": set()}
+    for lv in levels:
+        for o in placement.objects(lv):
+            t = o["type"]
+            if t >= len(rows):
+                over["objects"] += 1
+                over["types"].add(t)
+                continue
+            c = rows[t][0]
+            out[c]["objects"] += 1
+            out[c]["types"].add(t)
+            out[c]["levels"].add(lv)
+    return dict(out), over
 
 
 def report(op=None, out=sys.stdout):
@@ -191,7 +209,7 @@ def report(op=None, out=sys.stdout):
     grouped = arms(w)
     stops = set(t.values())
     shared = max(grouped, key=lambda a: len(grouped[a]))
-    cen = census()
+    cen, _over = census()
     rows = sorted(grouped.items(), key=lambda kv: min(kv[1]))
     print(f"{len(t)} opcodes through {len(grouped)} arms; "
           f"{len(grouped[shared])} of them share {shared:#010x}", file=out)
@@ -206,7 +224,7 @@ def report(op=None, out=sys.stdout):
         names = ", ".join(f"{o:#04x}" for o in sorted(ops)[:8])
         print(f"\n  {arm:#010x}  opcode{'s' if len(ops) > 1 else ''} {names}"
               + (f" and {len(ops) - 8} more" if len(ops) > 8 else "")
-              + (f"   -- {n} objects on level 0" if n else ""), file=out)
+              + (f"   -- {n} objects in the game" if n else ""), file=out)
         print(f"      {sum(len(fn.blocks[b]) for b in blocks)} instructions in "
               f"{len(blocks)} blocks", file=out)
         if calls:
@@ -224,7 +242,7 @@ def document(path=None):
     import io
     buf = io.StringIO()
     report(None, buf)
-    cen = census()
+    cen, over = census()
     with open(path, "w") as fh:
         p = lambda *a: print(*a, file=fh)                           # noqa: E731
         p("# What an object does")
@@ -241,15 +259,21 @@ def document(path=None):
         p("Doors, chests, levers, signs and the things that hurt you are one")
         p("machine with 236 opcodes.")
         p()
-        p("## Level 0, by opcode")
+        p("## Every placed object in the game, by opcode")
         p()
-        p("`object_type_table` is filled per level, so this is level 0 alone.")
+        p("The type table is one block on the disc -- `FDAT.T` entry 97 at")
+        p("offset 4, 300 rows of 24 bytes -- and it is the same on every")
+        p("level, so this is the whole game and not one level of it.")
         p()
-        p("| opcode | objects | types |")
-        p("| --- | --- | --- |")
+        p(f"**{over['objects']} placed objects have a type of 300 or above**,")
+        p("which is where the table stops, so they have no row and no opcode:")
+        p("the same boundary `model_of_type` changes its mind at.")
+        p()
+        p("| opcode | objects | levels | types |")
+        p("| --- | --- | --- | --- |")
         for c, v in sorted(cen.items(), key=lambda kv: -kv[1]["objects"]):
             ts = ", ".join(str(x) for x in sorted(v["types"])[:10])
-            p(f"| `{c:#04x}` | {v['objects']} | {ts} |")
+            p(f"| `{c:#04x}` | {v['objects']} | {len(v['levels'])} | {ts} |")
         p()
         p("## Every arm")
         p()
@@ -268,9 +292,13 @@ if __name__ == "__main__":
         print("wrote " + os.path.relpath(got, ROOT) if got
               else "no snapshot to take the classes from")
     elif a and a[0] == "--census":
-        for c, v in sorted(census().items(), key=lambda kv: -kv[1]["objects"]):
-            print(f"  opcode {c:#04x}  {v['objects']:4d} objects  types "
-                  + ", ".join(str(x) for x in sorted(v["types"])[:12]))
+        cen, over = census()
+        for c, v in sorted(cen.items(), key=lambda kv: -kv[1]["objects"]):
+            print(f"  opcode {c:#04x}  {v['objects']:5d} objects on "
+                  f"{len(v['levels']):2d} levels  types "
+                  + ", ".join(str(x) for x in sorted(v["types"])[:10]))
+        print(f"\n  {over['objects']} objects have a type of 300 or above, "
+              f"past the end of the table: {len(over['types'])} distinct")
     elif a:
         report(int(a[0], 0))
     else:

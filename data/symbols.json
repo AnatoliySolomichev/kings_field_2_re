@@ -259,7 +259,7 @@
  "0x8018fb3c": {
   "name": "object_type_table",
   "kind": "data",
-  "evidence": "332 records of 24 bytes, ending where object_table begins. Byte +0 is the class render_walk dispatches on -- checked against the live records of fifteen types, all fifteen matching -- and 0xe5 and 0xe9 send it straight to the loop tail, so those are never drawn. Type 158 carries 0xe5 and 159 carries 0x07: a treasure chest closed and the same chest open, and 19 cells across the 28 levels hold both while none holds either alone"
+  "evidence": "300 rows of 24 bytes, loaded whole from FDAT.T entry 97 at offset 4 -- the entry opens with a length word of 7200 = 300*24. All 300 rows match a level-0 RAM snapshot byte for byte and the table is the same on every level. Byte +0 of a row is both the object's behaviour opcode (object_interpreter's switch) and its render class (render_walk's). A type of 300 or above has no row, which is the same boundary model_of_type changes its mind at"
  },
  "0x80191a5c": {
   "name": "object_table",

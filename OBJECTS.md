@@ -12,33 +12,58 @@ class `render_walk` draws on.
 Doors, chests, levers, signs and the things that hurt you are one
 machine with 236 opcodes.
 
-## Level 0, by opcode
+## Every placed object in the game, by opcode
 
-`object_type_table` is filled per level, so this is level 0 alone.
+The type table is one block on the disc -- `FDAT.T` entry 97 at
+offset 4, 300 rows of 24 bytes -- and it is the same on every
+level, so this is the whole game and not one level of it.
 
-| opcode | objects | types |
-| --- | --- | --- |
-| `0xff` | 194 | 153, 155, 157, 209, 211, 228, 230, 231, 232, 233 |
-| `0x40` | 31 | 0, 6, 15, 34, 51, 54, 72, 100, 101, 104 |
-| `0xe6` | 28 | 287 |
-| `0x09` | 24 | 183, 184, 186, 190, 192, 196, 212, 245 |
-| `0x14` | 13 | 299 |
-| `0x06` | 11 | 152, 154, 156 |
-| `0x01` | 9 | 177, 178 |
-| `0x03` | 5 | 171 |
-| `0x1f` | 5 | 283 |
-| `0xe2` | 5 | 297 |
-| `0x51` | 4 | 219 |
-| `0xe3` | 3 | 282 |
-| `0xe1` | 3 | 284 |
-| `0x07` | 2 | 159 |
-| `0x0e` | 2 | 227 |
-| `0xe0` | 2 | 280 |
-| `0xe5` | 2 | 158 |
-| `0xf0` | 1 | 265 |
-| `0xe9` | 1 | 318 |
-| `0x0d` | 1 | 317 |
-| `0x54` | 1 | 224 |
+**1424 placed objects have a type of 300 or above**,
+which is where the table stops, so they have no row and no opcode:
+the same boundary `model_of_type` changes its mind at.
+
+| opcode | objects | levels | types |
+| --- | --- | --- | --- |
+| `0xff` | 997 | 24 | 153, 155, 157, 161, 163, 164, 166, 206, 207, 208 |
+| `0x40` | 496 | 24 | 0, 3, 4, 5, 6, 7, 8, 9, 12, 14 |
+| `0x09` | 467 | 22 | 183, 184, 185, 186, 188, 190, 191, 192, 193, 194 |
+| `0x06` | 178 | 20 | 152, 154, 156, 160 |
+| `0xe6` | 136 | 13 | 287 |
+| `0xe2` | 134 | 27 | 297 |
+| `0x02` | 118 | 19 | 170, 174, 175, 176, 179 |
+| `0xe0` | 86 | 22 | 280 |
+| `0x14` | 76 | 17 | 299 |
+| `0x51` | 73 | 4 | 216, 217, 218, 219, 221 |
+| `0x03` | 64 | 6 | 171 |
+| `0xe3` | 63 | 25 | 282 |
+| `0x1f` | 61 | 16 | 283 |
+| `0xe1` | 50 | 14 | 284 |
+| `0x0e` | 48 | 24 | 227 |
+| `0x01` | 42 | 7 | 177, 178 |
+| `0xe9` | 42 | 4 | 288, 291 |
+| `0x07` | 37 | 10 | 159, 172, 173 |
+| `0x52` | 21 | 2 | 220 |
+| `0x0d` | 20 | 9 | 198, 199, 200, 202, 204, 226 |
+| `0x5f` | 20 | 2 | 290 |
+| `0xe5` | 19 | 6 | 158 |
+| `0x17` | 19 | 3 | 162 |
+| `0x1b` | 18 | 3 | 165, 167 |
+| `0x1a` | 18 | 3 | 258 |
+| `0x18` | 14 | 3 | 257 |
+| `0xf2` | 13 | 1 | 267, 268, 269, 270, 271, 272, 273, 274, 275, 276 |
+| `0xf0` | 12 | 12 | 264, 265 |
+| `0x53` | 12 | 3 | 259, 260 |
+| `0x15` | 10 | 6 | 298 |
+| `0x05` | 10 | 3 | 180 |
+| `0xe4` | 9 | 7 | 285 |
+| `0xea` | 8 | 2 | 289 |
+| `0x54` | 7 | 3 | 224 |
+| `0x16` | 7 | 7 | 254 |
+| `0x12` | 3 | 3 | 251 |
+| `0x55` | 2 | 1 | 222 |
+| `0x5a` | 2 | 1 | 225 |
+| `0x0f` | 1 | 1 | 203 |
+| `0x32` | 1 | 1 | 241 |
 
 ## Every arm
 
@@ -50,17 +75,17 @@ machine with 236 opcodes.
       calls sub_800445b8, vec_angle, object_sound, facing_test, sub_8001660c, sub_80074840, collide_query
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table, points at object_table, reads player_pos
 
-  0x8004814c  opcode 0x01   -- 9 objects on level 0
+  0x8004814c  opcode 0x01   -- 42 objects in the game
       257 instructions in 41 blocks
       calls sub_800445b8, vec_angle, object_sound, facing_test, sub_8001660c, sub_80074840, collide_query
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table, reads player_pos, writes player_strafe_speed
 
-  0x800475f8  opcode 0x02
+  0x800475f8  opcode 0x02   -- 118 objects in the game
       221 instructions in 37 blocks
       calls sub_800445b8, object_sound, collide_query
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
 
-  0x800470c4  opcode 0x03   -- 5 objects on level 0
+  0x800470c4  opcode 0x03   -- 64 objects in the game
       176 instructions in 32 blocks
       calls object_sound, sub_800443c8, collide_query
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
@@ -70,17 +95,17 @@ machine with 236 opcodes.
       calls object_sound, sub_800443c8, collide_query
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
 
-  0x80047444  opcode 0x05
+  0x80047444  opcode 0x05   -- 10 objects in the game
       177 instructions in 33 blocks
       calls object_sound, sub_800443c8, collide_query
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
 
-  0x80048790  opcode 0x06   -- 11 objects on level 0
+  0x80048790  opcode 0x06   -- 178 objects in the game
       301 instructions in 51 blocks
       calls player_in_rect, sub_80046c00, grid_query_area, place_player_on_terrain, sub_80019ab4, sub_8003d624, object_sound, sub_80044900 and 5 more
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table, reads player_pos, writes player_pos
 
-  0x80048960  opcode 0x07   -- 2 objects on level 0
+  0x80048960  opcode 0x07   -- 37 objects in the game
       250 instructions in 49 blocks
       calls player_in_rect, sub_80046c00, grid_query_area, place_player_on_terrain, sub_80019ab4, sub_8003d624, sub_80044900, object_set_present and 1 more
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table, reads player_pos, writes player_pos
@@ -90,7 +115,7 @@ machine with 236 opcodes.
       calls player_in_rect, sub_80046c00, grid_query_area, place_player_on_terrain, sub_80019ab4, sub_8003d624, object_sound, sub_80016240 and 3 more
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table, reads player_pos, writes player_pos
 
-  0x80048c34  opcode 0x09   -- 24 objects on level 0
+  0x80048c34  opcode 0x09   -- 467 objects in the game
       18 instructions in 5 blocks
       points at object_table
 
@@ -103,25 +128,25 @@ machine with 236 opcodes.
       calls object_use_state
       points at object_table
 
-  0x8004b204  opcodes 0x12, 0x16
+  0x8004b204  opcodes 0x12, 0x16   -- 10 objects in the game
       9 instructions in 2 blocks
 
-  0x8004847c  opcode 0x17
+  0x8004847c  opcode 0x17   -- 19 objects in the game
       317 instructions in 52 blocks
       calls player_in_rect, sub_80046c00, grid_query_area, place_player_on_terrain, sub_80019ab4, sub_8003d624, object_sound, sub_80044900 and 5 more
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table, reads player_pos, writes player_pos
 
-  0x8004aeb8  opcode 0x18
+  0x8004aeb8  opcode 0x18   -- 14 objects in the game
       82 instructions in 16 blocks
       calls object_use_state
       points at object_table, reads current_level_block, reads pending_level
 
-  0x8004b000  opcode 0x1a
+  0x8004b000  opcode 0x1a   -- 18 objects in the game
       133 instructions in 19 blocks
       calls object_use_state
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table, points at object_table
 
-  0x80047858  opcode 0x1b
+  0x80047858  opcode 0x1b   -- 18 objects in the game
       348 instructions in 60 blocks
       calls sub_800445b8, vec_angle, object_sound, facing_test, sub_8001660c, sub_80074840, collide_query
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table, points at object_table, reads player_pos
@@ -129,30 +154,30 @@ machine with 236 opcodes.
   0x8004b154  opcode 0x31
       5 instructions in 1 blocks
 
-  0x8004b168  opcode 0x32
+  0x8004b168  opcode 0x32   -- 1 objects in the game
       27 instructions in 7 blocks
       points at actor_table
 
-  0x80049188  opcode 0x51   -- 4 objects on level 0
+  0x80049188  opcode 0x51   -- 73 objects in the game
       341 instructions in 74 blocks
       calls object_set_present, sub_800533e8, player_in_rect, object_sound, sub_80046760, collide_query
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
 
-  0x80049888  opcode 0x52
+  0x80049888  opcode 0x52   -- 21 objects in the game
       240 instructions in 51 blocks
       calls object_sound, player_in_rect, object_set_present, sub_80046760, collide_query, sub_800533e8
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
 
-  0x80048c7c  opcode 0x53
+  0x80048c7c  opcode 0x53   -- 12 objects in the game
       156 instructions in 27 blocks
       calls player_in_rect, sub_800443c8
       reads current_level_block
 
-  0x80048ecc  opcode 0x54   -- 1 objects on level 0
+  0x80048ecc  opcode 0x54   -- 7 objects in the game
       136 instructions in 21 blocks
       calls player_in_rect, sub_800443c8
 
-  0x80049b40  opcode 0x55
+  0x80049b40  opcode 0x55   -- 2 objects in the game
       339 instructions in 66 blocks
       calls object_sound, sub_80046760, collide_query, sub_800533e8
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
@@ -175,12 +200,12 @@ machine with 236 opcodes.
       calls object_use_state
       points at object_table
 
-  0x800496b8  opcode 0x5a
+  0x800496b8  opcode 0x5a   -- 2 objects in the game
       171 instructions in 37 blocks
       calls player_in_rect, object_sound, collide_query, sub_800445b8
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
 
-  0x800490b8  opcode 0x5f
+  0x800490b8  opcode 0x5f   -- 20 objects in the game
       111 instructions in 22 blocks
       calls sub_800445b8
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
@@ -200,30 +225,30 @@ machine with 236 opcodes.
       calls collide_surface, sub_80056268, sub_80015f18
       reads collision_layer_offset
 
-  0x8004a7f8  opcode 0xe0   -- 2 objects on level 0
+  0x8004a7f8  opcode 0xe0   -- 86 objects in the game
       76 instructions in 9 blocks
       calls player_in_rect, object_trigger
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
 
-  0x8004a868  opcode 0xe1   -- 3 objects on level 0
+  0x8004a868  opcode 0xe1   -- 50 objects in the game
       107 instructions in 21 blocks
       calls player_in_rect, sub_800463bc
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
 
-  0x8004a954  opcode 0xe3   -- 3 objects on level 0
+  0x8004a954  opcode 0xe3   -- 63 objects in the game
       69 instructions in 8 blocks
       calls player_in_rect
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
 
-  0x8004a9a8  opcode 0xe4
+  0x8004a9a8  opcode 0xe4   -- 9 objects in the game
       46 instructions in 11 blocks
       calls player_in_rect
 
-  0x8004b4d0  opcodes 0xe5, 0xe9   -- 3 objects on level 0
+  0x8004b4d0  opcodes 0xe5, 0xe9   -- 61 objects in the game
       49 instructions in 6 blocks
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
 
-  0x8004aa60  opcode 0xe6   -- 28 objects on level 0
+  0x8004aa60  opcode 0xe6   -- 136 objects in the game
       104 instructions in 15 blocks
       calls player_in_rect
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table, points at object_table
@@ -238,7 +263,7 @@ machine with 236 opcodes.
       calls player_in_rect, sub_8003daec, grid_query_area, place_player_on_terrain
       reads player_pos, writes player_pos, writes player_facing, reads player_facing
 
-  0x8004a5b8  opcode 0xea
+  0x8004a5b8  opcode 0xea   -- 8 objects in the game
       95 instructions in 17 blocks
       calls player_in_rect, grid_query_area, sub_80046cb0
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table, reads player_pos

@@ -486,20 +486,17 @@ rebuilding the ISO. `tools/tarc.py` reads the container; there is no writer yet.
 romhacking.net (utility 1063) does exactly this job for the other games in the
 series, source included. See EXTERNAL.md.
 
-## Where `object_type_table` is built
+## Where `object_type_table` is built — found
 
-`0x8018fb3c`, 24-byte rows indexed by type id, and byte `+0` of each row is the
-object's behaviour opcode *and* its render class. It is not loaded whole from
-anywhere: 32 of the 819 non-zero rows in a level-0 snapshot appear verbatim in
-`FDAT.T` entry 1 at offset 9004 and the other 787 do not appear on the disc at
-all. The low rows read as item stats, so at least one source is `ITEM.T`.
+`FDAT.T` entry 97 at offset 4, behind a length word of 7200 = 300 × 24. All 300
+rows match a level-0 snapshot byte for byte, and the table is the same on every
+level. `tools/objops.py type_rows()` reads it and the port takes its class
+bytes from there instead of from a snapshot.
 
-Finding the rest is what lets the port run object behaviour on any level
-instead of borrowing level 0's classes from a snapshot. Everything that touches
-the table is listed by
-
-    python3 -c "import json;d=json.load(open('out/rdis/game.json'));[print(f['name'],hex(r['at'])) for f in d['functions'].values() for r in f['refs'] if r['addr']==0x8018fb3c]"
-
-and `init_level_state` reading `archive 4` entries `0x60` and `0x61` is the
-first thing to look at.
-
+The earlier note here said it was built at load time out of at least two
+sources. That was wrong, and the way it was wrong is worth keeping: a 48-byte
+search for one row hit a coincidental match in `FDAT.T` entry 1 first, and a
+base derived from that one hit then agreed with 32 rows out of 819 — which
+looked like partial evidence for a partial copy and was noise. The 819 was
+wrong as well: the table is 300 rows, and the other 519 were whatever follows
+it in RAM, read as type rows because the reader took `range(0x400)` on trust.
