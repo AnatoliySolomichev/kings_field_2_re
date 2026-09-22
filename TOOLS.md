@@ -732,6 +732,30 @@ reasons: capstone does not decode the GTE at all, and it hands back a string,
 which is the one thing an annotating pass cannot work with. It agrees with
 capstone on every R3000A instruction in GAME.EXE.
 
+**`subsys.py`** — which part of the game each routine belongs to.
+
+```
+python3 tools/subsys.py            the map, counted
+python3 tools/subsys.py player     one subsystem, routine by routine
+python3 tools/subsys.py 0x8002ed60 what one routine belongs to, and why
+python3 tools/subsys.py --doc      regenerate MAP.md
+```
+
+816 routines is too many to name one at a time and most will never earn a
+name. What every one of them can have is a **place**. `game_main`'s sixteen
+calls and `render_frame`'s twenty-two are the roots, and each routine goes to
+the root it is fewest calls from — ties to whichever runs first, which is the
+frame's own order.
+
+**Reachability alone says nothing here**, and the first version of this proved
+it: every root reaches nearly everything through a handful of shared helpers,
+and 630 of the 816 came out in one bucket called "shared". Nearest root is the
+question worth asking. The Sony library is taken out first — a walk stops *at*
+a library routine rather than charging everything below it to whoever called
+it.
+
+[MAP.md](MAP.md) is the generated map, and it places all 816.
+
 **`consts.py`** — every number in the code, where it appears, and what it is
 doing there.
 

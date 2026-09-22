@@ -79,6 +79,9 @@ def main(quick=False, only_check=False):
             run(["tools/pseudo.py", e, "--all"], f"{e} pseudocode",
                 keep=["wrote"])
 
+        print("\nWhere each routine belongs")
+        run(["tools/subsys.py", "--doc"], "MAP.md", keep=["wrote"])
+
         print("\nThe disc's own layout")
         run(["tools/fdat.py", "--doc"], "FDAT.md", keep=["wrote"])
 
