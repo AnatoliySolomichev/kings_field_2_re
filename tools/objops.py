@@ -3,6 +3,7 @@
 
     python3 tools/objops.py             every opcode, with what its arm touches
     python3 tools/objops.py --actors    the same for the creatures' own machine
+    python3 tools/objops.py --player    and for what a button press becomes
     python3 tools/objops.py 0x1f        one opcode in full
     python3 tools/objops.py --census    which opcodes level 0 actually uses
     python3 tools/objops.py --doc       regenerate OBJECTS.md
@@ -18,11 +19,13 @@ published for the handlers:  0x80198394 = the record
 if record[+4] < 236:  switch on it, through the table at 0x8001209c
 ```
 
-**The game has two machines of this shape** and this tool maps both.
+**The game has three machines of this shape** and this tool maps all of them.
 `object_interpreter` switches on `record[+4]` of the 396 objects through a
 236-arm table; `actor_tick` (`0x800500a8`) switches on `actor[+0xe]` of the
 199 creatures through a **241-arm table at `0x800128f0` with 31 distinct
-targets**, and `--actors` is that one.
+targets**, and `--actors` is that one. And `player_action` (`0x8002c30c`) switches on its
+first argument through **77 arms at `0x800117e8`** -- what a button press
+becomes, since `player_turn` calls it -- which is `--player`.
 
 So **byte +4 is the object's behaviour opcode**, and it is a copy of byte +0 of
 its type's row in `object_type_table` — which is what FORMATS.md had already
@@ -78,6 +81,9 @@ MACHINES = {
     "actors": {"routine": 0x800500A8, "table": 0x800128F0,
                "byte": "actor[+0xe]",
                "records": "actor_table, 199 records of 0x88"},
+    "player": {"routine": 0x8002C30C, "table": 0x800117E8,
+               "byte": "the first argument",
+               "records": "no table -- player_turn calls it with an action"},
 }
 
 _W = None
@@ -140,6 +146,34 @@ def body(w, fn, arm, stops):
             if t in fn.blocks:
                 queue.append(t)
     return sorted(seen)
+
+
+def _what_is(w, fn, arm):
+    """What a shared target actually is, rather than what one machine's is.
+
+    The first version of this printed "a call into the level's own code" for
+    every machine, because that is what the object machine's shared target
+    does. The player machine's is a plain epilogue, and the sentence would have
+    been a finding nobody made.
+    """
+    import bisect
+    blocks = sorted(fn.blocks)
+    i = bisect.bisect_right(blocks, arm) - 1
+    ins = fn.blocks[blocks[i]] if i >= 0 else []
+    ins = [a for a in ins if a >= arm][:12]
+    kinds = [w.insns[a] for a in ins]
+    if any(k.kind == "jr" and k.rs == 31 for k in kinds):
+        if not any(k.kind in ("call", "jalr") for k in kinds):
+            return "the routine's own epilogue -- those opcodes do nothing"
+    for a in ins:
+        i2 = w.insns[a]
+        if i2.kind == "jalr":
+            for at, addr, mode, _wd in fn.refs:
+                if at in ins and syms.name_in("game", addr, "") == "level_hooks":
+                    return ("a call through level_hooks -- an opcode it does "
+                            "not know is handed to the level's own code")
+            return "a call through a register"
+    return "not a handler; what it is has not been read"
 
 
 def profile(w, fn, blocks):
@@ -330,11 +364,11 @@ def report(op=None, out=sys.stdout, machine="objects"):
     cen, _over = (census() if machine == "objects" else ({}, {}))
     rows = sorted(grouped.items(), key=lambda kv: min(kv[1]))
     print(f"{len(t)} opcodes through {len(grouped)} arms; "
-          f"{len(grouped[shared])} of them reach {shared:#010x}, which is not "
-          f"a handler but a call into the level's own code "
-          f"(level_hooks+0x24); {len(grouped.get(CONTINUE, []))} reach "
-          f"{CONTINUE:#010x}, which is the loop's continue and does nothing",
-          file=out)
+          f"{len(grouped[shared])} of them reach {shared:#010x}, which is "
+          f"{_what_is(w, fn, shared)}", file=out)
+    if CONTINUE in grouped:
+        print(f"  and {len(grouped[CONTINUE])} reach {CONTINUE:#010x}, the "
+              f"loop's continue, which does nothing", file=out)
     for arm, ops in rows:
         if op is not None and op not in ops:
             continue
@@ -435,6 +469,8 @@ if __name__ == "__main__":
               else "no snapshot to take the classes from")
     elif a and a[0] == "--actors":
         report(None, sys.stdout, "actors")
+    elif a and a[0] == "--player":
+        report(None, sys.stdout, "player")
     elif a and a[0] == "--types":
         print(ROW.strip())
         print()

@@ -1647,6 +1647,39 @@ single name fits a field across all types. Trees keep round numbers 120–230 in
 +0x38 where a chest keeps `0xff`; doors keep their own cell in +0x39/+0x3a
 where a coin pile keeps its value.
 
+### Three machines of the same shape, and what they add up to
+
+The game dispatches on a byte three times, and all three are built the same
+way — a routine that switches on one byte through a big table, most of whose
+arms are the same target:
+
+| | switches on | arms | shared | what the shared one is |
+| --- | --- | --- | --- | --- |
+| `object_interpreter` | `record[+4]` of 396 objects | 236 | 191 | **a call through `level_hooks`** |
+| `actor_tick` | `actor[+0xe]` of 199 creatures | 241 | 209 | **a call through `level_hooks`** |
+| `player_action` | its own argument | 77 | 35 | the routine's own epilogue |
+
+Two of the three **hand an opcode they do not know to the level's own code**,
+through `level_hooks + 0x24`, the same entry of the same structure. That is the
+game's extension point: a level can give a creature or an object behaviour the
+executable has never heard of. The player's machine has no such escape — the
+opcodes it does not know do nothing.
+
+And the three join up. `player_turn` reads the button edges and calls
+`player_action`; its arms call **`effect_spawn`**, which takes a slot from the
+128 at `effect_slots` and writes the kind byte; `effect_driver` ticks that slot
+once a frame through **`effect_tick`**, whose own 130-arm switch is on the same
+kind byte; and `render_walk`'s third loop draws it. So
+
+```
+a button  ->  player_action (77)  ->  effect_spawn  ->  a slot
+          ->  effect_tick (130)   ->  render_walk    ->  the screen
+```
+
+is the whole of attacking and casting, and `cast_spell` and `spell_begin` are
+the two halves of paying for the second — one checks `spell_table[n] + 0x16`
+and the other subtracts it.
+
 ### The type row, and the 49 types that are places rather than things
 
 Each of the 300 rows is 24 bytes and this much of it is read:

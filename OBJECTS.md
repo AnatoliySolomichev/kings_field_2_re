@@ -68,7 +68,8 @@ the same boundary `model_of_type` changes its mind at.
 ## Every arm
 
 ```
-236 opcodes through 44 arms; 191 of them reach 0x8004b4b4, which is not a handler but a call into the level's own code (level_hooks+0x24); 2 reach 0x8004b4d0, which is the loop's continue and does nothing
+236 opcodes through 44 arms; 191 of them reach 0x8004b4b4, which is a call through level_hooks -- an opcode it does not know is handed to the level's own code
+  and 2 reach 0x8004b4d0, the loop's continue, which does nothing
 
   0x80047cbc  opcode 0x00
       347 instructions in 60 blocks
@@ -289,7 +290,7 @@ they do not know to the level. That is the game's extension point,
 and it is the same one twice.
 
 ```
-241 opcodes through 31 arms; 209 of them reach 0x80052bf8, which is not a handler but a call into the level's own code (level_hooks+0x24); 0 reach 0x8004b4d0, which is the loop's continue and does nothing
+241 opcodes through 31 arms; 209 of them reach 0x80052bf8, which is a call through level_hooks -- an opcode it does not know is handed to the level's own code
 
   0x800508b4  opcode 0x00
       178 instructions in 31 blocks

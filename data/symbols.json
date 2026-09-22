@@ -1848,5 +1848,40 @@
   "name": "seq_data",
   "kind": "data",
   "evidence": "FDAT 97 block 6, 832 bytes, the sequences seq_index points into. flag_gate, player_controller and level_overlay_tick read into it as well. What a sequence holds is not established"
+ },
+ "0x80053b64": {
+  "name": "effect_alloc",
+  "kind": "code",
+  "evidence": "scans the 128 effect_slots from the top for one whose +0 is 0xff and returns it, or zero when none is free"
+ },
+ "0x80053c84": {
+  "name": "effect_spawn",
+  "kind": "code",
+  "evidence": "(kind, a, b, c): takes a slot from effect_alloc and fills it -- +0 and +1 from the first two arguments, which is the kind byte effect_tick's 130-arm switch dispatches on. Ten callers, and it is how anything gets into the effect table"
+ },
+ "0x8002c30c": {
+  "name": "player_action",
+  "kind": "code",
+  "evidence": "a 77-arm switch at 0x800117e8 on its first argument, bounded by `sltiu $v0, $a0, 0x4d`. player_turn calls it -- the routine that reads the button edges -- and so does 0x8002d130, which spends MP. So it is what a button press becomes: the third dispatch machine in the game, beside the objects' 236 and the creatures' 241"
+ },
+ "0x800117e8": {
+  "name": "player_action_table",
+  "kind": "data",
+  "evidence": "77 arms for player_action's switch"
+ },
+ "0x8002d2a0": {
+  "name": "held_item_tick",
+  "kind": "code",
+  "evidence": "reads held_item_record and branches on 0x801b25af against 0x1b, 0x1d and 0xff; writes player_hp and reads offense_ratings, the buttons and bind_action. The frame of whatever is in the player's hands"
+ },
+ "0x8002d130": {
+  "name": "spell_begin",
+  "kind": "code",
+  "evidence": "(spell, commit, ...): compares player_mp with spell_table[spell] + 0x16 and, when there is enough, points 0x801b2590 at the record, zeroes magic_meter and **subtracts the cost**. So cast_spell checks and this one spends -- and it reads the MP cost from the same +0x16, which is a second, independent confirmation of that field"
+ },
+ "0x801b2590": {
+  "name": "casting_spell",
+  "kind": "data",
+  "evidence": "spell_begin points it at the spell_table record being cast"
  }
 }
