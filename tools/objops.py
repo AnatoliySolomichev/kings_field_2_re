@@ -21,7 +21,21 @@ So **byte +4 is the object's behaviour opcode**, and it is a copy of byte +0 of
 its type's row in `object_type_table` — which is what FORMATS.md had already
 established from the other side, as the class `render_walk` dispatches on.
 Doors, chests, levers, signs and the things that hurt you are all one machine
-with 236 opcodes, of which 44 have their own code and the rest share a tail.
+with 236 opcodes. **Two of the 44 targets are not handlers at all**, and a
+session with `emu/bp20.lua` armed is what made that obvious:
+
+* `0x8004b4b4`, which 191 opcodes reach, is **a call into the level's own
+  code** -- it loads `level_hooks` (`0x8018fae0`), takes its `+0x24` and
+  `jalr`s it. So an object whose class has no handler of its own is handed to
+  the level, which is the opposite of the "shared do-nothing tail" this tool
+  called it at first.
+* `0x8004b4d0` is the **loop's continue**, `$s2 += 0x44`. The two opcodes that
+  point there, `0xe5` and `0xe9`, therefore do nothing at all -- which is what
+  FORMATS.md already said about them from the drawing side, a chest closed and
+  one other.
+
+A breakpoint on `0x8004b4d0` fires for every object that finishes, not for the
+two opcodes, which is exactly what the log showed.
 
 This tool walks each arm's own blocks -- everything reachable from it without
 entering another arm -- and reports what that arm calls and which globals it
@@ -209,10 +223,17 @@ def report(op=None, out=sys.stdout):
     grouped = arms(w)
     stops = set(t.values())
     shared = max(grouped, key=lambda a: len(grouped[a]))
+    # 0x8004b4b4 is the one 191 opcodes reach, and it is a call into the
+    # level's hooks rather than a tail; 0x8004b4d0 is the loop's continue.
+    CONTINUE = 0x8004B4D0
     cen, _over = census()
     rows = sorted(grouped.items(), key=lambda kv: min(kv[1]))
     print(f"{len(t)} opcodes through {len(grouped)} arms; "
-          f"{len(grouped[shared])} of them share {shared:#010x}", file=out)
+          f"{len(grouped[shared])} of them reach {shared:#010x}, which is not "
+          f"a handler but a call into the level's own code "
+          f"(level_hooks+0x24); {len(grouped.get(CONTINUE, []))} reach "
+          f"{CONTINUE:#010x}, which is the loop's continue and does nothing",
+          file=out)
     for arm, ops in rows:
         if op is not None and op not in ops:
             continue

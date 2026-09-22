@@ -143,7 +143,45 @@ func _init() -> void:
 	if not _scripts():
 		quit(1)
 		return
+	if not _damage():
+		quit(1)
+		return
 	quit(0)
+
+
+# The hits emu/bp20.lua recorded, through the port's copy of the formula. What
+# is compared is the damage, against what the log's own HP either side says.
+func _damage() -> bool:
+	if not FileAccess.file_exists("res://damagecheck.json"):
+		print("damage: no cases to check against")
+		return true
+	var d = JSON.parse_string(
+		FileAccess.get_file_as_string("res://damagecheck.json"))
+	if typeof(d) != TYPE_DICTIONARY:
+		print("damage: damagecheck.json is not a dictionary")
+		return false
+	var defence: Array = d.get("defence", [])
+	var stat: int = int(d.get("stat", 0))
+	var k: int = int(d.get("k", KFDamage.K))
+	var hits: Array = d.get("hits", [])
+	var bad_d := 0
+	var seen := 0
+	for h in hits:
+		var before := int(h["before"])
+		var after := int(h["after"])
+		if before == 0 or after == 0:
+			continue                       # already dead, or the kill clamps
+		seen += 1
+		var got := KFDamage.hit(Array(h["attacks"]), defence, stat, k)
+		if int(got["damage"]) != before - after:
+			bad_d += 1
+			if bad_d == 1:
+				print("  hit %s: %d -> %d is %d, godot says %d" % [
+					str(h["attacks"].slice(0, 4)), before, after,
+					before - after, int(got["damage"])])
+	print("damage: %d of %d recorded hits reproduced exactly" % [
+		seen - bad_d, seen])
+	return bad_d == 0
 
 
 # Every entity script in the game, through both copies of the interpreter. What

@@ -1937,6 +1937,69 @@ record 98 asks for 1000000 experience and the total is capped at 999999.
 is not reproduced there, and comparing two different random sequences would
 say nothing.
 
+### What a hit takes off
+
+`player_take_hit` (`0x8002ab18`) was read months after everything around it and
+never checked, because nothing in this repository had ever recorded a creature
+hitting the player. A session with `emu/bp20.lua` armed did, and the formula
+comes out exactly.
+
+It is given **nine attack values, one per damage type** — slash, blow, stab,
+dark, holy, fire, earth, wind, water, the same nine the player's block carries
+as ratings — in `a0`..`a3` and `arg4`..`arg8`. Each goes through
+`damage_of_type` (`0x8002a5f8`) against the matching defence:
+
+```
+A = attack * 16
+D = ((stat_2524 * 0x801b24f8) >> 8) + defence * 16      0x801b24f8 is 0x1000
+if A == 0:  0                                           a type not in the attack
+if D == 0:  D = 0x10
+d = ( max(0, A - D) + (A * A) / (2 * D) ) / 5
+```
+
+**A hit gets through two ways at once**: the part that beats the defence
+outright, and a quadratic term that never quite vanishes. So an attack always
+does something, and a strong enough one grows faster than a defence can hold
+it — which is why armour in this game feels like it slows the bleeding rather
+than stopping it.
+
+The nine are summed and scaled twice, and both scales are read off the call
+site at `0x8004d358` rather than guessed — `0x1000` into `sp+0x24`, `0xa` into
+`sp+0x28`, and `sp+0x10` through `sp+0x20`, the other five damage types, all
+zero:
+
+```
+base = sum of the nine
+s1   = (0x1000 * base + 0x8000) >> 16      = base / 16, rounded
+dmg  = (0xa * s1) / 10                     = s1
+player_hp -= dmg                            apply_damage, 0x8002a6f4
+```
+
+**Checked against the game.** In the recorded session a creature hit a fresh
+character with `(slash 0, blow 40, stab 30)` three separate times and the log
+shows 50 → 36 → 22 → 8, fourteen each time. Against that character's own
+defence — slash 13, blow 6, stab 4, out of `out/snap/b.ram` — the model gives
+143 for the blow, 79 for the stab, 222 for the sum and **14** for the damage.
+`tools/damage.py` reproduces **6 of 6** recorded hits exactly, and the seventh —
+the one that killed the player — comes out at 59 against 33 HP. `godot/damage.gd`
+is the same formula and `selftest.gd` holds the two together on the same six.
+
+### The 191 opcodes that share a target are not doing nothing
+
+`object_interpreter`'s table has 44 distinct targets and **two of them are not
+handlers**:
+
+* `0x8004b4b4`, which 191 opcodes reach, loads `level_hooks` (`0x8018fae0`),
+  takes its `+0x24` and calls it. An object whose class has no handler of its
+  own is **handed to the level's own code**, which is the opposite of the
+  "shared do-nothing tail" this document called it at first.
+* `0x8004b4d0` is the loop's `continue`, `$s2 += 0x44`. The two opcodes that
+  point there, `0xe5` and `0xe9`, do nothing — which is what section 5 already
+  said from the drawing side.
+
+A breakpoint on `0x8004b4d0` therefore fires for every object that finishes,
+not for those two opcodes, and that is what the recorded session showed.
+
 ### 5.1 The player stat block, `0x801b24e0`
 
 The starting addresses are the GameShark code list for SLUS-00255 on

@@ -1000,7 +1000,8 @@ def project(lv, out="out/godot", start=(57, 4)):
     for name in ("player.gd", "collision.gd", "selftest.gd", "ghost.gd",
                  "labels.gd", "pad.gd", "boot.gd", "opening.gd",
                  "cutscene.gd", "actors.gd", "levelup.gd",
-                 "game.gd", "objects.gd", "escript.gd", "items.gd"):
+                 "game.gd", "objects.gd", "escript.gd", "items.gd",
+                 "damage.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening
@@ -1008,6 +1009,11 @@ def project(lv, out="out/godot", start=(57, 4)):
     except Exception as e:                       # no disc image, no title screen
         print(f"opening assets skipped: {e}")
     gdcoll.export(lv, out)
+    try:
+        import damage
+        damage.export(out)
+    except Exception as e:                       # no log, no recorded hits
+        print(f"damage cases skipped: {e}")
     try:
         import escript
         escript.export(out)
@@ -1064,8 +1070,9 @@ def verify(out="out/godot"):
                        capture_output=True, text=True, timeout=900)
     for line in (r.stdout + r.stderr).splitlines():
         if line.startswith(("loaded:", "movement:", "levels:", "angles:",
-                            "scripts:", "FAIL", "  first", "  level case",
-                            "  angle (", "  script level")):
+                            "scripts:", "damage:", "FAIL", "  first",
+                            "  level case", "  angle (", "  script level",
+                            "  hit ")):
             print("   " + line.strip())
     if r.returncode != 0:
         print("the port and the Python model disagree")

@@ -163,8 +163,7 @@
  "0x8005cbe0": {
   "name": "use_item",
   "kind": "code",
-  "evidence": "selected item in $s5, branches on the faced object type",
-  "size": 3096
+  "evidence": "selected item in $s5, branches on the faced object type. **a0 is a pointer, not an item id**: emu/bp20.lua logged 0x80195ff0, which is object_table + 261*0x44 + 0x40"
  },
  "0x8005d5f8": {
   "name": "load_area_name",
@@ -403,7 +402,7 @@
  "0x8005c308": {
   "name": "script_interpreter",
   "kind": "code",
-  "evidence": "(script record). Takes the entity's 120-byte record at entity_table + 120*rec[+2] and its running state at entity[+0x38], which must begin 0x70. state[+0x10] is the program counter, +0x13 the retry flag, +0x12 the wait state and +0x0c the TALK.T base a line is added to. A byte below 0xf0 -- and 0xf1, 0xfa..0xfe -- is a line: it drives the animation through 0x8005c0d4, loads TALK.T[base + byte] when the entity's kind is 0x2b, calls render_frame, and waits for bind_use. 0xf0..0xff dispatch through script_opcode_table"
+  "evidence": "(actor record -- confirmed by emu/bp20.lua, which logged 0x80185da8 and 0x80186d10, slots 0 and 58 of actor_table). Takes the entity's 120-byte record at entity_table + 120*rec[+2] and its running state at entity[+0x38], which must begin 0x70. state[+0x10] is the program counter, +0x13 the retry flag, +0x12 the wait state and +0x0c the TALK.T base a line is added to. A byte below 0xf0 -- and 0xf1, 0xfa..0xfe -- is a line: it drives the animation through 0x8005c0d4, loads TALK.T[base + byte] when the entity's kind is 0x2b, calls render_frame, and waits for bind_use. 0xf0..0xff dispatch through script_opcode_table"
  },
  "0x80013160": {
   "name": "script_opcode_table",
@@ -1703,7 +1702,7 @@
  "0x80047010": {
   "name": "object_interpreter",
   "kind": "code",
-  "evidence": "the third call in every frame and the largest routine in the game. Walks all 396 slots of object_table; per slot it publishes the record at 0x80198394 and object_type_table + 24*record[+6] at 0x80198390, skips a record whose +4 is 0xff, and switches on that byte through the 236-arm table at 0x8001209c -- 44 arms of their own code and 191 opcodes sharing the tail. Byte +4 is a copy of byte +0 of the type's row, which is the same class render_walk draws on. tools/objops.py maps it"
+  "evidence": "the third call in every frame and the largest routine in the game. Walks all 396 slots of object_table; per slot it publishes the record at 0x80198394 and object_type_table + 24*record[+6] at 0x80198390, skips a record whose +4 is 0xff, and switches on that byte through the 236-arm table at 0x8001209c -- 44 targets, of which two are not handlers: 0x8004b4b4, which 191 opcodes reach, calls level_hooks+0x24 -- the level's own code -- and 0x8004b4d0 is the loop's continue, which is where 0xe5 and 0xe9 go. Byte +4 is a copy of byte +0 of the type's row, which is the same class render_walk draws on. tools/objops.py maps it"
  },
  "0x8001209c": {
   "name": "object_op_table",
@@ -1749,5 +1748,30 @@
   "name": "level_hooks",
   "kind": "data",
   "evidence": "a pointer to a structure of function pointers. level_load points it at 0x8007e4e4; level_overlay_tick calls its +4 once a frame and a script's 0xf4 opcode calls its +0x10. Whether it is the same table tools/overlay.py lists as the level's entry points is not established"
+ },
+ "0x8002ab18": {
+  "name": "player_take_hit",
+  "kind": "code",
+  "evidence": "(slash, blow, stab, dark, holy, fire, earth, wind, water, scale, percent, kind) -- nine attack values, one per damage type, the same nine tools/player.py reads. Each goes through damage_of_type against the matching defence rating; the nine are summed, scaled by arg9 as (arg9*sum + 0x8000) >> 16 and by arg10 as (arg10*that)/10, and handed to apply_damage. Both scales are 0x1000 and 0xa at the call site 0x8004d358. Checked: 6 of 6 hits in out/lua_bp20.log reproduced exactly by tools/damage.py, and the seventh -- the kill -- comes out at 59 against 33 HP"
+ },
+ "0x8002a5f8": {
+  "name": "damage_of_type",
+  "kind": "code",
+  "evidence": "(stat, defence, attack) -> the damage of one type. A = attack*16, D = ((stat * [0x801b24f8]) >> 8) + defence*16, and the answer is (max(0, A - D) + A*A/(2*D)) / 5, with D forced to 0x10 when it is zero and 0 returned when the attack is. So a hit gets through in two ways at once and the quadratic term never quite vanishes"
+ },
+ "0x8002a6f4": {
+  "name": "apply_damage",
+  "kind": "code",
+  "evidence": "subtracts the damage from player_hp and clamps; the only place the player's HP goes down in combat"
+ },
+ "0x801b2524": {
+  "name": "player_stat_effective",
+  "kind": "data",
+  "evidence": "the effective copy of player_stat_36 that sub_80029500 writes each time the ratings are recomputed; damage_of_type scales the defence by it. 20 at level 1"
+ },
+ "0x801b24f8": {
+  "name": "damage_scale",
+  "kind": "data",
+  "evidence": "a halfword, 0x1000 in every snapshot; damage_of_type multiplies the stat by it and shifts right 8"
  }
 }

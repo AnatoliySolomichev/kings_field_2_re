@@ -329,6 +329,24 @@ python3 tools/savemap.py             the layout
 python3 tools/savemap.py save1       read those fields out of a snapshot
 ```
 
+**`damage.py`** — what a hit takes off, and the log that settles it.
+
+```
+python3 tools/damage.py              the model, against out/lua_bp20.log
+python3 tools/damage.py 0 40 30      one attack, by type
+python3 tools/damage.py --sites      who calls it
+```
+
+Nine attack values, one per damage type, each against the matching defence:
+`A = attack * 16`, `D = ((stat * 0x1000) >> 8) + defence * 16`, and the answer
+is `(max(0, A - D) + A*A/(2*D)) / 5`. **A hit gets through two ways at once** —
+the part that beats the defence, and a quadratic term that never quite
+vanishes — so an attack always does something. The nine are summed, halved
+sixteen times over and handed to `apply_damage`.
+
+**6 of 6** hits in the recorded session reproduced exactly; the seventh is the
+one that killed the player, and the model says 59 against 33 HP.
+
 **`player.py`** — the player's stat block, from a snapshot or from the emulator.
 
 ```

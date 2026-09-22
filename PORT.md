@@ -29,7 +29,7 @@ that it reproduces it correctly.** `status` says how far that went:
 | --- | --- | --- | --- | --- | --- |
 | boot | 10 | 1 | 0 | 115 | 50 (43%) |
 | open | 293 | 6 | 0 | 19753 | 1066 (5%) |
-| game | 816 | 29 | 5 | 92169 | 10269 (11%) |
+| game | 816 | 31 | 5 | 92169 | 10694 (11%) |
 | end | 167 | 0 | 0 | 9966 | 0 (0%) |
 
 Those percentages are of *all* the code in the image, which includes
@@ -45,6 +45,9 @@ floor, not a score.
 | [`godot/collision.gd:135`](godot/collision.gd#L135) | `func vec_angle` | `game:0x80016ab8` vec_angle | transcribed |
 | [`godot/actors.gd:253`](godot/actors.gd#L253) | `func _in_range` | `game:0x80016ec8` in_range | transcribed |
 | [`godot/levelup.gd:55`](godot/levelup.gd#L55) | `(the file)` | `game:0x8002a310` award_exp | transcribed |
+| [`godot/damage.gd:43`](godot/damage.gd#L43) | `var a` | `game:0x8002a5f8` damage_of_type | verified |
+| [`godot/damage.gd:33`](godot/damage.gd#L33) | `const TYPES` | `game:0x8002ab18` player_take_hit | verified |
+| [`godot/damage.gd:58`](godot/damage.gd#L58) | `var base` | `game:0x8002ab18` player_take_hit | verified |
 | [`godot/game.gd:86`](godot/game.gd#L86) | `const EYE_HEIGHT` | `game:0x8002b330` camera_pose | transcribed |
 | [`godot/player.gd:250`](godot/player.gd#L250) | `func _tick` | `game:0x8002e3f8` player_horizontal | partial |
 | [`godot/player.gd:338`](godot/player.gd#L338) | `func _move` | `game:0x8002ed60` player_vertical | verified |

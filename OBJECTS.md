@@ -68,7 +68,7 @@ the same boundary `model_of_type` changes its mind at.
 ## Every arm
 
 ```
-236 opcodes through 44 arms; 191 of them share 0x8004b4b4
+236 opcodes through 44 arms; 191 of them reach 0x8004b4b4, which is not a handler but a call into the level's own code (level_hooks+0x24); 2 reach 0x8004b4d0, which is the loop's continue and does nothing
 
   0x80047cbc  opcode 0x00
       347 instructions in 60 blocks
