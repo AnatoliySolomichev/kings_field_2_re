@@ -822,6 +822,26 @@ of question: a breakpoint on a routine you chose can only confirm the choice,
 while a watchpoint on the value makes whatever writes it name itself. All three
 need somebody walking about — that is the whole point of them.
 
+**`bp20.lua`** is the one for everything a player *does*, and it exists because
+five subsystems are read and none of them is checked: the object interpreter,
+the damage roll, the items, the script interpreter and the level load. It arms
+the **43 arms of the object interpreter that are not the shared tail** — the
+list is checked against `tools/objops.py` rather than copied — plus
+`0x8002ab18` on the way in and out with the player's HP either side,
+`use_item`, `has_item`, `take_item`, `give_item`, `script_interpreter` and
+`level_load`.
+
+```
+./emu/run.sh debug bp20.lua
+```
+
+Then play normally for a minute or two: open a door, take something out of a
+chest, talk to somebody, use an item, get hit. Each of those goes through one
+of those routines. An arm is logged the first eight times and counted after
+that, or a door you are standing next to fills the file on its own, and there
+is a heartbeat every 600 frames so an empty log can be told from breakpoints
+that never armed.
+
 **`bp19.lua`** is the one for the monsters. It puts an execution breakpoint on
 each of the 39 instructions in the actor cluster that store the state byte at
 `actor+9`, and logs every change as a transition — old value, new value, the
