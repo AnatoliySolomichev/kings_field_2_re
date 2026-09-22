@@ -11,11 +11,14 @@ earn a name. What every one of them can have is a **place**: the part of the
 frame it is reachable from.
 
 `game_main` runs sixteen calls in a loop and `render_frame` is twenty-two more
-(FORMATS.md, "What a frame is"). Each of those is a root here. A routine
-reached from exactly one root belongs to it; a routine reached from several is
-**shared**, and one reached from none is either dead or gets there through a
-pointer -- which is worth knowing on its own, because that is where the
-interrupt handlers and the level overlays' targets are.
+(FORMATS.md, "What a frame is"). Each of those is a root here, and a routine
+goes to the root it is **fewest calls from**, ties to whichever runs first.
+
+Reachability on its own says nothing: every root reaches nearly everything
+through a handful of shared helpers, and asking that question put 630 of the
+816 in one bucket called "shared". The Sony library is taken out first, and a
+walk stops *at* a library routine rather than charging everything below it to
+whoever called it -- without that it was 697.
 
 Nothing here is a guess: the edges are the call graph `tools/rdis.py` walked,
 and the roots are the calls `game_main` and `render_frame` actually make.
@@ -213,11 +216,17 @@ def document(path=None):
         p("reached, placed by which part of the frame it is reachable from.")
         p()
         p("`game_main` runs sixteen calls in a loop and `render_frame` is")
-        p("twenty-two more; each is a root. A routine reached from exactly one")
-        p("root belongs to it, one reached from several is **shared**, and one")
-        p("reached from none is either dead or gets there through a pointer —")
-        p("which is where the interrupt handlers and the level overlays'")
-        p("targets are, so that group is worth reading rather than skipping.")
+        p("twenty-two more; each is a root, and a routine goes to the root it")
+        p("is **fewest calls from** — ties to whichever runs first, which is")
+        p("the frame's own order. Reachability alone says nothing: every root")
+        p("reaches nearly everything through a handful of shared helpers, and")
+        p("asking that question put 630 of the 816 in one bucket. The Sony")
+        p("library is taken out first, and a walk stops *at* a library routine")
+        p("rather than charging everything below it to whoever called it.")
+        p()
+        p("`unreached` is the bucket worth reading rather than skipping: it is")
+        p("what nothing in the frame calls, which is where the interrupt")
+        p("handlers and whatever a pointer table reaches have to be.")
         p()
         p("| subsystem | routines | instructions | named |")
         p("| --- | --- | --- | --- |")
