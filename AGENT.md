@@ -169,9 +169,16 @@ object present writes `0xfc` into its terrain grid cell and going away writes
 back the byte at **+23 of the disc placement record**. A door *is* a wall while
 it is shut. FORMATS.md, "The scale triple is a switch".
 
-**4. The 53 objects with no model**, `MO.T` type 287 among them (28 instances on
-level 0). `tools/tmd.py` cannot find a TMD in those entries; their wrapper
-differs. Chests (`MO.T` 106) are one of them and are visibly missing.
+**4. The objects with no model — the rule is read now.** `model_of_type`
+(`0x80040568`) says it in eleven instructions: below type 300 the model is
+`type + 0x100`, and **from 300 up it is `type + 0x100 + 32 * level`**. So
+`MOF.T` is banked 32 models to a level, level *n* using bank *n + 4*, which
+holds for all 1424 placed objects of type 300 and above across 25 levels.
+`tools/tmd.py` ignored the level — right on level 0, wrong by 32 banks on level
+1, and level 0 is the only one the port has ever built.
+
+*What is left:* 33 of those 1424 still land on an empty `MOF.T` entry, and the
+`MO.T` wrapper problem below type 300 is separate and still open.
 
 **5. Enemies.** The 265 entity records are definitions — stats and kind, no
 position. Nothing places them yet. Find what does before drawing anything.
@@ -182,7 +189,27 @@ opening, the title menu and the whole input path are read and in
 `godot/opening.gd` and `godot/pad.gd`. What it left open is `END.EXE`, the
 save-loading path on the `GAME.EXE` side (`0x8001fa60`), and sound.
 
-**7. Everything else in BACKLOG.md**, which is ordered roughly by what it
+**7. What to port next, and how to find it.** `python3 tools/portmap.py --next`
+ranks every routine with no marker in the port by how many routines call it,
+leaving out the Sony library and anything that talks to hardware — Godot is
+what those were for. Read the candidate with `python3 tools/pseudo.py game
+<address>` before opening the listing; it is usually enough on its own.
+
+The systems still entirely unported, largest first: the creature AI
+(`sub_800568bc`, 4584 instructions), the object opcode interpreter
+(`sub_80047010`, 3965, with its own 236-arm switch), combat and the damage roll
+(`0x8002ab18` and `sub_80029500`), the inventory and the menus (the cluster
+around `0x80025468`, which now reads as screens because `ui_prim_begin`,
+`ui_prim_quad` and `ui_prim_add` are named), the entity script interpreter
+(`0x8005c308`, whose language `tools/escript.py` already decodes), save and
+load (`save_serialise`, `save_restore`), and sound.
+
+**None of those has a recording behind it.** The method this project runs on
+wants one — so for each, the first move is an `emu/bp*.lua` that logs the
+routine's arguments and its answer, and a person at the emulator playing for a
+minute. Reading alone gets a transcription; it does not get a number.
+
+**8. Everything else in BACKLOG.md**, which is ordered roughly by what it
 unblocks.
 
 ---
