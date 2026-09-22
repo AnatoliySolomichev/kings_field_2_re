@@ -2,6 +2,7 @@
 """What an object *does*, opcode by opcode.
 
     python3 tools/objops.py             every opcode, with what its arm touches
+    python3 tools/objops.py --actors    the same for the creatures' own machine
     python3 tools/objops.py 0x1f        one opcode in full
     python3 tools/objops.py --census    which opcodes level 0 actually uses
     python3 tools/objops.py --doc       regenerate OBJECTS.md
@@ -16,6 +17,12 @@ published for the handlers:  0x80198394 = the record
                              0x80198390 = object_type_table + 24 * record[+6]
 if record[+4] < 236:  switch on it, through the table at 0x8001209c
 ```
+
+**The game has two machines of this shape** and this tool maps both.
+`object_interpreter` switches on `record[+4]` of the 396 objects through a
+236-arm table; `actor_tick` (`0x800500a8`) switches on `actor[+0xe]` of the
+199 creatures through a **241-arm table at `0x800128f0` with 31 distinct
+targets**, and `--actors` is that one.
 
 So **byte +4 is the object's behaviour opcode**, and it is a copy of byte +0 of
 its type's row in `object_type_table` — which is what FORMATS.md had already
@@ -62,6 +69,17 @@ TYPE_TABLE = 0x8018FB3C
 TYPE_ROW = 24
 SNAP = os.path.join(ROOT, "out", "snap", "b.ram")
 
+# The two dispatch machines in the game, built the same way: a routine that
+# walks a table of records and switches on one byte of each.
+MACHINES = {
+    "objects": {"routine": 0x80047010, "table": 0x8001209C,
+                "byte": "record[+4]",
+                "records": "object_table, 396 records of 0x44"},
+    "actors": {"routine": 0x800500A8, "table": 0x800128F0,
+               "byte": "actor[+0xe]",
+               "records": "actor_table, 199 records of 0x88"},
+}
+
 _W = None
 
 
@@ -72,18 +90,19 @@ def walk():
     return _W
 
 
-def table(w=None):
-    """`{opcode: arm address}` for all 236, out of the resolved switch."""
+def table(w=None, machine="objects"):
+    """`{opcode: arm address}`, out of the machine's resolved switch."""
     w = w or walk()
-    fn = w.funcs[INTERP]
-    tb = next(t for t in fn.tables if t["base"] == 0x8001209C)
+    m = MACHINES[machine]
+    fn = w.funcs[m["routine"]]
+    tb = next(t for t in fn.tables if t["base"] == m["table"])
     return {i: t for i, t in enumerate(tb["targets"])}, tb
 
 
-def arms(w=None):
-    """`{arm: [opcodes that reach it]}`, the shared tail included."""
+def arms(w=None, machine="objects"):
+    """`{arm: [opcodes that reach it]}`, the shared targets included."""
     w = w or walk()
-    t, _tb = table(w)
+    t, _tb = table(w, machine)
     out = collections.defaultdict(list)
     for op, a in t.items():
         out[a].append(op)
@@ -297,17 +316,18 @@ def census(levels=range(28)):
     return dict(out), over
 
 
-def report(op=None, out=sys.stdout):
+def report(op=None, out=sys.stdout, machine="objects"):
     w = walk()
-    fn = w.funcs[INTERP]
-    t, tb = table(w)
-    grouped = arms(w)
+    m = MACHINES[machine]
+    fn = w.funcs[m["routine"]]
+    t, tb = table(w, machine)
+    grouped = arms(w, machine)
     stops = set(t.values())
     shared = max(grouped, key=lambda a: len(grouped[a]))
     # 0x8004b4b4 is the one 191 opcodes reach, and it is a call into the
     # level's hooks rather than a tail; 0x8004b4d0 is the loop's continue.
     CONTINUE = 0x8004B4D0
-    cen, _over = census()
+    cen, _over = (census() if machine == "objects" else ({}, {}))
     rows = sorted(grouped.items(), key=lambda kv: min(kv[1]))
     print(f"{len(t)} opcodes through {len(grouped)} arms; "
           f"{len(grouped[shared])} of them reach {shared:#010x}, which is not "
@@ -382,6 +402,26 @@ def document(path=None):
         p("```")
         p(buf.getvalue().rstrip())
         p("```")
+        p()
+        p("## And the creatures, which are the same machine again")
+        p()
+        p("`actor_tick` (`0x800500a8`) walks the 199 records of")
+        p("`actor_table`, 0x88 bytes each, and switches on **`actor[+0xe]`**")
+        p("through a 241-arm table at `0x800128f0`. Thirty of the arms are")
+        p("behaviours -- opcodes `0x00` to `0x1f` with `0x07` and `0x08`")
+        p("missing, plus `0x84` and `0xf0` -- and **209 opcodes reach")
+        p("`0x80052bf8`, which calls `level_hooks + 0x24`**, the same escape")
+        p("into the level's own code the object machine has at `0x8004b4b4`.")
+        p()
+        p("So both machines are built the same way and both hand an opcode")
+        p("they do not know to the level. That is the game's extension point,")
+        p("and it is the same one twice.")
+        p()
+        p("```")
+        b2 = io.StringIO()
+        report(None, b2, "actors")
+        p(b2.getvalue().rstrip())
+        p("```")
     return path
 
 
@@ -393,6 +433,8 @@ if __name__ == "__main__":
         got = export("out/godot")
         print("wrote " + os.path.relpath(got, ROOT) if got
               else "no snapshot to take the classes from")
+    elif a and a[0] == "--actors":
+        report(None, sys.stdout, "actors")
     elif a and a[0] == "--types":
         print(ROW.strip())
         print()

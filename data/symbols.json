@@ -782,7 +782,7 @@
  "0x800500a8": {
   "name": "actor_tick",
   "kind": "code",
-  "evidence": "the per-frame actor state machine; sets collision_layers and calls actor_move_vertical, actor_move_3d and the horizontal move"
+  "evidence": "the per-frame creature machine: walks the 199 records of actor_table and switches on actor[+0xe] through the 241-arm table at 0x800128f0, guarded by `sltiu $v0, $v1, 0xf1`. Thirty arms are behaviours -- opcodes 0x00..0x1f without 0x07 and 0x08, plus 0x84 and 0xf0 -- and 209 opcodes reach 0x80052bf8, which calls level_hooks+0x24, the same escape into the level's own code the object machine has. It also reads a record at actor[+0x60] whose +0, +4 and +0xa it branches on"
  },
  "0x8004dbc8": {
   "name": "actor_move_horizontal",
@@ -1818,5 +1818,10 @@
   "name": "equipped_b",
   "kind": "data",
   "evidence": "the second of the four. cast_spell halves a spell's MP cost when it holds 0x2e"
+ },
+ "0x800128f0": {
+  "name": "actor_op_table",
+  "kind": "data",
+  "evidence": "241 arms for actor_tick's switch on actor[+0xe], 31 distinct"
  }
 }
