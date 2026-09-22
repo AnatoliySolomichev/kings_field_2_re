@@ -286,10 +286,10 @@ FDAT.T: 132 entries
   entry   1    28672 bytes  the entities and placement, level 0  -- 6 blocks
       0  at      4    12992 bytes  32041e0804280000ff001011  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  010901043effff0200000c02  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  ff00ff0000000000000038ff
+      2  at  16204      768 bytes  ff00ff0000000000000038ff  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  020c2ffffd00f40100040004  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  01000301014d4dffffff0006  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  6e001c146e101a1a5a16201a
+      5  at  27432      640 bytes  6e001c146e101a1a5a16201a  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry   2     4096 bytes  the level's own code, level 0  -- 1 block
       0  at      4        5 bytes  b0831e80b8851e8004871e80
@@ -301,10 +301,10 @@ FDAT.T: 132 entries
   entry   4    28672 bytes  the entities and placement, level 1  -- 6 blocks
       0  at      4    12992 bytes  3404240810280002ff001011  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  0105012503ffff0200040004  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  ff00ff00f40100007c150000
+      2  at  16204      768 bytes  ff00ff00f40100007c150000  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  022f09ffee00000000040003  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  01000301014d4dffffff0006  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  509a0e06508c0614508c1e06
+      5  at  27432      640 bytes  509a0e06508c0614508c1e06  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry   5     4096 bytes  the level's own code, level 1  -- 1 block
       0  at      4        6 bytes  98831e80a8851e8080861e80
@@ -316,10 +316,10 @@ FDAT.T: 132 entries
   entry   7    28672 bytes  the entities and placement, level 2  -- 6 blocks
       0  at      4    12992 bytes  3404240810280002ff001011  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  0101010526ff730200000004  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  ff00ff000000000000009cff
+      2  at  16204      768 bytes  ff00ff000000000000009cff  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  022801ff18010000ff00ff00  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  01000301014d4dffffff0006  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  16561a0a0258100608580e06
+      5  at  27432      640 bytes  16561a0a0258100608580e06  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry   8     4096 bytes  the level's own code, level 2  -- 1 block
       0  at      4        7 bytes  c8831e804c861e80f4861e80
@@ -331,10 +331,10 @@ FDAT.T: 132 entries
   entry  10    28672 bytes  the entities and placement, level 3  -- 6 blocks
       0  at      4    12992 bytes  3404240810280002ff001011  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  0105004237ffff0200000004  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  ff00ff00c201000096006aff
+      2  at  16204      768 bytes  ff00ff00c201000096006aff  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  020000ff1a01000000040004  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  01000301014d4dffffff0006  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  026808060468061404780612
+      5  at  27432      640 bytes  026808060468061404780612  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry  11     2048 bytes  the level's own code, level 3  -- 1 block
       0  at      4        8 bytes  a0831e80b8851e80c0851e80
@@ -346,10 +346,10 @@ FDAT.T: 132 entries
   entry  13    28672 bytes  the entities and placement, level 4  -- 6 blocks
       0  at      4    12992 bytes  32041e0804280000ff001011  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  010301430bffff02000c0003  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  0900ff002c017805a4060000
+      2  at  16204      768 bytes  0900ff002c017805a4060000  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  020538ffb100000c00000000  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  01000301014d4dffffff0006  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  80000e0480040e107a0e1406
+      5  at  27432      640 bytes  80000e0480040e107a0e1406  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry  14     4096 bytes  the level's own code, level 4  -- 1 block
       0  at      4        9 bytes  e8841e8044871e804c871e80
@@ -361,10 +361,10 @@ FDAT.T: 132 entries
   entry  16    28672 bytes  the entities and placement, level 5  -- 6 blocks
       0  at      4    12992 bytes  32041e0804280000ff001011  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  0109010d0bffff020000a406  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  5300ff000000200320030000
+      2  at  16204      768 bytes  5300ff000000200320030000  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  020003ff180100000f002500  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  01000301014d4dffffff0006  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  0a100a060a10060c764c040e
+      5  at  27432      640 bytes  0a100a060a10060c764c040e  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry  17     2048 bytes  the level's own code, level 5  -- 1 block
       0  at      4       10 bytes  98831e80a0851e80a8851e80
@@ -376,10 +376,10 @@ FDAT.T: 132 entries
   entry  19    28672 bytes  the entities and placement, level 6  -- 6 blocks
       0  at      4    12992 bytes  3404240810280002ff001011  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  0108010530ffff0200040007  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  ff00ff006400780508070000
+      2  at  16204      768 bytes  ff00ff006400780508070000  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  020204ffb000000400040000  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  01000301014d4dffffff0006  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  000206100002080608020806
+      5  at  27432      640 bytes  000206100002080608020806  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry  20     4096 bytes  the level's own code, level 6  -- 1 block
       0  at      4       11 bytes  3c851e804c871e8054871e80
@@ -391,10 +391,10 @@ FDAT.T: 132 entries
   entry  22    28672 bytes  the entities and placement, level 7  -- 6 blocks
       0  at      4    12992 bytes  3804c80810280006ff001011  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  0003011c4280ff0200000004  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  ff00ff002c01000060090000
+      2  at  16204      768 bytes  ff00ff002c01000060090000  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  020f10ff4401000000040004  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  01000301014d4dffffff0006  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  140012100c02140604020806
+      5  at  27432      640 bytes  140012100c02140604020806  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry  23     2048 bytes  the level's own code, level 7  -- 1 block
       0  at      4       12 bytes  98831e80a0851e80a8851e80
@@ -406,10 +406,10 @@ FDAT.T: 132 entries
   entry  25    28672 bytes  the entities and placement, level 8  -- 6 blocks
       0  at      4    12992 bytes  2a04f108042807ffffe21011  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  0001014418ffff0200080006  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  ff00ff0000000000000070fe
+      2  at  16204      768 bytes  ff00ff0000000000000070fe  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  020000ff1a01000000040004  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  01000301014d4dffffff0006  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  94900a108c90120a7e90180a
+      5  at  27432      640 bytes  94900a108c90120a7e90180a  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry  26     2048 bytes  the level's own code, level 8  -- 1 block
       0  at      4       13 bytes  98831e80a0851e8044861e80
@@ -421,10 +421,10 @@ FDAT.T: 132 entries
   entry  28    28672 bytes  the entities and placement, level 9  -- 6 blocks
       0  at      4    12992 bytes  3c04c8080428000aff001011  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  ffffffffffffffffffffffff  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  ff00ff040000e80334080000
+      2  at  16204      768 bytes  ff00ff040000e80334080000  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  02231eff4501580200000000  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  01000301014d4dffffff0006  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  141c06060a1c0a060a120610
+      5  at  27432      640 bytes  141c06060a1c0a060a120610  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry  29     4096 bytes  the level's own code, level 9  -- 1 block
       0  at      4       14 bytes  7c841e80f4861e80fc861e80
@@ -436,10 +436,10 @@ FDAT.T: 132 entries
   entry  31    28672 bytes  the entities and placement, level 10  -- 6 blocks
       0  at      4    12992 bytes  4004c8080428000eff001011  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  000200290dffff02e8030004  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  ff00ff0020030000e803ceff
+      2  at  16204      768 bytes  ff00ff0020030000e803ceff  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  02130eff4601000000040004  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  01000301014d4dffffff0006  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  5a00060a500410065004060e
+      5  at  27432      640 bytes  5a00060a500410065004060e  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry  32     2048 bytes  the level's own code, level 10  -- 1 block
       0  at      4       15 bytes  98831e80a0851e80a8851e80
@@ -451,10 +451,10 @@ FDAT.T: 132 entries
   entry  34    28672 bytes  the entities and placement, level 11  -- 6 blocks
       0  at      4    12992 bytes  3804c80810280006ff001011  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  010301140cff7c0200080004  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  0900ff000000b00400000000
+      2  at  16204      768 bytes  0900ff000000b00400000000  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  023042ff4401000000040004  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  01000301014d4dffffff0006  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  005c12060c56060c0c560e06
+      5  at  27432      640 bytes  005c12060c56060c0c560e06  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry  35     2048 bytes  the level's own code, level 11  -- 1 block
       0  at      4       16 bytes  98831e80c4851e80cc851e80
@@ -466,10 +466,10 @@ FDAT.T: 132 entries
   entry  37    28672 bytes  the entities and placement, level 12  -- 6 blocks
       0  at      4    12992 bytes  3704c80810280005ff001011  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  010001101bff890200000004  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  ff00ff0300000000000ef000
+      2  at  16204      768 bytes  ff00ff0300000000000ef000  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  023518ff18010000ff00ff00  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  01000301014d4dffffff0006  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  025a0a0a045a0610046a0612
+      5  at  27432      640 bytes  025a0a0a045a0610046a0612  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry  38     2048 bytes  the level's own code, level 12  -- 1 block
       0  at      4       17 bytes  98831e80d0851e80d8851e80
@@ -481,10 +481,10 @@ FDAT.T: 132 entries
   entry  40    28672 bytes  the entities and placement, level 13  -- 6 blocks
       0  at      4    12992 bytes  3c04c8080428000aff001011  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  0102011d06ffff02e8030004  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  ff00ff040000000014050000
+      2  at  16204      768 bytes  ff00ff040000000014050000  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  024d2cff18010000ff00ff00  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  01000301014d4dffffff0006  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  4e8c06144c880a1048801212
+      5  at  27432      640 bytes  4e8c06144c880a1048801212  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry  41     2048 bytes  the level's own code, level 13  -- 1 block
       0  at      4       18 bytes  98831e80a0851e80a8851e80
@@ -496,10 +496,10 @@ FDAT.T: 132 entries
   entry  43    28672 bytes  the entities and placement, level 14  -- 6 blocks
       0  at      4    12992 bytes  42041e0804000010ff001011  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  0106013313ffff0200040004  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  ff00ff000000000000000000
+      2  at  16204      768 bytes  ff00ff000000000000000000  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  022310ff18010000ff00ff00  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  01000401020420ffffff0008  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  1e3a08060e3a1008083a1008
+      5  at  27432      640 bytes  1e3a08060e3a1008083a1008  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry  44     2048 bytes  the level's own code, level 14  -- 1 block
       0  at      4       19 bytes  98831e80c4851e80cc851e80
@@ -511,10 +511,10 @@ FDAT.T: 132 entries
   entry  46    28672 bytes  the entities and placement, level 15  -- 6 blocks
       0  at      4    12992 bytes  3c04c8080428000aff001011  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  0101000206ffff0200000004  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  ff00ff000000000000000000
+      2  at  16204      768 bytes  ff00ff000000000000000000  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  020000ff1a01000000040004  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  01000301014d4dffffff0006  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  003e080638020806082e0816
+      5  at  27432      640 bytes  003e080638020806082e0816  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry  47     2048 bytes  the level's own code, level 15  -- 1 block
       0  at      4       20 bytes  98831e80a0851e80a8851e80
@@ -526,10 +526,10 @@ FDAT.T: 132 entries
   entry  49    28672 bytes  the entities and placement, level 16  -- 6 blocks
       0  at      4    12992 bytes  4d04c8080428001bff001011  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  0000001302ffff0200080004  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  ff00ff002c010000fc089cff
+      2  at  16204      768 bytes  ff00ff002c010000fc089cff  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  020000ff1a01000000040004  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  01000301014d4dffffff0006  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  020210060a02100614020614
+      5  at  27432      640 bytes  020210060a02100614020614  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry  50     2048 bytes  the level's own code, level 16  -- 1 block
       0  at      4       21 bytes  98831e80a0851e80a8851e80
@@ -541,10 +541,10 @@ FDAT.T: 132 entries
   entry  52    28672 bytes  the entities and placement, level 17  -- 6 blocks
       0  at      4    12992 bytes  43041e0804000011ff001011  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  0008014b48ff000200080004  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  ff00ff002c010000fc089cff
+      2  at  16204      768 bytes  ff00ff002c010000fc089cff  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  020000ff1a01000000040004  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  01000301014d4dffffff0006  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  48020a1248060a1248100a12
+      5  at  27432      640 bytes  48020a1248060a1248100a12  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry  53     4096 bytes  the level's own code, level 17  -- 1 block
       0  at      4       22 bytes  50841e8058861e80f8861e80
@@ -556,10 +556,10 @@ FDAT.T: 132 entries
   entry  55    28672 bytes  the entities and placement, level 18  -- 6 blocks
       0  at      4    12992 bytes  3f04c8080428000dff001011  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  0003014718ffff02b0040004  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  0d00ff000000e803f4010000
+      2  at  16204      768 bytes  0d00ff000000e803f4010000  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  022405ff18010000ff00ff00  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  01000301014d4dffffff0006  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  123208060a3208060a320614
+      5  at  27432      640 bytes  123208060a3208060a320614  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry  56     2048 bytes  the level's own code, level 18  -- 1 block
       0  at      4       23 bytes  98831e80a0851e80a8851e80
@@ -571,10 +571,10 @@ FDAT.T: 132 entries
   entry  58    28672 bytes  the entities and placement, level 19  -- 6 blocks
       0  at      4    12992 bytes  32041e0804280000ff001011  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  0104011203ffff0200080004  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  eb00ff000000000000000000
+      2  at  16204      768 bytes  eb00ff000000000000000000  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  02080cffa400000c00040008  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  01000301014d4dffffff0006  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  1a000a121a060a121a0c0a12
+      5  at  27432      640 bytes  1a000a121a060a121a0c0a12  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry  59     2048 bytes  the level's own code, level 19  -- 1 block
       0  at      4       24 bytes  98831e80a0851e80a8851e80
@@ -586,10 +586,10 @@ FDAT.T: 132 entries
   entry  61    28672 bytes  the entities and placement, level 20  -- 6 blocks
       0  at      4    12992 bytes  5604c80804280024ff001011  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  0100013926ffff0200000004  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  eb00ff000000000000000000
+      2  at  16204      768 bytes  eb00ff000000000000000000  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  020000ff1a01000000040004  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  01000301014d4dffffff0006  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  481a0e0e48220e0c48280e08
+      5  at  27432      640 bytes  481a0e0e48220e0c48280e08  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry  62     2048 bytes  the level's own code, level 20  -- 1 block
       0  at      4       25 bytes  98831e80a0851e80a8851e80
@@ -601,10 +601,10 @@ FDAT.T: 132 entries
   entry  64    28672 bytes  the entities and placement, level 21  -- 6 blocks
       0  at      4    12992 bytes  3d04c8080428000aff001011  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  ffffffffffffffffffffffff  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  ff00ff000000000000000000
+      2  at  16204      768 bytes  ff00ff000000000000000000  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  ffffffffffffffffffffffff  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  01000301014d4dffffff0006  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  1004342e3404362e6604302e
+      5  at  27432      640 bytes  1004342e3404362e6604302e  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry  65     2048 bytes  the level's own code, level 21  -- 1 block
       0  at      4       26 bytes  98831e80a0851e80a8851e80
@@ -616,10 +616,10 @@ FDAT.T: 132 entries
   entry  67    28672 bytes  the entities and placement, level 22  -- 6 blocks
       0  at      4    12992 bytes  4c04c8080400001affd81011  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  0100011335ffff0208070004  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  ff00ff0300000000000ef000
+      2  at  16204      768 bytes  ff00ff0300000000000ef000  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  020000ff1a01000000040004  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  01000301014d4dffffff0006  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  041e061e0402061e52101806
+      5  at  27432      640 bytes  041e061e0402061e52101806  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry  68     2048 bytes  the level's own code, level 22  -- 1 block
       0  at      4       27 bytes  98831e80f4851e80fc851e80
@@ -631,10 +631,10 @@ FDAT.T: 132 entries
   entry  70    28672 bytes  the entities and placement, level 23  -- 6 blocks
       0  at      4    12992 bytes  4904c80804280017ff001011  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  0100014240ff6d0200040004  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  ff00ff0064000000960038ff
+      2  at  16204      768 bytes  ff00ff0064000000960038ff  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  020000ff1a01000000040004  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  01000301014d4dffffff0006  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  8c7612068c6c06106802180a
+      5  at  27432      640 bytes  8c7612068c6c06106802180a  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry  71     2048 bytes  the level's own code, level 23  -- 1 block
       0  at      4       28 bytes  98831e80e4851e80ec851e80
@@ -646,10 +646,10 @@ FDAT.T: 132 entries
   entry  73    28672 bytes  the entities and placement, level 24  -- 6 blocks
       0  at      4    12992 bytes  4a04c80804280018ff001011  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  010001110effff0220030004  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  ff00ff0064000000960038ff
+      2  at  16204      768 bytes  ff00ff0064000000960038ff  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  020000ff1a01000000040004  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  01000301014d4dffffff0006  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  028612120a861212027e1212
+      5  at  27432      640 bytes  028612120a861212027e1212  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry  74     2048 bytes  the level's own code, level 24  -- 1 block
       0  at      4       29 bytes  98831e80d0851e80d8851e80
@@ -661,10 +661,10 @@ FDAT.T: 132 entries
   entry  76    28672 bytes  the entities and placement, level 25  -- 6 blocks
       0  at      4    12992 bytes  6504f1080428003334003032  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  0200012828ff000200080004  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  ff00ff000000000000000000
+      2  at  16204      768 bytes  ff00ff000000000000000000  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  020034ff2101000000040004  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  01000301014d4dffffff0006  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  000000000000000000000000
+      5  at  27432      640 bytes  000000000000000000000000  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry  77     4096 bytes  the level's own code, level 25  -- 1 block
       0  at      4       30 bytes  98831e80a0851e80a8851e80
@@ -676,10 +676,10 @@ FDAT.T: 132 entries
   entry  79    28672 bytes  the entities and placement, level 26  -- 6 blocks
       0  at      4    12992 bytes  3e04c8080428000cff001011  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  000100233180ff0200000004  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  ff00ff0000000000000038ff
+      2  at  16204      768 bytes  ff00ff0000000000000038ff  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  020436ff1801000049003800  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  00000401020b06ffffff0004  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  0e8c0a0e1a8c0a0e24820a0a
+      5  at  27432      640 bytes  0e8c0a0e1a8c0a0e24820a0a  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry  80     4096 bytes  the level's own code, level 26  -- 1 block
       0  at      4       31 bytes  7c841e8084861e80bc861e80
@@ -691,10 +691,10 @@ FDAT.T: 132 entries
   entry  82    28672 bytes  the entities and placement, level 27  -- 6 blocks
       0  at      4    12992 bytes  6404f10804280032ff003032  40 entity records of 120 bytes, then their scripts -- the script block starts at 4804 (tools/entities.py, tools/escript.py)
       1  at  13000     3200 bytes  0200002828ff000200000004  the actor table -- 200 records of 16 (tools/actors.py)
-      2  at  16204      768 bytes  5800ff030000b0046400f000
+      2  at  16204      768 bytes  5800ff030000b0046400f000  copied to 0x8019175c by level_load -- which is exactly 0x300 below object_table, so it abuts it. Nothing has been found reading it
       3  at  16976     8400 bytes  023400ff2101000000040004  the object placement -- 350 records of 24 (tools/placement.py)
       4  at  25380     2048 bytes  01000301014d4dffffff0006  2048 bytes of tile shapes, copied to 0x801e4464
-      5  at  27432      640 bytes  000000000000000000000000
+      5  at  27432      640 bytes  000000000000000000000000  copied to 0x801ba6fc by level_load, 0x28c below story_flags. Nothing has been found reading it
 
   entry  83     2048 bytes  the level's own code, level 27  -- 1 block
       0  at      4       32 bytes  98831e80a0851e80a8851e80

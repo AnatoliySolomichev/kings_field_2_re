@@ -29,8 +29,7 @@
  "0x80018358": {
   "name": "level_load",
   "kind": "code",
-  "evidence": "calls apply_level_state and stores the current level",
-  "size": 2312
+  "evidence": "a seven-state machine on 0x8018fad6 dispatched through the table at 0x80011070, running one step a frame. It reads archive 4 entries 3*pending_level, +1 and +2 -- the grid, the entities and placement, and the level's own code -- and copies each block to its home: the grid to level_grid (16000 words), the entity block to entity_table (0xcb0 words), the 768-byte block to 0x8019175c and the 640-byte one to 0x801ba6fc. State 0 first marks all 396 object slots free by writing 0xff into record[+4]"
  },
  "0x800187f0": {
   "name": "read_pending_level",

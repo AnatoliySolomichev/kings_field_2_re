@@ -23,7 +23,9 @@ eleven blocks are:
 | 3 | 1200 | the **level table**, 100 rows of 12, the last one zero; HP, MP, a stat gain and the experience for the next level |
 | 5 | 2304 | the **creature animation frames** |
 
-and the other eight are not identified yet. Naming one of them is a matter of
+and the other eight are not identified yet. The two unnamed per-level blocks
+are at least *placed*: `level_load` copies them to `0x8019175c` and
+`0x801ba6fc`, which abut `object_table` and `story_flags`. Naming one of them is a matter of
 finding what reads it, and `out/rdis/game.json` answers that: every routine's
 `reads` list is in there.
 """
@@ -65,6 +67,15 @@ PER_LEVEL = {
     (1, 1): "the actor table -- 200 records of 16 (tools/actors.py)",
     (1, 3): "the object placement -- 350 records of 24 (tools/placement.py)",
     (1, 4): "2048 bytes of tile shapes, copied to 0x801e4464",
+    # The two that are not identified are at least *placed*: level_load copies
+    # each to a fixed address, and both sit immediately before a table that is
+    # known, which is worth writing down even though nothing has been found
+    # reading either of them yet.
+    (1, 2): "copied to 0x8019175c by level_load -- which is exactly 0x300 "
+            "below object_table, so it abuts it. Nothing has been found "
+            "reading it",
+    (1, 5): "copied to 0x801ba6fc by level_load, 0x28c below story_flags. "
+            "Nothing has been found reading it",
 }
 
 
