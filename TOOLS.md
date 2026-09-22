@@ -172,6 +172,39 @@ python3 tools/actors.py 0 --at 62 8    # arriving in cell (62,8)
 python3 tools/actors.py --all          # every level, by category
 ```
 
+**`objops.py`** — what an object *does*, opcode by opcode.
+
+```
+python3 tools/objops.py             every opcode, with what its arm touches
+python3 tools/objops.py 0x1f        one opcode in full
+python3 tools/objops.py --census    which opcodes level 0 actually uses
+python3 tools/objops.py --doc       regenerate OBJECTS.md
+```
+
+`object_interpreter` (`0x80047010`) is the third call in every frame and the
+largest routine in the game. It walks all 396 slots of `object_table` and
+switches on **byte +4 of the record** — a copy of byte +0 of its type's row,
+the same class `render_walk` draws on. So doors, chests, levers, signs and the
+things that hurt you are **one machine with 236 opcodes**, 44 of which have
+their own code.
+
+The tool walks each arm's own blocks — everything reachable from it without
+entering another arm, which is what keeps the shared tail from swallowing all
+of them — and reports what that arm calls and touches. Nothing is interpreted;
+the arms come from the `sltiu` that guards the index.
+
+It reads as you would hope. `0x00`–`0x05` and `0x1b` write `player_pos` and
+`player_speed`: doors that shove you. `0x06`–`0x08`, `0x17`, `0x57`, `0xe7` and
+`0xe8` write the position *and* the facing and call `place_player_on_terrain`:
+teleports. `0xeb` calls `level_load` and `actors_retire_marked`: the way
+between levels. `0x51`, `0x52` and `0x55` call `object_set_present`: things
+that come and go. `0x60`–`0x62` call `collide_surface`: things that follow the
+floor.
+
+The census is narrower on purpose — `object_type_table` is filled per level, so
+a snapshot answers for that level and no other. [OBJECTS.md](OBJECTS.md) is the
+generated index.
+
 **`readables.py`** — every object you can read, and what it says. This is the
 one that turns the world into text: signs, graves, plaques, with their cells.
 

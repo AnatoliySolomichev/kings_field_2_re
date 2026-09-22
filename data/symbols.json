@@ -1701,5 +1701,45 @@
   "name": "held_item_record",
   "kind": "data",
   "evidence": "draw_held_item reads its +0x34..+0x38 as a position and +0x3c as a rotation, and hands the rotation to 0x80076168"
+ },
+ "0x80047010": {
+  "name": "object_interpreter",
+  "kind": "code",
+  "evidence": "the third call in every frame and the largest routine in the game. Walks all 396 slots of object_table; per slot it publishes the record at 0x80198394 and object_type_table + 24*record[+6] at 0x80198390, skips a record whose +4 is 0xff, and switches on that byte through the 236-arm table at 0x8001209c -- 44 arms of their own code and 191 opcodes sharing the tail. Byte +4 is a copy of byte +0 of the type's row, which is the same class render_walk draws on. tools/objops.py maps it"
+ },
+ "0x8001209c": {
+  "name": "object_op_table",
+  "kind": "data",
+  "evidence": "236 arms for object_interpreter's switch at 0x800470bc, guarded by `sltiu $v0, $v1, 0xec` on the object's class byte"
+ },
+ "0x80198394": {
+  "name": "current_object",
+  "kind": "data",
+  "evidence": "object_interpreter writes the record it is running before dispatching, so every arm can find it without an argument"
+ },
+ "0x80198390": {
+  "name": "current_object_type",
+  "kind": "data",
+  "evidence": "the same for object_type_table + 24 * record[+6], the type's own 24-byte row"
+ },
+ "0x8004482c": {
+  "name": "object_sound",
+  "kind": "code",
+  "evidence": "(record, kind) -> sound_cue_at(kind, record + 0x14, 0x78, 0). record+0x14 is the object's world position, so this is a cue played where the object stands. Nearly every arm of the object interpreter calls it"
+ },
+ "0x80015654": {
+  "name": "sound_cue_at",
+  "kind": "code",
+  "evidence": "(kind, position, range, flags) -- what object_sound is a wrapper for, and what sound_play_3d sits under"
+ },
+ "0x80046884": {
+  "name": "player_in_rect",
+  "kind": "code",
+  "evidence": "(cx, cz, w, h): true when the player's own cell -- player_pos >> 11 and 0x801b25f8 >> 11 -- lies inside the rectangle. The trigger test every door, teleport and switch in the object interpreter uses"
+ },
+ "0x80046914": {
+  "name": "object_use_state",
+  "kind": "code",
+  "evidence": "switches on the object's +8, the interaction state, and gives up when its +0x38 is 0xff. The handler the opcodes that need a use call"
  }
 }

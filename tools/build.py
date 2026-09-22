@@ -79,6 +79,9 @@ def main(quick=False, only_check=False):
             run(["tools/pseudo.py", e, "--all"], f"{e} pseudocode",
                 keep=["wrote"])
 
+        print("\nWhat an object does")
+        run(["tools/objops.py", "--doc"], "OBJECTS.md", keep=["wrote"])
+
         print("\nThe port, against the game")
         run(["tools/portmap.py", "--doc"], "PORT.md", keep=["wrote"])
 
