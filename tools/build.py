@@ -79,6 +79,9 @@ def main(quick=False, only_check=False):
             run(["tools/pseudo.py", e, "--all"], f"{e} pseudocode",
                 keep=["wrote"])
 
+        print("\nThe disc's own layout")
+        run(["tools/fdat.py", "--doc"], "FDAT.md", keep=["wrote"])
+
         print("\nWhat an object does")
         run(["tools/objops.py", "--doc"], "OBJECTS.md", keep=["wrote"])
 

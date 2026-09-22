@@ -113,6 +113,35 @@ words beside what they find.
 
 ## Levels
 
+**`fdat.py`** — `FDAT.T` entry by entry and block by block.
+
+```
+python3 tools/fdat.py              every entry, with its blocks
+python3 tools/fdat.py 97           one entry in full
+python3 tools/fdat.py --shape      the entries grouped by what they look like
+python3 tools/fdat.py --doc        regenerate FDAT.md
+```
+
+Every entry is a **chain of length-prefixed blocks** — a `u32` of length, that
+many bytes, then the next. `placement.py` has read the level entries that way
+since the object placement was found; pointing the same reader at all 132 is
+what turned up the object type table, and `--shape` is why it is worth doing:
+**all 28 of the `3n + 1` entries have exactly the same six blocks**, and a
+format that holds 28 times is a format rather than a reading.
+
+```
+3n + 0   64000, then one block whose length differs by level
+           the grid, then the tile shape programs
+3n + 1   12992, 3200, 768, 8400, 2048, 640
+           40 entity records of 120 and their scripts; the actor table,
+           200 x 16; ?; the placement, 350 x 24; the tile shapes; ?
+entry 97  the shared data: the object type table, the level table,
+           the creature animation frames, and eight blocks not yet named
+```
+
+[FDAT.md](FDAT.md) is the generated map. Naming one of the unknown blocks is a
+matter of finding what reads it, and `out/rdis/game.json` answers that.
+
 **`maps.py`** — the 80×80 grids out of `FDAT.T`, and a renderer for all 28.
 
 **`level_map.py`** — one level in detail.
