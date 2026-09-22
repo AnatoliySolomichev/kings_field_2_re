@@ -17,14 +17,49 @@ a line of dialogue. That is the whole language:
              0xf1 and 0xfa..0xfe dispatch to this same handler.
     0xf0 n   jump back n bytes, and set the header's retry flag
     0xf2     skip, two bytes
-    0xf3     skip, one byte
-    0xf4     skip, one byte
-    0xf5     skip, one byte
-    0xf6     copy the actor's byte +1 into 0x801baa2e
+    0xf3     spend one of the no-wait count
+    0xf4 a n **call the level's own code** -- entry 4 of the overlay at
+             [0x8018fae0]+0x10, with `a` as the argument -- and set the
+             no-wait count to `n`
+    0xf5 n   set the no-wait count to n
+    0xf6     copy the actor's byte +1 into 0x801baa2e, and clear the retry flag
     0xf7 i v flags[i] = v
     0xf8 n   jump back n bytes
     0xf9 i v t   if flags[i] == v, jump to label t; else fall through, 4 bytes
     0xff     end
+
+The interpreter **waits for the use button after every line**, and the no-wait
+count is how a script says several lines in a row or finishes without stopping.
+`0x8005c4f4` sets it and `.L18` spends one of it after each line.
+
+**Three of those were wrong until the interpreter was read** rather than the
+scripts: `0xf3`, `0xf4` and `0xf5` were all recorded as "skip one byte",
+because that is what they look like from outside. `0xf4` calling into the
+level's own code is the one that matters -- it is how a conversation makes
+something happen in the world.
+
+There are **six of them in the game** and five carry the same pair:
+
+```
+level  3  entity  3    call_overlay 11, then no-wait 245
+level  4  entity  6    the same
+level 12  entity  7    the same
+level 18  entity  0    the same
+level 21  entity  1    the same
+level 10  entity  2    call_overlay 51, then no-wait 20
+```
+
+Five levels asking for the same thing with the same argument, and one asking
+for something else.
+
+**Which routine that reaches is not settled.** `[0x8018fae0]` is a pointer to a
+structure, not to the overlay's own entry table: `level_load` points it at
+`0x8007e4e4` and `level_overlay_tick` calls its `+4` once a frame, while a
+script calls its `+0x10`. Matching `+0x10` to a routine in the level's overlay
+means reading the pointer live, or finding what writes the structure.
+`tools/overlay.py 3` lists fourteen entry points and the fifth of them is a
+bare `return`, but that list is the overlay's own table and there is nothing
+yet saying the two are the same table.
 
 `flags` is a byte array at **0x801ba988** -- game state, nine pieces of code
 reach it, among them `apply_level_state`, `object_trigger` and the object
@@ -53,18 +88,43 @@ TALK = 7
 INTERPRETER = 0x8005C308
 
 # opcode -> (length, mnemonic). Length None means "ends the script".
+#
+# Read off the sixteen arms of `script_opcode_table` (0x80013160), which
+# `tools/rdis.py` resolves, rather than off what the scripts seem to do. Three
+# of these were wrong before and all three were wrong in the same way -- an
+# opcode that advances the pointer and does something was recorded as an
+# opcode that only advances the pointer:
+#
+#   0xf4 was "skip1" and is a **call into the level's own code**: it steps
+#        past itself, calls entry 4 of the overlay at [0x8018fae0]+0x10 with
+#        the next byte as the argument, and then takes a repeat count;
+#   0xf5 was "skip1" and **sets the no-wait count** from the next byte;
+#   0xf3 was "skip1" and spends one of it: the interpreter waits for the use
+#        button after every line, and while that count is not zero it skips
+#        the wait and fetches the next opcode straight away.
+#
+# `0xf1` and `0xfa`..`0xfe` share the arm that anything below `0xf0` uses, so
+# they are lines like any other.
 OPS = {
-    0xF0: (2, "loop_back"),
+    0xF0: (2, "loop_back"),        # pc -= arg, and set the retry flag at +0x13
     0xF2: (2, "skip2"),
-    0xF3: (1, "skip1"),
-    0xF4: (1, "skip1"),
-    0xF5: (1, "skip1"),
-    0xF6: (1, "set_actor_byte"),
-    0xF7: (3, "set_flag"),
-    0xF8: (2, "jump_back"),
-    0xF9: (4, "if_flag"),
+    0xF3: (1, "run_on"),           # spend one of the no-wait count
+    0xF4: (3, "call_overlay"),     # overlay entry 4, then a no-wait count
+    0xF5: (2, "no_wait"),          # run this many more lines without waiting
+    0xF6: (1, "set_actor_byte"),   # 0x801baa2e = record[+1]; clears the retry
+    0xF7: (3, "set_flag"),         # story_flags[arg1] = arg2
+    0xF8: (2, "jump_back"),        # pc -= arg, no retry flag
+    0xF9: (4, "if_flag"),          # story_flags[arg1] == arg2 -> label arg3
     0xFF: (1, "end"),
 }
+
+# The entity's own record is 120 bytes in `entity_table`, indexed by the
+# script record's +2, and the running state is the block its +0x38 points at:
+# +0x00 must be 0x70, +0x10 is the program counter, +0x12 the wait state,
+# +0x13 the retry flag and +0x0c the TALK.T base a line is added to. All read
+# off `script_interpreter` (0x8005c308).
+ENTITY_STRIDE = 120
+STATE_TAG = 0x70
 
 
 def decode(code):

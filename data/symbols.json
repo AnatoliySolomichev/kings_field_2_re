@@ -403,13 +403,12 @@
  "0x8005c308": {
   "name": "script_interpreter",
   "kind": "code",
-  "evidence": "fetches a byte, dispatches 0xf0..0xff through the table at 0x80013160",
-  "size": 1248
+  "evidence": "(script record). Takes the entity's 120-byte record at entity_table + 120*rec[+2] and its running state at entity[+0x38], which must begin 0x70. state[+0x10] is the program counter, +0x13 the retry flag, +0x12 the wait state and +0x0c the TALK.T base a line is added to. A byte below 0xf0 -- and 0xf1, 0xfa..0xfe -- is a line: it drives the animation through 0x8005c0d4, loads TALK.T[base + byte] when the entity's kind is 0x2b, calls render_frame, and waits for bind_use. 0xf0..0xff dispatch through script_opcode_table"
  },
  "0x80013160": {
   "name": "script_opcode_table",
   "kind": "data",
-  "evidence": "16 handler pointers, one per opcode 0xf0..0xff"
+  "evidence": "16 arms for script_interpreter's switch, indexed at opcode - 0xf0. 0xf1 and 0xfa..0xfe share the arm a plain line uses, so the language has nine real opcodes"
  },
  "0x801ba988": {
   "name": "story_flags",
@@ -1740,5 +1739,15 @@
   "name": "object_use_state",
   "kind": "code",
   "evidence": "switches on the object's +8, the interaction state, and gives up when its +0x38 is 0xff. The handler the opcodes that need a use call"
+ },
+ "0x801baa2e": {
+  "name": "script_speaker",
+  "kind": "data",
+  "evidence": "the script record's +1, written by opcode 0xf6 and at the top of script_interpreter when the state's +0x10 is zero; the interpreter compares it with the record's +1 to decide whether to skip to the next 0xf0"
+ },
+ "0x8018fae0": {
+  "name": "level_hooks",
+  "kind": "data",
+  "evidence": "a pointer to a structure of function pointers. level_load points it at 0x8007e4e4; level_overlay_tick calls its +4 once a frame and a script's 0xf4 opcode calls its +0x10. Whether it is the same table tools/overlay.py lists as the level's entry points is not established"
  }
 }
