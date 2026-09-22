@@ -1010,6 +1010,11 @@ def project(lv, out="out/godot", start=(57, 4)):
         print(f"opening assets skipped: {e}")
     gdcoll.export(lv, out)
     try:
+        import strings
+        strings.export(out)
+    except Exception as e:                       # no disc, no strings
+        print(f"strings skipped: {e}")
+    try:
         import itemtext
         itemtext.export(out)
     except Exception as e:                       # no disc, no item names

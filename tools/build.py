@@ -79,6 +79,9 @@ def main(quick=False, only_check=False):
             run(["tools/pseudo.py", e, "--all"], f"{e} pseudocode",
                 keep=["wrote"])
 
+        print("\nThe strings that are not pictures")
+        run(["tools/strings.py"], "the three tables", keep=["=== "])
+
         print("\nWhere each routine belongs")
         run(["tools/subsys.py", "--doc"], "MAP.md", keep=["wrote"])
 

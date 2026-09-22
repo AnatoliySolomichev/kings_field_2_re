@@ -99,7 +99,30 @@ python3 tools/tsum.py extract/CD/COM/*.T
 
 ## Text
 
-No string in this game is ASCII; it is all pre-rendered images.
+**`strings.py`** — the strings that are *not* pictures.
+
+```
+python3 tools/strings.py            the three tables, decoded
+python3 tools/strings.py --scan     look for more of them
+python3 tools/strings.py --godot    write them out for the port
+```
+
+`0x8007f530` is **191 rows of 24 bytes** in the plainest encoding there is —
+`a` is 0, `z` is 25, `0x7f` a space, `0xff` the end, with an apostrophe and a
+hyphen the only punctuation — and the rows are three things one after another:
+the memory card's ten messages, the **150 item names**, and the **31 spell
+names**. All 191 decode without one unknown code.
+
+The spell names land exactly where the spell subsystem needed them:
+`spell_table` is 24-byte records whose `+0x16` is the MP cost, `skill_unlock`
+sets a record's `+0` when a skill crosses a threshold, and there are 31 of them
+— *fire ball, meteor, lightning bolt, missile shield, blessings*.
+
+Everything else the player reads **is** a picture, and the rest of this section
+is about those.
+
+No string in this game is ASCII *except that table*; the rest is pre-rendered
+images.
 
 **`dump_text.py`**, **`ocr.py`** — the fixed-grid dialogue face. **`propfont.py`**
 and **`propocr.py`** — the proportional face used on signs and item names.
