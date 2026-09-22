@@ -171,7 +171,15 @@ from the type row rather than from the placement record. **So an object's
 collision is still not found** — withdrawn in full in FORMATS.md, "The scale
 triple is a switch".
 
-**4. The objects with no model — the rule is read now.** `model_of_type`
+**4. The objects with no model — answered, and mostly on purpose.** Across the
+game 707 of 4838 placed objects have no usable model, and `python3
+tools/objops.py --types` accounts for 696: **578 are markers** whose type row
+is empty past +3 and whose opcode is in the trigger range, 76 are type 299 (the
+inscription volume), 42 carry a class that means never drawn, and one is past
+the end of the type table. **Ten are left, all type 298.** Type 287, the one
+this item named, is a marker with 136 instances across 13 levels.
+
+The model *rule* is read too: `model_of_type`
 (`0x80040568`) says it in eleven instructions: below type 300 the model is
 `type + 0x100`, and **from 300 up it is `type + 0x100 + 32 * level`**. So
 `MOF.T` is banked 32 models to a level, level *n* using bank *n + 4*, which

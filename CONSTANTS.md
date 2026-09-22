@@ -44,7 +44,7 @@ In `game:actor_ai`, `game:sub_8002c30c`, `game:sub_80053c84`, `game:actor_tick`,
 The collision flag word the player's movement asks for. Only the sites inside the movement routines are this; 0x31 is also just 49.
 
 23 sites: 14 loaded, 4 bound, 3 compared with, 2 argument.
-In `game:sub_80053c84`, `game:options_screen`, `game:sub_8002ab18`, `game:player_horizontal`, `game:player_vertical`, `game:object_interpreter`, `game:sub_80024a78`, `game:sub_80025468`, `game:sub_80026e4c`, `game:sub_80029500`, `game:player_move`, `game:tile_collision` and 4 more.
+In `game:sub_80053c84`, `game:options_screen`, `game:player_take_hit`, `game:player_horizontal`, `game:player_vertical`, `game:object_interpreter`, `game:sub_80024a78`, `game:sub_80025468`, `game:sub_80026e4c`, `game:sub_80029500`, `game:player_move`, `game:tile_collision` and 4 more.
 
 `python3 tools/consts.py 0x31` for every site.
 
@@ -64,7 +64,7 @@ In `game:object_interpreter`, `open:sub_80029504`, `game:sub_8005db30`, `game:su
 The grid is 80 by 80 and grid_query_area bounds both axes by it.
 
 32 sites: 22 loaded, 8 bound, 1 compared with, 1 argument.
-In `game:sub_80053c84`, `game:sub_80024f88`, `game:sub_8001b88c`, `game:sub_8002a6f4`, `game:sub_8002d2a0`, `game:player_vertical`, `game:grid_query_area`, `game:sub_800345f4`, `game:draw_terrain`, `game:sub_800445b8`, `open:open_main`, `open:title_menu` and 7 more.
+In `game:sub_80053c84`, `game:sub_80024f88`, `game:sub_8001b88c`, `game:apply_damage`, `game:sub_8002d2a0`, `game:player_vertical`, `game:grid_query_area`, `game:sub_800345f4`, `game:draw_terrain`, `game:sub_800445b8`, `open:open_main`, `open:title_menu` and 7 more.
 
 `python3 tools/consts.py 0x50` for every site.
 

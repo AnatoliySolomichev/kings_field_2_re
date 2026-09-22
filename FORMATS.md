@@ -1619,6 +1619,77 @@ single name fits a field across all types. Trees keep round numbers 120–230 in
 +0x38 where a chest keeps `0xff`; doors keep their own cell in +0x39/+0x3a
 where a coin pile keeps its value.
 
+### The type row, and the 49 types that are places rather than things
+
+Each of the 300 rows is 24 bytes and this much of it is read:
+
+| | |
+| --- | --- |
+| +0 | the behaviour opcode, and the render class — **the same byte** |
+| +1, +2 | `0x00` and `0xff` on all 300 |
+| +3 | copied into the live record's `+3` by `load_object_placement` |
+| +6 | `u16`, a size: 800, 900, 1000, 1200, 1350, 1400, 1500, 2000 — the shapes the player's own radius (800) and body height (1700) come in |
+| +8 | `u16`, a second size |
+| +0xa | copied into the live record's `+0x6a` |
+| +0x17 | the byte `object_set_present` puts back into the cell when the object goes |
+
+**49 of the 300 types have nothing at all after +3**, and every one of them
+carries an opcode from the trigger range — `0x1f`, `0x5f`, `0xe0`–`0xea`,
+`0xf0`, `0xf2`, or `0xff` which is "skip". Types **264 to 297 are almost all of
+them**, in runs: 264–266 on `0xf0`, 267–279 on `0xf2`, then one type per opcode
+from `0xe0` up. A type with no size, no second size and nothing to copy is not
+a thing. **It is a place** — a volume that does something when the player walks
+into it.
+
+### Why 707 objects have no model, and it is mostly on purpose
+
+The queue's fourth item was "the 53 objects with no model, `MO.T` type 287
+among them". Across the whole game it is 707 of 4838 placed objects, and
+`python3 tools/objops.py --types` accounts for 696 of them:
+
+| | |
+| --- | --- |
+| 578 | a **marker** — the type row is empty past +3 |
+| 76 | type 299, the volume that says an inscription can be read here |
+| 42 | a class that means **never drawn**, `0xe5` or `0xe9` |
+| 1 | past the end of the type table, type 300 or above |
+| **10** | **still unexplained** — all of them type 298, opcode `0x15` |
+
+Type 287, the one the queue named, is a marker: 136 placed across 13 levels,
+`0xe6`, and an empty row. It has no model because it is not meant to have one.
+
+### What the opcodes are, from a session that ran them
+
+`emu/bp20.lua` recorded a player opening a door, taking things out of chests,
+picking up herbs and getting killed. **13 of the 44 targets ran**, and every
+one of them ran on exactly the opcode the table says, which is the instrument
+checking out. What they ran on:
+
+| opcode | types it ran on | what those are |
+| --- | --- | --- |
+| `0x01` | 177, 178 | the **doors** — section 5 had 175–178 as doors from the parameter block |
+| `0x03` | 171 | |
+| `0x06` | 152, 154 | |
+| `0x07` | 159 | the **open chest**; `0xe5` is 158, the closed one, and it does nothing |
+| `0x09` | 183, 186, 190, 192, 196, 212 | |
+| `0x51` | 219 | |
+| `0x54` | 224 | |
+| `0x62` | 149 | a **spawned pickup**, in slot 350 — past the 350 placement records — following the floor; taking it was followed by `give_item` |
+| `0xe0` `0xe1` `0xe3` `0xe6` | 280, 284, 282, 287 | markers, all four |
+
+The items the session produced name themselves against `tools/itemtext.py`:
+`give_item(104)` twice is *"this herb will heal the wounded body"*,
+`give_item(109)` is *"the stone which contains the moon's magical power"*,
+`give_item(141)` is *"the key for the pedestals built upon the defence walls"*
+and `give_item(34)` is a helmet — which is what the player said they picked up,
+in that order. **After every `give_item` the game asks `has_item(0)` and
+`has_item(133)`**, the first sword and the key of Ichrius.
+
+Two corrections the same log forced: `use_item`'s `a0` is a **pointer** —
+`0x80195ff0`, inside `object_table` — and not an item id, and
+`script_interpreter` is given an **actor** record, `0x80185da8` and
+`0x80186d10` being slots 0 and 58 of `actor_table`.
+
 ### The object interpreter, and where its table does not come from
 
 `object_interpreter` (`0x80047010`) is the third call in every frame. It walks

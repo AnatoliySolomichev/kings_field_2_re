@@ -169,6 +169,87 @@ def type_rows(path=None):
                 TYPES_OFFSET + TYPE_ROW * (t + 1)] for t in range(n)]
 
 
+# What a type's 24-byte row holds. Only the fields that are established are
+# named; the rest are left as offsets, because a guess in this table would read
+# exactly like the three that are read.
+ROW = """
++0   the behaviour opcode, and the render class -- the same byte
++1   0x00 on all 300
++2   0xff on all 300
++3   copied into the live record's +3 by load_object_placement
++6   u16, a size: 800, 900, 1000, 1200, 1350, 1400, 1500, 2000 -- the shapes
+     the player's own radius (800) and body height (1700) come in
++8   u16, a second size
++0xa copied into the live record's +0x6a
++0x17  the byte object_set_present restores into the cell when the object goes
+"""
+
+
+def markers():
+    """The types whose row is empty past +3, and which are therefore not
+    things but **places**.
+
+    A type with nothing after +3 has no size, no second size and nothing to
+    copy into the live record, and every one of them carries an opcode in the
+    trigger range. They have no model because they are not meant to be drawn:
+    578 of the 707 placed objects in the game that `tools/tmd.py` cannot find a
+    model for are these.
+    """
+    rows = type_rows()
+    return {t: r[0] for t, r in enumerate(rows) if not any(r[3:])}
+
+
+def modelless(out=sys.stdout):
+    """Every placed object with no usable model, and why.
+
+    This is the queue's fourth item, answered from the data: of 707, **578 are
+    markers**, 76 are type 299 -- the volume that says an inscription can be
+    read here -- and 42 carry a class, `0xe5` or `0xe9`, that means never
+    drawn. Ten objects of type 298 and one past the end of the type table are
+    what is left.
+    """
+    import collections
+    import placement
+    import tmd
+    rows = type_rows()
+    mk = markers()
+    never = {0xE5, 0xE9}
+    cache, acc, left, total = {}, collections.Counter(), collections.Counter(), 0
+    for lv in range(28):
+        for o in placement.objects(lv):
+            t = o["type"]
+            total += 1
+            key = (t, lv)
+            if key not in cache:
+                try:
+                    arch, e = tmd.model_of(t, lv)
+                    cache[key] = bool(tmd.load(arch, e)[1])
+                except Exception:
+                    cache[key] = False
+            if cache[key]:
+                continue
+            if t >= len(rows):
+                acc["past the type table, type 300 or above"] += 1
+            elif t in mk:
+                acc["a marker: the row is empty past +3"] += 1
+            elif rows[t][0] in never:
+                acc["a class that means never drawn (0xe5, 0xe9)"] += 1
+            elif t == 299:
+                acc["type 299, the inscription volume"] += 1
+            else:
+                acc["still unexplained"] += 1
+                left[t] += 1
+    print(f"{total} placed objects; {sum(acc.values())} have no usable model",
+          file=out)
+    for k, v in acc.most_common():
+        print(f"  {v:4d}  {k}", file=out)
+    if left:
+        print("  what is left, by type: "
+              + ", ".join(f"{t} x{n}" for t, n in sorted(left.items())),
+              file=out)
+    return acc
+
+
 def export(out_dir):
     """The class of every type, where the port can read it.
 
@@ -312,6 +393,18 @@ if __name__ == "__main__":
         got = export("out/godot")
         print("wrote " + os.path.relpath(got, ROOT) if got
               else "no snapshot to take the classes from")
+    elif a and a[0] == "--types":
+        print(ROW.strip())
+        print()
+        mk = markers()
+        print(f"{len(mk)} of the 300 types are markers -- the row is empty "
+              f"past +3:")
+        import collections
+        for op, ts in sorted(collections.Counter(mk.values()).items()):
+            print(f"   opcode {op:#04x}: "
+                  + ", ".join(str(t) for t in sorted(mk) if mk[t] == op))
+        print()
+        modelless()
     elif a and a[0] == "--census":
         cen, over = census()
         for c, v in sorted(cen.items(), key=lambda kv: -kv[1]["objects"]):

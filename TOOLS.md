@@ -206,7 +206,8 @@ python3 tools/actors.py --all          # every level, by category
 ```
 python3 tools/objops.py             every opcode, with what its arm touches
 python3 tools/objops.py 0x1f        one opcode in full
-python3 tools/objops.py --census    which opcodes level 0 actually uses
+python3 tools/objops.py --census    which opcodes the game uses, and on what
+python3 tools/objops.py --types     the type row, the markers, and the modelless
 python3 tools/objops.py --doc       regenerate OBJECTS.md
 ```
 
@@ -230,9 +231,15 @@ between levels. `0x51`, `0x52` and `0x55` call `object_set_present`: things
 that come and go. `0x60`–`0x62` call `collide_surface`: things that follow the
 floor.
 
-The census is narrower on purpose — `object_type_table` is filled per level, so
-a snapshot answers for that level and no other. [OBJECTS.md](OBJECTS.md) is the
-generated index.
+`--types` reads the 24-byte type row and settles the queue's fourth item.
+**49 of the 300 types have nothing after +3** — no size, no second size,
+nothing to copy into the live record — and every one of them carries an opcode
+from the trigger range. They are not things, they are **places**, and that is
+why they have no model. Of the 707 placed objects in the game with no usable
+model, 578 are those markers, 76 are the inscription volume, 42 carry a class
+that means never drawn, and **ten are left**, all type 298.
+
+[OBJECTS.md](OBJECTS.md) is the generated index.
 
 **`readables.py`** — every object you can read, and what it says. This is the
 one that turns the world into text: signs, graves, plaques, with their cells.
