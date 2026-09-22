@@ -1823,5 +1823,10 @@
   "name": "actor_op_table",
   "kind": "data",
   "evidence": "241 arms for actor_tick's switch on actor[+0xe], 31 distinct"
+ },
+ "0x80081c8c": {
+  "name": "light_table_source",
+  "kind": "data",
+  "evidence": "what light_table_reset expands into tile_look at the top of every frame: 64 entries read 48 bytes apart and written 108 apart. The first 48 entries are FDAT.T entry 97 block 4... block 5, 2304 bytes, matching RAM byte for byte; the last 16 come from GAME.EXE's own data"
  }
 }

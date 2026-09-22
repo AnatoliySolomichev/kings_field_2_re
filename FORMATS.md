@@ -947,54 +947,52 @@ if (has_item(2) && has_item(130) && has_item(131) && has_item(132))
 Item 2 is the sword's final stage, so flag 3 is an endgame condition the
 overlay re-evaluates every time it runs. It says nothing about the opening.
 
-### Creatures are animated by blending two 108-byte keyframes
+### Withdrawn: the 108-byte records are the lighting table, not keyframes
 
-Their limbs move because `0x8003e34c`, the routine that draws a creature, is an
-interpolator. It forms two frame pointers the same way:
+This section said creatures are animated by blending two 108-byte keyframes out
+of a table at `0x801aeefc`, 64 of them, each 54 signed halfwords read as
+eighteen joints of three angles, filled from `FDAT` entry 97 block 5. Every
+measurement in it was right and the reading on top of them was wrong.
+
+**`0x801aeefc` is the lighting table**, and `draw_tile` settles it in six
+instructions. It forms `tile_look + 108 * (cell[+9] & 0x3f) + 20 * rot` and
+then does this:
 
 ```
-v1 = frame & 0x3f            a frame number, 0 to 63
-v0 = 108 * v1                built from shifts and subtractions
-v1 = t2 + 0x42a8             the base of the frame table
-s1 = v0 + v1                 and $s2 the same, for the second frame
+lw   $t5, 0x0($t4)      ctc2 $t5, L11L12
+lw   $t6, 0x4($t4)      ctc2 $t6, L13L21
+lw   $t5, 0x8($t4)      ctc2 $t5, L22L23
+lw   $t6, 0xc($t4)      ctc2 $t6, L31L32
+lw   $t7, 0x10($t4)     ctc2 $t7, L33
 ```
 
-and then walks the two with `0x80017158` — a lerp — with `$s7` as the factor,
-feeding the results to `0x80035358`. So an animation is **up to 64 frames of
-108 bytes**, and what is drawn is a blend of two of them. The fields it
-interpolates run to `+0x6a`, which fits inside the 108.
+— the record goes straight into **the GTE's light direction matrix**, and its
+`+0x50` into the light colour matrix, and its `+0x64` into RBK, GBK and BBK.
+`draw_held_item` does the same with the cell the player is standing in.
+`data/symbols.json` has said so under the name `tile_look` the whole time: four
+20-byte light matrices chosen by orientation, a colour matrix at `+0x50`,
+the background colour at `+0x64`. That is 108 bytes and it accounts for all of
+them.
 
-`0x8005c0d4`, which `script_interpreter` calls before every dialogue line, is
-*not* this: it is `facing_test` plus a frame of drawing in a loop — an NPC
-turning to face the player and waiting, not a walk cycle.
+Why the animation reading looked good is worth keeping. A light matrix is nine
+signed halfwords of fixed point, so **±4096 is exactly what it looks like**,
+and four of them plus a colour matrix is 54 halfwords — the same count an
+eighteen-joint skeleton would give. Two entries being identical and a third
+differing is what a lighting table does too: most cells are lit the same way.
+Nothing in the shape of the data could have told the two apart. Only what the
+code *does* with it could, and that was one instruction away.
 
-**The base is `0x801aeefc`**, read by following `$t2` up: it is set at
-`0x8003e3ac` as `lui 0x801b` and `addiu -0x53ac`, so `$t2 = 0x801aac54`, and
-the table is `$t2 + 0x42a8`. In a level 0 snapshot a frame reads as 54 signed
-halfwords inside +/-4096 — **eighteen joints of three angles** — and frames 0
-and 1 are identical while frame 2 differs, which is what keyframes look like.
+The filler is `light_table_reset` (`0x800341e8`), which `game_main` calls **at
+the top of every frame**, not once — an animation table would not need that and
+a lighting table that `light_table_step` interpolates does. It copies 64
+entries, 48 bytes at the source and 108 at the destination; block 5 of
+`FDAT[97]` is 2304 bytes, which is the first 48 of those entries, and the last
+16 come from `GAME.EXE`'s own data past the block.
 
-**They come from `FDAT` entry 97, packed.** A write watchpoint named the
-filler: `0x800341e8`, called once by `game_main` at `0x80014d88`, and it is a
-straight copy loop — source `0x80081c8c`, destination `0x801aeefc`, 64
-iterations, advancing 46 bytes at the source and 106 at the destination. The
-source is **block 5 of `FDAT[97]`, 2304 bytes**, which is 36 bytes a frame on
-the disc expanded to 108 in memory; its first sixteen bytes match `0x80081c8c`
-in a snapshot exactly.
-
-So the animation data is readable from the disc after all, in a packed form,
-and the earlier search failed because it looked for the *expanded* bytes.
-
-**The frames are not on the disc in that form.** The bytes of frame 2 are not a
-verbatim run in `MO.T`, `MOF.T`, `FDAT.T`, `ITEM.T`, `RTMD.T`, `TALK.T` or
-`STALK.T`, so the table is built or unpacked at run time. Scanning for code
-that names the address does not find the filler either — the region around it
-is a large graphics scratch that dozens of routines touch, and a fill through a
-pointer names no address at all. `emu/bp19.lua` asks the value instead: a write
-watchpoint on the first eight frames, beside one on an actor's `+0x0c`, which
-is what `EXTERNAL.md` calls the current animation.
-
-None of this is in the port, where creatures are static meshes.
+**So where the creature animation lives is open again.** `0x8003e34c` really
+does interpolate two records by a fraction — that part of the old reading is
+unaffected — but what it interpolates is lighting, and creatures moving their
+limbs has to be somewhere else.
 
 ### A creature carries one angle, and only one of a set is drawn
 

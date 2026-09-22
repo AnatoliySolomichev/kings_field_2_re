@@ -705,7 +705,7 @@ FDAT.T: 132 entries
       2  at  10476     2112 bytes  000a0e000400020000000000
       3  at  12592     1200 bytes  32001e001400000032000000  the level table -- 100 rows of 12, the last zero: HP max, MP max, a gain for the stat at +0x36, and the experience for the next level (tools/levelup.py)
       4  at  13796     2304 bytes  0012ff040001000000000000  the **spell table** -- 96 records of 24: +0 unlocked, +5 a group bit, +0x16 the MP cost. 95 of the 96 are byte for byte what a RAM snapshot holds at 0x801b77ec (tools/spells.py)
-      5  at  16104     2304 bytes  b80b24fadc0548f424fa24fa  the creature animation frames (FORMATS.md section 4)
+      5  at  16104     2304 bytes  b80b24fadc0548f424fa24fa  the **lighting table's source**, 48 entries of 48 bytes, which light_table_reset expands into tile_look's 108-byte records at the top of every frame -- the last 16 of its 64 entries come from GAME.EXE's own data past this block. An earlier note called this the creature animation frames and that is withdrawn: draw_tile loads a record straight into the GTE's light matrices
       6  at  18412      832 bytes  ffff47001d01000800008200
       7  at  19248     5280 bytes  000000000000310000000000
       8  at  24532      192 bytes  001000000124100003203400

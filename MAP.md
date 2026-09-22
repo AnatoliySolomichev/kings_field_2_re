@@ -957,7 +957,7 @@ the 64 lighting entries, refilled and stepped.
 | address | instructions | callers | name | what it touches |
 | --- | --- | --- | --- | --- |
 | `0x80016290` | 137 | 2 | sub_80016290 |  |
-| `0x800341e8` | 70 | 3 | light_table_reset | points at tile_look, writes tile_look |
+| `0x800341e8` | 70 | 3 | light_table_reset | points at light_table_source, points at tile_look, reads light_table_source, writes tile_look |
 | `0x80034300` | 37 | 3 | light_table_step | points at tile_look |
 
 ## flags

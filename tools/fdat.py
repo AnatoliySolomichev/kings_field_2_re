@@ -22,7 +22,7 @@ eleven blocks are:
 | 0 | 7200 | the **object type table**, 300 rows of 24; byte +0 is the behaviour opcode and the render class |
 | 3 | 1200 | the **level table**, 100 rows of 12, the last one zero; HP, MP, a stat gain and the experience for the next level |
 | 4 | 2304 | the **spell table**, 96 records of 24 |
-| 5 | 2304 | the **creature animation frames** |
+| 5 | 2304 | the **lighting table's source**, 48 entries of 48 bytes |
 
 and the other eight are not identified yet. The two unnamed per-level blocks
 are at least *placed*: `level_load` copies them to `0x8019175c` and
@@ -55,7 +55,12 @@ KNOWN = {
     (97, 4): "the **spell table** -- 96 records of 24: +0 unlocked, +5 a group "
              "bit, +0x16 the MP cost. 95 of the 96 are byte for byte what a "
              "RAM snapshot holds at 0x801b77ec (tools/spells.py)",
-    (97, 5): "the creature animation frames (FORMATS.md section 4)",
+    (97, 5): "the **lighting table's source**, 48 entries of 48 bytes, which "
+             "light_table_reset expands into tile_look's 108-byte records at "
+             "the top of every frame -- the last 16 of its 64 entries come "
+             "from GAME.EXE's own data past this block. An earlier note called "
+             "this the creature animation frames and that is withdrawn: "
+             "draw_tile loads a record straight into the GTE's light matrices",
 }
 
 # The same for every level, keyed by the entry's place in the 3n cycle. All 28

@@ -71,9 +71,9 @@ floor, not a score.
 | [`godot/actors.gd:129`](godot/actors.gd#L129) | `func _pass` | `game:0x80052e5c` actor_tick_driver | transcribed |
 | [`godot/escript.gd:32`](godot/escript.gd#L32) | `const FLAG_COUNT` | `game:0x8005c308` script_interpreter | partial |
 | [`godot/escript.gd:48`](godot/escript.gd#L48) | `var f: Array = flags.duplicate` | `game:0x8005c308` script_interpreter | partial |
-| [`godot/items.gd:37`](godot/items.gd#L37) | `func has_item` | `game:0x8005d7bc` has_item | transcribed |
-| [`godot/items.gd:44`](godot/items.gd#L44) | `func take_item` | `game:0x8005d7f8` take_item | transcribed |
-| [`godot/items.gd:57`](godot/items.gd#L57) | `func give_item` | `game:0x8005d898` give_item | transcribed |
+| [`godot/items.gd:41`](godot/items.gd#L41) | `func has_item` | `game:0x8005d7bc` has_item | transcribed |
+| [`godot/items.gd:48`](godot/items.gd#L48) | `func take_item` | `game:0x8005d7f8` take_item | transcribed |
+| [`godot/items.gd:61`](godot/items.gd#L61) | `func give_item` | `game:0x8005d898` give_item | transcribed |
 | [`godot/cutscene.gd:44`](godot/cutscene.gd#L44) | `func _ready` | `game:0x80060d20` 0x80060d20 | partial |
 | [`godot/collision.gd:107`](godot/collision.gd#L107) | `func arctan_unit` | `game:0x800742ac` arctan_unit | transcribed |
 | [`godot/collision.gd:151`](godot/collision.gd#L151) | `func isqrt` | `game:0x80074508` game_isqrt | transcribed |
