@@ -871,6 +871,23 @@ of question: a breakpoint on a routine you chose can only confirm the choice,
 while a watchpoint on the value makes whatever writes it name itself. All three
 need somebody walking about — that is the whole point of them.
 
+**`bp21.lua`** is the one for a conversation, and it is the next session to
+ask for. It logs **every opcode `script_interpreter` is about to run**, at
+`0x8005c3f8` — the top of its dispatch — with the program counter out of the
+state block and the operands decoded, so a flag write prints as
+`flags[3] = 1` and the `0xf4` hook prints as what it asks the level for. Plus
+the `TALK.T` entry each line loads, and the two other readings that have never
+been checked: `cast_spell` with the MP either side, and `skill_unlock`.
+
+```
+./emu/run.sh debug bp21.lua
+```
+
+Then **talk to somebody and let the whole conversation run.** `godot/escript.gd`
+reproduces the control flow of all 1086 scripts against `tools/escript.py`,
+which is two copies of one reading agreeing with each other. What neither has
+is the game, and this is that.
+
 **`bp20.lua`** is the one for everything a player *does*, and it exists because
 five subsystems are read and none of them is checked: the object interpreter,
 the damage roll, the items, the script interpreter and the level load. It arms

@@ -231,10 +231,15 @@ exactly the opcode the table says; the item ids, which name themselves against
 `tools/itemtext.py`; **the death branch** and the crystal that stops it; and
 two corrections to readings made without it.
 
-What would settle the rest is the same again with more logged: the five damage
-types `bp20.lua` does not print, `script_interpreter`'s opcode stream frame by
-frame, and a session that talks to somebody — the one recorded has two `TALK`
-entries and no conversation.
+**The next session to ask for is `emu/bp21.lua`, and it is a conversation.**
+It logs every opcode `script_interpreter` runs with its operands decoded, the
+`TALK.T` entry each line loads, and the two readings made since that have never
+been checked — `cast_spell` and `skill_unlock`. `godot/escript.gd` reproduces
+all 1086 scripts against `tools/escript.py`, which is two copies of one reading
+agreeing with each other; the game is what neither has.
+
+What would also help, and needs no new script: `bp20.lua` again with the five
+damage types it does not print added to the `HURT in` line.
 
 **8. Everything else in BACKLOG.md**, which is ordered roughly by what it
 unblocks.
