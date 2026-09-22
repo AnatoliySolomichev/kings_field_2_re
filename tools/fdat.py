@@ -55,6 +55,15 @@ KNOWN = {
     (97, 4): "the **spell table** -- 96 records of 24: +0 unlocked, +5 a group "
              "bit, +0x16 the MP cost. 95 of the 96 are byte for byte what a "
              "RAM snapshot holds at 0x801b77ec (tools/spells.py)",
+    (97, 6): "832 bytes that block 8 indexes -- the counts in that index sum "
+             "to exactly 832 -- copied to 0x801e7edc. flag_gate, "
+             "player_controller and level_overlay_tick read into it. What the "
+             "sequences hold is not established",
+    (97, 8): "an **index into block 6**: 39 records of 4 bytes, `(id, count, "
+             "u16 offset)`, ids 0..43 with gaps, and the offsets accumulate by "
+             "the counts exactly. 0x80060800 expands it into 0x80198468 at "
+             "startup and 0x800608ec looks an id up there -- which is what "
+             "script_interpreter calls for an entity that is not a talker",
     (97, 5): "the **lighting table's source**, 48 entries of 48 bytes, which "
              "light_table_reset expands into tile_look's 108-byte records at "
              "the top of every frame -- the last 16 of its 64 entries come "

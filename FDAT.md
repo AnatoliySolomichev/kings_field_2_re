@@ -706,9 +706,9 @@ FDAT.T: 132 entries
       3  at  12592     1200 bytes  32001e001400000032000000  the level table -- 100 rows of 12, the last zero: HP max, MP max, a gain for the stat at +0x36, and the experience for the next level (tools/levelup.py)
       4  at  13796     2304 bytes  0012ff040001000000000000  the **spell table** -- 96 records of 24: +0 unlocked, +5 a group bit, +0x16 the MP cost. 95 of the 96 are byte for byte what a RAM snapshot holds at 0x801b77ec (tools/spells.py)
       5  at  16104     2304 bytes  b80b24fadc0548f424fa24fa  the **lighting table's source**, 48 entries of 48 bytes, which light_table_reset expands into tile_look's 108-byte records at the top of every frame -- the last 16 of its 64 entries come from GAME.EXE's own data past this block. An earlier note called this the creature animation frames and that is withdrawn: draw_tile loads a record straight into the GTE's light matrices
-      6  at  18412      832 bytes  ffff47001d01000800008200
+      6  at  18412      832 bytes  ffff47001d01000800008200  832 bytes that block 8 indexes -- the counts in that index sum to exactly 832 -- copied to 0x801e7edc. flag_gate, player_controller and level_overlay_tick read into it. What the sequences hold is not established
       7  at  19248     5280 bytes  000000000000310000000000
-      8  at  24532      192 bytes  001000000124100003203400
+      8  at  24532      192 bytes  001000000124100003203400  an **index into block 6**: 39 records of 4 bytes, `(id, count, u16 offset)`, ids 0..43 with gaps, and the offsets accumulate by the counts exactly. 0x80060800 expands it into 0x80198468 at startup and 0x800608ec looks an id up there -- which is what script_interpreter calls for an entity that is not a talker
       9  at  24728     1496 bytes  01000000d405000000000000
      10  at  26228   102900 bytes  46000000c802000000000000
 

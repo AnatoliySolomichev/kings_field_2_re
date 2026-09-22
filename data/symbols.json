@@ -1828,5 +1828,25 @@
   "name": "light_table_source",
   "kind": "data",
   "evidence": "what light_table_reset expands into tile_look at the top of every frame: 64 entries read 48 bytes apart and written 108 apart. The first 48 entries are FDAT.T entry 97 block 4... block 5, 2304 bytes, matching RAM byte for byte; the last 16 come from GAME.EXE's own data"
+ },
+ "0x80060800": {
+  "name": "build_seq_index",
+  "kind": "code",
+  "evidence": "walks the 39 four-byte records of FDAT 97 block 8 at 0x801983a8 -- (id, count, u16 offset), stopping at an id of 0xff -- and expands them into the table at 0x80198468 that 0x800608ec looks up. game_main calls it once in the init chain"
+ },
+ "0x800608ec": {
+  "name": "seq_lookup",
+  "kind": "code",
+  "evidence": "(id) -> walks the 0x30 entries of the table build_seq_index made, folding a few ids onto others first (1 and 2 become 1, 0x25 and 0x24 fold, 0x22 becomes 0x20). script_interpreter calls it with a script's frame byte for an entity whose kind is not 0x2b -- so it is what a non-talker's script byte means"
+ },
+ "0x801983a8": {
+  "name": "seq_index",
+  "kind": "data",
+  "evidence": "FDAT 97 block 8 copied whole: 39 records of (id, count, u16 offset), the offsets accumulating by the counts to exactly 832, which is the length of block 6"
+ },
+ "0x801e7edc": {
+  "name": "seq_data",
+  "kind": "data",
+  "evidence": "FDAT 97 block 6, 832 bytes, the sequences seq_index points into. flag_gate, player_controller and level_overlay_tick read into it as well. What a sequence holds is not established"
  }
 }
