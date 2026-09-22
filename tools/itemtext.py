@@ -26,6 +26,64 @@ import pickle
 import re
 import sys
 
+# --- the names, in plain text --------------------------------------------
+#
+# Every item name in the game is a 24-byte row at 0x8007f620, and it is **not
+# a picture**: `a` is 0, `z` is 25, 0x7f is a space and 0xff ends the string.
+# Two punctuation codes appear, 0x32 in "seath's sword" and 0x33 in "ryu-ga".
+#
+# This repository has OCRed item names off rendered images since it started,
+# and they were in the executable all along. The OCR read item 0 as "Excel
+# Iecor"; it is **excellector**. `tools/itemtext.py names` prints all 150 and
+# not one of them needs a glyph template.
+#
+# Found from 0x8001af88, which builds the inventory page: it walks the item
+# array and indexes this table by the id, 24 bytes to a row.
+
+NAME_TABLE = 0x8007F620
+NAME_ROW = 24
+NAME_COUNT = 150
+NAME_CHARS = {0x7F: " ", 0x32: "'", 0x33: "-"}
+
+
+def name(item_id):
+    """The item's name, out of GAME.EXE rather than out of a picture."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import mips
+    b = mips.load("game").bytes(NAME_TABLE + NAME_ROW * item_id, NAME_ROW)
+    if not b:
+        return None
+    out = []
+    for c in b:
+        if c == 0xFF:
+            break
+        if c < 26:
+            out.append(chr(ord("a") + c))
+        elif c in NAME_CHARS:
+            out.append(NAME_CHARS[c])
+        else:
+            out.append(f"<{c:02x}>")
+    return "".join(out)
+
+
+def names():
+    """`{id: name}` for all 150."""
+    return {i: name(i) for i in range(NAME_COUNT)}
+
+
+def export(out_dir):
+    """The names, where the port can read them."""
+    import json
+    path = os.path.join(out_dir, "itemnames.json")
+    with open(path, "w") as fh:
+        json.dump({"_note": f"the item names out of GAME.EXE at "
+                            f"{NAME_TABLE:#x}, {NAME_ROW} bytes a row: a is 0, "
+                            "z is 25, 0x7f a space, 0xff the end. Not OCR",
+                   "names": {str(k): v for k, v in names().items() if v}},
+                  fh, separators=(",", ":"))
+    return path
+
+
 sys.path.insert(0, "tools")
 import propocr                                                       # noqa: E402
 import tim                                                           # noqa: E402
@@ -105,6 +163,12 @@ def text(n, arc=None, f=None, clean=True):
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "names":
+        for k, n in names().items():
+            if n:
+                print(f"  {k:3d}  {n}")
+        sys.exit(0)
+
     arc = TArc(ITEM)
     if len(sys.argv) > 1:
         n = int(sys.argv[1])

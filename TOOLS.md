@@ -300,7 +300,19 @@ python3 tools/overlay.py 17         one level: entry points and calls
 python3 tools/overlay.py 17 dis     disassembled
 ```
 
-**`itemtext.py`** — what each item id *is*: item `n` is `ITEM.T[390 + n]`.
+**`itemtext.py`** — what each item id *is*: item `n` is `ITEM.T[390 + n]`, and
+its **name is plain text in the executable**.
+
+```
+python3 tools/itemtext.py names      all 150 names, out of GAME.EXE
+```
+
+150 rows of 24 bytes at `0x8007f620`: `a` is 0, `z` is 25, `0x7f` a space,
+`0xff` the end, with an apostrophe and a hyphen the only punctuation. **All 150
+decode without one unknown code**, so the OCR this project has used for item
+names since it started is not needed for them — it read item 0 as *"Excel
+Iecor"* and the game calls it `excellector`. The descriptions are still
+pictures.
 
 ```
 python3 tools/itemtext.py            every item

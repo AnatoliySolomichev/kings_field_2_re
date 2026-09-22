@@ -14,7 +14,11 @@ class_name KFItems
 # 99 is 0x63 and it is the cap in both arrays, so a stack is 99 and a full pack
 # says so rather than losing the item quietly.
 #
-# Item `n` is `ITEM.T[390 + n]` and ids stop at 149 -- tools/itemtext.py.
+# Item `n`'s description is `ITEM.T[390 + n]`, a picture, and its **name is
+# plain text in the executable**: a 24-byte row at 0x8007f620 where `a` is 0,
+# `z` is 25, 0x7f is a space and 0xff ends it. All 150 decode without a single
+# unknown code, so nothing here needs the OCR that read item 0 as "Excel
+# Iecor" -- it is `excellector`. tools/itemtext.py writes them out.
 
 const COUNT := 150                   # ids 0..149
 const CAP := 0x63                    # 99, the per-slot cap in both arrays
@@ -72,6 +76,27 @@ func count(id: int) -> int:
 	if id < 0 or id >= COUNT:
 		return 0
 	return int(a[id]) + int(b[id])
+
+
+var item_names := {}
+
+
+func load_names(path := "res://itemnames.json") -> bool:
+	if not FileAccess.file_exists(path):
+		return false
+	var d = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if typeof(d) != TYPE_DICTIONARY:
+		return false
+	item_names.clear()
+	for k in d.get("names", {}).keys():
+		item_names[int(k)] = str(d["names"][k])
+	return not item_names.is_empty()
+
+
+func name_of(id: int) -> String:
+	if item_names.is_empty():
+		load_names()
+	return item_names.get(id, "item %d" % id)
 
 
 func summary() -> String:

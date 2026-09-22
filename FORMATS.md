@@ -100,7 +100,37 @@ id (see §5).
 
 ---
 
-## 3. Text is stored as pictures
+## 3. Text is stored as pictures — except the item names
+
+Every string the player reads is a rendered image and this document is mostly
+about decoding them. **The item names are not.** They are 150 rows of 24 bytes
+at `0x8007f620` in `GAME.EXE`, in the plainest encoding there is:
+
+```
+0x00..0x19   a to z
+0x7f         a space
+0x32         an apostrophe      "seath's sword", "ichrius' key"
+0x33         a hyphen           "ryu-ga"
+0xff         the end
+```
+
+All 150 decode without one unknown code. `tools/itemtext.py names` prints
+them, and nineteen are a single `a` — unused ids.
+
+This was found from `0x8001af88`, the routine that builds the inventory page:
+it walks the item array and indexes this table by the id. The OCR that has been
+reading item names off pictures since this project started gave item 0 as
+*"Excel Iecor"*. It is **`excellector`**. Item 104, the herb a player picked up
+in the recorded session, is **`earth herb`**; 107, the one that stops a death,
+is **`dragon crystal`**; 109 is **`moon stone`** and 141 is
+**`silviera's key`** — which is what the player said they had picked up.
+
+The *descriptions* are still pictures, in `ITEM.T[390 + n]`, and everything
+below still applies to them.
+
+## 3.1 The picture faces
+
+
 
 No game string is ASCII. Dialogue, item text and signs are all pre-rendered
 TIM images, which is why `strings` over the disc finds nothing but the Sony
