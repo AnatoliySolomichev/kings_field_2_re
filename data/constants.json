@@ -221,5 +221,36 @@
     "routines": []
    }
   ]
+ },
+ "0x640": {
+  "value": 1600,
+  "meanings": [
+   {
+    "name": "EYE_HEIGHT",
+    "kind": "read",
+    "where": "game:0x8002b330 camera_pose, game:0x80028d54 sync_player_pos",
+    "evidence": "the eye above the feet. camera_pose puts the camera at player_y + bob + crouch - 0x640 (Y points down, so minus is up), and sync_player_pos adds the same 0x640 back when it compares the eye with the three surface planes.",
+    "routines": [
+     "camera_pose",
+     "sync_player_pos"
+    ]
+   }
+  ]
+ },
+ "0x6c": {
+  "value": 108,
+  "meanings": [
+   {
+    "name": "TILE_LOOK_STRIDE",
+    "kind": "read",
+    "where": "game:0x8003df50 draw_held_item",
+    "evidence": "108 bytes to a lighting entry in tile_look, formed as a shift-and-add chain on cell[+9] & 0x3f. 64 entries, reset every frame by light_table_reset from 0x80081c8c.",
+    "routines": [
+     "draw_held_item",
+     "draw_tile",
+     "light_table_reset"
+    ]
+   }
+  ]
  }
 }

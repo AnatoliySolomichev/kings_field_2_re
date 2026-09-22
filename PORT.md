@@ -29,7 +29,7 @@ that it reproduces it correctly.** `status` says how far that went:
 | --- | --- | --- | --- | --- | --- |
 | boot | 10 | 1 | 0 | 115 | 50 (43%) |
 | open | 293 | 6 | 0 | 19753 | 1066 (5%) |
-| game | 816 | 21 | 5 | 92169 | 5537 (6%) |
+| game | 816 | 23 | 5 | 92169 | 5859 (6%) |
 | end | 167 | 0 | 0 | 9966 | 0 (0%) |
 
 Those percentages are of *all* the code in the image, which includes
@@ -41,9 +41,11 @@ floor, not a score.
 | in the port | what it is | in the game | status |
 | --- | --- | --- | --- |
 | [`godot/boot.gd:66`](godot/boot.gd#L66) | `func _exec` | `boot:0x80010038` shell_main | transcribed |
+| [`godot/game.gd:45`](godot/game.gd#L45) | `(the file)` | `game:0x80014bd4` game_main | partial |
 | [`godot/collision.gd:135`](godot/collision.gd#L135) | `func vec_angle` | `game:0x80016ab8` vec_angle | transcribed |
 | [`godot/actors.gd:253`](godot/actors.gd#L253) | `func _in_range` | `game:0x80016ec8` in_range | transcribed |
 | [`godot/levelup.gd:55`](godot/levelup.gd#L55) | `(the file)` | `game:0x8002a310` award_exp | transcribed |
+| [`godot/game.gd:86`](godot/game.gd#L86) | `const EYE_HEIGHT` | `game:0x8002b330` camera_pose | transcribed |
 | [`godot/player.gd:250`](godot/player.gd#L250) | `func _tick` | `game:0x8002e3f8` player_horizontal | partial |
 | [`godot/player.gd:338`](godot/player.gd#L338) | `func _move` | `game:0x8002ed60` player_vertical | verified |
 | [`godot/player.gd:320`](godot/player.gd#L320) | `func _bob` | `game:0x8002f298` player_bob | transcribed |
@@ -109,6 +111,6 @@ load-bearing whatever its size.
 | 10 | 18 | `0x800168a8` | sub_800168a8 |
 | 10 | 14 | `0x80019538` | sub_80019538 |
 | 9 | 569 | `0x80018358` | level_load |
-| 9 | 405 | `0x800422b8` | sub_800422b8 |
+| 9 | 405 | `0x800422b8` | render_frame |
 | 9 | 224 | `0x80026acc` | sub_80026acc |
 

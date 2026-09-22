@@ -1556,5 +1556,150 @@
   "name": "collision_ceiling",
   "kind": "data",
   "evidence": "the companion slot the wall and ceiling handlers leave the *lower* bound in; player_horizontal reads it at 0x8002e5e0"
+ },
+ "0x800341e8": {
+  "name": "light_table_reset",
+  "kind": "code",
+  "evidence": "copies the 0x3f-entry lighting table from 0x80081c8c into tile_look, twice per entry (the near and far copies), at the top of every frame. game_main calls it first in the loop"
+ },
+ "0x80034180": {
+  "name": "render_flags_reset",
+  "kind": "code",
+  "evidence": "writes the eleven render flags at 0x801aeafa..0x801aeb0c back to their defaults -- 1, 1, 0... and 0xff -- second in game_main's frame"
+ },
+ "0x80034300": {
+  "name": "light_table_step",
+  "kind": "code",
+  "evidence": "when 0x801aeef8 is set, runs 0x80016290 over all 64 lighting entries three times, once per colour, then clears the flag. The interpolation that makes torchlight move"
+ },
+ "0x8002b330": {
+  "name": "camera_pose",
+  "kind": "code",
+  "evidence": "(pos_out, ang_out): writes the eye -- player X, player_y + bob + crouch - 0x640, player Z -- and the three view angles from 0x801b2608/0x260a/0x260c. So 0x640 is the eye above the feet, and sync_player_pos adds the same 0x640 back when it compares the eye with the three surface planes"
+ },
+ "0x800156bc": {
+  "name": "audio_listener_set",
+  "kind": "code",
+  "evidence": "copies the camera pose game_main just built into the mirror at 0x801b0a10 with its cell layer, and the angles into 0x801b0a22. Only sound_play_3d reads it, to get the distance and the bearing of a cue"
+ },
+ "0x80015410": {
+  "name": "sound_play_3d",
+  "kind": "code",
+  "evidence": "(kind, position, ..., radius, range): takes the distance from the listener mirror through game_isqrt, drops the cue when it is past the range, and scales the volume by what is left. The low twelve bits of the first argument are a bearing and 0x8000 is a flag"
+ },
+ "0x8005bc50": {
+  "name": "ai_driver",
+  "kind": "code",
+  "evidence": "walks 128 slots of 0x4c bytes at 0x801b80ec; for each live one it publishes the slot at 0x801ba6f0 and its 24-byte definition at 0x801b77ec + 24*slot[+1] into 0x801ba6ec, counts slot[+0x10] down, and calls actor_ai. Fifth in game_main's frame"
+ },
+ "0x800568bc": {
+  "name": "actor_ai",
+  "kind": "code",
+  "evidence": "the 4584-instruction behaviour tick ai_driver calls once per live slot. Reads the player's position and state, rolls rand, asks collide_surface and actor_spot_taken, and writes the player's HP -- so it is where a creature decides and where it hits"
+ },
+ "0x8005eb20": {
+  "name": "level_overlay_tick",
+  "kind": "code",
+  "evidence": "calls through the function pointer at [0x8018fae0]+4 -- the level's own code, FDAT.T entry 3n+2 -- and then owns the fade when a level changes. Seventh in game_main's frame"
+ },
+ "0x800422b8": {
+  "name": "render_frame",
+  "kind": "code",
+  "evidence": "the last call in game_main's loop: the camera matrix (0x800357e8), then 0x800351fc, 0x80041f9c, 0x80034bf4, 0x80035630, 0x80043858 and 0x8003df50, then the GPU primitive state for the frame"
+ },
+ "0x801b80ec": {
+  "name": "ai_slots",
+  "kind": "data",
+  "evidence": "128 slots of 0x4c bytes; ai_driver walks them and byte +0 is 0xff when the slot is free"
+ },
+ "0x801b77ec": {
+  "name": "ai_defs",
+  "kind": "data",
+  "evidence": "24-byte records ai_driver indexes by a slot's +1 byte and publishes at 0x801ba6ec for actor_ai to read"
+ },
+ "0x801c1728": {
+  "name": "sound_task",
+  "kind": "data",
+  "evidence": "the record the two servicers in game_main's frame poll: 0x80018cd0 acts when its +0 is 0x40 and its +0x10 is 1, 0x80015a48 when they are 0x30 and 2. 0x8001a438 sets it up and 0x8001967c advances it"
+ },
+ "0x800357e8": {
+  "name": "view_pose_set",
+  "kind": "code",
+  "evidence": "copies the camera pose render_frame is given into player_pos_view and its three angles, and divides the X and Z by 2048 into 0x801aec64 and 0x801aec68 -- the cell the camera is in. First stage of render_frame"
+ },
+ "0x800351fc": {
+  "name": "texture_scroll_step",
+  "kind": "code",
+  "evidence": "two 0x18-byte records at 0x801aeb1c, each a countdown, a scroll offset and a rect, advanced with MoveImage inside VRAM. The animated water and lava surfaces"
+ },
+ "0x80041f9c": {
+  "name": "message_tick",
+  "kind": "code",
+  "evidence": "a state machine on 0x801aeaf7 over the byte sequence at 0x801aeaed indexed by 0x801aeaf5, drawing through 0x800277c0 -- the on-screen banner queue, with 0x19 taking its own path"
+ },
+ "0x80034bf4": {
+  "name": "view_matrix_build",
+  "kind": "code",
+  "evidence": "three game_cos/game_sin pairs on the view angles at 0x801aec5c, folded by octant, into the scratchpad at 0x1f800118 and 0x801aec6c..0x78. The camera's rotation matrix for the frame"
+ },
+ "0x80035630": {
+  "name": "frame_begin_3d",
+  "kind": "code",
+  "evidence": "flips draw_buffer_index, points current_draw_slot and ot_pointer at that buffer's records, and clears the 0x2000-entry ordering table with ClearOTagR plus an 8-entry one at 0x801a9178. The world's frame setup; frame_begin (0x80026fe4) is the menus' own"
+ },
+ "0x80043858": {
+  "name": "effect_timers_step",
+  "kind": "code",
+  "evidence": "counts down the twelve bytes at 0x801aab64, stepping 0x14 apart, and clamps each at 1. Nothing else writes them"
+ },
+ "0x8003df50": {
+  "name": "draw_held_item",
+  "kind": "code",
+  "evidence": "returns at once when 0x801b25a4 is -1. Otherwise it takes the lighting of the cell the player stands in -- tile_look + 108 * (cell & 0x3f), which is what fixes tile_look's stride at 108 -- loads it into the GTE's light and colour matrices, and draws the model at 0x801b2594 with its own rotation. The thing in the player's hand"
+ },
+ "0x8003c35c": {
+  "name": "draw_model_cell_lit",
+  "kind": "code",
+  "evidence": "the third model draw beside draw_model_lit and draw_model_plain: MVMVA, ScaleMatrix and the tile_look lighting, called once from render_frame between the held item and the terrain"
+ },
+ "0x8003bfd0": {
+  "name": "draw_terrain",
+  "kind": "code",
+  "evidence": "the cell walk: reads player_pos_view, block_copies the cells around it and calls draw_tile for each. render_frame's world pass"
+ },
+ "0x8003d280": {
+  "name": "overlay_plane_18",
+  "kind": "code",
+  "evidence": "reads depth_under_plane_18 -- how far the eye is under the surface collision opcode 0x18 places -- and fills the screen with it. One of three, one per plane"
+ },
+ "0x8003d38c": {
+  "name": "overlay_plane_19",
+  "kind": "code",
+  "evidence": "the same for depth_under_plane_19, opcode 0x19's plane"
+ },
+ "0x8003d41c": {
+  "name": "overlay_plane_17",
+  "kind": "code",
+  "evidence": "the same for the third depth at 0x801b2640, opcode 0x17's plane -- which is why that address was named camera_height, from where it is formed rather than from what it means"
+ },
+ "0x80035700": {
+  "name": "frame_end_3d",
+  "kind": "code",
+  "evidence": "DrawSync, PutDispEnv and PutDrawEnv for the buffer draw_buffer_index names, then DrawOTag on its ordering table. The last drawing call of a frame"
+ },
+ "0x80043940": {
+  "name": "resource_sweep",
+  "kind": "code",
+  "evidence": "the last call in render_frame: walks whatever free_object_resource is given and releases it"
+ },
+ "0x801b25a4": {
+  "name": "held_item_model",
+  "kind": "data",
+  "evidence": "-1 when the player's hands are empty; draw_held_item returns immediately on that and otherwise draws the model at 0x801b2594"
+ },
+ "0x801b2594": {
+  "name": "held_item_record",
+  "kind": "data",
+  "evidence": "draw_held_item reads its +0x34..+0x38 as a position and +0x3c as a rotation, and hands the rotation to 0x80076168"
  }
 }

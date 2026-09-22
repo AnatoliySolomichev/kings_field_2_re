@@ -999,7 +999,8 @@ def project(lv, out="out/godot", start=(57, 4)):
     open(f"{out}/boot.tscn", "w").write(BOOT_SCENE)
     for name in ("player.gd", "collision.gd", "selftest.gd", "ghost.gd",
                  "labels.gd", "pad.gd", "boot.gd", "opening.gd",
-                 "cutscene.gd", "actors.gd", "levelup.gd"):
+                 "cutscene.gd", "actors.gd", "levelup.gd",
+                 "game.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening

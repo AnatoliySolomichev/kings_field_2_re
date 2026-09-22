@@ -546,6 +546,18 @@ def render(w, fn, out=sys.stdout, const_names=None, raw=False, portmap=None):
     print("}", file=out)
 
 
+def _fresh(d):
+    """An empty directory to write into.
+
+    Renaming a routine renames its file, and without this the old one stays --
+    `800422b8_sub_800422b8.c` sitting beside `800422b8_render_frame.c`, both
+    looking current, one of them a version behind.
+    """
+    import shutil
+    if os.path.isdir(d):
+        shutil.rmtree(d)
+    os.makedirs(d, exist_ok=True)
+
 if __name__ == "__main__":
     argv = sys.argv[1:]
     nick = argv.pop(0) if argv and argv[0] in mips.EXES else "game"
@@ -565,7 +577,7 @@ if __name__ == "__main__":
     w = rdis.build(nick)
     if argv and argv[0] == "--all":
         d = os.path.join(ROOT, "out", "pseudo", nick)
-        os.makedirs(d, exist_ok=True)
+        _fresh(d)
         for f, fn in sorted(w.funcs.items()):
             with open(os.path.join(d, f"{f:08x}_{fn.name}.c"), "w") as fh:
                 render(w, fn, fh, cn, raw, pm)

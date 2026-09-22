@@ -1478,6 +1478,71 @@ detail).
 
 ---
 
+### What a frame is
+
+`game_main` (`0x80014bd4`) zeroes twelve tables, loads a level, and then runs
+**sixteen calls in a loop** until the word at `$gp+0x1e4` goes non-zero. That
+word is how the game ends: 2 writes `0` into the shell's `next_exe` and goes
+back to `OPEN.EXE`, 3 and 4 both go to `END.EXE` with `overlay_arg` 2 and 3.
+
+| | | |
+| --- | --- | --- |
+| 1 | `light_table_reset` | `0x800341e8` — the 64 lighting entries refilled from `0x80081c8c` |
+| 2 | `render_flags_reset` | `0x80034180` — eleven flags at `0x801aeafa` to their defaults |
+| 3 | the object interpreter | `0x80047010`, with its own 236-arm switch |
+| 4 | `player_controller` | `0x80030fcc` — pad, then turn, look, walk, height |
+| 5 | `actor_tick_driver` | `0x80052e5c` — the 199 creature slots |
+| 6 | `ai_driver` | `0x8005bc50` — 128 behaviour slots, each into `actor_ai` |
+| 7 | `spawn_anywhere = 0` | `0x801b24f2`, cleared every frame |
+| 8 | `level_overlay_tick` | `0x8005eb20` — the level's own code, through `[0x8018fae0]+4` |
+| 9 | `level_load` | `0x80018358` — acts only when a transition is pending |
+| 10 | `flag_gate` | `0x80061940` |
+| 11 | `camera_pose` | `0x8002b330` — the eye and the three view angles |
+| 12 | `audio_listener_set` | `0x800156bc` — the same pose, for 3D sound |
+| 13 | `light_table_step` | `0x80034300` — the interpolation that moves torchlight |
+| 14, 15 | the two sound tasks | `0x80018cd0` for type `0x40`, `0x80015a48` for `0x30` |
+| 16 | `render_frame` | `0x800422b8` |
+
+**The eye is `player_y + bob + crouch - 0x640`.** `camera_pose` forms it that
+way and `sync_player_pos` adds the same `0x640` back when it compares the eye
+with the three surface planes, so 1600 units is the eye above the feet — beside
+a body height of `0x6a4` = 1700.
+
+### And what render_frame is
+
+Twenty-two more calls, and the shape is a PlayStation renderer exactly:
+
+```
+view_pose_set          0x800357e8   the pose into player_pos_view, and its cell
+texture_scroll_step    0x800351fc   two VRAM rects moved: the water and the lava
+message_tick           0x80041f9c   the on-screen banner queue
+view_matrix_build      0x80034bf4   three game_cos/game_sin pairs into the GTE
+frame_begin_3d         0x80035630   flip the buffer, ClearOTagR on 0x2000 entries
+effect_timers_step     0x80043858   twelve byte timers at 0x801aab64
+draw_held_item         0x8003df50   the thing in the player's hands
+draw_model_cell_lit    0x8003c35c
+draw_terrain           0x8003bfd0   the cell walk, into draw_tile
+render_walk            0x80040ae4   the creatures, then the objects
+overlay_plane_18       0x8003d280   the screen tint for being under that plane
+overlay_plane_19       0x8003d38c
+overlay_plane_17       0x8003d41c
+frame_end_3d           0x80035700   DrawSync, PutDispEnv, PutDrawEnv, DrawOTag
+resource_sweep         0x80043940
+```
+
+The three overlays are what closes the loop on the surface planes: collision
+opcodes `0x17`, `0x18` and `0x19` place them, `sync_player_pos` measures how
+far the eye is under each, `player_throw` fires when it goes under, and **each
+depth has its own full-screen tint**. `0x801b2640` was named `camera_height`
+from where it is formed; it is the third of those depths.
+
+**`tile_look`'s stride is 108 bytes**, read off `draw_held_item` forming
+`tile_look + 108 * (cell[+9] & 0x3f)` — 64 entries, refilled every frame.
+
+`godot/game.gd` carries this order with each step either wired to the port's
+copy or naming the address it stands for and saying nothing runs. Six of the
+sixteen exist.
+
 ## 5. Live RAM
 
 Found by diffing snapshots taken around a pickup, then pinned down against

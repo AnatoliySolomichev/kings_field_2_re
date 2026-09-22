@@ -1091,7 +1091,7 @@ def save(nick, seeds=()):
 
 def listings(w, const_names=None, portmap=None):
     d = os.path.join(ROOT, "out", "asm", w.nick)
-    os.makedirs(d, exist_ok=True)
+    _fresh(d)
     n = 0
     for f, fn in sorted(w.funcs.items()):
         with open(os.path.join(d, f"{f:08x}_{fn.name}.s"), "w") as fh:
@@ -1187,6 +1187,18 @@ def describe(w, out=sys.stdout, unnamed_only=True):
         if p:
             print(f"            {p}", file=out)
 
+
+def _fresh(d):
+    """An empty directory to write into.
+
+    Renaming a routine renames its file, and without this the old one stays --
+    `800422b8_sub_800422b8.c` sitting beside `800422b8_render_frame.c`, both
+    looking current, one of them a version behind.
+    """
+    import shutil
+    if os.path.isdir(d):
+        shutil.rmtree(d)
+    os.makedirs(d, exist_ok=True)
 
 if __name__ == "__main__":
     argv = sys.argv[1:]

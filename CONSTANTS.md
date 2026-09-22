@@ -34,7 +34,7 @@ immediates alone cannot see the two numbers that say what the grid is.
 Ten bytes to a terrain cell, from the same index arithmetic.
 
 253 sites: 164 loaded, 53 multiplier, 23 argument, 11 bound, 1 mask, 1 compared with.
-In `game:sub_800568bc`, `game:sub_8002c30c`, `game:sub_80053c84`, `game:actor_tick`, `game:sub_80028f90`, `game:sub_80030e14`, `game:player_controller`, `open:sub_8001b524`, `open:sub_8002842c`, `game:sub_8002d2a0`, `game:sub_80047010`, `game:sub_80062304` and 74 more.
+In `game:actor_ai`, `game:sub_8002c30c`, `game:sub_80053c84`, `game:actor_tick`, `game:sub_80028f90`, `game:sub_80030e14`, `game:player_controller`, `open:sub_8001b524`, `open:sub_8002842c`, `game:sub_8002d2a0`, `game:sub_80047010`, `game:sub_80062304` and 74 more.
 
 `python3 tools/consts.py 0xa` for every site.
 
@@ -54,7 +54,7 @@ In `game:sub_80053c84`, `game:options_screen`, `game:sub_8002ab18`, `game:player
 68 bytes to an object record. Every walk of the object table steps by it -- `$s2 += 0x44` -- and find_object forms object_table + a0 * 0x44.
 
 37 sites: 27 multiplier, 7 loaded, 2 compared with, 1 argument.
-In `game:sub_80047010`, `open:sub_80029504`, `game:sub_8005db30`, `game:sub_80067d4c`, `game:sub_80029500`, `game:sub_8002d2a0`, `game:sub_800568bc`, `open:sub_8001ad3c`, `game:sub_8002bdc0`, `game:sub_80044900`, `game:find_object`, `game:find_free_slot` and 5 more.
+In `game:sub_80047010`, `open:sub_80029504`, `game:sub_8005db30`, `game:sub_80067d4c`, `game:sub_80029500`, `game:sub_8002d2a0`, `game:actor_ai`, `open:sub_8001ad3c`, `game:sub_8002bdc0`, `game:sub_80044900`, `game:find_object`, `game:find_free_slot` and 5 more.
 
 `python3 tools/consts.py 0x44` for every site.
 
@@ -64,9 +64,19 @@ In `game:sub_80047010`, `open:sub_80029504`, `game:sub_8005db30`, `game:sub_8006
 The grid is 80 by 80 and grid_query_area bounds both axes by it.
 
 32 sites: 22 loaded, 8 bound, 1 compared with, 1 argument.
-In `game:sub_80053c84`, `game:sub_80024f88`, `game:sub_8001b88c`, `game:sub_8002a6f4`, `game:sub_8002d2a0`, `game:player_vertical`, `game:grid_query_area`, `game:sub_800345f4`, `game:sub_8003bfd0`, `game:sub_800445b8`, `open:open_main`, `open:title_menu` and 7 more.
+In `game:sub_80053c84`, `game:sub_80024f88`, `game:sub_8001b88c`, `game:sub_8002a6f4`, `game:sub_8002d2a0`, `game:player_vertical`, `game:grid_query_area`, `game:sub_800345f4`, `game:draw_terrain`, `game:sub_800445b8`, `open:open_main`, `open:title_menu` and 7 more.
 
 `python3 tools/consts.py 0x50` for every site.
+
+### `0x6c` = 108
+
+**TILE_LOOK_STRIDE** -- *read*, from `game:0x8003df50 draw_held_item`  
+108 bytes to a lighting entry in tile_look, formed as a shift-and-add chain on cell[+9] & 0x3f. 64 entries, reset every frame by light_table_reset from 0x80081c8c.
+
+9 sites: 6 multiplier, 3 loaded.
+In `game:draw_model_plain`, `game:sub_8001b254`, `game:sub_80026acc`, `game:draw_tile`, `game:draw_model_cell_lit`, `game:overlay_plane_18`, `game:draw_held_item`, `game:sub_800400ac`.
+
+`python3 tools/consts.py 0x6c` for every site.
 
 ### `0x7f` = 127
 
@@ -74,7 +84,7 @@ In `game:sub_80053c84`, `game:sub_80024f88`, `game:sub_8001b88c`, `game:sub_8002
 flag_gate masks the gate byte with 0x7f, which is why the flag array is 128 long and not 64.
 
 172 sites: 113 loaded, 22 argument, 17 mask, 11 compared with, 9 bound.
-In `open:sub_80028f70`, `open:sub_8002607c`, `game:sub_80015410`, `game:sub_80060d20`, `game:sub_80071bb4`, `end:sub_8001c5a0`, `open:play_movie`, `open:sub_800211d0`, `game:game_main`, `game:player_controller`, `game:sub_8006a060`, `end:sub_80011d14` and 61 more.
+In `open:sub_80028f70`, `open:sub_8002607c`, `game:sound_play_3d`, `game:sub_80060d20`, `game:sub_80071bb4`, `end:sub_8001c5a0`, `open:play_movie`, `open:sub_800211d0`, `game:game_main`, `game:player_controller`, `game:sub_8006a060`, `end:sub_80011d14` and 61 more.
 
 `python3 tools/consts.py 0x7f` for every site.
 
@@ -84,7 +94,7 @@ In `open:sub_80028f70`, `open:sub_8002607c`, `game:sub_80015410`, `game:sub_8006
 Inside 0x80 of the surface the player is *placed* on it rather than eased towards it, and 0x80 is also the largest single step towards it. tools/movement.py reproduces 48 of 48 of the game's height stores with it.
 
 272 sites: 100 loaded, 43 bound, 40 mask, 32 divisor, 28 multiplier, 26 argument, 3 compared with.
-In `game:sub_80053c84`, `game:sub_80047010`, `game:sub_800568bc`, `game:actor_tick`, `game:sub_80029500`, `game:sub_8001ec84`, `game:load_object_placement`, `game:sub_80015410`, `game:tile_collision`, `game:object_interact`, `open:sub_8002607c`, `game:apply_control_scheme` and 103 more.
+In `game:sub_80053c84`, `game:sub_80047010`, `game:actor_ai`, `game:actor_tick`, `game:sub_80029500`, `game:sub_8001ec84`, `game:load_object_placement`, `game:sound_play_3d`, `game:tile_collision`, `game:object_interact`, `open:sub_8002607c`, `game:apply_control_scheme` and 103 more.
 
 `python3 tools/consts.py 0x80` for every site.
 
@@ -94,7 +104,7 @@ In `game:sub_80053c84`, `game:sub_80047010`, `game:sub_800568bc`, `game:actor_ti
 136 bytes to a creature record in the table at 0x80185da8.
 
 17 sites: 14 multiplier, 3 compared with.
-In `game:sub_8004c668`, `game:sub_800568bc`, `game:sub_800533e8`, `game:sub_8002d2a0`, `game:sub_800460bc`, `game:sub_80046914`, `game:sub_80047010`, `game:actor_spawn_slot`, `game:actor_select`, `game:use_item`, `game:object_interact`, `game:apply_level_state`.
+In `game:sub_8004c668`, `game:actor_ai`, `game:sub_800533e8`, `game:sub_8002d2a0`, `game:sub_800460bc`, `game:sub_80046914`, `game:sub_80047010`, `game:actor_spawn_slot`, `game:actor_select`, `game:use_item`, `game:object_interact`, `game:apply_level_state`.
 
 `python3 tools/consts.py 0x88` for every site.
 
@@ -137,7 +147,7 @@ The radius literal the player's movement passes to the collision: `li $a3, 0x320
 The same number, unrelated: a terrain cell is at grid + cz*800 + cx*10, so a row of 80 cells of 10 bytes is 800 bytes. Confirmed from the code after first being guessed -- FORMATS.md, 'Two constants confirmed from the code'.
 
 49 sites: 33 loaded, 14 multiplier, 1 argument, 1 bound.
-In `game:use_item`, `game:player_vertical`, `game:sub_80047010`, `game:sub_800568bc`, `game:player_move`, `game:player_controller`, `game:place_player_on_terrain`, `game:player_horizontal`, `game:sub_800445b8`, `game:object_set_present`, `game:load_object_placement`, `game:sub_8004f414` and 13 more.
+In `game:use_item`, `game:player_vertical`, `game:sub_80047010`, `game:actor_ai`, `game:player_move`, `game:player_controller`, `game:place_player_on_terrain`, `game:player_horizontal`, `game:sub_800445b8`, `game:object_set_present`, `game:load_object_placement`, `game:sub_8004f414` and 13 more.
 
 `python3 tools/consts.py 0x320` for every site.
 
@@ -147,9 +157,19 @@ In `game:use_item`, `game:player_vertical`, `game:sub_80047010`, `game:sub_80056
 A gap wider than 0x400 stops being a step and becomes a fall: below the surface by more than this enters state 0x40, above it enters state 0x20.
 
 149 sites: 70 loaded, 23 multiplier, 22 divisor, 15 mask, 13 bound, 6 argument.
-In `game:sub_800568bc`, `game:sub_80047010`, `game:sub_8004f414`, `game:sub_800366a8`, `game:sub_80053c84`, `game:draw_tmd_object`, `game:level_state_write`, `game:sub_80074380`, `game:tile_collision`, `game:actor_move_vertical`, `open:PutDispEnv`, `open:sub_800173b4` and 37 more.
+In `game:actor_ai`, `game:sub_80047010`, `game:sub_8004f414`, `game:sub_800366a8`, `game:sub_80053c84`, `game:draw_tmd_object`, `game:level_state_write`, `game:sub_80074380`, `game:tile_collision`, `game:actor_move_vertical`, `open:PutDispEnv`, `open:sub_800173b4` and 37 more.
 
 `python3 tools/consts.py 0x400` for every site.
+
+### `0x640` = 1600
+
+**EYE_HEIGHT** -- *read*, from `game:0x8002b330 camera_pose, game:0x80028d54 sync_player_pos`  
+the eye above the feet. camera_pose puts the camera at player_y + bob + crouch - 0x640 (Y points down, so minus is up), and sync_player_pos adds the same 0x640 back when it compares the eye with the three surface planes.
+
+2 sites: 2 loaded.
+In `game:sub_8002deec`, `game:actor_ai`.
+
+`python3 tools/consts.py 0x640` for every site.
 
 ### `0x6a4` = 1700
 
@@ -167,7 +187,7 @@ In `game:use_item`, `game:player_horizontal`, `game:player_vertical`, `game:sub_
 World X and Z are 2048 units to the grid cell: actor_stand_at_home forms x = cell_x << 11 + fine x. FORMATS.md, 'World X/Z = 2048 x cell'.
 
 219 sites: 95 divisor, 35 multiplier, 29 loaded, 25 bound, 24 mask, 10 argument, 1 compared with.
-In `game:sub_80047010`, `game:actor_tick`, `game:sub_800568bc`, `game:sub_80053c84`, `game:render_walk`, `game:load_object_placement`, `game:sub_8001aa84`, `game:grid_query_area`, `game:draw_cell_walk`, `game:draw_model_plain`, `game:sub_800422b8`, `game:object_set_present` and 69 more.
+In `game:sub_80047010`, `game:actor_tick`, `game:actor_ai`, `game:sub_80053c84`, `game:render_walk`, `game:load_object_placement`, `game:sub_8001aa84`, `game:grid_query_area`, `game:draw_cell_walk`, `game:draw_model_plain`, `game:render_frame`, `game:object_set_present` and 69 more.
 
 `python3 tools/consts.py 0x800` for every site.
 
@@ -177,7 +197,7 @@ In `game:sub_80047010`, `game:actor_tick`, `game:sub_800568bc`, `game:sub_80053c
 The fixed point this game multiplies in: `mult` then `sra` by 12, so 0x1000 is 1.0. An object record is initialised with 0x1000 in its three scale fields (+0x2c, +0x2e, +0x30), and a TMD's scale word is the same.
 
 365 sites: 129 loaded, 124 divisor, 39 argument, 29 mask, 23 bound, 18 multiplier, 3 compared with.
-In `game:sub_80053c84`, `game:player_horizontal`, `game:sub_800568bc`, `game:sub_80047010`, `game:sub_80076168`, `game:actor_tick`, `game:player_controller`, `game:ScaleMatrix`, `game:apply_control_scheme`, `game:sub_80034bf4`, `game:sub_8003d8ec`, `game:sub_8003da10` and 106 more.
+In `game:sub_80053c84`, `game:player_horizontal`, `game:actor_ai`, `game:sub_80047010`, `game:sub_80076168`, `game:actor_tick`, `game:player_controller`, `game:ScaleMatrix`, `game:apply_control_scheme`, `game:view_matrix_build`, `game:sub_8003d8ec`, `game:sub_8003da10` and 106 more.
 
 `python3 tools/consts.py 0x1000` for every site.
 
