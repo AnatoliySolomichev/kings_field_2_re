@@ -110,7 +110,7 @@ class Body:
 
     def __init__(self, w, fn, raw=False, const_names=None):
         self.w, self.fn, self.raw = w, fn, raw
-        self.lin = {}            # reg -> (multiplier, the expression it scales)
+        self.lin = {}            # reg -> (multiplier, source reg, its text)
         self._force = False      # while true, nothing folds -- see branch()
         self.frame = rdis.frame(w, fn)[0]
         # Which stack slots the prologue saves. Only those are hidden: the
@@ -168,8 +168,19 @@ class Body:
         """
         return _paren(self.get(regs, r))
 
-    def forget(self, r):
+    def forget_from(self, r):
+        """Writing a register ends its chain and every chain that scales it.
+
+        The second half is the one that matters. A chain remembers which
+        register it came from, and once something else lands in that register
+        the chain is about a value that is gone.
+        """
+        if r is None:
+            return
         self.lin.pop(r, None)
+        for k, v in list(self.lin.items()):
+            if v[1] == r:
+                self.lin.pop(k, None)
 
     def put(self, regs, r, expr, force=False):
         """Fold an expression into a register, or emit it as a statement."""
@@ -277,9 +288,11 @@ class Body:
         if mn in ("sw", "lw") and i.rs == 29 and i.simm in self.saved_off:
             return
         if mn == "lui":
+            self.forget_from(i.rt)
             regs[i.rt] = f"{i.imm << 16:#x}"
             return
         if mn in ("addiu", "addi"):
+            self.forget_from(i.rt)
             got = self.refs.get(a)
             if got and got[1] == "addr":
                 self.put(regs, i.rt, "&" + self.sym(got[0]))
@@ -294,6 +307,7 @@ class Body:
                          f"{self.arg(regs, i.rs)} {op} {self.num(abs(i.simm))}")
             return
         if mn == "ori":
+            self.forget_from(i.rt)
             if i.rs == 0:
                 self.put(regs, i.rt, self.num(i.imm, mn))
                 return
@@ -309,15 +323,18 @@ class Body:
                      f"{self.arg(regs, i.rs)} | {self.num(i.imm)}")
             return
         if mn in ("andi", "xori"):
+            self.forget_from(i.rt)
             op = "&" if mn == "andi" else "^"
             self.put(regs, i.rt,
                      f"{self.arg(regs, i.rs)} {op} {self.num(i.imm)}")
             return
         if mn in ("slti", "sltiu"):
+            self.forget_from(i.rt)
             self.put(regs, i.rt,
                      f"({self.arg(regs, i.rs)} < {self.num(i.imm)})")
             return
         if mn == "move":
+            self.forget_from(i.rd)
             src = i.rs if i.rt == 0 else i.rt
             self.put(regs, i.rd, self.get(regs, src))
             return
@@ -326,18 +343,19 @@ class Body:
             sign = -1 if mn.startswith("sub") else 1
             got = None
             if x and y and x[1] == y[1]:
-                got = (x[0] + sign * y[0], x[1])
-            elif x and self.get(regs, i.rt) == x[1]:
-                got = (x[0] + sign, x[1])
-            elif y and self.get(regs, i.rs) == y[1]:
-                got = (1 + sign * y[0], y[1])
+                got = (x[0] + sign * y[0], x[1], x[2])
+            elif x and i.rt == x[1]:
+                got = (x[0] + sign, x[1], x[2])
+            elif y and i.rs == y[1]:
+                got = (1 + sign * y[0], y[1], y[2])
+            self.forget_from(i.rd)
             if got and got[0] > 2:
                 self.lin[i.rd] = got
-                self.put(regs, i.rd, f"{got[0]} * {_paren(got[1])}")
+                self.put(regs, i.rd, f"{got[0]} * {_paren(got[2])}")
                 return
-            self.lin.pop(i.rd, None)
         if mn in ("addu", "add", "subu", "sub", "and", "or", "xor", "slt",
                   "sltu", "sllv", "srlv", "srav"):
+            self.forget_from(i.rd)
             op = {"addu": "+", "add": "+", "subu": "-", "sub": "-",
                   "and": "&", "or": "|", "xor": "^", "slt": "<", "sltu": "<",
                   "sllv": "<<", "srlv": ">>", "srav": ">>"}[mn]
@@ -355,8 +373,10 @@ class Body:
             op = "<<" if mn == "sll" else ">>"
             if mn == "sll" and i.shamt and i.shamt < 16:
                 had = i.rt in self.lin
-                k, src = self.lin.get(i.rt, (1, self.get(regs, i.rt)))
-                self.lin[i.rd] = (k << i.shamt, src)
+                k, sr, src = self.lin.get(
+                    i.rt, (1, i.rt, self.get(regs, i.rt)))
+                self.forget_from(i.rd)
+                self.lin[i.rd] = (k << i.shamt, sr, src)
                 if had and (k << i.shamt) > 2:
                     # The chain was already a multiply; keep it one rather
                     # than showing the shift that continues it.
@@ -364,10 +384,11 @@ class Body:
                              f"{k << i.shamt} * {_paren(src)}")
                     return
             else:
-                self.forget(i.rd)
+                self.forget_from(i.rd)
             self.put(regs, i.rd, f"{self.arg(regs, i.rt)} {op} {i.shamt}")
             return
         if i.kind == "load":
+            self.forget_from(i.writes)
             self.put(regs, i.writes, self.mem(i, regs, a))
             return
         if i.kind == "store":
@@ -382,6 +403,7 @@ class Body:
             regs["hi"] = f"{self.arg(regs, i.rs)} % {self.arg(regs, i.rt)}"
             return
         if mn in ("mflo", "mfhi"):
+            self.forget_from(i.rd)
             self.put(regs, i.rd, regs.get("lo" if mn == "mflo" else "hi",
                                           mn[2:]))
             return
@@ -400,6 +422,7 @@ class Body:
         if mn in ("syscall", "break"):
             self.emit(mn + "();")
             return
+        self.forget_from(i.writes)
         self.emit("/* " + i.fmt() + " */")
 
     def call(self, a, regs):
@@ -447,7 +470,9 @@ class Body:
                 self.label(f"{syms.name_in(fn.nick, b)}:"
                            "   /* a label, not a routine */")
             regs = {}
-            n = 0
+            self.lin = {}         # a chain never crosses a block: the block
+            n = 0                 # may be reached from somewhere else
+
             while n < len(ins):
                 a = ins[n]
                 i = self.w.insns[a]
