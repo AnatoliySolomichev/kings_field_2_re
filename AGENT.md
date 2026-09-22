@@ -209,6 +209,14 @@ wants one — so for each, the first move is an `emu/bp*.lua` that logs the
 routine's arguments and its answer, and a person at the emulator playing for a
 minute. Reading alone gets a transcription; it does not get a number.
 
+**`emu/bp20.lua` is that instrument for five of them at once** — the object
+interpreter's 43 real arms, the damage roll with the player's HP either side,
+`use_item` and the three inventory primitives, `script_interpreter`, and
+`level_load`'s state. It wants a short ordinary session: open a door, take
+something out of a chest, talk to somebody, use an item, get hit. **That one
+session unblocks more than anything else on this list**, and it is the thing to
+ask a person for first.
+
 **8. Everything else in BACKLOG.md**, which is ordered roughly by what it
 unblocks.
 
