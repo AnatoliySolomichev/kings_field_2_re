@@ -323,6 +323,18 @@ python3 tools/overlay.py 17         one level: entry points and calls
 python3 tools/overlay.py 17 dis     disassembled
 ```
 
+**`spells.py`** — the spells: what they cost and what unlocks them.
+
+```
+python3 tools/spells.py             all 31, with their names
+python3 tools/spells.py --check     the disc against a RAM snapshot
+```
+
+`FDAT.T` entry 97 block 4, 96 records of 24 bytes, and **95 of the 96 are byte
+for byte what a RAM snapshot holds** at `0x801b77ec`. The one that differs is
+record 29 — `+0` is the unlocked flag and a fresh character has exactly one
+spell, *light*. `+0x16` is the MP cost and `+5` groups the table in five runs.
+
 **`itemtext.py`** — what each item id *is*: item `n` is `ITEM.T[390 + n]`, and
 its **name is plain text in the executable**.
 

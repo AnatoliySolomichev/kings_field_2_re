@@ -1010,6 +1010,11 @@ def project(lv, out="out/godot", start=(57, 4)):
         print(f"opening assets skipped: {e}")
     gdcoll.export(lv, out)
     try:
+        import spells
+        spells.export(out)
+    except Exception as e:                       # no disc, no spells
+        print(f"spells skipped: {e}")
+    try:
         import strings
         strings.export(out)
     except Exception as e:                       # no disc, no strings

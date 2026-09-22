@@ -704,7 +704,7 @@ FDAT.T: 132 entries
       1  at   7208     3264 bytes  020b40ffff00270020000900
       2  at  10476     2112 bytes  000a0e000400020000000000
       3  at  12592     1200 bytes  32001e001400000032000000  the level table -- 100 rows of 12, the last zero: HP max, MP max, a gain for the stat at +0x36, and the experience for the next level (tools/levelup.py)
-      4  at  13796     2304 bytes  0012ff040001000000000000
+      4  at  13796     2304 bytes  0012ff040001000000000000  the **spell table** -- 96 records of 24: +0 unlocked, +5 a group bit, +0x16 the MP cost. 95 of the 96 are byte for byte what a RAM snapshot holds at 0x801b77ec (tools/spells.py)
       5  at  16104     2304 bytes  b80b24fadc0548f424fa24fa  the creature animation frames (FORMATS.md section 4)
       6  at  18412      832 bytes  ffff47001d01000800008200
       7  at  19248     5280 bytes  000000000000310000000000

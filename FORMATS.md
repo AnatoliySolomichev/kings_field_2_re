@@ -2026,6 +2026,40 @@ Without it the game makes a new character and clears the story flags, and the
 log shows the seven-state level load running straight afterwards. `has_item(0x6b)`
 is the last thing in the log before that load.
 
+### The spell table, and every spell in the game
+
+`FDAT.T` entry 97 block 4 is **96 records of 24 bytes**, and 95 of them are
+byte for byte what a RAM snapshot holds at `0x801b77ec`. The one that differs
+is record 29, whose `+0` is 1 in RAM and 0 on the disc — because `+0` is the
+**unlocked** flag and a fresh character has exactly one spell, *light*.
+
+| | |
+| --- | --- |
+| +0 | unlocked. `skill_unlock` sets it when a skill crosses a threshold |
+| +0x05 | a one-bit group: 1, 2, 4, 8, `0x10`, in runs down the table |
+| +0x16 | the **MP cost**, which `cast_spell` reads |
+
+The names are the last 31 rows of the string table at `0x8007f530` and they
+line up one for one:
+
+| | | | |
+| --- | --- | --- | --- |
+| fire ball 3 | fire wall 10 | fire storm 15 | flame 28, thedek 36 |
+| stone 10 | earth wave 17 | meteor 26 | shudom 32 |
+| haze 19 | bortecth 27 | | |
+| wind cutter 3 | tornado 20 | freeze 26 | walwind 34 |
+| lightning bolt 18 | flash 24 | orladin 38 | |
+| earth heal 8 | antidote 6 | fire resist 8 | refusal 100 |
+| missile shield 8 | light 5 | blessings 18 | |
+
+**Which element each group bit is, is not settled.** 1 is fire and 2 is earth
+from the names, and the other three do not line up with a guess: bit 4 holds
+*haze* and *bortecth* while bit 8 holds *wind cutter*, *tornado* and *walwind*,
+so calling 4 "wind" would be wrong in the obvious direction.
+
+Six of the 31 have no name, at 3, 10, 14, 18, 22 and 24 — the end of each group,
+so the elements have room for more spells than the game ships with.
+
 ### The five "rolled stats" are skills, and they unlock spells
 
 `award_exp` rolls for five halfwords at `0x801b2518`..`0x801b2520` on every
