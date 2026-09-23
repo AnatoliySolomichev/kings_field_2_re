@@ -101,6 +101,14 @@ def main(quick=False, only_check=False):
         keep=["snapshots match"])
     run(["tools/movement.py", "bp15"], "the movement, against the watchpoint",
         keep=["of 48", "of 15"])
+    run(["tools/escript.py", "check"], "the conversations, against what was played",
+        keep=["reproduced"])
+    run(["tools/equip.py", "--check", "out/ram.bin"],
+        "the equipment tables, against a RAM snapshot",
+        keep=["match RAM", "reproduced"])
+    run(["tools/quest.py", "--check"],
+        "the conversation hooks, two readings of the same table",
+        keep=["agree"])
     run(["tools/portmap.py"], "the port's markers",
         keep=["markers", "resolve", "broken"])
     if not quick and not only_check:

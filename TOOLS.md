@@ -964,6 +964,61 @@ Worth running again for: an NPC with a `f1` guard or an `f9`, so a branch is
 seen taken; and a conversation whose header `+0x12` is not `0xff`, to watch
 the shop or the inn open.
 
+### `tools/ovdis.py` — the same walk, over a level's own code
+
+```
+python3 tools/ovdis.py --all        every level, one line each
+python3 tools/ovdis.py 0            level 0: routines, switches, calls
+python3 tools/ovdis.py 0 --listing  annotated listings into out/asm/ov00/
+```
+
+`tools/overlay.py` reads an overlay linearly and `tools/decomp.py` turns what
+it recognises into statements; neither follows control flow, so neither
+resolves a jump table, and the overlays are full of them. This wraps an
+overlay in the interface `mips.Exe` presents — it is an archive entry that
+loads at a fixed address and is never relocated, so nothing has to be
+relocated here either — and hands it to `tools/rdis.py` unchanged, seeded with
+the 32 pointers at entry+4 and borrowing GAME.EXE's address book for the calls
+that leave it.
+
+**422 routines, 11 309 words and 6 jump tables across the 28 overlays.**
+
+Writing it is also what found the delay-slot bug: an overlay puts almost every
+argument in a delay slot, so `has_item()` then `has_item(2)` then
+`has_item(0x82)` ran down a chain that actually asks 2, 0x82, 0x83. Every
+listing in the project had every such argument one call late.
+
+### `tools/quest.py` — what a conversation can make happen
+
+```
+python3 tools/quest.py              every level, every arm, and who calls it
+python3 tools/quest.py 0            one level in full
+python3 tools/quest.py --check      the arm table against tools/ovdis.py
+```
+
+The `0xf4` opcode calls **entry 4 of the level's own overlay**, and entry 4 is
+a switch on the argument the opcode carries. This prints each arm as
+pseudocode with the conversation that asks for it beside it. Fifteen levels
+use it; the hooks come in two shapes, a jump table whose arms sit at
+overlay+136 and a chain of comparisons on `$a1`, and both are read rather than
+assumed. **23 of 23** arms agree with what `tools/ovdis.py` resolves
+independently; the other eleven levels are comparison chains, which have no
+table for a walker to resolve.
+
+### `tools/equip.py` — what a weapon and a piece of armour are worth
+
+```
+python3 tools/equip.py              both tables, with the item names
+python3 tools/equip.py --check      against a RAM snapshot, or against the
+                                    case recorded in the file
+```
+
+`player_recalc_stats` never stores the ratings, it recomputes them, and
+`tools/equip.py` is that computation plus the two tables it reads —
+FDAT entry 97 blocks 1 and 2. **3264 of 3264** weapon bytes and **2112 of
+2112** armour bytes are what a running game held, and **16 of 16** ratings
+come out of the two records.
+
 **`bp22.lua`** is the one to run next, and unlike the others it has a
 checklist, because every reading it carries is one nothing has checked.
 

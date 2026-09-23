@@ -3,6 +3,7 @@
 
     python3 tools/quest.py              every level, every arm, and who calls it
     python3 tools/quest.py 0            one level in full
+    python3 tools/quest.py --check      the arm table against tools/ovdis.py
     python3 tools/quest.py --godot      write it out for the port
 
 The conversation language has one opcode that reaches the world, `0xf4`, and
@@ -135,6 +136,48 @@ def callers(levels=range(28)):
     return out
 
 
+def check(out=sys.stdout):
+    """The arms this file reads, against the ones the walker resolves.
+
+    Two readings of the same table: this one scans the hook's first few
+    instructions for the bound and the base, `tools/ovdis.py` runs the whole
+    overlay through `tools/rdis.py`'s switch resolver. Where a level's hook is
+    a jump table they can be compared; where it is a chain of comparisons
+    there is nothing for the walker to resolve, and that is counted separately
+    rather than as agreement.
+    """
+    import ovdis
+    ok = bad = chain = 0
+    for lv in range(28):
+        hook, ar = arms(lv)
+        if not ar:
+            continue
+        w = ovdis.walk(lv)
+        found = {}
+        # Only the table belonging to the hook itself. Matching loosely picks
+        # up an unrelated 46-arm switch elsewhere in level 17's overlay and
+        # reports 44 disagreements about a table neither reading is looking at.
+        if w is not None and hook in w.funcs:
+            for tb in w.funcs[hook].tables:
+                if 0 <= tb["at"] - hook < 0x40:
+                    for n, t in enumerate(tb["targets"]):
+                        found[n] = t
+        if not found:
+            chain += 1
+            continue
+        for n in sorted(set(ar) | set(found)):
+            if ar.get(n) == found.get(n):
+                ok += 1
+            else:
+                bad += 1
+                print(f"  level {lv} arm {n}: this file {ar.get(n)}, "
+                      f"the walker {found.get(n)}", file=out)
+    print(f"{ok} of {ok + bad} arms agree with tools/ovdis.py; "
+          f"{chain} levels use a comparison chain, which has no table to resolve",
+          file=out)
+    return bad == 0
+
+
 def render(lv, out=sys.stdout):
     hook, ar = arms(lv)
     if not ar:
@@ -206,7 +249,9 @@ def export(out_dir):
 
 if __name__ == "__main__":
     arg = sys.argv[1] if len(sys.argv) > 1 else None
-    if arg == "--godot":
+    if arg == "--check":
+        sys.exit(0 if check() else 1)
+    elif arg == "--godot":
         print(export("godot"))
     elif arg is not None:
         render(int(arg))

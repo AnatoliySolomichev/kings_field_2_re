@@ -167,7 +167,24 @@ def item_names():
 
 
 def check(ram_path):
-    """The disc, and the formula, against a RAM snapshot."""
+    """The disc, and the formula, against a RAM snapshot.
+
+    The snapshot is 2 MB and is not kept in the repository, so without one
+    this falls back to `RECORDED`, which is the same case written down.
+    """
+    if not os.path.exists(ram_path):
+        print(f"  no RAM snapshot at {ram_path}; checking the formula against "
+              f"RECORDED instead")
+        weapons, armour = tables()
+        bad = 0
+        for r in RECORDED:
+            o, f = ratings(r["weapon"], r["worn"], weapons, armour)
+            n = sum(1 for a, b in zip(o, r["offense"]) if a == b) \
+                + sum(1 for a, b in zip(f, r["defense"]) if a == b)
+            print(f"  weapon {r['weapon']}, worn {r['worn']}: "
+                  f"{n} of {2 * RATINGS} ratings reproduced from the two records")
+            bad += 2 * RATINGS - n
+        return bad == 0
     d = open(ram_path, "rb").read()
 
     def at(a):
