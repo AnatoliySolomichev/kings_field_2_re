@@ -46,8 +46,12 @@ button. `0xf0`..`0xff` dispatch through `script_opcode_table` (`0x80013160`):
     f0 n   pc -= n, and set the retry flag
     f2 n   a **label**, and a two-byte no-op when it is executed
     f3     spend one of the run-on count
-    f4 a n call the level's own code -- `[0x8018fae0]->+0x10(actor, a)` -- and
-           then take `n` as a run-on count
+    f4 a n call **entry 4 of the level's own overlay** with `a` --
+           `[0x8018fae0]` is the overlay's own pointer table at `BASE + 4`,
+           so `+0x10` is its fifth slot -- and then take `n` as a run-on
+           count. Entry 4 is a switch on `a`: level 0's is six arms at
+           `0x801e8a34`, and arm 0 sets `story_flags[3]` when the player
+           holds items 2, 130, 131 and 132. See `tools/overlay.py`
     f5 n   run the next n lines without waiting
     f6     copy the actor's +1 into script_speaker, clear the retry flag
     f7 i v story_flags[i] = v
@@ -61,6 +65,11 @@ after it with the label, and lands on the byte after that. The scan is over
 bytes, not instructions, so an operand that happens to be `0xf2` is a label as
 far as it is concerned -- and it gives up at the first `0xff`, so a label
 after the first stop is unreachable. Both are reproduced here.
+
+**The loop the language sits in.** A conversation tests story flags with its
+guards and its `f9`, and sets them through `f4`, which runs the level's own
+code. Sixty `f4` calls across fifteen levels, and every argument is inside
+its level's switch bound.
 
 **What is in the 43.** 593 lines, 105 `f8`, 79 `f2`, 60 `f9`, 60 `f4`, 57
 `f0`, 55 `f5`, 43 `ff` -- and **no `f7`, `f3` or `f6` anywhere**. Scripts
