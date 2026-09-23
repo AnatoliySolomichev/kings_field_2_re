@@ -49,7 +49,7 @@ local function log(s)
 end
 
 PCSX.settings.emulator.Debug.Debug = true
-log('=== bp22 (the world's saved state) armed; debug = '
+log("=== bp22 (the world's saved state) armed; debug = "
     .. tostring(PCSX.settings.emulator.Debug.Debug) .. ' ===')
 
 local mem = PCSX.getMemPtr()
