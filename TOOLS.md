@@ -295,7 +295,8 @@ byte", which is what they look like from outside. `0xf5` sets a **no-wait
 count** — the interpreter stops after every line until the use button, and that
 count is how a script says several lines in a row — `0xf3` spends one of it,
 and **`0xf4` calls the level's own code**, which is how a conversation makes
-something happen in the world. There are 60 of those in the game.
+something happen in the world. There are 62 of those in the game and
+`tools/quest.py` prints what each one runs.
 
 Two more were wrong until `emu/bp21.lua` put the interpreter under a
 breakpoint while somebody talked to an NPC: **`f2` is a label**, not a
@@ -310,6 +311,14 @@ game**, one per entity that talks, holding 733 lines. `godot/escript.gd` is
 the same machine and `selftest.gd` holds the two together — **43 of 43** —
 and then holds both against the recording: **25 of 25** steps that
 `emu/bp21.lua` watched the game run, over four of level 0's six talkers.
+
+A third was wrong for a different reason: **`0xf4` is two bytes, not
+three.** Its arm jumps to the shared tail rather than falling into `0xf5`'s,
+and the two instructions that show that were outside every listing this
+project had printed until `tools/rdis.py` learned to keep walking after an
+indirect call inside a switch arm. Reading it as three shifted the decode
+after each of the 62 sites: this file used to report 60 `f9` where there are
+78, and no `f3` where there are 4.
 
 **Withdrawn:** "1086 scripts in the game, 870 reach an `end`, 1086 of 1086
 agree." Those were not scripts; each entity record has sixteen block pointers

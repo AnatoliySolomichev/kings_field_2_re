@@ -46,12 +46,12 @@ button. `0xf0`..`0xff` dispatch through `script_opcode_table` (`0x80013160`):
     f0 n   pc -= n, and set the retry flag
     f2 n   a **label**, and a two-byte no-op when it is executed
     f3     spend one of the run-on count
-    f4 a n call **entry 4 of the level's own overlay** with `a` --
+    f4 a   call **entry 4 of the level's own overlay** with `a` --
            `[0x8018fae0]` is the overlay's own pointer table at `BASE + 4`,
-           so `+0x10` is its fifth slot -- and then take `n` as a run-on
-           count. Entry 4 is a switch on `a`: level 0's is six arms at
-           `0x801e8a34`, and arm 0 sets `story_flags[3]` when the player
-           holds items 2, 130, 131 and 132. See `tools/overlay.py`
+           so `+0x10` is its fifth slot. Entry 4 is a switch on `a`: level
+           0's is six arms at `0x801e8a34`, and arm 0 sets `story_flags[3]`
+           when the player holds items 2, 130, 131 and 132. See
+           `tools/overlay.py` and `tools/quest.py`
     f5 n   run the next n lines without waiting
     f6     copy the actor's +1 into script_speaker, clear the retry flag
     f7 i v story_flags[i] = v
@@ -71,9 +71,20 @@ guards and its `f9`, and sets them through `f4`, which runs the level's own
 code. Sixty `f4` calls across fifteen levels, and every argument is inside
 its level's switch bound.
 
-**What is in the 43.** 593 lines, 105 `f8`, 79 `f2`, 60 `f9`, 60 `f4`, 57
-`f0`, 55 `f5`, 43 `ff` -- and **no `f7`, `f3` or `f6` anywhere**. Scripts
-*test* story flags and never set one; something else writes them.
+**What is in the 43**, counting from the `0xfe` that starts a conversation:
+594 lines, 105 `f8`, 80 `f2`, 78 `f9`, 62 `f4`, 57 `f0`, 56 `f5`, 43 `ff`,
+4 `f3`, 18 guards -- and **no `f7` or `f6` anywhere**. A conversation *tests*
+story flags through its guards and its `f9` and never sets one directly; what
+sets them is the level's own code, which `f4` calls.
+
+**`f4` is two bytes, not three.** Its arm steps the pc past the opcode, calls
+the hook with the next byte, and jumps to the shared tail that steps past
+*that* -- it does **not** fall into the `f5` arm and take a count. The two
+instructions that show it, `0x8005c4ec` and `0x8005c4f0`, were outside every
+listing this project had printed until `tools/rdis.py` learned to keep walking
+after an indirect call inside a switch arm. Reading it as three bytes shifted
+the decode of everything after each of the 62 sites, which is why this file
+used to report 60 `f9` where there are 78, and no `f3` where there are 4.
 
 **Withdrawn.** Everything this file said before came from decoding blocks
 1..15 of each record as if they were scripts -- 1086 of them, "12 179 plain
@@ -108,7 +119,7 @@ OPS = {
     0xF0: (2, "loop_back"),        # pc -= arg, and set the retry flag at +0x13
     0xF2: (2, "label"),
     0xF3: (1, "run_on"),           # spend one of the run-on count
-    0xF4: (3, "call_overlay"),     # level_hooks->+0x10(actor, arg), then a count
+    0xF4: (2, "call_overlay"),     # level_hooks->+0x10(actor, arg)
     0xF5: (2, "no_wait"),          # run this many more lines without waiting
     0xF6: (1, "set_speaker"),      # script_speaker = actor[+1]; clears the retry
     0xF7: (3, "set_flag"),         # story_flags[arg1] = arg2
@@ -364,9 +375,8 @@ def render(code, base=0, text=None):
             lines.append(f"  {off:3d}: if flags[{args[0]}] == {args[1]} goto label {args[2]}")
         elif mn == "label" and args:
             lines.append(f"  {off:3d}: label {args[0]}:")
-        elif mn == "call_overlay" and len(args) == 2:
-            lines.append(f"  {off:3d}: level_hooks->0x10(actor, {args[0]}), "
-                         f"then {args[1]} without waiting")
+        elif mn == "call_overlay" and args:
+            lines.append(f"  {off:3d}: level_hooks->0x10(actor, {args[0]})")
         elif mn == "end":
             lines.append(f"  {off:3d}: end")
         else:

@@ -27,7 +27,9 @@ class_name KFScript
 #   0xf0 n    pc -= n, and set the retry flag -- a section break, see `visits`
 #   0xf2 n    a label; a two-byte no-op when it is executed
 #   0xf3      spend one of the run-on count
-#   0xf4 a n  call the level's own code with a, then take n as a run-on count
+#   0xf4 a    call entry 4 of the level's own overlay with a. Two bytes, not
+#             three: the arm steps past the opcode, calls the hook with the
+#             next byte and jumps to the shared tail that steps past that
 #   0xf5 n    run the next n lines without waiting
 #   0xf6      script_speaker = actor[+1], and clear the retry flag
 #   0xf7 i v  story_flags[i] = v
@@ -58,7 +60,7 @@ const CONVERSATION := 0x70  # the block kind the interpreter will run
 # The bytes that are lines rather than opcodes, above 0xf0.
 const LINE_OPS := [0xF1, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE]
 # opcode -> how far the pointer moves when nothing else decides.
-const SIZE := {0xF0: 2, 0xF2: 2, 0xF3: 1, 0xF4: 3, 0xF5: 2, 0xF6: 1,
+const SIZE := {0xF0: 2, 0xF2: 2, 0xF3: 1, 0xF4: 2, 0xF5: 2, 0xF6: 1,
 	0xF7: 3, 0xF8: 2, 0xF9: 4, 0xFF: 1}
 
 
@@ -143,8 +145,7 @@ static func run(code: PackedByteArray, flags: Array = [],
 				run_on = int(code[pc + 1])
 				pc += 2
 			0xF4:
-				run_on = int(code[pc + 2]) if pc + 2 < code.size() else 0
-				pc += 3
+				pc += 2
 			0xF3:
 				pc += 1
 				if run_on > 0:

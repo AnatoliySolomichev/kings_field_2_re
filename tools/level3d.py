@@ -1035,6 +1035,11 @@ def project(lv, out="out/godot", start=(57, 4)):
     except Exception as e:                       # no disc, no scripts
         print(f"entity scripts skipped: {e}")
     try:
+        import quest
+        quest.export(out)
+    except Exception as e:                       # no disc, no quest hooks
+        print(f"quest hooks skipped: {e}")
+    try:
         import equip
         equip.export(out)
     except Exception as e:                       # no disc, no equipment tables
