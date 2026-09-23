@@ -44,7 +44,7 @@ In `game:effect_tick`, `game:player_action`, `game:effect_spawn`, `game:actor_ti
 The collision flag word the player's movement asks for. Only the sites inside the movement routines are this; 0x31 is also just 49.
 
 23 sites: 14 loaded, 4 bound, 3 compared with, 2 argument.
-In `game:effect_spawn`, `game:options_screen`, `game:player_take_hit`, `game:player_horizontal`, `game:player_vertical`, `game:object_interpreter`, `game:sub_80024a78`, `game:sub_80025468`, `game:sub_80026e4c`, `game:sub_80029500`, `game:player_move`, `game:tile_collision` and 4 more.
+In `game:effect_spawn`, `game:options_screen`, `game:player_take_hit`, `game:player_horizontal`, `game:player_vertical`, `game:object_interpreter`, `game:sub_80024a78`, `game:ui_panel`, `game:sub_80026e4c`, `game:player_recalc_stats`, `game:player_move`, `game:tile_collision` and 4 more.
 
 `python3 tools/consts.py 0x31` for every site.
 
@@ -54,7 +54,7 @@ In `game:effect_spawn`, `game:options_screen`, `game:player_take_hit`, `game:pla
 68 bytes to an object record. Every walk of the object table steps by it -- `$s2 += 0x44` -- and find_object forms object_table + a0 * 0x44.
 
 37 sites: 27 multiplier, 7 loaded, 2 compared with, 1 argument.
-In `game:object_interpreter`, `open:sub_80029504`, `game:sub_8005db30`, `game:sub_80067d4c`, `game:sub_80029500`, `game:held_item_tick`, `game:effect_tick`, `open:sub_8001ad3c`, `game:sub_8002bdc0`, `game:sub_80044900`, `game:find_object`, `game:find_free_slot` and 5 more.
+In `game:object_interpreter`, `open:sub_80029504`, `game:object_give`, `game:sub_80067d4c`, `game:player_recalc_stats`, `game:held_item_tick`, `game:effect_tick`, `open:sub_8001ad3c`, `game:sub_8002bdc0`, `game:sub_80044900`, `game:find_object`, `game:find_free_slot` and 5 more.
 
 `python3 tools/consts.py 0x44` for every site.
 
@@ -94,7 +94,7 @@ In `open:sub_80028f70`, `open:sub_8002607c`, `game:sound_play_3d`, `game:sub_800
 Inside 0x80 of the surface the player is *placed* on it rather than eased towards it, and 0x80 is also the largest single step towards it. tools/movement.py reproduces 48 of 48 of the game's height stores with it.
 
 277 sites: 102 loaded, 45 bound, 41 mask, 32 divisor, 28 multiplier, 26 argument, 3 compared with.
-In `game:effect_spawn`, `game:object_interpreter`, `game:effect_tick`, `game:actor_tick`, `game:sub_80029500`, `game:sub_8001ec84`, `game:load_object_placement`, `game:sound_play_3d`, `game:tile_collision`, `game:object_interact`, `open:sub_8002607c`, `game:apply_control_scheme` and 104 more.
+In `game:effect_spawn`, `game:object_interpreter`, `game:effect_tick`, `game:actor_tick`, `game:player_recalc_stats`, `game:sub_8001ec84`, `game:load_object_placement`, `game:sound_play_3d`, `game:tile_collision`, `game:object_interact`, `open:sub_8002607c`, `game:apply_control_scheme` and 104 more.
 
 `python3 tools/consts.py 0x80` for every site.
 
@@ -147,7 +147,7 @@ The radius literal the player's movement passes to the collision: `li $a3, 0x320
 The same number, unrelated: a terrain cell is at grid + cz*800 + cx*10, so a row of 80 cells of 10 bytes is 800 bytes. Confirmed from the code after first being guessed -- FORMATS.md, 'Two constants confirmed from the code'.
 
 51 sites: 33 loaded, 16 multiplier, 1 argument, 1 bound.
-In `game:object_interpreter`, `game:use_item`, `game:player_vertical`, `game:effect_tick`, `game:player_move`, `game:player_controller`, `game:place_player_on_terrain`, `game:player_horizontal`, `game:sub_800445b8`, `game:object_set_present`, `game:load_object_placement`, `game:sub_8004f414` and 13 more.
+In `game:object_interpreter`, `game:use_item`, `game:player_vertical`, `game:effect_tick`, `game:player_move`, `game:player_controller`, `game:place_player_on_terrain`, `game:player_horizontal`, `game:sub_800445b8`, `game:object_set_present`, `game:load_object_placement`, `game:actor_animation_effects` and 13 more.
 
 `python3 tools/consts.py 0x320` for every site.
 
@@ -157,7 +157,7 @@ In `game:object_interpreter`, `game:use_item`, `game:player_vertical`, `game:eff
 A gap wider than 0x400 stops being a step and becomes a fall: below the surface by more than this enters state 0x40, above it enters state 0x20.
 
 153 sites: 73 loaded, 23 multiplier, 22 divisor, 16 mask, 13 bound, 6 argument.
-In `game:effect_tick`, `game:object_interpreter`, `game:sub_8004f414`, `game:sub_800366a8`, `game:effect_spawn`, `game:draw_tmd_object`, `game:level_state_write`, `game:sub_80074380`, `game:tile_collision`, `game:actor_move_vertical`, `open:PutDispEnv`, `open:sub_800173b4` and 38 more.
+In `game:effect_tick`, `game:object_interpreter`, `game:actor_animation_effects`, `game:model_prims_flag40`, `game:effect_spawn`, `game:draw_tmd_object`, `game:level_state_write`, `game:sub_80074380`, `game:tile_collision`, `game:actor_move_vertical`, `open:PutDispEnv`, `open:sub_800173b4` and 38 more.
 
 `python3 tools/consts.py 0x400` for every site.
 

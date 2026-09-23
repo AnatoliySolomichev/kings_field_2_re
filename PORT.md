@@ -29,7 +29,7 @@ that it reproduces it correctly.** `status` says how far that went:
 | --- | --- | --- | --- | --- | --- |
 | boot | 10 | 1 | 0 | 115 | 50 (43%) |
 | open | 293 | 6 | 0 | 20002 | 1066 (5%) |
-| game | 818 | 33 | 5 | 93468 | 11247 (12%) |
+| game | 818 | 35 | 5 | 93468 | 11965 (12%) |
 | end | 167 | 0 | 0 | 9966 | 0 (0%) |
 
 Those percentages are of *all* the code in the image, which includes
@@ -44,6 +44,9 @@ floor, not a score.
 | [`godot/game.gd:45`](godot/game.gd#L45) | `(the file)` | `game:0x80014bd4` game_main | partial |
 | [`godot/collision.gd:135`](godot/collision.gd#L135) | `func vec_angle` | `game:0x80016ab8` vec_angle | transcribed |
 | [`godot/actors.gd:253`](godot/actors.gd#L253) | `func _in_range` | `game:0x80016ec8` in_range | transcribed |
+| [`godot/equip.gd:49`](godot/equip.gd#L49) | `func add_armour` | `game:0x800293e4` add_armour_ratings | verified |
+| [`godot/equip.gd:25`](godot/equip.gd#L25) | `const RATINGS` | `game:0x80029500` player_recalc_stats | partial |
+| [`godot/equip.gd:60`](godot/equip.gd#L60) | `func ratings` | `game:0x80029500` player_recalc_stats | partial |
 | [`godot/levelup.gd:55`](godot/levelup.gd#L55) | `(the file)` | `game:0x8002a310` award_exp | transcribed |
 | [`godot/damage.gd:43`](godot/damage.gd#L43) | `var a` | `game:0x8002a5f8` damage_of_type | verified |
 | [`godot/damage.gd:33`](godot/damage.gd#L33) | `const TYPES` | `game:0x8002ab18` player_take_hit | verified |
@@ -98,8 +101,8 @@ load-bearing whatever its size.
 | callers | instructions | address | name |
 | --- | --- | --- | --- |
 | 32 | 30 | `0x8002792c` | sub_8002792c |
-| 16 | 431 | `0x80025468` | sub_80025468 |
-| 15 | 316 | `0x800222fc` | sub_800222fc |
+| 16 | 431 | `0x80025468` | ui_panel |
+| 15 | 316 | `0x800222fc` | ui_menu_chrome |
 | 15 | 40 | `0x80027688` | sub_80027688 |
 | 15 | 26 | `0x80019ab4` | sub_80019ab4 |
 | 14 | 39 | `0x80027494` | ui_prim_quad |
@@ -110,7 +113,6 @@ load-bearing whatever its size.
 | 13 | 100 | `0x800261dc` | sub_800261dc |
 | 13 | 82 | `0x80061e00` | sub_80061e00 |
 | 13 | 15 | `0x80016a2c` | facing_test |
-| 12 | 647 | `0x80029500` | sub_80029500 |
 | 12 | 67 | `0x800269c0` | sub_800269c0 |
 | 12 | 40 | `0x80041eec` | announce |
 | 11 | 146 | `0x80033f38` | collide_query |
@@ -127,4 +129,5 @@ load-bearing whatever its size.
 | 9 | 575 | `0x80018358` | level_load |
 | 9 | 405 | `0x800422b8` | render_frame |
 | 9 | 224 | `0x80026acc` | sub_80026acc |
+| 9 | 219 | `0x80024f88` | sub_80024f88 |
 

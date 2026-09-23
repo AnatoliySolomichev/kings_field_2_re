@@ -1978,5 +1978,35 @@
   "name": "model_prims_flag40",
   "kind": "code",
   "evidence": "draw_model_plain’s primitive walker for draw-mode bit 0x40, taking only the model; it holds two of every GPU code where the others hold one, so it walks the primitives twice. Why, is not settled"
+ },
+ "0x8005db30": {
+  "name": "object_give",
+  "kind": "code",
+  "evidence": "object_interact’s only caller of it: find_free_slot(0x15e) and init_object_record spawn an object in front of the player, placed with game_cos/game_sin off player_facing, a model and a sound are uploaded through res_upload_vram and res_upload_spu, announce(0x19) puts a banner up, player_gold is read and written, and the routine runs its own render_frame/PadRead loop -- the modal \"you have found something\" sequence"
+ },
+ "0x80025468": {
+  "name": "ui_panel",
+  "kind": "code",
+  "evidence": "sixteen callers, every menu screen among them shop_buy and shop_sell; draws through ui_prim_begin/quad/add and 0x800261dc/0x8002636c against static descriptors at 0x8007e564 and 0x8007e570 -- the panel every screen is built out of"
+ },
+ "0x800222fc": {
+  "name": "ui_menu_chrome",
+  "kind": "code",
+  "evidence": "fifteen callers, every menu screen; calls pad_read_latch once and 0x8002792c seven times and reads player_gold -- the border, the gold readout and the pad, done once per menu frame"
+ },
+ "0x8001cbb8": {
+  "name": "ui_equip_page",
+  "kind": "code",
+  "evidence": "under 0x8001c7a8, two nine-arm switches over inventory_a, equipped_weapon, equipped_armour and equipped_b, with pad_wait_release and its own frame_begin/frame_end -- the screen where gear is put on"
+ },
+ "0x80043bb8": {
+  "name": "load_wait_screen",
+  "kind": "code",
+  "evidence": "load_entry’s own draw loop: DrawSync three times, frame_begin_3d and frame_end_3d, PadRead, and twelve reads of `buttons` against eight of `bind_use` -- what is on screen while an archive entry is read"
+ },
+ "0x8004b984": {
+  "name": "actor_behaviour",
+  "kind": "code",
+  "evidence": "a 133-arm switch under 0x8004bf1c using vec_angle and facing_test five times each against player_pos and rand once -- an actor deciding what to do, keyed the way actor_animation_effects is keyed"
  }
 }
