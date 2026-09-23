@@ -9,18 +9,21 @@
 Two things had to be right before any of this could be read, both off
 `script_interpreter` (`0x8005c308`):
 
-  * an entity's dialogue counts from a **base** at `+0x0c` of the script block
-    its record's `+0x38` points at -- not `+0x0c` of the record, which is where
-    `tools/escript.py` used to look and which is zero for every entity on
-    level 0;
+  * an entity's dialogue counts from a **base** at `+0x0c` of the block its
+    record's `+0x38` points at, and only when that block begins `0x70`;
   * an opcode below `0xf0` drives an animation *and* fetches
     `TALK.T[base + opcode]`. The `0x2b` comparison nearby gates neither: it
     skips a call to `0x800608ec` and the fetch sits past its branch target.
 
-**Only 42 of the game's 265 entities carry a base**, and those 42 hold 267 of
-the 12 179 `say` opcodes; 242 of the 267 land on text this project has decoded.
-The other 11 912 belong to entities whose base is zero -- monsters, driving
-animations. An earlier note here said all 12 179 were dialogue. They are not.
+**43 of the game's 265 entities talk**, and between them they say 733 lines.
+This file prints them in the order the game says them: an entity gives one
+section per visit and repeats its last line until you go and speak to somebody
+else, which is what `escript.visits` works out.
+
+**Withdrawn:** "42 entities hold 267 of the 12 179 `say` opcodes, the other
+11 912 belong to entities whose base is zero." There are no 12 179 opcodes.
+That count came from decoding each record's blocks 1..15 as scripts, which
+they are not -- see `tools/entities.py` and `tools/escript.py`.
 """
 import collections
 import os
@@ -32,25 +35,18 @@ import escript                                                       # noqa: E40
 
 
 def talkers(lv, text):
-    """[(entity index, mesh, base, [(script offset, [(entry, line)])])]"""
-    raw, base, recs = entities.entry(lv)
-    if not recs:
-        return []
-    flat = sorted(v for _r, o in recs for v in o)
-    pieces = entities.cut(raw, base, flat)
+    """[(entity index, kind, base, [(visit number, [(entry, line)])])]
+
+    One entry per visit, because that is how the game hands the lines out.
+    """
     out = []
-    for k, (rec, offs) in enumerate(recs):
-        b = escript.talk_base(raw, base, rec)
-        if not b:
-            continue
+    for _lv, k, rec, h, code in escript.conversations([lv]):
+        b = h["talk"]
         scripts = []
-        for a in offs[1:]:
-            said = []
-            for _off, op, _args, mn in escript.decode(pieces[a]):
-                if mn == "say":
-                    said.append((b + op, text.get(b + op, "")))
-            if said:
-                scripts.append((a, said))
+        for n, said in enumerate(escript.visits(code), 1):
+            lines = [(b + op, text.get(b + op, "")) for op in said]
+            if lines:
+                scripts.append((n, lines))
         out.append((k, rec[0], b, scripts))
     return out
 
@@ -60,10 +56,10 @@ def dump(lv, text, out=sys.stdout):
     if not got:
         return 0
     print(f"\n=== level {lv} — {len(got)} entities with dialogue ===", file=out)
-    for k, mesh, b, scripts in got:
-        print(f"\n  entity {k} (mesh {mesh:#04x}, TALK base {b})", file=out)
+    for k, kind, b, scripts in got:
+        print(f"\n  entity {k} (kind {kind:#04x}, TALK base {b})", file=out)
         for a, said in scripts:
-            print(f"    script +{a}:", file=out)
+            print(f"    visit {a}:", file=out)
             seen = set()
             for entry, line in said:
                 if entry in seen:
@@ -231,10 +227,9 @@ def flags():
                 wrote[n].append((lv, a, str(st[2]), " && ".join(guards)))
 
     tested = collections.defaultdict(list)
-    for lv, k, a, code, _rec in escript.walk():
-        for _off, _op, args, mn in escript.decode(code):
-            if mn == "if_flag" and len(args) == 3:
-                tested[args[0]].append(f"level {lv} entity {k} == {args[1]}")
+    for n, rows in escript.flag_graph().items():
+        for lv, k, v, where in rows:
+            tested[n].append(f"level {lv} entity {k} == {v} ({where})")
 
     print(f"{len(wrote)} of 128 story flags are written by a level overlay; "
           f"{len(tested)} are tested by an entity script.\n")
