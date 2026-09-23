@@ -37,7 +37,7 @@ import syms                                                          # noqa: E40
 STORY_FLAGS = 0x801BA988
 # 128, not 64: cutscene_step masks the gate byte with 0x7f and the cutscene table
 # uses indices up to 126. See FORMATS.md, "Where that list lives".
-FLAG_COUNT = 0x80
+FLAG_COUNT = 0x100   # bytes; see tools/escript.py for why it is not 0x80
 
 # The game routines a level overlay calls. overlay.py's list, plus the ones a
 # first pass over all twenty-eight levels turned up.

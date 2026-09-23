@@ -422,7 +422,7 @@
  "0x8005ea64": {
   "name": "reset_story_flags",
   "kind": "code",
-  "evidence": "zeroes 0x40 bytes at story_flags and more at +0x100; called at new game",
+  "evidence": "clears the flag array with block_zero(story_flags, 0, 0x40) -- and block_zero stores words, so that is 256 bytes, the whole span save_serialise copies -- then 0x1400 words (0x5000 bytes) of level_state and the 32 index entries; called at new game and on death without item 107",
   "size": 196
  },
  "0x8005c1e8": {

@@ -52,7 +52,9 @@ class_name KFScript
 # agreement meant nothing. See tools/entities.py.
 # @orig game:0x8005c308 script_interpreter  status:partial -- flow and flags
 
-const FLAG_COUNT := 0x80
+# 256, not 128: reset_story_flags clears 0x40 **words** and save_serialise
+# copies 0x100 bytes. Six flags a conversation reads are past 128.
+const FLAG_COUNT := 0x100
 const END := 0xFF
 const HEADER := 0x14        # the code starts here, and pc counts from here
 const CONVERSATION := 0x70  # the block kind the interpreter will run

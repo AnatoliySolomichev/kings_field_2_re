@@ -75,11 +75,11 @@ floor, not a score.
 | [`godot/actors.gd:219`](godot/actors.gd#L219) | `func _taken` | `game:0x8004d644` actor_spot_taken | transcribed |
 | [`godot/actors.gd:233`](godot/actors.gd#L233) | `func _kill` | `game:0x80052b7c` 0x80052b7c | transcribed |
 | [`godot/actors.gd:129`](godot/actors.gd#L129) | `func _pass` | `game:0x80052e5c` actor_tick_driver | transcribed |
-| [`godot/escript.gd:71`](godot/escript.gd#L71) | `var i` | `game:0x8005c18c` script_find_label | verified |
-| [`godot/escript.gd:86`](godot/escript.gd#L86) | `var f: Array = flags.duplicate` | `game:0x8005c1e8` script_prescan | verified |
-| [`godot/escript.gd:53`](godot/escript.gd#L53) | `const FLAG_COUNT` | `game:0x8005c308` script_interpreter | partial |
-| [`godot/escript.gd:101`](godot/escript.gd#L101) | `var f: Array = flags.duplicate` | `game:0x8005c308` script_interpreter | partial |
-| [`godot/escript.gd:171`](godot/escript.gd#L171) | `var f: Array = flags.duplicate` | `game:0x8005c308` script_interpreter | verified |
+| [`godot/escript.gd:73`](godot/escript.gd#L73) | `var i` | `game:0x8005c18c` script_find_label | verified |
+| [`godot/escript.gd:88`](godot/escript.gd#L88) | `var f: Array = flags.duplicate` | `game:0x8005c1e8` script_prescan | verified |
+| [`godot/escript.gd:53`](godot/escript.gd#L53) | `(the file)` | `game:0x8005c308` script_interpreter | partial |
+| [`godot/escript.gd:103`](godot/escript.gd#L103) | `var f: Array = flags.duplicate` | `game:0x8005c308` script_interpreter | partial |
+| [`godot/escript.gd:173`](godot/escript.gd#L173) | `var f: Array = flags.duplicate` | `game:0x8005c308` script_interpreter | verified |
 | [`godot/items.gd:41`](godot/items.gd#L41) | `func has_item` | `game:0x8005d7bc` has_item | transcribed |
 | [`godot/items.gd:48`](godot/items.gd#L48) | `func take_item` | `game:0x8005d7f8` take_item | transcribed |
 | [`godot/items.gd:61`](godot/items.gd#L61) | `func give_item` | `game:0x8005d898` give_item | transcribed |

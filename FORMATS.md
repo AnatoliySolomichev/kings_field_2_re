@@ -861,9 +861,12 @@ record are not. Reading them as further scene-and-flag pairs gives scene
 numbers like 158 and 252 that no file answers to, so they are left alone.
 
 **A correction that follows from it:** these indices reach 126, and `cutscene_step`
-masks the byte with `0x7f`. So `story_flags` runs to **128 entries**, not the
-64 this document and `tools/story.py flags` assumed — `reset_story_flags`
-clearing "0x40 bytes and more at +0x100" fits that better than it fits 64.
+masks the byte with `0x7f`. So `story_flags` runs past 64 — and it runs past
+128 as well. **The array is 256 bytes.** `reset_story_flags` clears it with
+`block_zero(story_flags, 0, 0x40)`, and `block_zero` stores **words**: its
+other call clears `0x1400` for the `0x5000` bytes of `level_state`, so `0x40`
+words is 256 bytes. `save_serialise` and `save_restore` copy exactly that
+span, `0x801ba988` to `0x801baa88`, which is where `level_state` begins.
 
 That was not a cosmetic limit. With it raised, the level overlays turn out to
 write **60** flags rather than 36: twenty-four writes were being discarded for
@@ -2741,7 +2744,9 @@ Every piece of code that reaches `0x801ba988`, and what it does there:
 
 Three things follow. The array is **saved and restored** — the serialiser pair
 moves it to and from the save buffer — so it is persistent game state, not per-level
-scratch. It is **at least `0x100` bytes**, since the reset clears two regions.
+scratch. It is **exactly `0x100` bytes**: the reset clears `0x40` *words* of
+it, the serialiser copies `0x100` bytes of it, and `level_state` begins at the
+byte after.
 And **`flags[0]` is a progress counter**: `object_trigger` raises it to the
 destination level number whenever that is higher than what it holds, and never
 lowers it, so it records the furthest level the player has reached.
@@ -2919,9 +2924,18 @@ Which lays out one contiguous save block:
 | `level_state` `0x801baa88` | `0x5000` bytes of chained variable-size records |
 | `level_state_index` `0x801bfa88` | 32 `u16`, one per level, `0xffff` until that level has state |
 
-`reset_story_flags` clearing "0x40 bytes at the base and more at `+0x100`" is
-this block, and the serialiser pair copying the array in and out is this block
-being saved and restored.
+`reset_story_flags` clearing `0x40` **words** at the base — 256 bytes, the
+whole flag array — and `0x1400` more at `+0x100` is this block, and the
+serialiser pair copying the array in and out is this block being saved and
+restored.
+
+**This was read as 64 bytes for a long time, and that was a `block_zero`
+whose count is in words being read as if it were in bytes.** It cost
+something real: `tools/escript.py` and `godot/escript.gd` both sized the
+array 128, so the six flags a conversation reads past that — 135, 137, 140,
+143, 144 and 147 — failed a bounds check inside the model and could never
+hold. Nothing showed it, because every recorded conversation leaves them
+zero and a guard on a zero flag does not hold either way.
 
 **It is state, not placement.** On a fresh level 0 the index has *no* slots
 used; after progressing, one. So these records are what the player has changed

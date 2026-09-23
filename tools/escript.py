@@ -110,7 +110,14 @@ INTERPRETER = 0x8005C308
 PRESCAN = 0x8005C1E8
 FIND_LABEL = 0x8005C18C
 HEADER = 0x14                  # the code starts here, and pc counts from here
-FLAG_COUNT = 0x80
+# 256, not 128. `reset_story_flags` clears the array with
+# `block_zero(story_flags, 0, 0x40)`, and `block_zero` stores **words**: its
+# other call clears 0x1400 for the 0x5000 bytes of `level_state`. So 0x40
+# words is 256 bytes, which is exactly the span `save_serialise` copies out
+# and `save_restore` copies back. Six flags a conversation reads -- 135, 137,
+# 140, 143, 144 and 147 -- are past 128, and with the array sized 128 every
+# guard on them silently failed the bounds check and could never hold.
+FLAG_COUNT = 0x100
 
 # opcode -> (length, mnemonic). Read off the sixteen arms of
 # `script_opcode_table` (0x80013160). Length None would mean "ends the script";
