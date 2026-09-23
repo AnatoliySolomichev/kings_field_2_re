@@ -518,9 +518,9 @@
   "evidence": "scans object_table from the index in a0, bounded at 0x18c = 396, within limits passed in a1..a3; the overlays call it 27 times"
  },
  "0x80013640": {
-  "name": "level_build_opcode_table",
+  "name": "level_state_opcode_table",
   "kind": "data",
-  "evidence": "16 arms, 0xf0..0xff, that apply_level_state dispatches the saved level stream through"
+  "evidence": "16 arms, 0xf0..0xff, that apply_level_state dispatches the saved level stream through, one opcode per object slot"
  },
  "0x800448b8": {
   "name": "init_object_record",
@@ -1928,5 +1928,10 @@
   "name": "equipped_weapon",
   "kind": "data",
   "evidence": "the weapon item id, 0xff for none; player_recalc_stats indexes weapon_table with it"
+ },
+ "0x80013298": {
+  "name": "object_save_class_table",
+  "kind": "data",
+  "evidence": "233 arms keyed by object_type_table[type].byte0, choosing what level_state_write records about an object slot: 200 write 0xfe and nothing else, 25 write 0xfd and the state byte"
  }
 }

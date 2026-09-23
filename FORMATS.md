@@ -2901,6 +2901,59 @@ isolated.
 
 `0x801baa88` is save data, and picking something up is recorded there.
 
+### What a level's record actually says
+
+The 144 bytes are not a diff. `level_state_write` (`0x8005efd4`) builds the
+whole record from scratch every time something changes, on its own stack, and
+`apply_level_state` (`0x8005f444`) reads it back at level load. Between them
+they say what the format is, and it has **three sections**.
+
+**One: the actors that are gone.** Walk `actor_table`, 0x88 a slot, stopping
+at the first byte-0 of `0xff`. For each slot whose byte 0 is **1** — category
+1, and no other category — write the slot index and then `3` if the actor's
+`+9` is `3`, otherwise `0`. Terminate with `0xff`. So a category-1 death is
+kept and nothing else's is.
+
+**Two: how far each conversation has got.** Walk the 40 entity records; for
+each whose `+0x38` is not null and whose block begins `0x70`, write the entity
+index, the program counter at `+0x10` and the retry flag at `+0x13`.
+Terminate with `0xff`. §9 has what those two bytes mean.
+
+**Three: one opcode per object slot**, 396 of them, in lockstep — the decoder
+advances its own pointer by `0x44` once per record and stops at 396, so there
+is no terminator and no slot is skipped. The opcode is chosen by the object's
+*class*, `object_type_table[type].byte0`, through a **233-arm table at
+`0x80013298`**, and the arms land in six places:
+
+| Arms | What is written |
+| --- | --- |
+| 200 | `0xfe` — nothing about this slot is worth keeping |
+| 25 | `0xfd` and the object's state byte at `+0x38` |
+| 5 | `0xf4`, the state at `+0x38`, and the byte at `+0x39` |
+| 1 | `0xf5` and the byte at `+0x39` |
+| 1 | the opcode the object's **kind** byte at `+0x04` chooses: `0x60`→`0xf0`, `0x61`→`0xf1`, `0x62`→`0xf2`, `0x70`→`0xf3`, anything else `0xfd` |
+| 1 | `0xfd` and the state — **unless the state is below 2, in which case nothing at all is written** |
+
+`0xf0`, `0xf1` and `0xf2` are **an object that was not there when the level
+was built**: the decoder calls `init_object_record`, stamps the kind byte
+`0x60`, `0x61` or `0x62`, and then reads the type id and a position — `x` and
+`z` as two bytes each, which it shifts back up by 2 (the encoder wrote
+`x >> 2` and `x >> 10`), `y` as two bytes unshifted, and for `0xf0` an angle
+that it shifts up by 4. So **what you drop is saved as a spawn instruction**,
+and the three kinds are three flavours of it.
+
+**Read, and checked by nothing.** Both sides of this were read off the code
+and they agree with each other, which after §9 is worth stating plainly as a
+weakness rather than a strength. `emu/bp22.lua` dumps the stream
+`level_state_write` builds and the one `apply_level_state` is handed; until
+that has run, the section counts above are a claim about the encoder, not
+about a byte anyone has seen.
+
+The one arm that writes nothing when the state is below 2 is the part to
+distrust first: in lockstep, a record that is sometimes absent desyncs
+everything after it. Either that class never reaches the encoder, or the
+reading of it is wrong.
+
 Two things the same experiment shows are *not* settled. `inventory_a` does not
 appear in the save verbatim, so the carried items are written in some other
 form. And `story_flags` cannot be judged from this save at all: one non-zero
