@@ -32,6 +32,36 @@ reading listings.
 
 ---
 
+## What may be committed
+
+**Everything committed here is published on GitHub**, history included. So
+nothing that belongs to the game goes in, however it was obtained and however
+far it has been transformed:
+
+* the disc image, any of its four executables, or any file from `extract/`;
+* anything decoded from them — images, models, sounds, movies, the game's
+  text, level data, or any table of the game's bytes, the conversations'
+  bytecode among them;
+* long stretches of the game's code, whether as a listing, a hex dump or the C
+  that `tools/pseudo.py` and `tools/decomp.py` make of it.
+
+What goes in is this project's own work: the tools, the notes, the names and
+the evidence for them, the port, and short quotations — a few instructions, a
+few bytes, a line of text — where a finding cannot be followed without them.
+Everything else the tools regenerate from the reader's own copy of the disc,
+into `extract/` and `out/`, which `.gitignore` keeps out. **A tool that writes
+anywhere else needs a `.gitignore` line before its output is committed.**
+`godot/escript.json` and `godot/quest.json` — every conversation's bytecode and
+every quest hook as C — went in unnoticed and had to be cut out of the whole
+history before the first push.
+
+Nor anything private: no keys, tokens or passwords, and nothing you would not
+put on a public page under your own name.
+
+If you are not sure something may be published, leave it out and ask.
+
+---
+
 ## The method that got this far
 
 This is the part worth copying. It is not a style preference; each rule is here

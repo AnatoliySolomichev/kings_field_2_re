@@ -16,6 +16,11 @@
 # All of it regenerates from the disc with the tools in tools/.
 /out/
 
+# What a tool writes beside the port's scripts is read off the disc as well --
+# quest.py --godot puts the quest hooks here. The build makes its own copies in
+# out/godot/, so nothing reads these, and they must not be published.
+/godot/*.json
+
 __pycache__/
 *.pyc
 
