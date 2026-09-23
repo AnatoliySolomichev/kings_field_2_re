@@ -799,6 +799,28 @@ name themselves and there is no `S00`–`S02` on the disc.
 | `S14` | `story_flags[126]` |
 | `S15` | `story_flags[125]` |
 
+**`cutscene_step` is the whole cutscene machine, and the gate is one phase of
+it.** It was called `flag_gate` here for that one branch, because 53 of its
+161 instructions -- everything past its indirect call -- were outside the walk
+until `tools/rdis.py` learned to keep going after one. What it does, once a
+frame from `game_main` and `player_controller`: take the scene number at
+`cutscene_number` (`0x801e8260`, `0xff` for none), multiply it by 52 into
+`seq_data`, leave the record pointer at `cutscene_record` (`0x801e825c`), and
+dispatch `cutscene_phase` (`0x801e824c`) through a **17-arm table at
+`0x800136a0`**. Phases that were invisible until now include the one that
+copies the screen with `MoveImage` between `draw_env` and `disp_env`, and the
+one that calls the level's own **entry 7** when `cutscene_pending`
+(`0x801e824e`) is 1.
+
+A conversation can start a scene: `script_interpreter`'s service arm for a
+header `+0x12` in the `0x40` range writes `1` to `cutscene_phase` and `n & 3`
+to `cutscene_number`.
+
+And `story_flags` **93, 101 and 102 are not story**. `cutscene_step` and
+`level_overlay_tick` move them from 1 to 2 and back as phase state within a
+single fade. The array is at least `0x100` bytes and only its lower part is
+what the conversations test.
+
 **Withdrawn: the flag is not a key, it is an "already shown" mark.** This
 document said bit `0x80` meant "skipped once that is set", and I told a player
 that level 13's overlay *unlocks* `S04`. Both are backwards, and the answer is
