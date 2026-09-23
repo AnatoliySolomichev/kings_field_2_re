@@ -119,6 +119,11 @@ def entities(raw, ch):
                     "height": struct.unpack_from("<H", e, 0x14)[0],
                     "e1a": struct.unpack_from("<h", e, 0x1A)[0],
                     "e1c": struct.unpack_from("<h", e, 0x1C)[0],
+                    # +0x1e is what killing it is worth: actor_take_hit hands
+                    # it straight to award_exp. On level 0 it reads 9, 11, 28,
+                    # 15, 36, 18 for the six monsters and 0 for all six
+                    # townspeople, the three men by the house among them.
+                    "exp": struct.unpack_from("<h", e, 0x1E)[0],
                     "flags": struct.unpack_from("<I", e, 0x34)[0]})
     return out
 

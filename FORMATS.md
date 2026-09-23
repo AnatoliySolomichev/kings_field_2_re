@@ -2026,6 +2026,25 @@ colour; `ui_prim_quad` (`0x80027494`) fills its four corners and four UV pairs
 ordering table at a depth the caller picks; and `pad_read_latch`
 (`0x800279a4`) reads the pad and sets a flag if anything at all is down.
 
+### What a creature is worth
+
+`actor_take_hit` (`0x8004c668`) is what hurts a creature, and when one dies it
+calls **`award_exp(entity[+0x1e])`** — so `+0x1e` of the 120-byte entity
+definition is the experience it is worth. Level 0 reads:
+
+| entity | 0 | 1 | 2 | 3 | 4 | 5 | 6..11 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| HP (`+0x12`) | 1000 | 1000 | 1400 | 800 | 300 | 800 | 100..350 |
+| experience (`+0x1e`) | 9 | 11 | 28 | 15 | 36 | 18 | **0** |
+
+The six that are worth nothing are the townspeople — entities 9, 10 and 11 are
+the three men by the house — so killing a villager gives you nothing, which the
+data says outright. And the first threshold is 50, so level 2 is five or six
+monsters away.
+
+`actor_attack_player` (`0x800533e8`) is the other direction: it hands three of
+its own arguments to `player_take_hit` as damage values.
+
 ### Dying, and the crystal that stops it
 
 The recorded session includes a death, and `player_controller` says what

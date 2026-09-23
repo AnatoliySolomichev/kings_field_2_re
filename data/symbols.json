@@ -782,7 +782,7 @@
  "0x800500a8": {
   "name": "actor_tick",
   "kind": "code",
-  "evidence": "the per-frame creature machine: walks the 199 records of actor_table and switches on actor[+0xe] through the 241-arm table at 0x800128f0, guarded by `sltiu $v0, $v1, 0xf1`. Thirty arms are behaviours -- opcodes 0x00..0x1f without 0x07 and 0x08, plus 0x84 and 0xf0 -- and 209 opcodes reach 0x80052bf8, which calls level_hooks+0x24, the same escape into the level's own code the object machine has. It also reads a record at actor[+0x60] whose +0, +4 and +0xa it branches on"
+  "evidence": "the per-frame creature machine: walks the 199 records of actor_table and switches on actor[+0xe] through the 241-arm table at 0x800128f0, guarded by `sltiu $v0, $v1, 0xf1`. Thirty arms are behaviours -- opcodes 0x00..0x1f without 0x07 and 0x08, plus 0x84 and 0xf0 -- and 209 opcodes reach 0x80052bf8, which calls level_hooks+0x24, the same escape into the level's own code the object machine has. It also reads a record at actor[+0x60] whose +0, +4 and +0xa it branches on. Confirmed live: a read of the running emulator on level 0 shows actor[+0xe] holding 6 on two active creatures and 0 on three others, which is the dispatch byte taking real values"
  },
  "0x8004dbc8": {
   "name": "actor_move_horizontal",
@@ -1893,5 +1893,20 @@
   "name": "res_upload_spu",
   "kind": "code",
   "evidence": "the frame's fifteenth call. Acts when the request has type 0x30 and its +0x10 is 2, and hands the data to 0x80067500 with 0xa000 -- an SPU address -- with 0x80061e00 fetching from the CD. The sound half of the same queue"
+ },
+ "0x8004c668": {
+  "name": "actor_take_hit",
+  "kind": "code",
+  "evidence": "(actor index, ...): forms actor_table + 136*index, works out the bearing with vec_angle and facing_test, and when the creature dies calls **award_exp(entity[+0x1e])** -- so +0x1e of the 120-byte entity definition is the experience the creature is worth. On level 0 that reads 9, 11, 28, 15, 36 and 18 for the six monsters and **0 for all six townspeople**, the three men by the house among them"
+ },
+ "0x800533e8": {
+  "name": "actor_attack_player",
+  "kind": "code",
+  "evidence": "calls player_take_hit with three of its own arguments as the damage values, after vec_angle and facing_test -- a creature striking the player. Two callers, both in the creature machine"
+ },
+ "0x8003daec": {
+  "name": "screen_capture",
+  "kind": "code",
+  "evidence": "DrawSync, StoreImage and MoveImage around frame_begin_3d, reading draw_buffer_index -- it takes the drawn frame back out of VRAM, which is what a fade or a transition needs"
  }
 }
