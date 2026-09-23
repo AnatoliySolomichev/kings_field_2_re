@@ -411,11 +411,37 @@ class Walk:
                     work.append(s)
         self._dedupe(fn)
 
+    def _delay_value(self, di, regs):
+        """What an instruction in a delay slot leaves in a register, when it
+        leaves a constant. Only the forms a compiler puts there."""
+        if di is None:
+            return None
+        if di.mn in ("li", "addiu", "addi") and di.rs == 0:
+            return di.rt, di.simm
+        if di.mn == "ori" and di.rs == 0:
+            return di.rt, di.imm
+        if di.mn == "lui":
+            return di.rt, (di.imm << 16)
+        if di.mn == "move":
+            v = regs.get(di.rs if di.rt == 0 else di.rt)
+            return (di.rd, v) if isinstance(v, int) else None
+        return None
+
     def _run_block(self, fn, b, regs):
-        """Interpret one block for its constants; returns its successors."""
+        """Interpret one block for its constants; returns its successors.
+
+        **A delay slot runs before its call.** `jal has_item` with `li $a0, 2`
+        under it passes 2, and reading the two in address order gives that 2 to
+        the *next* call instead -- which is what this did, so an overlay listing
+        read `has_item()` and then `has_item(2)` all the way down, every
+        argument one call late. So a call takes its arguments from the registers
+        plus whatever its delay slot puts there, and the caller-saved registers
+        are dropped after the delay slot rather than before it.
+        """
         e = self.exe
         succ = []
         ins = fn.blocks[b]
+        pending_clobber = None
         for n, a in enumerate(ins):
             i = self.insns[a]
             mn = i.mn
@@ -499,17 +525,19 @@ class Walk:
                     fn.refs.append((a, (base + i.simm) & 0xFFFFFFFF, "write",
                                     mipsdis.WIDTH.get(mn, 4)))
             elif i.kind == "call":
-                args = {r: regs.get(r) for r in ARGREG
-                        if isinstance(regs.get(r), int)}
+                seen = dict(regs)
+                got = self._delay_value(self.insns.get(a + 4), regs)
+                if got is not None:
+                    seen[got[0]] = got[1]
+                args = {r: seen.get(r) for r in ARGREG
+                        if isinstance(seen.get(r), int)}
                 for k, (sa, t, _o) in enumerate(fn.calls):
                     if sa == a:
                         fn.calls[k] = (a, t, args)
                 fn.argsat[a] = args
-                for r in CLOBBERED:
-                    regs.pop(r, None)
+                pending_clobber = a + 4
             elif i.kind == "jalr":
-                for r in CLOBBERED:
-                    regs.pop(r, None)
+                pending_clobber = a + 4
             elif i.kind == "jr" and i.rs != 31:
                 v = regs.get(i.rs)
                 if isinstance(v, Table):
@@ -520,6 +548,13 @@ class Walk:
                       "slti", "sltiu") or (i.kind == "alu" and i.mn == "lui"):
                 fn.consts.append((a, i.imm if mn in ("ori", "andi", "xori", "lui")
                                   else i.simm, mn))
+            if pending_clobber == a:
+                for r in CLOBBERED:
+                    regs.pop(r, None)
+                pending_clobber = None
+        if pending_clobber is not None:           # the call ended the block
+            for r in CLOBBERED:
+                regs.pop(r, None)
         return _successors(self, fn, ins)
 
     def _bound(self, fn, block, idx):

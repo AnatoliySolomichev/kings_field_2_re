@@ -6,7 +6,7 @@ the evidence live in `data/constants.json`, and everything else here is
 counted out of the code.
 
 556 distinct numbers over 12251 sites, and
-296 distinct displacements off a register over 15235 sites.
+296 distinct displacements off a register over 15233 sites.
 
 A number's *role* is read off the instruction and its neighbours:
 
@@ -278,10 +278,10 @@ routines is the object record's stride showing up as a field.
 
 | offset | loads | stores | routines |
 | --- | --- | --- | --- |
-| `+0x0` | 2090 | 1233 | 522 |
+| `+0x0` | 2090 | 1232 | 522 |
 | `+0x4` | 807 | 346 | 287 |
 | `+0x8` | 394 | 283 | 212 |
-| `+0xc` | 326 | 235 | 153 |
+| `+0xc` | 326 | 234 | 152 |
 | `+0x10` | 284 | 221 | 142 |
 | `+0x2` | 312 | 189 | 159 |
 | `+0x6` | 279 | 155 | 139 |
