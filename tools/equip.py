@@ -196,7 +196,22 @@ def check(ram_path):
     print(f"  offense: {off}  RAM {live_off}")
     print(f"  defense: {dfn}  RAM {live_dfn}")
     print(f"  {n} of {2 * RATINGS} ratings reproduced from the two records")
+    for r in RECORDED:
+        o, f = ratings(r["weapon"], r["worn"], weapons, armour)
+        if o != r["offense"] or f != r["defense"]:
+            print(f"  RECORDED disagrees: {o} {f}")
+            bad += 1
     return bad == 0 and n == 2 * RATINGS
+
+
+# What a RAM snapshot of the running game held: the equipped ids, and the
+# sixteen ratings player_recalc_stats had left in memory. The port is checked
+# against this rather than against tools/equip.py alone.
+RECORDED = [
+    {"weapon": 0, "worn": [255, 42, 255, 255, 255, 255, 255],
+     "offense": [39, 32, 9, 0, 0, 0, 0, 0],
+     "defense": [13, 6, 4, 0, 0, 0, 0, 0]},
+]
 
 
 def export(out_dir):
@@ -207,7 +222,8 @@ def export(out_dir):
                      "adds, as player_recalc_stats reads them",
             "armour_first": ARMOUR_FIRST,
             "weapons": [weapon_values(r) for r in weapons],
-            "armour": [armour_values(r) for r in armour]}
+            "armour": [armour_values(r) for r in armour],
+            "recorded": RECORDED}
     path = os.path.join(out_dir, "equip.json")
     with open(path, "w") as fh:
         json.dump(rows, fh, separators=(",", ":"))

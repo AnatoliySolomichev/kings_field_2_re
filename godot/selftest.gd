@@ -146,6 +146,9 @@ func _init() -> void:
 	if not _damage():
 		quit(1)
 		return
+	if not _equip():
+		quit(1)
+		return
 	quit(0)
 
 
@@ -259,6 +262,29 @@ func _scripts() -> bool:
 				ok += 1
 	print("conversations: %d of %d steps emu/bp21.lua recorded in play" % [ok, want])
 	return bad_s == 0 and ok == want
+
+
+# What the player is carrying, against what the game had in memory.
+func _equip() -> bool:
+	var e := KFEquip.new()
+	if not e.load_tables():
+		print("equipment: no tables to check against")
+		return true
+	var d = JSON.parse_string(
+		FileAccess.get_file_as_string("res://equip.json"))
+	var rec: Array = d.get("recorded", [])
+	var ok := 0
+	var want := 0
+	for r in rec:
+		var got := e.ratings(int(r["weapon"]), Array(r["worn"]))
+		for k in range(KFEquip.RATINGS):
+			want += 2
+			if int(got["offense"][k]) == int(r["offense"][k]):
+				ok += 1
+			if int(got["defense"][k]) == int(r["defense"][k]):
+				ok += 1
+	print("equipment: %d of %d ratings match what the game had in memory" % [ok, want])
+	return ok == want
 
 
 # The game's arctangent, against the same directions tools/movement.py put
