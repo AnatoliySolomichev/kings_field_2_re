@@ -25,9 +25,9 @@
 --         items the game actually asks about.
 --
 --   TALK  `script_interpreter` (0x8005c308) per call, with the entity, and the
---         opcode it is about to run. godot/escript.gd reproduces the control
---         flow on 1086 of 1086 scripts *in Python*; this is what would hold it
---         against the game.
+--         opcode it is about to run. `emu/bp21.lua` is the script that does
+--         this properly, and what it recorded showed the corpus both copies
+--         were decoding was not scripts at all.
 --
 --   LVL   `level_load`'s state each time it changes, so the seven-state load
 --         can be watched happening.

@@ -295,19 +295,32 @@ byte", which is what they look like from outside. `0xf5` sets a **no-wait
 count** — the interpreter stops after every line until the use button, and that
 count is how a script says several lines in a row — `0xf3` spends one of it,
 and **`0xf4` calls the level's own code**, which is how a conversation makes
-something happen in the world. There are six of those in the game.
+something happen in the world. There are 60 of those in the game.
 
-`run()` steps a script the way the interpreter does, reproducing the control
-flow and the flags and not the waiting. Over all **1086 scripts in the game**:
-870 reach an `end`, 198 run off the end of their slice and 18 loop for ever,
-which is what an idle NPC does. `godot/escript.gd` is the same machine and
-`selftest.gd` holds the two together — **1086 of 1086** stop in the same place,
-for the same reason, after the same number of steps, leaving the same flags.
+Two more were wrong until `emu/bp21.lua` put the interpreter under a
+breakpoint while somebody talked to an NPC: **`f2` is a label**, not a
+two-byte skip, and **`f9` jumps to a label**, which `0x8005c18c` resolves by
+scanning for `f2 <id>`. And `f0` turned out to be the mechanic the language is
+built on — a section break that repeats its last line until you go and talk to
+somebody else — which `visits()` models.
+
+`run()` steps a conversation the way the interpreter does, reproducing the
+order of execution and not the waiting. There are **43 conversations in the
+game**, one per entity that talks, holding 733 lines. `godot/escript.gd` is
+the same machine and `selftest.gd` holds the two together — **43 of 43** —
+and then holds both against the recording: **15 of 15** steps that
+`emu/bp21.lua` watched the game run.
+
+**Withdrawn:** "1086 scripts in the game, 870 reach an `end`, 1086 of 1086
+agree." Those were not scripts; each entity record has sixteen block pointers
+starting at `+0x38`, the reader took the list from `+0x3c`, and blocks 1..15
+are something the level's own overlay uses. `tools/entities.py` has it.
 
 To dump the whole game at once:
 
 ```
-for lv in $(seq 0 27); do python3 tools/escript.py $lv; done > out/scripts.txt
+python3 tools/story.py            # every conversation -> out/story.txt
+python3 tools/escript.py check    # replay what the emulator recorded
 ```
 
 **`items.py`** — where the game decides what an item does: the three inventory
@@ -930,10 +943,17 @@ been checked: `cast_spell` with the MP either side, and `skill_unlock`.
 ./emu/run.sh debug bp21.lua
 ```
 
-Then **talk to somebody and let the whole conversation run.** `godot/escript.gd`
-reproduces the control flow of all 1086 scripts against `tools/escript.py`,
-which is two copies of one reading agreeing with each other. What neither has
-is the game, and this is that.
+**That session has been run, and it broke the reading it was meant to check.**
+The player talked to the man outside the house on level 0 and the interpreter
+fetched `04 05 06 07 08 09 f0 01` where `tools/escript.py` had `02 00 ff`.
+Both copies were decoding bytes that are not scripts. The recording is now
+kept in `tools/escript.py` as `RECORDED` and replayed by
+`python3 tools/escript.py check` and by the Godot self-test, and everything
+this project says about conversations is built back up from it.
+
+Worth running again for: an NPC with a `f1` guard or an `f9`, so a branch is
+seen taken; and a conversation whose header `+0x12` is not `0xff`, to watch
+the shop or the inn open.
 
 **`bp20.lua`** is the one for everything a player *does*, and it exists because
 five subsystems are read and none of them is checked: the object interpreter,

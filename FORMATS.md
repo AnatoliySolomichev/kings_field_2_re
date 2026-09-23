@@ -1110,14 +1110,18 @@ loaded "only when the entity's kind byte is `0x2b`". Reading the branch at
 `load_entry(7, base + opcode)` at `+0x2f4` sits past the branch target, so it
 runs either way.
 
-**Withdrawn, and it was mine:** from that I said "the 12 179 instructions the
-tool counts as `say` are dialogue". They are not, and fixing the base is what
-showed it. **Only 42 of the game's 265 entities carry a base at all**, and
-those 42 hold **267** of the 12 179 opcodes, of which **242 land on text this
-project has decoded — 90 %**. The other 11 912 belong to entities whose base is
-zero. Every opcode does drive an animation *and* fetch `TALK.T[base + opcode]`,
-which is what the code says; what a zero base fetches is not dialogue anybody
-sees. The reading was right and the conclusion drawn from it was too wide.
+**Withdrawn twice over.** From the corrected base I said "the 12 179
+instructions the tool counts as `say` are dialogue", then withdrew that to
+"only 42 of 265 entities carry a base, and those 42 hold 267 of the 12 179
+opcodes". **There are no 12 179 opcodes.** Both numbers came from decoding the
+wrong bytes: each entity record holds *sixteen* block pointers starting at
+`+0x38`, the reader took the list from `+0x3c`, and blocks 1..15 — which are
+not scripts — were being disassembled while block 0, the only conversation,
+was skipped as "a header". See §9 and `tools/entities.py`.
+
+What is actually there: **43 entities in the game talk**, between them saying
+**733 lines**, and `emu/bp21.lua` recorded two of those conversations in play
+to settle it.
 
 `tools/story.py` is the result: the game's talkers and their lines, level by
 level, into `out/story.txt`.
@@ -1456,18 +1460,31 @@ matches RAM **byte for byte over 3000 bytes**; at the old one, 7 %.
 
 **There are far fewer entities than the notes used to claim.** "~121 populated"
 came from dividing the whole 28 672-byte entry by the record size, which counts
-the script block as records. Reading it properly gives 16 entities on level 0,
-12 on level 4, 10 on level 7 — **265 entities and 1350 scripts in the game**.
+the block area as records. Reading it properly gives 16 entities on level 0,
+12 on level 4, 10 on level 7 — **265 entities and 1617 blocks in the game**.
 Reader: `tools/entities.py`.
 
-A record ends with a list of `u32` offsets into the script block, **starting at
-+0x38** and terminated by `0xffffffff`. Those offsets are monotonic across the
-whole level: entity 0 owns the first run, entity 1 the next, so the block is one
-sequential stream that the records carve up.
+A record ends with **sixteen** `u32` offsets into the block area, at `+0x38`
+through `+0x74`, and `entity_table_init` (`0x80053084`) is what settles the
+count: it walks 40 records and, for each, 16 words from `+0x38`, turning
+`0xffffffff` into a null pointer and everything else into `offset +
+entity_scripts`. Unused slots are `0xffffffff` and sit at the tail. The
+offsets are monotonic across the whole level, so the area is one sequential
+stream that the records carve up.
 
-The **first offset is a header, not code**. The interpreter keeps the program
-counter in its `+0x10` and a flag in `+0x13`, and reaches code at header+0x14,
-so decoding that entry as instructions decodes a struct.
+**The list starts at `+0x38`, not `+0x3c`.** Reading it one slot late dropped
+every entity's block 0 and renumbered the rest, and that is the single mistake
+behind every wrong claim this document made about entity scripts.
+
+Each block begins with a **kind byte** and carries `0xff` at `+4`. **Only kind
+`0x70` is a conversation** — `script_interpreter` tests for exactly that — and
+it is always block 0. Forty-three entities in the game have one. Nothing in
+`GAME.EXE` reads blocks 1..15; they are relocated for the level's own overlay
+and what they mean is not settled.
+
+A conversation block is a 20-byte header and then code: the TALK.T base at
+`+0x0c`, the program counter at `+0x10`, what happens when the talking stops at
+`+0x12`, the retry flag at `+0x13`, and `pc` counting from `+0x14`.
 
 Fields, from columns that vary sensibly across the 265 records
 (*names unverified*, they are read off the shape of the values):
@@ -2707,26 +2724,58 @@ And **`flags[0]` is a progress counter**: `object_trigger` raises it to the
 destination level number whenever that is higher than what it holds, and never
 lowers it, so it records the furthest level the player has reached.
 
-### Entity scripts barely branch
+### A conversation gives you one section per visit
 
-With the base corrected, 1086 scripts decode to 12 179 plain instructions, 876
-ends, and **four `0xf9` conditionals with no `0xf7` anywhere**: two on flag 0
-(`== 10`, on levels 24 and 27) and two on flag 14 (`== 0`, levels 11 and 13).
-Flag 0 is the progress counter, so a late-game entity gating on it reads true.
+The 43 conversation blocks hold **733 lines**, 105 `f8`, 79 `f2`, 60 `f9`, 60
+`f4`, 57 `f0`, 55 `f5` and 43 `ff` — and **no `f7`, `f3` or `f6` anywhere**. A
+script *tests* story flags and never sets one; something else writes them.
 
-An earlier pass here reported *zero* conditionals. That was the wrong base, and
-the claim is withdrawn — though the corrected number is small enough that four
-instances in twelve thousand instructions deserve confirming in play before
-anything is built on them.
+Two opcodes had been read wrong. **`f2` is a label**, not a two-byte skip, and
+**`f9` jumps to a label rather than to an offset**: `0x8005c18c` scans the code
+from pc 0 for an `f2` byte, compares what follows against the operand and lands
+just past it. The scan is over bytes rather than instructions and gives up at
+the first `0xff`, so a label past the first stop cannot be reached.
 
-And the dialogue reading of the common opcode barely applies: it reaches
-`TALK.T` **only when the entity's kind byte is `0x2b`**, and across the whole
-game exactly **one entity of 265 is that kind**. Every other script is a list
-of animation frames. `tools/escript.py` prints `frame n` for those rather than
-inventing a line of dialogue beside them.
+**`f0` is the mechanic the whole language is built on.** It jumps back onto the
+line before it *and sets the retry flag*, so pressing the button again repeats
+that last line for ever. What moves a conversation on is talking to somebody
+**else**: `script_interpreter` compares the global `script_speaker`
+(`0x801baa2e`, the previous talker's `actor[+1]`) against this actor's, and
+when they differ and the retry flag is set it scans forward from the stored pc
+to the next `f0` and resumes just past it. `f8` jumps back *without* setting
+the flag — that is where an entity runs out of things to say.
 
-So `FDAT.T` entry `3n + 1` is an animation sequencer, and neither the quest
-conditions nor the conversations are in it.
+So the shopkeeper on level 0 hands out six sections over six visits and the
+innkeeper twelve.
+
+**The save file confirms all of this from the other side.**
+`level_state_write` (`0x8005efd4`) walks the 40 entity records and, for each
+one whose `+0x38` is not null **and whose first byte is `0x70`**, writes three
+bytes: the entity index, the byte at `+0x10` and the byte at `+0x13`.
+`apply_level_state` (`0x8005f444`) reads the same triples back, terminated by
+`0xff`, and stores them into `+0x10` and `+0x13` of the block. Two fields out
+of twenty, from the block reached through `+0x38`, gated on `0x70` — which is
+the whole reading of the header arrived at independently, written by code that
+has nothing to do with the interpreter. An entity remembering how much of its
+conversation it has given you is a saved game's business, so it is saved.
+
+Starting is its own small machine. `script_prescan` (`0x8005c1e8`) reads the
+code from pc 0, where a chain of four-byte guards sits — `f1 flag value label`
+— and the **first** one that holds wins, provided its label is further on than
+the pc already stored. The chain ends with a lone `0xfe`, and a fresh
+conversation starts just past it, which is why the recorded trace begins at
+pc 1. Eighteen guards exist in the game, on ten conversations.
+
+**Withdrawn:** "1086 scripts decode to 12 179 plain instructions, 876 ends and
+four `0xf9` conditionals", "six `f4` calls in the whole game", and "it reaches
+`TALK.T` only when the entity's kind byte is `0x2b`, and exactly one entity of
+265 is that kind, so every other script is a list of animation frames". The
+first two counted blocks 1..15 as scripts. The third misread the branch: the
+`0x2b` comparison skips a call to `0x800608ec` and the `load_entry(7, base +
+opcode)` sits past its target, so the text is fetched either way — which is
+why `out/story.txt` is now full of English.
+
+`FDAT.T` entry `3n + 1` is where the conversations are after all.
 
 ### The `0x8001dxxx` cluster is the pause menu, not the conversations
 
@@ -2747,9 +2796,10 @@ why *Jamie Porter* shows up 28 times. Withdrawn.
 The real path is in **`0x8005e2d0`**, the object interaction handler, and it is
 short. See §10.
 
-A full decode of all 1350 scripts is written to `out/scripts.txt` by
-`for lv in $(seq 0 27); do tools/escript.py $lv; done`. It is regenerated from
-the disc, so it is not committed.
+Every conversation in the game, in the order the game tells it, is written to
+`out/story.txt` by `python3 tools/story.py`; `python3 tools/escript.py <level>`
+disassembles them. Both are regenerated from the disc, so neither is
+committed.
 
 ---
 

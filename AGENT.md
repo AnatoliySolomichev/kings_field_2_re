@@ -231,12 +231,18 @@ exactly the opcode the table says; the item ids, which name themselves against
 `tools/itemtext.py`; **the death branch** and the crystal that stops it; and
 two corrections to readings made without it.
 
-**The next session to ask for is `emu/bp21.lua`, and it is a conversation.**
-It logs every opcode `script_interpreter` runs with its operands decoded, the
-`TALK.T` entry each line loads, and the two readings made since that have never
-been checked — `cast_spell` and `skill_unlock`. `godot/escript.gd` reproduces
-all 1086 scripts against `tools/escript.py`, which is two copies of one reading
-agreeing with each other; the game is what neither has.
+**`emu/bp21.lua` has been run, and it earned its keep on the first
+conversation.** It logs every opcode `script_interpreter` runs, and what it
+logged did not match what this project had read: the game fetched
+`04 05 06 07 08 09 f0 01` where `tools/escript.py` had `02 00 ff`. The whole
+"1086 scripts" corpus was blocks 1..15 of each entity record, which are not
+scripts. There are 43 conversations. The recording is now the anchor — 26 of
+26 steps and lines in Python, 15 of 15 in the port — and it is the pattern to
+repeat: **a check between two of my own readings is worth almost nothing.**
+
+Still unrun on that script: `cast_spell` and `skill_unlock`, a conversation
+with an `f1` guard or an `f9` taken, and one whose header `+0x12` is not
+`0xff` so the shop or the inn opens.
 
 What would also help, and needs no new script: `bp20.lua` again with the five
 damage types it does not print added to the `HURT in` line.

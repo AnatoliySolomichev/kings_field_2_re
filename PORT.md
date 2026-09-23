@@ -28,8 +28,8 @@ that it reproduces it correctly.** `status` says how far that went:
 | executable | routines | with a marker | labels marked | instructions | covered |
 | --- | --- | --- | --- | --- | --- |
 | boot | 10 | 1 | 0 | 115 | 50 (43%) |
-| open | 293 | 6 | 0 | 19753 | 1066 (5%) |
-| game | 816 | 31 | 5 | 92169 | 10694 (11%) |
+| open | 293 | 6 | 0 | 20002 | 1066 (5%) |
+| game | 818 | 33 | 5 | 93468 | 11247 (12%) |
 | end | 167 | 0 | 0 | 9966 | 0 (0%) |
 
 Those percentages are of *all* the code in the image, which includes
@@ -69,8 +69,11 @@ floor, not a score.
 | [`godot/actors.gd:219`](godot/actors.gd#L219) | `func _taken` | `game:0x8004d644` actor_spot_taken | transcribed |
 | [`godot/actors.gd:233`](godot/actors.gd#L233) | `func _kill` | `game:0x80052b7c` 0x80052b7c | transcribed |
 | [`godot/actors.gd:129`](godot/actors.gd#L129) | `func _pass` | `game:0x80052e5c` actor_tick_driver | transcribed |
-| [`godot/escript.gd:32`](godot/escript.gd#L32) | `const FLAG_COUNT` | `game:0x8005c308` script_interpreter | partial |
-| [`godot/escript.gd:48`](godot/escript.gd#L48) | `var f: Array = flags.duplicate` | `game:0x8005c308` script_interpreter | partial |
+| [`godot/escript.gd:69`](godot/escript.gd#L69) | `var i` | `game:0x8005c18c` script_find_label | verified |
+| [`godot/escript.gd:84`](godot/escript.gd#L84) | `var f: Array = flags.duplicate` | `game:0x8005c1e8` script_prescan | verified |
+| [`godot/escript.gd:51`](godot/escript.gd#L51) | `const FLAG_COUNT` | `game:0x8005c308` script_interpreter | partial |
+| [`godot/escript.gd:99`](godot/escript.gd#L99) | `var f: Array = flags.duplicate` | `game:0x8005c308` script_interpreter | partial |
+| [`godot/escript.gd:170`](godot/escript.gd#L170) | `var f: Array = flags.duplicate` | `game:0x8005c308` script_interpreter | verified |
 | [`godot/items.gd:41`](godot/items.gd#L41) | `func has_item` | `game:0x8005d7bc` has_item | transcribed |
 | [`godot/items.gd:48`](godot/items.gd#L48) | `func take_item` | `game:0x8005d7f8` take_item | transcribed |
 | [`godot/items.gd:61`](godot/items.gd#L61) | `func give_item` | `game:0x8005d898` give_item | transcribed |
@@ -115,13 +118,13 @@ load-bearing whatever its size.
 | 11 | 55 | `0x800167cc` | sub_800167cc |
 | 11 | 26 | `0x800279d8` | sub_800279d8 |
 | 11 | 20 | `0x80016928` | sub_80016928 |
-| 10 | 1970 | `0x80053c84` | sub_80053c84 |
+| 11 | 18 | `0x800168a8` | sub_800168a8 |
+| 10 | 1970 | `0x80053c84` | effect_spawn |
 | 10 | 116 | `0x80025be8` | sub_80025be8 |
 | 10 | 33 | `0x80019cc4` | read_entry_a |
 | 10 | 31 | `0x80016c90` | sub_80016c90 |
-| 10 | 18 | `0x800168a8` | sub_800168a8 |
 | 10 | 14 | `0x80019538` | sub_80019538 |
-| 9 | 569 | `0x80018358` | level_load |
+| 9 | 575 | `0x80018358` | level_load |
 | 9 | 405 | `0x800422b8` | render_frame |
 | 9 | 224 | `0x80026acc` | sub_80026acc |
 

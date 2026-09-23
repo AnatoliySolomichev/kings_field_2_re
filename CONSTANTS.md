@@ -5,8 +5,8 @@ from their entry points by `tools/rdis.py`. Do not edit it: the names and
 the evidence live in `data/constants.json`, and everything else here is
 counted out of the code.
 
-555 distinct numbers over 11985 sites, and
-296 distinct displacements off a register over 14906 sites.
+556 distinct numbers over 12251 sites, and
+296 distinct displacements off a register over 15235 sites.
 
 A number's *role* is read off the instruction and its neighbours:
 
@@ -33,8 +33,8 @@ immediates alone cannot see the two numbers that say what the grid is.
 **GRID_CELL_BYTES** -- *read*, from `game:0x80033b8c`  
 Ten bytes to a terrain cell, from the same index arithmetic.
 
-253 sites: 164 loaded, 53 multiplier, 23 argument, 11 bound, 1 mask, 1 compared with.
-In `game:effect_tick`, `game:sub_8002c30c`, `game:sub_80053c84`, `game:actor_tick`, `game:sub_80028f90`, `game:sub_80030e14`, `game:player_controller`, `open:sub_8001b524`, `open:sub_8002842c`, `game:sub_8002d2a0`, `game:object_interpreter`, `game:sub_80062304` and 74 more.
+265 sites: 174 loaded, 55 multiplier, 23 argument, 11 bound, 1 mask, 1 compared with.
+In `game:effect_tick`, `game:player_action`, `game:effect_spawn`, `game:actor_tick`, `game:sub_80028f90`, `game:object_interpreter`, `game:sub_80030e14`, `game:player_controller`, `open:sub_8001b524`, `open:sub_8002842c`, `game:held_item_tick`, `game:sub_80062304` and 74 more.
 
 `python3 tools/consts.py 0xa` for every site.
 
@@ -44,7 +44,7 @@ In `game:effect_tick`, `game:sub_8002c30c`, `game:sub_80053c84`, `game:actor_tic
 The collision flag word the player's movement asks for. Only the sites inside the movement routines are this; 0x31 is also just 49.
 
 23 sites: 14 loaded, 4 bound, 3 compared with, 2 argument.
-In `game:sub_80053c84`, `game:options_screen`, `game:player_take_hit`, `game:player_horizontal`, `game:player_vertical`, `game:object_interpreter`, `game:sub_80024a78`, `game:sub_80025468`, `game:sub_80026e4c`, `game:sub_80029500`, `game:player_move`, `game:tile_collision` and 4 more.
+In `game:effect_spawn`, `game:options_screen`, `game:player_take_hit`, `game:player_horizontal`, `game:player_vertical`, `game:object_interpreter`, `game:sub_80024a78`, `game:sub_80025468`, `game:sub_80026e4c`, `game:sub_80029500`, `game:player_move`, `game:tile_collision` and 4 more.
 
 `python3 tools/consts.py 0x31` for every site.
 
@@ -54,7 +54,7 @@ In `game:sub_80053c84`, `game:options_screen`, `game:player_take_hit`, `game:pla
 68 bytes to an object record. Every walk of the object table steps by it -- `$s2 += 0x44` -- and find_object forms object_table + a0 * 0x44.
 
 37 sites: 27 multiplier, 7 loaded, 2 compared with, 1 argument.
-In `game:object_interpreter`, `open:sub_80029504`, `game:sub_8005db30`, `game:sub_80067d4c`, `game:sub_80029500`, `game:sub_8002d2a0`, `game:effect_tick`, `open:sub_8001ad3c`, `game:sub_8002bdc0`, `game:sub_80044900`, `game:find_object`, `game:find_free_slot` and 5 more.
+In `game:object_interpreter`, `open:sub_80029504`, `game:sub_8005db30`, `game:sub_80067d4c`, `game:sub_80029500`, `game:held_item_tick`, `game:effect_tick`, `open:sub_8001ad3c`, `game:sub_8002bdc0`, `game:sub_80044900`, `game:find_object`, `game:find_free_slot` and 5 more.
 
 `python3 tools/consts.py 0x44` for every site.
 
@@ -64,7 +64,7 @@ In `game:object_interpreter`, `open:sub_80029504`, `game:sub_8005db30`, `game:su
 The grid is 80 by 80 and grid_query_area bounds both axes by it.
 
 32 sites: 22 loaded, 8 bound, 1 compared with, 1 argument.
-In `game:sub_80053c84`, `game:sub_80024f88`, `game:sub_8001b88c`, `game:apply_damage`, `game:sub_8002d2a0`, `game:player_vertical`, `game:grid_query_area`, `game:sub_800345f4`, `game:draw_terrain`, `game:sub_800445b8`, `open:open_main`, `open:title_menu` and 7 more.
+In `game:effect_spawn`, `game:sub_80024f88`, `game:sub_8001b88c`, `game:apply_damage`, `game:held_item_tick`, `game:player_vertical`, `game:grid_query_area`, `game:sub_800345f4`, `game:draw_terrain`, `game:sub_800445b8`, `open:open_main`, `open:title_menu` and 7 more.
 
 `python3 tools/consts.py 0x50` for every site.
 
@@ -73,8 +73,8 @@ In `game:sub_80053c84`, `game:sub_80024f88`, `game:sub_8001b88c`, `game:apply_da
 **TILE_LOOK_STRIDE** -- *read*, from `game:0x8003df50 draw_held_item`  
 108 bytes to a lighting entry in tile_look, formed as a shift-and-add chain on cell[+9] & 0x3f. 64 entries, reset every frame by light_table_reset from 0x80081c8c.
 
-9 sites: 6 multiplier, 3 loaded.
-In `game:draw_model_plain`, `game:sub_8001b254`, `game:sub_80026acc`, `game:draw_tile`, `game:draw_model_cell_lit`, `game:overlay_plane_18`, `game:draw_held_item`, `game:sub_800400ac`.
+10 sites: 6 multiplier, 3 loaded, 1 argument.
+In `game:draw_model_plain`, `game:sub_8001b254`, `game:sub_80026acc`, `game:draw_tile`, `game:draw_model_cell_lit`, `game:overlay_plane_18`, `game:draw_held_item`, `game:sub_800400ac`, `game:effect_tick`.
 
 `python3 tools/consts.py 0x6c` for every site.
 
@@ -83,8 +83,8 @@ In `game:draw_model_plain`, `game:sub_8001b254`, `game:sub_80026acc`, `game:draw
 **FLAG_MASK** -- *read*, from `game:0x80061940 flag_gate`  
 flag_gate masks the gate byte with 0x7f, which is why the flag array is 128 long and not 64.
 
-172 sites: 113 loaded, 22 argument, 17 mask, 11 compared with, 9 bound.
-In `open:sub_80028f70`, `open:sub_8002607c`, `game:sound_play_3d`, `game:sub_80060d20`, `game:sub_80071bb4`, `end:sub_8001c5a0`, `open:play_movie`, `open:sub_800211d0`, `game:game_main`, `game:player_controller`, `game:sub_8006a060`, `end:sub_80011d14` and 61 more.
+174 sites: 115 loaded, 22 argument, 17 mask, 11 compared with, 9 bound.
+In `open:sub_80028f70`, `open:sub_8002607c`, `game:sound_play_3d`, `game:sub_80060d20`, `game:sub_80071bb4`, `end:sub_8001c5a0`, `open:play_movie`, `open:sub_800211d0`, `game:game_main`, `game:player_controller`, `game:sub_8006a060`, `end:sub_80011d14` and 62 more.
 
 `python3 tools/consts.py 0x7f` for every site.
 
@@ -93,8 +93,8 @@ In `open:sub_80028f70`, `open:sub_8002607c`, `game:sound_play_3d`, `game:sub_800
 **VSTEP_PLACE** -- *read*, from `game:0x8002ed60 player_vertical`  
 Inside 0x80 of the surface the player is *placed* on it rather than eased towards it, and 0x80 is also the largest single step towards it. tools/movement.py reproduces 48 of 48 of the game's height stores with it.
 
-272 sites: 100 loaded, 43 bound, 40 mask, 32 divisor, 28 multiplier, 26 argument, 3 compared with.
-In `game:sub_80053c84`, `game:object_interpreter`, `game:effect_tick`, `game:actor_tick`, `game:sub_80029500`, `game:sub_8001ec84`, `game:load_object_placement`, `game:sound_play_3d`, `game:tile_collision`, `game:object_interact`, `open:sub_8002607c`, `game:apply_control_scheme` and 103 more.
+277 sites: 102 loaded, 45 bound, 41 mask, 32 divisor, 28 multiplier, 26 argument, 3 compared with.
+In `game:effect_spawn`, `game:object_interpreter`, `game:effect_tick`, `game:actor_tick`, `game:sub_80029500`, `game:sub_8001ec84`, `game:load_object_placement`, `game:sound_play_3d`, `game:tile_collision`, `game:object_interact`, `open:sub_8002607c`, `game:apply_control_scheme` and 104 more.
 
 `python3 tools/consts.py 0x80` for every site.
 
@@ -103,8 +103,8 @@ In `game:sub_80053c84`, `game:object_interpreter`, `game:effect_tick`, `game:act
 **ACTOR_STRIDE** -- *read*, from `game:0x8004da2c, game:0x8004b624 actor_copy_kind`  
 136 bytes to a creature record in the table at 0x80185da8.
 
-17 sites: 14 multiplier, 3 compared with.
-In `game:sub_8004c668`, `game:effect_tick`, `game:sub_800533e8`, `game:sub_8002d2a0`, `game:sub_800460bc`, `game:object_use_state`, `game:object_interpreter`, `game:actor_spawn_slot`, `game:actor_select`, `game:use_item`, `game:object_interact`, `game:apply_level_state`.
+23 sites: 20 multiplier, 3 compared with.
+In `game:effect_tick`, `game:actor_take_hit`, `game:actor_attack_player`, `game:held_item_tick`, `game:sub_800460bc`, `game:object_use_state`, `game:object_interpreter`, `game:actor_spawn_slot`, `game:actor_select`, `game:use_item`, `game:object_interact`, `game:apply_level_state`.
 
 `python3 tools/consts.py 0x88` for every site.
 
@@ -146,8 +146,8 @@ The radius literal the player's movement passes to the collision: `li $a3, 0x320
 **GRID_ROW_BYTES** -- *read*, from `game:0x80033b8c`  
 The same number, unrelated: a terrain cell is at grid + cz*800 + cx*10, so a row of 80 cells of 10 bytes is 800 bytes. Confirmed from the code after first being guessed -- FORMATS.md, 'Two constants confirmed from the code'.
 
-49 sites: 33 loaded, 14 multiplier, 1 argument, 1 bound.
-In `game:use_item`, `game:player_vertical`, `game:object_interpreter`, `game:effect_tick`, `game:player_move`, `game:player_controller`, `game:place_player_on_terrain`, `game:player_horizontal`, `game:sub_800445b8`, `game:object_set_present`, `game:load_object_placement`, `game:sub_8004f414` and 13 more.
+51 sites: 33 loaded, 16 multiplier, 1 argument, 1 bound.
+In `game:object_interpreter`, `game:use_item`, `game:player_vertical`, `game:effect_tick`, `game:player_move`, `game:player_controller`, `game:place_player_on_terrain`, `game:player_horizontal`, `game:sub_800445b8`, `game:object_set_present`, `game:load_object_placement`, `game:sub_8004f414` and 13 more.
 
 `python3 tools/consts.py 0x320` for every site.
 
@@ -156,8 +156,8 @@ In `game:use_item`, `game:player_vertical`, `game:object_interpreter`, `game:eff
 **VSTEP_FALL** -- *read*, from `game:0x8002ed60 player_vertical`  
 A gap wider than 0x400 stops being a step and becomes a fall: below the surface by more than this enters state 0x40, above it enters state 0x20.
 
-149 sites: 70 loaded, 23 multiplier, 22 divisor, 15 mask, 13 bound, 6 argument.
-In `game:effect_tick`, `game:object_interpreter`, `game:sub_8004f414`, `game:sub_800366a8`, `game:sub_80053c84`, `game:draw_tmd_object`, `game:level_state_write`, `game:sub_80074380`, `game:tile_collision`, `game:actor_move_vertical`, `open:PutDispEnv`, `open:sub_800173b4` and 37 more.
+153 sites: 73 loaded, 23 multiplier, 22 divisor, 16 mask, 13 bound, 6 argument.
+In `game:effect_tick`, `game:object_interpreter`, `game:sub_8004f414`, `game:sub_800366a8`, `game:effect_spawn`, `game:draw_tmd_object`, `game:level_state_write`, `game:sub_80074380`, `game:tile_collision`, `game:actor_move_vertical`, `open:PutDispEnv`, `open:sub_800173b4` and 38 more.
 
 `python3 tools/consts.py 0x400` for every site.
 
@@ -186,8 +186,8 @@ In `game:use_item`, `game:player_horizontal`, `game:player_vertical`, `game:sub_
 **CELL** -- *read*, from `game:0x80033b8c grid_cell_at, and everywhere a world coordinate is formed`  
 World X and Z are 2048 units to the grid cell: actor_stand_at_home forms x = cell_x << 11 + fine x. FORMATS.md, 'World X/Z = 2048 x cell'.
 
-219 sites: 95 divisor, 35 multiplier, 29 loaded, 25 bound, 24 mask, 10 argument, 1 compared with.
-In `game:object_interpreter`, `game:actor_tick`, `game:effect_tick`, `game:sub_80053c84`, `game:render_walk`, `game:load_object_placement`, `game:sub_8001aa84`, `game:grid_query_area`, `game:draw_cell_walk`, `game:draw_model_plain`, `game:render_frame`, `game:object_set_present` and 69 more.
+226 sites: 99 divisor, 35 multiplier, 31 loaded, 25 mask, 25 bound, 10 argument, 1 compared with.
+In `game:object_interpreter`, `game:actor_tick`, `game:effect_tick`, `game:effect_spawn`, `game:render_walk`, `game:load_object_placement`, `game:sub_8001aa84`, `game:grid_query_area`, `game:draw_cell_walk`, `game:draw_model_plain`, `game:render_frame`, `game:object_set_present` and 70 more.
 
 `python3 tools/consts.py 0x800` for every site.
 
@@ -196,8 +196,8 @@ In `game:object_interpreter`, `game:actor_tick`, `game:effect_tick`, `game:sub_8
 **FIXED_ONE** -- *read*, from `game:0x800448b8 and every GTE matrix build`  
 The fixed point this game multiplies in: `mult` then `sra` by 12, so 0x1000 is 1.0. An object record is initialised with 0x1000 in its three scale fields (+0x2c, +0x2e, +0x30), and a TMD's scale word is the same.
 
-365 sites: 129 loaded, 124 divisor, 39 argument, 29 mask, 23 bound, 18 multiplier, 3 compared with.
-In `game:sub_80053c84`, `game:player_horizontal`, `game:effect_tick`, `game:object_interpreter`, `game:sub_80076168`, `game:actor_tick`, `game:player_controller`, `game:ScaleMatrix`, `game:apply_control_scheme`, `game:view_matrix_build`, `game:sub_8003d8ec`, `game:sub_8003da10` and 106 more.
+380 sites: 135 loaded, 127 divisor, 39 argument, 30 mask, 27 bound, 19 multiplier, 3 compared with.
+In `game:effect_spawn`, `game:player_horizontal`, `game:object_interpreter`, `game:effect_tick`, `game:sub_80076168`, `game:actor_tick`, `game:player_controller`, `game:ScaleMatrix`, `game:apply_control_scheme`, `game:view_matrix_build`, `game:sub_8003d8ec`, `game:sub_8003da10` and 107 more.
 
 `python3 tools/consts.py 0x1000` for every site.
 
@@ -209,66 +209,66 @@ used sixty times in one routine is that routine's business.
 
 | number | | routines | sites | commonest roles |
 | --- | --- | --- | --- | --- |
-| `0xff` | 255 | 248 | 926 | mask 494, loaded 281, compared with 136 |
-| `0x10` | 16 | 187 | 423 | multiplier 167, mask 106, loaded 66 |
+| `0xff` | 255 | 248 | 939 | mask 500, loaded 287, compared with 137 |
+| `0x10` | 16 | 187 | 432 | multiplier 168, mask 106, loaded 69 |
 | `0xffff` | 65535 | 166 | 393 | mask 326, loaded 44, compared with 18 |
-| `0x20` | 32 | 133 | 219 | multiplier 76, loaded 51, mask 27 |
-| `0x40` | 64 | 103 | 288 | loaded 86, divisor 81, bound 49 |
-| `0x100` | 256 | 99 | 171 | multiplier 47, mask 45, loaded 32 |
-| `0xa0` | 160 | 61 | 73 | loaded 60, argument 10, multiplier 3 |
+| `0x20` | 32 | 133 | 222 | multiplier 76, loaded 53, mask 27 |
+| `0x40` | 64 | 104 | 291 | loaded 86, divisor 81, bound 51 |
+| `0x100` | 256 | 100 | 172 | multiplier 47, mask 46, loaded 32 |
+| `0xa0` | 160 | 61 | 75 | loaded 60, argument 10, multiplier 5 |
 | `0xb0` | 176 | 61 | 64 | loaded 59, compared with 2, argument 2 |
-| `0xfff` | 4095 | 56 | 165 | mask 109, bound 29, loaded 25 |
-| `0x18` | 24 | 55 | 89 | loaded 38, multiplier 29, bound 18 |
-| `0x8000` | 32768 | 54 | 89 | loaded 37, divisor 19, mask 16 |
+| `0xfff` | 4095 | 56 | 167 | mask 109, bound 29, loaded 27 |
+| `0x18` | 24 | 56 | 98 | loaded 39, multiplier 32, bound 23 |
+| `0x8000` | 32768 | 55 | 91 | loaded 39, divisor 19, mask 16 |
 | `0xf0` | 240 | 45 | 168 | loaded 76, bound 64, argument 15 |
 | `0x34` | 52 | 45 | 130 | multiplier 98, loaded 25, compared with 7 |
 | `0x3f` | 63 | 45 | 91 | mask 46, compared with 26, loaded 16 |
-| `0x4000` | 16384 | 44 | 83 | divisor 31, loaded 19, mask 15 |
-| `0x200` | 512 | 42 | 89 | loaded 34, multiplier 17, bound 15 |
-| `0x2000` | 8192 | 39 | 103 | argument 34, loaded 23, bound 18 |
-| `0x3c` | 60 | 38 | 51 | loaded 32, multiplier 10, compared with 7 |
+| `0x4000` | 16384 | 44 | 92 | divisor 40, loaded 19, mask 15 |
+| `0x200` | 512 | 43 | 91 | loaded 35, multiplier 17, bound 15 |
+| `0x2000` | 8192 | 40 | 104 | argument 34, loaded 23, bound 18 |
+| `0x3c` | 60 | 38 | 53 | loaded 32, multiplier 10, compared with 7 |
 | `0x78` | 120 | 36 | 43 | multiplier 18, loaded 16, argument 8 |
-| `0x30` | 48 | 35 | 49 | loaded 19, mask 10, bound 9 |
+| `0x30` | 48 | 35 | 50 | loaded 20, mask 10, bound 9 |
+| `0x64` | 100 | 30 | 66 | loaded 25, argument 16, multiplier 13 |
 | `-0x63` | -99 | 30 | 66 | loaded 58, compared with 8 |
-| `0x64` | 100 | 30 | 60 | loaded 23, argument 16, bound 11 |
 | `0x60` | 96 | 28 | 63 | multiplier 40, loaded 16, argument 3 |
-| `0xc8` | 200 | 28 | 51 | loaded 28, argument 15, bound 7 |
+| `0xc8` | 200 | 28 | 59 | loaded 30, argument 15, bound 7 |
 | `0x140` | 320 | 26 | 54 | loaded 31, argument 20, multiplier 2 |
 | `0xac` | 172 | 26 | 41 | multiplier 41 |
 | `0x14` | 20 | 25 | 67 | loaded 37, multiplier 16, compared with 6 |
-| `0x15` | 21 | 23 | 50 | loaded 20, argument 16, compared with 8 |
-| `0x11` | 17 | 23 | 35 | loaded 21, bound 9, compared with 5 |
+| `0x11` | 17 | 24 | 37 | loaded 21, bound 11, compared with 5 |
+| `0x15` | 21 | 23 | 51 | loaded 20, argument 16, compared with 8 |
 | `0x2c` | 44 | 23 | 26 | loaded 16, compared with 6, multiplier 3 |
-| `0x32` | 50 | 22 | 51 | loaded 36, argument 8, bound 7 |
+| `0x32` | 50 | 22 | 52 | loaded 37, argument 8, bound 7 |
 | `0xc0` | 192 | 22 | 42 | loaded 32, mask 4, bound 3 |
-| `0x63` | 99 | 22 | 39 | loaded 26, compared with 8, bound 4 |
+| `0x63` | 99 | 22 | 41 | loaded 28, compared with 8, bound 4 |
 | `0x1e` | 30 | 22 | 36 | loaded 25, argument 9, compared with 1 |
-| `0x1c` | 28 | 22 | 29 | multiplier 14, loaded 8, argument 4 |
+| `0x1c` | 28 | 22 | 31 | multiplier 14, loaded 10, argument 4 |
 | `0x3fff` | 16383 | 22 | 28 | loaded 12, multiplier 9, mask 4 |
 | `0x16` | 22 | 21 | 55 | loaded 44, argument 7, compared with 3 |
-| `0x19` | 25 | 21 | 30 | loaded 10, bound 9, compared with 6 |
-| `0x12` | 18 | 20 | 32 | loaded 20, compared with 6, bound 3 |
+| `0x19` | 25 | 21 | 32 | loaded 12, bound 9, compared with 6 |
+| `0x12` | 18 | 20 | 34 | loaded 22, compared with 6, bound 3 |
 | `0x1f` | 31 | 20 | 26 | loaded 18, argument 4, mask 2 |
 | `0x70` | 112 | 19 | 21 | loaded 13, compared with 5, argument 3 |
 | `0x81` | 129 | 17 | 44 | multiplier 18, loaded 18, bound 6 |
+| `0x7fff` | 32767 | 17 | 44 | mask 19, multiplier 16, loaded 8 |
 | `0x4c` | 76 | 17 | 20 | loaded 16, multiplier 3, compared with 1 |
 | `0x21` | 33 | 17 | 20 | loaded 11, bound 5, compared with 4 |
 | `0x1b` | 27 | 17 | 20 | compared with 8, argument 6, loaded 4 |
-| `0x7fff` | 32767 | 16 | 40 | multiplier 16, mask 15, loaded 8 |
 | `0x46` | 70 | 16 | 37 | loaded 27, bound 3, argument 3 |
-| `0x28` | 40 | 16 | 24 | loaded 14, multiplier 5, argument 3 |
+| `0x28` | 40 | 16 | 26 | loaded 14, multiplier 5, argument 3 |
 | `0x42` | 66 | 15 | 46 | loaded 40, argument 5, compared with 1 |
-| `0x258` | 600 | 15 | 28 | loaded 15, argument 8, multiplier 4 |
+| `0x258` | 600 | 15 | 32 | loaded 15, argument 8, multiplier 8 |
 | `0x24` | 36 | 15 | 20 | compared with 7, loaded 6, multiplier 2 |
 | `0x5f` | 95 | 15 | 19 | loaded 9, compared with 4, argument 4 |
+| `0x17` | 23 | 15 | 18 | loaded 13, bound 3, compared with 2 |
 | `0xfd` | 253 | 15 | 17 | mask 11, loaded 3, compared with 2 |
 | `0x3e8` | 1000 | 14 | 25 | bound 11, loaded 7, multiplier 5 |
-| `0x17` | 23 | 14 | 17 | loaded 12, bound 3, compared with 2 |
 | `0x1d` | 29 | 14 | 16 | loaded 6, mask 3, bound 3 |
-| `0xfe` | 254 | 13 | 27 | loaded 14, compared with 11, mask 1 |
+| `0xfe` | 254 | 13 | 29 | loaded 14, compared with 13, mask 1 |
+| `0x5c` | 92 | 13 | 28 | multiplier 10, loaded 7, compared with 7 |
+| `0xc000` | 49152 | 13 | 25 | mask 13, loaded 12 |
 | `0xc00` | 3072 | 13 | 23 | loaded 15, argument 5, bound 2 |
-| `0x41` | 65 | 13 | 19 | bound 15, argument 2, compared with 1 |
-| `0x13` | 19 | 13 | 19 | loaded 16, bound 2, compared with 1 |
 
 ## Displacements off a register
 
@@ -278,44 +278,44 @@ routines is the object record's stride showing up as a field.
 
 | offset | loads | stores | routines |
 | --- | --- | --- | --- |
-| `+0x0` | 2080 | 1203 | 521 |
-| `+0x4` | 802 | 342 | 285 |
-| `+0x8` | 387 | 272 | 211 |
-| `+0xc` | 321 | 235 | 153 |
-| `+0x10` | 280 | 216 | 141 |
-| `+0x2` | 305 | 182 | 159 |
-| `+0x6` | 277 | 154 | 138 |
-| `+0x14` | 203 | 121 | 103 |
-| `+0x18` | 197 | 122 | 114 |
-| `+0xe` | 116 | 170 | 91 |
-| `+0x3` | 148 | 130 | 85 |
-| `+0x1c` | 171 | 100 | 87 |
-| `+0x30` | 135 | 93 | 45 |
-| `+0x12` | 143 | 83 | 78 |
-| `+0x38` | 130 | 70 | 41 |
-| `+0x7` | 99 | 99 | 69 |
-| `+0x2c` | 104 | 84 | 63 |
-| `+0x34` | 113 | 72 | 45 |
+| `+0x0` | 2090 | 1233 | 522 |
+| `+0x4` | 807 | 346 | 287 |
+| `+0x8` | 394 | 283 | 212 |
+| `+0xc` | 326 | 235 | 153 |
+| `+0x10` | 284 | 221 | 142 |
+| `+0x2` | 312 | 189 | 159 |
+| `+0x6` | 279 | 155 | 139 |
+| `+0x18` | 206 | 127 | 115 |
+| `+0x14` | 207 | 124 | 104 |
+| `+0xe` | 118 | 171 | 91 |
+| `+0x3` | 148 | 138 | 85 |
+| `+0x1c` | 178 | 105 | 88 |
+| `+0x30` | 140 | 100 | 45 |
+| `+0x12` | 144 | 85 | 79 |
+| `+0x38` | 139 | 81 | 41 |
+| `+0x7` | 99 | 105 | 69 |
+| `+0x2c` | 107 | 86 | 63 |
+| `+0x34` | 118 | 74 | 45 |
+| `+0x28` | 80 | 102 | 47 |
+| `+0x20` | 88 | 86 | 68 |
 | `+0x16` | 92 | 79 | 62 |
-| `+0x20` | 83 | 84 | 67 |
-| `+0x28` | 73 | 90 | 47 |
-| `+0x44` | 78 | 81 | 31 |
-| `+0xa` | 79 | 76 | 73 |
-| `+0xf` | 69 | 74 | 34 |
-| `+0x32` | 75 | 65 | 16 |
+| `+0x44` | 81 | 83 | 31 |
+| `+0xa` | 80 | 76 | 74 |
+| `+0x32` | 79 | 67 | 16 |
+| `+0xf` | 70 | 74 | 34 |
 | `+0x1` | 100 | 37 | 61 |
 | `+0xa8` | 127 | 4 | 9 |
 | `+0x3c` | 95 | 31 | 40 |
-| `+0x3a` | 88 | 29 | 20 |
-| `+0x1e` | 97 | 20 | 33 |
+| `+0x1e` | 102 | 20 | 34 |
+| `+0x3a` | 89 | 29 | 20 |
 | `+0x160` | 112 | 1 | 17 |
 | `+0xd` | 42 | 64 | 34 |
+| `+0x24` | 36 | 68 | 49 |
 | `+0x70` | 31 | 65 | 11 |
-| `+0x24` | 31 | 60 | 48 |
-| `+0x5` | 25 | 62 | 56 |
+| `+0x48` | 47 | 45 | 28 |
+| `+0x5` | 25 | 63 | 56 |
 | `+0x90` | 46 | 40 | 16 |
+| `+0x26` | 49 | 35 | 24 |
 | `+0xb` | 25 | 56 | 36 |
-| `+0x13` | 31 | 50 | 35 |
-| `+0x9` | 31 | 49 | 21 |
-| `+0x2a` | 34 | 46 | 17 |
+| `+0x9` | 31 | 50 | 21 |
 

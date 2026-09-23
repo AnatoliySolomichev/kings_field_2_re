@@ -417,7 +417,7 @@
  "0x8018daa8": {
   "name": "entity_scripts",
   "kind": "data",
-  "evidence": "the per-level script block; record offsets are relocated into pointers into it"
+  "evidence": "entity_table + 0x12c0, the base entity_table_init adds to each of a record's sixteen block offsets"
  },
  "0x8005ea64": {
   "name": "reset_story_flags",
@@ -520,7 +520,7 @@
  "0x80013640": {
   "name": "level_build_opcode_table",
   "kind": "data",
-  "evidence": "16 handler pointers for the level_state stream, opcodes 0xf0..0xff"
+  "evidence": "16 arms, 0xf0..0xff, that apply_level_state dispatches the saved level stream through"
  },
  "0x800448b8": {
   "name": "init_object_record",
@@ -1908,5 +1908,10 @@
   "name": "screen_capture",
   "kind": "code",
   "evidence": "DrawSync, StoreImage and MoveImage around frame_begin_3d, reading draw_buffer_index -- it takes the drawn frame back out of VRAM, which is what a fade or a transition needs"
+ },
+ "0x8005c18c": {
+  "name": "script_find_label",
+  "kind": "code",
+  "evidence": "scans a conversation block from +0x14 for a 0xf2 byte, compares the byte after it against $a1 and returns the pc just past it, giving up at the first 0xff; both script_prescan's guards and the interpreter's 0xf9 arm resolve their target through it"
  }
 }

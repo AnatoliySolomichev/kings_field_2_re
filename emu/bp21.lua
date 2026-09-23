@@ -8,9 +8,11 @@
 -- every entity on a level and `python3 tools/escript.py 0` prints their
 -- scripts, so what this logs can be held against what the script says.
 --
--- `godot/escript.gd` reproduces the control flow of all 1086 scripts in the
--- game **against tools/escript.py**, which is two copies of the same reading
--- agreeing with each other. What neither has is the game. This is that.
+-- This script has been run and it broke the reading it was written to check:
+-- the game fetched `04 05 06 07 08 09 f0 01` for level 0's entity 9 where
+-- `tools/escript.py` had `02 00 ff`. Both copies had been decoding blocks
+-- 1..15 of each entity record, which are not scripts. What it recorded is
+-- kept in `tools/escript.py` as RECORDED and replayed by `escript.py check`.
 --
 -- What it logs:
 --
