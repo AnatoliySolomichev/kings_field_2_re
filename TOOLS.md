@@ -955,6 +955,39 @@ Worth running again for: an NPC with a `f1` guard or an `f9`, so a branch is
 seen taken; and a conversation whose header `+0x12` is not `0xff`, to watch
 the shop or the inn open.
 
+**`bp22.lua`** is the one to run next, and unlike the others it has a
+checklist, because every reading it carries is one nothing has checked.
+
+```
+./emu/run.sh debug bp22.lua
+```
+
+Then, in the game, in this order — each line is a different breakpoint:
+
+1. **Pick something up, open a chest, kill something** — then **walk through a
+   door to another level and come back**. That is what makes
+   `level_state_write` run, and the `STATE` lines are the byte stream this
+   project has read off the encoder and checked against nothing (§11). The
+   `APPLY` line on the way back is the other half of the round trip.
+2. **Open the menu and equip and unequip a few things** — a helm, a shield,
+   a ring. Each `EQUIP` line is a second and third case for
+   `tools/equip.py`, which so far has exactly one. Anything with a flat
+   bonus on it would settle the four bonuses that are read and unchecked.
+3. **Stay at the inn, and buy and sell something.** `SHOP` and `SERVICE`
+   are the arm of `script_interpreter` that runs when a talker's header
+   `+0x12` is not `0xff`, and neither has been seen.
+4. **Talk to an NPC whose dialogue depends on the story** — one who says
+   something different after you have done something. `GUARD` and `IF` are
+   the two branches in the conversation language, 78 of them in the game
+   and none yet seen taken.
+5. **Talk to the people who give you something or open something** — level
+   0's shopkeeper and the man by the graves. `HOOK` is the `0xf4` opcode
+   calling the level's own quest code, sixty of them in the game and none
+   ever seen run.
+
+Nothing needs doing quickly and nothing needs doing twice. The log is
+`out/lua_bp22.log`.
+
 **`bp20.lua`** is the one for everything a player *does*, and it exists because
 five subsystems are read and none of them is checked: the object interpreter,
 the damage roll, the items, the script interpreter and the level load. It arms
