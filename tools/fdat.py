@@ -56,7 +56,7 @@ KNOWN = {
              "bit, +0x16 the MP cost. 95 of the 96 are byte for byte what a "
              "RAM snapshot holds at 0x801b77ec (tools/spells.py)",
     (97, 6): "832 bytes that block 8 indexes -- the counts in that index sum "
-             "to exactly 832 -- copied to 0x801e7edc. flag_gate, "
+             "to exactly 832 -- copied to 0x801e7edc. cutscene_step, "
              "player_controller and level_overlay_tick read into it. What the "
              "sequences hold is not established",
     (97, 8): "an **index into block 6**: 39 records of 4 bytes, `(id, count, "

@@ -117,14 +117,14 @@ def cutscenes():
 
     `0x801e825c` holds a cursor into this table and `build_str_name`
     (a label inside the player at `0x80060d20`) takes the scene number from the
-    byte it points at; `flag_gate` reads the byte after it and treats `0xff` as
+    byte it points at; `cutscene_step` reads the byte after it and treats `0xff` as
     "no gate". The record number *is* the scene number for 3 to 15 -- exactly
     the thirteen files under `/STR` -- so the table is indexed by scene.
 
     **The flag is an "already shown" mark, not a key.** With bit `0x80` clear -- which
     every gate in this table has -- the scene plays while its flag is **clear**
     and stops once the flag is set. Reading it the other way round is easy and
-    wrong, because the answer is in the delay slots: at `flag_gate+0xc4` the
+    wrong, because the answer is in the delay slots: at `cutscene_step+0xc4` the
     branch taken when the flag is set carries `v0 = 2` in its slot and the
     fall-through carries `v0 = 0x10`, and 2 is what makes the machinery go on.
     The one case with independent evidence settles it: `game_main` sets flag 9

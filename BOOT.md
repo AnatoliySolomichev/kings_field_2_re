@@ -303,7 +303,7 @@ game_main
     |-- 0x800341e8, 0x80034180, 0x80047010
     |-- player_controller      the pad, and everything the player does
     |-- actor_tick_driver      the monsters
-    |-- 0x8005bc50, level_load, flag_gate, 0x8002b330, 0x800156bc
+    |-- 0x8005bc50, level_load, cutscene_step, 0x8002b330, 0x800156bc
     |-- 0x80034300, 0x80018cd0, 0x80015a48, 0x800422b8
     `-- round again
 ```

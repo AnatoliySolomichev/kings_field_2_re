@@ -35,7 +35,7 @@ import overlay as ov                                                 # noqa: E40
 import syms                                                          # noqa: E402
 
 STORY_FLAGS = 0x801BA988
-# 128, not 64: flag_gate masks the gate byte with 0x7f and the cutscene table
+# 128, not 64: cutscene_step masks the gate byte with 0x7f and the cutscene table
 # uses indices up to 126. See FORMATS.md, "Where that list lives".
 FLAG_COUNT = 0x80
 
@@ -46,7 +46,7 @@ CALLS.update({
     0x8005DB30: "spawn_at_player", 0x80046884: "object_op_46884",
     0x800445B8: "object_op_445b8", 0x8002BDC0: "world_op_2bdc0",
     0x80045C7C: "find_object", 0x800796C0: "rand",
-    0x80061940: "flag_gate", 0x8005D5F8: "load_area_name",
+    0x80061940: "cutscene_step", 0x8005D5F8: "load_area_name",
     0x8005DCC0: "award_gold", 0x80017C78: "object_trigger",
     0x8005E01C: "pickup_gives_type_id", 0x8005D898: "give_item",
 })

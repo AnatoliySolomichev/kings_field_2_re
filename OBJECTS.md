@@ -243,6 +243,7 @@ the same boundary `model_of_type` changes its mind at.
   0x8004a9a8  opcode 0xe4   -- 9 objects in the game
       46 instructions in 11 blocks
       calls player_in_rect
+      points at cutscene_number, reads cutscene_number, writes cutscene_phase, writes cutscene_number, reads cutscene_phase
 
   0x8004b4d0  opcodes 0xe5, 0xe9   -- 61 objects in the game
       49 instructions in 6 blocks

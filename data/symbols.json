@@ -432,10 +432,9 @@
   "size": 288
  },
  "0x80061940": {
-  "name": "flag_gate",
+  "name": "cutscene_step",
   "kind": "code",
-  "evidence": "tests story_flags[b & 0x7f], bit 0x80 picks which of two checks; returns 2 or 0x10",
-  "size": 644
+  "evidence": "game_main and player_controller call it once a frame. It takes the scene number at [0x801e8260], 0xff meaning none, resolves the 52-byte record in seq_data at 0x801e7edc and leaves the pointer at [0x801e825c], then dispatches [0x801e824c] through a **17-arm table at 0x800136a0** -- the scene's phase. Testing story_flags[b & 0x7f] is one of those phases, not the routine: it was named flag_gate for that one branch while 53 of its instructions, everything after its indirect call, were outside the walk"
  },
  "0x8001a774": {
   "name": "pause_menu",
@@ -2053,5 +2052,25 @@
   "name": "ui_prompt",
   "kind": "code",
   "evidence": "thirteen callers; its own frame_begin/frame_end loop around one ui_panel with pad_read_latch and pad_wait_release -- a modal question"
+ },
+ "0x801e824c": {
+  "name": "cutscene_phase",
+  "kind": "data",
+  "evidence": "a 17-arm state machine cutscene_step dispatches on; game_main, player_controller, object_interpreter, script_interpreter’s service arm 0x40 and cutscene_step itself all write it"
+ },
+ "0x801e824e": {
+  "name": "cutscene_pending",
+  "kind": "data",
+  "evidence": "set to 1 alongside cutscene_phase; when it is 1, cutscene_step calls level_hooks entry 7"
+ },
+ "0x801e8260": {
+  "name": "cutscene_number",
+  "kind": "data",
+  "evidence": "the scene, 0xff for none; cutscene_step multiplies it by 52 into seq_data. script_interpreter’s service arm 0x40 writes `n & 3` here, so a conversation can start one"
+ },
+ "0x801e825c": {
+  "name": "cutscene_record",
+  "kind": "data",
+  "evidence": "the pointer into seq_data cutscene_step leaves for the rest of the machine"
  }
 }

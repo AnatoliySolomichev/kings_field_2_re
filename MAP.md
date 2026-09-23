@@ -228,7 +228,7 @@ the pad, the turn, the walk and the height.
 | `0x800285dc` | 12 | 1 | sub_800285dc |  |
 | `0x80027a70` | 11 | 7 | sub_80027a70 | calls PadRead |
 | `0x80030af8` | 11 | 1 | sub_80030af8 | points at player_state, reads player_state, writes player_state, writes player_velocity |
-| `0x80061918` | 10 | 4 | sub_80061918 |  |
+| `0x80061918` | 10 | 4 | sub_80061918 | writes cutscene_pending, writes cutscene_phase, writes cutscene_number |
 | `0x8007ddbc` | 10 | 8 | sub_8007ddbc |  |
 | `0x8007311c` | 10 | 5 | cue_sound |  |
 | `0x80067acc` | 10 | 5 | sub_80067acc |  |
@@ -700,7 +700,7 @@ the level's own code, and the fades; the seven-state load.
 | `0x8005c864` | 223 | 3 | sub_8005c864 | calls actors_retire_marked, level_load, object_trigger, player_recalc_stats and 1 more; points at script_opcode_table, r |
 | `0x8005f444` | 222 | 1 | apply_level_state | calls level_state_unpack, init_object_record, rand, select_cell_layer; points at actor_table, points at entity_table, po |
 | `0x8006f14c` | 207 | 1 | sub_8006f14c | calls bios_printf |
-| `0x8005eb20` | 206 | 1 | level_overlay_tick | calls res_wait, level_load, object_trigger, MoveImage and 2 more; reads level_hooks, points at draw_buffer_index, reads  |
+| `0x8005eb20` | 206 | 1 | level_overlay_tick | calls res_wait, level_load, object_trigger, MoveImage and 2 more; reads level_hooks, points at cutscene_number, writes c |
 | `0x80015ce0` | 142 | 6 | sub_80015ce0 | calls file_checksum |
 | `0x800530f8` | 119 | 1 | actor_table_build | calls actor_copy_kind, actor_stand_at_home; points at actor_table, writes actor_table, reads actor_table, points at enti |
 | `0x80017aa4` | 117 | 1 | world_shift | points at effect_slots, points at player_pos, reads player_pos, writes player_pos |
@@ -854,17 +854,17 @@ the story flags.
 
 | address | instructions | callers | name | what it touches |
 | --- | --- | --- | --- | --- |
-| `0x80060d20` | 401 | 2 | sub_80060d20 | calls res_wait, clear_movement_state, DrawSync, EnterCriticalSection and 2 more; reads current_level_block |
+| `0x80060d20` | 401 | 2 | sub_80060d20 | calls res_wait, clear_movement_state, DrawSync, EnterCriticalSection and 2 more; reads current_level_block, reads cutsce |
 | `0x80073988` | 205 | 1 | sub_80073988 |  |
 | `0x800648cc` | 186 | 3 | sub_800648cc | calls cd_read_directory, bios_printf |
 | `0x80064f78` | 175 | 1 | sub_80064f78 | calls bios_printf |
-| `0x80061940` | 161 | 2 | flag_gate | calls MoveImage, DrawSync; points at seq_data, reads level_hooks, points at draw_buffer_index, reads draw_buffer_index |
+| `0x80061940` | 161 | 2 | cutscene_step | calls MoveImage, DrawSync; points at cutscene_number, reads cutscene_number, reads cutscene_phase, points at seq_data |
 | `0x80071bb4` | 106 | 1 | sub_80071bb4 |  |
 | `0x80061364` | 92 | 1 | sub_80061364 | points at draw_buffer_index, reads draw_buffer_index |
 | `0x80062084` | 85 | 1 | sub_80062084 | calls CD_sync, CD_cw |
 | `0x80062304` | 65 | 2 | sub_80062304 |  |
 | `0x80065efc` | 49 | 1 | sub_80065efc |  |
-| `0x800616dc` | 48 | 1 | sub_800616dc |  |
+| `0x800616dc` | 48 | 1 | sub_800616dc | reads cutscene_record, writes cutscene_pending |
 | `0x80066028` | 47 | 2 | sub_80066028 |  |
 | `0x80064ecc` | 43 | 1 | sub_80064ecc |  |
 | `0x800647b0` | 37 | 1 | sub_800647b0 |  |
@@ -873,7 +873,7 @@ the story flags.
 | `0x80064844` | 34 | 1 | sub_80064844 |  |
 | `0x80061894` | 33 | 1 | sub_80061894 | calls DrawSync, VSync, PutDispEnv, PutDrawEnv and 1 more; points at draw_buffer_index, reads draw_buffer_index, points a |
 | `0x80073334` | 31 | 1 | sub_80073334 |  |
-| `0x800614d4` | 31 | 1 | sub_800614d4 | calls EnterCriticalSection, ExitCriticalSection; points at fdat_load_buffer |
+| `0x800614d4` | 31 | 1 | sub_800614d4 | calls EnterCriticalSection, ExitCriticalSection; writes cutscene_pending, points at fdat_load_buffer |
 | `0x80065234` | 27 | 2 | sub_80065234 |  |
 | `0x80065e9c` | 24 | 1 | sub_80065e9c |  |
 | `0x80030810` | 21 | 1 | sub_80030810 | writes player_state, writes player_velocity, points at player_pitch, reads player_pitch |

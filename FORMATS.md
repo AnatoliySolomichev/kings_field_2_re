@@ -746,7 +746,7 @@ It has exactly two callers:
 
 | caller | when |
 | --- | --- |
-| `flag_gate` (`0x80061a90`) | the story flags decide — which is how the rest of the game's thirteen cutscenes are reached |
+| `cutscene_step` (`0x80061a90`) | the story flags decide — which is how the rest of the game's thirteen cutscenes are reached |
 | `0x80061bc4`, a bare wrapper, from `game_main` at `0x80014e74` | guarded by `bne $s1, 1` — and `$s1` is the new-game flag, set when `read_overlay_arg2` returns −1 |
 
 So the opening plays on a new game and not on a loaded save, from `game_main`'s
@@ -756,7 +756,7 @@ own init block, a few instructions after `place_player_on_terrain`.
 
 `0x801e825c` holds a **cursor**, and `build_str_name` takes the scene number
 from the byte it points at. In a level 0 snapshot the cursor is `0x801e7f78`
-and the bytes there are `3, 9, 31, 3, 0xff`. `flag_gate` reads the *second*
+and the bytes there are `3, 9, 31, 3, 0xff`. `cutscene_step` reads the *second*
 byte of each entry, so the list is **pairs**, terminated by `0xff`:
 
 ```
@@ -802,7 +802,7 @@ name themselves and there is no `S00`–`S02` on the disc.
 **Withdrawn: the flag is not a key, it is an "already shown" mark.** This
 document said bit `0x80` meant "skipped once that is set", and I told a player
 that level 13's overlay *unlocks* `S04`. Both are backwards, and the answer is
-in the delay slots. At `flag_gate+0xc4` the branch taken when the flag is set
+in the delay slots. At `cutscene_step+0xc4` the branch taken when the flag is set
 carries `v0 = 2` in its slot while the fall-through carries `v0 = 0x10`, and
 the routine stores whichever it ends with into the state word at `0x801e824c`:
 **2 goes on to the scene, `0x10` does not.** So
@@ -838,7 +838,7 @@ scenes" was, and it is what the code actually says.
 record are not. Reading them as further scene-and-flag pairs gives scene
 numbers like 158 and 252 that no file answers to, so they are left alone.
 
-**A correction that follows from it:** these indices reach 126, and `flag_gate`
+**A correction that follows from it:** these indices reach 126, and `cutscene_step`
 masks the byte with `0x7f`. So `story_flags` runs to **128 entries**, not the
 64 this document and `tools/story.py flags` assumed — `reset_story_flags`
 clearing "0x40 bytes and more at +0x100" fits that better than it fits 64.
@@ -1541,7 +1541,7 @@ back to `OPEN.EXE`, 3 and 4 both go to `END.EXE` with `overlay_arg` 2 and 3.
 | 7 | `spawn_anywhere = 0` | `0x801b24f2`, cleared every frame |
 | 8 | `level_overlay_tick` | `0x8005eb20` — the level's own code, through `[0x8018fae0]+4` |
 | 9 | `level_load` | `0x80018358` — acts only when a transition is pending |
-| 10 | `flag_gate` | `0x80061940` |
+| 10 | `cutscene_step` | `0x80061940` |
 | 11 | `camera_pose` | `0x8002b330` — the eye and the three view angles |
 | 12 | `audio_listener_set` | `0x800156bc` — the same pose, for 3D sound |
 | 13 | `light_table_step` | `0x80034300` — the interpolation that moves torchlight |
@@ -2715,7 +2715,7 @@ Every piece of code that reaches `0x801ba988`, and what it does there:
 | `reset_story_flags` | zeroes `0x40` bytes at the base and more at `+0x100`; called at new game |
 | `save_serialise+0x4d8` | copies the array **out** to the save buffer |
 | `save_restore+0x4e4` | copies it back **in** |
-| `flag_gate+0xb4`, `flag_gate+0xd8` | tests `flags[b & 0x7f]`, bit `0x80` picking which of two checks, returning 2 or 0x10 |
+| `cutscene_step+0xb4`, `cutscene_step+0xd8` | tests `flags[b & 0x7f]`, bit `0x80` picking which of two checks, returning 2 or 0x10 |
 
 Three things follow. The array is **saved and restored** — the serialiser pair
 moves it to and from the save buffer — so it is persistent game state, not per-level
