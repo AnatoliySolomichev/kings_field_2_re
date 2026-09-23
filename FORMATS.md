@@ -2799,6 +2799,28 @@ why `out/story.txt` is now full of English.
 
 `FDAT.T` entry `3n + 1` is where the conversations are after all.
 
+### A quest, end to end
+
+Both ends of a quest are now legible and `python3 tools/story.py quests`
+prints them together. **43 story flags are read by a conversation, 26 are
+written by a conversation hook, and 15 are both** — those fifteen are the
+quest steps.
+
+Level 0's is the plainest. Entity 10 calls `f4 0`, which asks whether the
+player holds items 2, 130, 131 and 132 and writes the answer into
+`story_flags[3]`; the same entity's guard at pc 31 reads `story_flags[3] == 1`
+and starts the conversation somewhere else when it does. Then `f4 1`, which
+asks the same four questions, sets `story_flags[1]`, takes all four items and
+unequips the sword if it was one of them.
+
+Level 2's entity 7 is the elaborate one: **eight guards on `story_flags[16]`**,
+against 1, 2, 3, 4, 104, 107, 108 and 109, and the level's hook writes 104,
+107, 108 and 109 from four of its arms. One NPC with eight things to say
+depending on how far along you are.
+
+A flag a hook writes and no conversation reads is not a quest step — it is
+read by native code, or by nothing.
+
 ### The `0x8001dxxx` cluster is the pause menu, not the conversations
 
 The two routines that load `STALK.T` with a literal archive index turned out to

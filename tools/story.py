@@ -5,6 +5,7 @@
     python3 tools/story.py 0             one level, on screen
     python3 tools/story.py flags         each story flag, with what sets and tests it
     python3 tools/story.py cutscenes     the thirteen cutscenes and the flag each waits on
+    python3 tools/story.py quests        each flag a conversation reads, and what sets it
 
 Two things had to be right before any of this could be read, both off
 `script_interpreter` (`0x8005c308`):
@@ -15,7 +16,7 @@ Two things had to be right before any of this could be read, both off
     `TALK.T[base + opcode]`. The `0x2b` comparison nearby gates neither: it
     skips a call to `0x800608ec` and the fetch sits past its branch target.
 
-**43 of the game's 265 entities talk**, and between them they say 733 lines.
+**43 of the game's 265 entities talk**, and between them they say 594 lines.
 This file prints them in the order the game says them: an entity gives one
 section per visit and repeats its last line until you go and speak to somebody
 else, which is what `escript.visits` works out.
@@ -110,6 +111,56 @@ def flag_writers():
                     n = int(st[1][12:st[1].index("]")])
                     out[n].append((lv, st[2]))
     return out
+
+
+def quests(out=sys.stdout):
+    """The chain a quest is made of: a hook writes a flag, a talker reads it.
+
+    Both ends are now legible, so this puts them side by side. The writing end
+    is `tools/quest.py` -- entry 4 of a level's overlay, the thing the `0xf4`
+    opcode calls, one arm per argument. The reading end is a conversation's
+    `f1` guards and its `f9`, which choose what an entity says. The condition
+    on a write is worked out by dominance, the same way `flags()` does it.
+
+    Only the flags that *both* sides touch are printed. A flag a hook writes
+    and nothing reads is either read by native code this does not follow or
+    read by nothing, and either way it is not a quest step.
+    """
+    import decomp
+    import quest
+    tests = escript.flag_graph()
+    wrote = collections.defaultdict(list)
+    for lv in range(28):
+        hook, ar = quest.arms(lv)
+        if not ar:
+            continue
+        r = decomp.Reader(lv)
+        for n, a in sorted(ar.items()):
+            stmts = quest.body(r, a, set(ar.values()))
+            for idx, (at, st) in enumerate(stmts):
+                if st[0] != "store" or not str(st[1]).startswith("story_flags["):
+                    continue
+                f = int(str(st[1])[12:str(st[1]).index("]")])
+                guards = []
+                for _b, prev in stmts[:idx]:
+                    if prev[0] == "branch" and prev[4] > at and prev[5] is not None:
+                        c = decomp.cond_of(prev, negate=True)
+                        if c not in guards:
+                            guards.append(c)
+                wrote[f].append((lv, n, st[2], guards))
+    both = sorted(set(tests) & set(wrote))
+    print(f"{len(tests)} story flags are read by a conversation and {len(wrote)} "
+          f"are written by a conversation hook; {len(both)} are both, and those "
+          f"are the quest steps.\n", file=out)
+    for f in both:
+        print(f"story_flags[{f}]", file=out)
+        for lv, n, v, guards in wrote[f]:
+            when = " when " + " && ".join(guards) if guards else ""
+            print(f"   level {lv:2d} hook arm {n}: = {v}{when}", file=out)
+        for lv, k, v, where in tests[f]:
+            print(f"   read by level {lv:2d} entity {k} == {v} ({where})", file=out)
+        print(file=out)
+    return len(both)
 
 
 def cutscenes():
@@ -262,6 +313,8 @@ if __name__ == "__main__":
     arg = sys.argv[1] if len(sys.argv) > 1 else "all"
     if arg == "flags":
         flags()
+    elif arg == "quests":
+        quests()
     elif arg == "cutscenes":
         cutscenes()
     elif arg == "all":
