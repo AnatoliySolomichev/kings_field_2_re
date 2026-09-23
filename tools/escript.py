@@ -417,9 +417,11 @@ def export(out_dir, levels=range(28)):
     return path
 
 
-# What emu/bp21.lua recorded while the game was played on 2026-09-22: the
-# instruction stream of two real conversations, pc and opcode as
-# `script_interpreter` fetched them, and the TALK.T entry each line loaded.
+# What emu/bp21.lua recorded while the game was played on 2026-09-22 and
+# 2026-09-23: the instruction stream of four real conversations, pc and opcode
+# as `script_interpreter` fetched them, and the TALK.T entry each line loaded.
+# Four of level 0's six talkers, three of them from a standing start and one
+# (entity 9) run round its section break five times.
 RECORDED = [
     {"level": 0, "entity": 9, "cell": (62, 5),
      "trace": [(1, 0x04), (2, 0x05), (3, 0x06), (4, 0x07), (5, 0x08), (6, 0x09),
@@ -428,6 +430,12 @@ RECORDED = [
      "talk": [680, 681, 682, 683, 684, 685, 685, 685, 685, 685]},
     {"level": 0, "entity": 7, "cell": (28, 60),
      "trace": [(1, 0x00)], "talk": [124]},
+    {"level": 0, "entity": 8, "cell": (47, 64),
+     "trace": [(1, 0x00), (2, 0x01), (3, 0x02), (4, 0x03), (5, 0x04),
+               (6, 0xF0), (5, 0x04), (6, 0xF0), (5, 0x04)],
+     "talk": [292, 293, 294, 295, 296, 296, 296]},
+    {"level": 0, "entity": 6, "cell": (47, 50),
+     "trace": [(1, 0x00)], "talk": [0]},
 ]
 
 

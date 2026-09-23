@@ -308,8 +308,8 @@ somebody else — which `visits()` models.
 order of execution and not the waiting. There are **43 conversations in the
 game**, one per entity that talks, holding 733 lines. `godot/escript.gd` is
 the same machine and `selftest.gd` holds the two together — **43 of 43** —
-and then holds both against the recording: **15 of 15** steps that
-`emu/bp21.lua` watched the game run.
+and then holds both against the recording: **25 of 25** steps that
+`emu/bp21.lua` watched the game run, over four of level 0's six talkers.
 
 **Withdrawn:** "1086 scripts in the game, 870 reach an `end`, 1086 of 1086
 agree." Those were not scripts; each entity record has sixteen block pointers
