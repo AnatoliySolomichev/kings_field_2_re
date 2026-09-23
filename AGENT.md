@@ -236,8 +236,8 @@ conversation.** It logs every opcode `script_interpreter` runs, and what it
 logged did not match what this project had read: the game fetched
 `04 05 06 07 08 09 f0 01` where `tools/escript.py` had `02 00 ff`. The whole
 "1086 scripts" corpus was blocks 1..15 of each entity record, which are not
-scripts. There are 43 conversations. The recording is now the anchor — 26 of
-26 steps and lines in Python, 15 of 15 in the port — and it is the pattern to
+scripts. There are 43 conversations. The recording is now the anchor — 44 of
+44 steps and lines in Python over four conversations, 25 of 25 in the port — and it is the pattern to
 repeat: **a check between two of my own readings is worth almost nothing.**
 
 Still unrun on that script: `cast_spell` and `skill_unlock`, a conversation
