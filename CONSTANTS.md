@@ -211,7 +211,7 @@ used sixty times in one routine is that routine's business.
 | --- | --- | --- | --- | --- |
 | `0xff` | 255 | 248 | 939 | mask 500, loaded 287, compared with 137 |
 | `0x10` | 16 | 187 | 432 | multiplier 168, mask 106, loaded 69 |
-| `0xffff` | 65535 | 166 | 393 | mask 326, loaded 44, compared with 18 |
+| `0xffff` | 65535 | 165 | 393 | mask 326, loaded 44, compared with 18 |
 | `0x20` | 32 | 133 | 222 | multiplier 76, loaded 53, mask 27 |
 | `0x40` | 64 | 104 | 291 | loaded 86, divisor 81, bound 51 |
 | `0x100` | 256 | 100 | 172 | multiplier 47, mask 46, loaded 32 |

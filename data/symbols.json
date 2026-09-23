@@ -2008,5 +2008,50 @@
   "name": "actor_behaviour",
   "kind": "code",
   "evidence": "a 133-arm switch under 0x8004bf1c using vec_angle and facing_test five times each against player_pos and rand once -- an actor deciding what to do, keyed the way actor_animation_effects is keyed"
+ },
+ "0x80017158": {
+  "name": "fixed_madd",
+  "kind": "code",
+  "evidence": "six instructions, twelve callers: $a0 + (($a1 * $a2) >> 12) -- a multiply-accumulate in the 1.12 fixed point the whole engine uses"
+ },
+ "0x80019ab4": {
+  "name": "res_wait",
+  "kind": "code",
+  "evidence": "spins on 0x80019538 until res_request equals [0x801c1724] and the byte it points at is zero -- waiting for the resource queue to drain. Fifteen callers"
+ },
+ "0x80015790": {
+  "name": "sound_play",
+  "kind": "code",
+  "evidence": "sound_play_3d and ui_sound both call it; reads the equipment byte 0x801b25db and takes (cue, a, b, c)"
+ },
+ "0x8007910c": {
+  "name": "VSync",
+  "kind": "code",
+  "evidence": "reads the GPU status port 0x1f801814 and root counter 1 at 0x1f801110 and subtracts a stored base -- the PSY-Q VSync. Twenty-eight callers"
+ },
+ "0x80079670": {
+  "name": "bios_printf",
+  "kind": "code",
+  "evidence": "li $t2, 0xa0 / jr $t2 / li $t1, 0x3f -- the A0 table call 0x3f, the BIOS printf. Twenty-three callers"
+ },
+ "0x800795c0": {
+  "name": "ExitCriticalSection",
+  "kind": "code",
+  "evidence": "li $a0, 2 / syscall -- syscall 2. Eighteen callers"
+ },
+ "0x80079310": {
+  "name": "EnterCriticalSection",
+  "kind": "code",
+  "evidence": "li $a0, 1 / syscall -- syscall 1. Sixteen callers"
+ },
+ "0x8002792c": {
+  "name": "ui_sound",
+  "kind": "code",
+  "evidence": "thirty-two callers, every one of them a menu: takes a small mode in $a0, calls sound_play(9, ...) with cue 0x38 for modes 0xc, 0xd and 0xe and 0x48 for mode 9, and waits two VSyncs for the latter -- the noises a menu makes"
+ },
+ "0x80024c70": {
+  "name": "ui_prompt",
+  "kind": "code",
+  "evidence": "thirteen callers; its own frame_begin/frame_end loop around one ui_panel with pad_read_latch and pad_wait_release -- a modal question"
  }
 }

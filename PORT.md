@@ -100,15 +100,15 @@ load-bearing whatever its size.
 
 | callers | instructions | address | name |
 | --- | --- | --- | --- |
-| 32 | 30 | `0x8002792c` | sub_8002792c |
+| 32 | 30 | `0x8002792c` | ui_sound |
 | 16 | 431 | `0x80025468` | ui_panel |
 | 15 | 316 | `0x800222fc` | ui_menu_chrome |
 | 15 | 40 | `0x80027688` | sub_80027688 |
-| 15 | 26 | `0x80019ab4` | sub_80019ab4 |
+| 15 | 26 | `0x80019ab4` | res_wait |
 | 14 | 39 | `0x80027494` | ui_prim_quad |
 | 14 | 32 | `0x80027414` | ui_prim_begin |
 | 14 | 12 | `0x80027530` | ui_prim_add |
-| 13 | 198 | `0x80024c70` | sub_80024c70 |
+| 13 | 198 | `0x80024c70` | ui_prompt |
 | 13 | 137 | `0x80026570` | sub_80026570 |
 | 13 | 100 | `0x800261dc` | sub_800261dc |
 | 13 | 82 | `0x80061e00` | sub_80061e00 |

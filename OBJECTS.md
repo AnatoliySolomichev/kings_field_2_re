@@ -134,7 +134,7 @@ the same boundary `model_of_type` changes its mind at.
 
   0x8004847c  opcode 0x17   -- 19 objects in the game
       208 instructions in 36 blocks
-      calls sub_80044900, sub_800168a8, sub_80017158, object_sound
+      calls sub_80044900, sub_800168a8, fixed_madd, object_sound
       points at object_table
 
   0x8004aeb8  opcode 0x18   -- 14 objects in the game
@@ -255,7 +255,7 @@ the same boundary `model_of_type` changes its mind at.
 
   0x8004a120  opcode 0xe7
       115 instructions in 19 blocks
-      calls player_in_rect, sub_80046c00, grid_query_area, place_player_on_terrain, sub_80019ab4, sub_8003d624
+      calls player_in_rect, sub_80046c00, grid_query_area, place_player_on_terrain, res_wait, sub_8003d624
       reads player_pos, writes player_pos, writes player_facing, reads player_facing
 
   0x8004a66c  opcode 0xe8
@@ -270,7 +270,7 @@ the same boundary `model_of_type` changes its mind at.
 
   0x8004a2e0  opcode 0xeb
       182 instructions in 35 blocks
-      calls player_in_rect, sub_80046c00, actors_retire_marked, sub_80019538, level_load, object_trigger, sub_80019ab4
+      calls player_in_rect, sub_80046c00, actors_retire_marked, sub_80019538, level_load, object_trigger, res_wait
       reads current_level_block, writes player_state, points at player_pitch, reads player_pitch, writes player_pos, writes player_y
 ```
 
