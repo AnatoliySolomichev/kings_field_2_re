@@ -1933,5 +1933,50 @@
   "name": "object_save_class_table",
   "kind": "data",
   "evidence": "233 arms keyed by object_type_table[type].byte0, choosing what level_state_write records about an object slot: 200 write 0xfe and nothing else, 25 write 0xfd and the state byte"
+ },
+ "0x800227ec": {
+  "name": "ui_status_page",
+  "kind": "code",
+  "evidence": "709 instructions under pause_menu that read player_exp, player_level, player_hp and _max, player_mp and _max, player_stat_effective and player_gold and hand them to ui_prim_begin/quad/add -- the status page"
+ },
+ "0x80023300": {
+  "name": "ui_ratings_page",
+  "kind": "code",
+  "evidence": "634 instructions under 0x8001d8a4 reading offense_ratings and defense_ratings, the sixteen numbers player_recalc_stats leaves -- the page that shows what your gear is worth"
+ },
+ "0x8004f414": {
+  "name": "actor_animation_effects",
+  "kind": "code",
+  "evidence": "a 130-arm switch on its first argument, which actor_tick passes as actor[+0x0c] -- the animation. The arms spawn effect kinds 0x81 and 0x83, wake actors and cue sound, so this is what an animation throws at the world. actor_set_animation is what writes the byte it keys on"
+ },
+ "0x8005c0d4": {
+  "name": "actor_set_animation",
+  "kind": "code",
+  "evidence": "writes actor[+0x0c] = $a1 and actor[+0x18] = $a2, working an arc out of the extra stack argument; script_interpreter calls it twice around a line of dialogue and actor_animation_effects dispatches on the byte it writes"
+ },
+ "0x80038844": {
+  "name": "model_prims_lit",
+  "kind": "code",
+  "evidence": "draw_model_lit's primitive walker: NCLIP/NCDS/NCDT over a TMD, emitting the full set of GPU codes 0x20..0x3c"
+ },
+ "0x80039d50": {
+  "name": "tile_prims",
+  "kind": "code",
+  "evidence": "draw_tile's primitive walker, the only one that uses DPCS (7 of them) alongside NCCS and NCDS"
+ },
+ "0x80037bec": {
+  "name": "model_prims_semi",
+  "kind": "code",
+  "evidence": "one of draw_model_plain’s three primitive walkers, chosen by the draw-mode flags; the only one of the five that emits the semi-transparent GPU codes 0x26 and 0x2e, and the only one given flags & 3 as an argument"
+ },
+ "0x80035ca4": {
+  "name": "model_prims",
+  "kind": "code",
+  "evidence": "the primitive walker four drawers share -- draw_model_cell_lit, draw_held_item, draw_model_plain and 0x8004290c -- taking (model, colour)"
+ },
+ "0x800366a8": {
+  "name": "model_prims_flag40",
+  "kind": "code",
+  "evidence": "draw_model_plain’s primitive walker for draw-mode bit 0x40, taking only the model; it holds two of every GPU code where the others hold one, so it walks the primitives twice. Why, is not settled"
  }
 }
