@@ -184,10 +184,15 @@ func _damage() -> bool:
 	return bad_d == 0
 
 
-# Every entity script in the game, through both copies of the interpreter. What
-# is compared is where each one stopped, why, how many steps it took and which
-# flags it left -- the part that does not depend on the text, the animation or
-# anyone pressing a button.
+# Every conversation in the game, through both copies of the interpreter, and
+# then the two the emulator recorded in play. What is compared is the order of
+# execution -- where it stopped, why, how many steps, which TALK.T entries it
+# asked for and what it hands out on each visit -- the part that does not
+# depend on the text, the animation or anyone pressing a button.
+#
+# The recorded pair is the one that counts. Two copies of one reading agreeing
+# with each other is what this check used to be, and it agreed 1086 times
+# about bytes that were not scripts at all.
 func _scripts() -> bool:
 	if not FileAccess.file_exists("res://escript.json"):
 		print("scripts: no cases to check against")
@@ -198,28 +203,62 @@ func _scripts() -> bool:
 		print("scripts: escript.json is not a dictionary")
 		return false
 	var rows: Array = d.get("scripts", [])
+	var by_key := {}
 	var bad_s := 0
 	for r in rows:
 		var code := PackedByteArray()
 		for b in r["code"]:
 			code.append(int(b))
+		by_key[[int(r["level"]), int(r["entity"])]] = code
 		var got := KFScript.run(code)
-		var flags: Array = []
-		for i in range(got["flags"].size()):
-			if int(got["flags"][i]) != 0:
-				flags.append(i)
 		var last: int = int(got["trace"][-1][0]) if got["trace"].size() else -1
+		var talk: Array = []
+		for op in got["said"]:
+			talk.append(int(r["header"]["talk"]) + int(op))
+		var vis: Array = []
+		for v in KFScript.visits(code):
+			var one: Array = []
+			for op in v:
+				one.append(int(r["header"]["talk"]) + int(op))
+			vis.append(one)
+		var want_talk: Array = []
+		for v in r["talk"]:
+			want_talk.append(int(v))
+		var want_vis: Array = []
+		for v in r["visits"]:
+			var one: Array = []
+			for op in v:
+				one.append(int(op))
+			want_vis.append(one)
 		if got["why"] != r["why"] or got["trace"].size() != int(r["steps"]) \
-				or last != int(r["last"]) or flags != Array(r["flags"]):
+				or last != int(r["last"]) or talk != want_talk \
+				or vis != want_vis:
 			bad_s += 1
 			if bad_s == 1:
-				print("  script level %d entity %d at %d: godot %s/%d/%d, python %s/%d/%d" % [
-					int(r["level"]), int(r["entity"]), int(r["at"]),
+				print("  conversation level %d entity %d: godot %s/%d/%d, python %s/%d/%d" % [
+					int(r["level"]), int(r["entity"]),
 					got["why"], got["trace"].size(), last,
 					r["why"], int(r["steps"]), int(r["last"])])
-	print("scripts: %d of %d run the same as tools/escript.py" % [
+	print("conversations: %d of %d run the same as tools/escript.py" % [
 		rows.size() - bad_s, rows.size()])
-	return bad_s == 0
+
+	# and against what the game itself did, which is the only claim that is
+	# not this project agreeing with itself
+	var rec: Array = d.get("recorded", [])
+	var ok := 0
+	var want := 0
+	for r in rec:
+		var code: PackedByteArray = by_key.get(
+			[int(r["level"]), int(r["entity"])], PackedByteArray())
+		var got := KFScript.run(code, [], int(r["trace"].size()), false)
+		for n in range(r["trace"].size()):
+			want += 1
+			if n < got["trace"].size() \
+					and int(got["trace"][n][0]) == int(r["trace"][n][0]) \
+					and int(got["trace"][n][1]) == int(r["trace"][n][1]):
+				ok += 1
+	print("conversations: %d of %d steps emu/bp21.lua recorded in play" % [ok, want])
+	return bad_s == 0 and ok == want
 
 
 # The game's arctangent, against the same directions tools/movement.py put

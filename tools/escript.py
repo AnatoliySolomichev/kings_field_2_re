@@ -395,20 +395,25 @@ def flag_graph():
 
 
 def export(out_dir, levels=range(28)):
-    """Every conversation in the game, and the trace `run` makes of it."""
+    """Every conversation in the game, the trace `run` makes of it, and what
+    `visits` says it hands out on each visit. The longest is 226 bytes, so
+    nothing is truncated: the port gets the whole block.
+    """
     rows = []
     for lv, k, rec, h, code in conversations(levels):
         trace, talk, why = run(code)
         rows.append({"level": lv, "entity": k, "kind": rec[0], "header": h,
-                     "code": list(code)[:256], "steps": len(trace), "why": why,
-                     "talk": [h["talk"] + t for t in talk][:64],
+                     "code": list(code), "steps": len(trace), "why": why,
+                     "talk": [h["talk"] + t for t in talk],
+                     "visits": [[h["talk"] + t for t in v] for v in visits(code)],
                      "last": trace[-1][0] if trace else -1})
     path = os.path.join(out_dir, "escript.json")
     with open(path, "w") as fh:
         json.dump({"_note": "every conversation in the game -- FDAT.T entry 3n+1, "
                             "block 0 of each entity record, kind 0x70 -- with the "
                             "trace tools/escript.py run() makes of it",
-                   "scripts": rows}, fh, separators=(",", ":"))
+                   "scripts": rows, "recorded": RECORDED},
+                  fh, separators=(",", ":"))
     return path
 
 
