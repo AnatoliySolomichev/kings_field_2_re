@@ -149,6 +149,9 @@ func _init() -> void:
 	if not _equip():
 		quit(1)
 		return
+	if not _directions():
+		quit(1)
+		return
 	quit(0)
 
 
@@ -285,6 +288,33 @@ func _equip() -> bool:
 				ok += 1
 	print("equipment: %d of %d ratings match what the game had in memory" % [ok, want])
 	return ok == want
+
+
+# A pair of angles through direction_from_angles, against tools/movement.py.
+func _directions() -> bool:
+	if not FileAccess.file_exists("res://dircheck.json"):
+		print("directions: no cases to check against")
+		return true
+	var rows = JSON.parse_string(
+		FileAccess.get_file_as_string("res://dircheck.json"))
+	if typeof(rows) != TYPE_ARRAY:
+		print("directions: dircheck.json is not a list")
+		return false
+	var c := KFCollision.new()
+	c.load_from("res://coll00.json")          # for the sine table, nothing else
+	var bad := 0
+	for r in rows:
+		var got := c.direction_from_angles(int(r[0]), int(r[1]))
+		for k in range(3):
+			if int(got[k]) != int(r[2][k]):
+				bad += 1
+				if bad == 1:
+					print("  pitch %d yaw %d: godot %s, python %s" % [
+						int(r[0]), int(r[1]), str(got), str(r[2])])
+				break
+	print("directions: %d of %d angle pairs match tools/movement.py exactly" % [
+		rows.size() - bad, rows.size()])
+	return bad == 0
 
 
 # The game's arctangent, against the same directions tools/movement.py put

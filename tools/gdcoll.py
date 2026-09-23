@@ -126,6 +126,29 @@ def movecheck(lv, lvl, out="out/godot"):
     print(f"movement reference: {len(runs)} runs, "
           f"{sum(len(r['frames']) for r in runs)} frames -> {path}")
     anglecheck(out)
+    dircheck(out)
+    return path
+
+
+def dircheck(out="out/godot", n=400):
+    """Angle pairs for `selftest.gd` to put through `direction_from_angles`.
+
+    Like `anglecheck`, this holds two copies of one reading together and
+    claims nothing more. What makes it worth having is the 16-bit truncation
+    between the two rotation stages: it is easy to port a rotation and get
+    that wrong, and the answer then differs by one unit in a place nothing
+    else would notice.
+    """
+    import random
+    rnd = random.Random(23)
+    rows = []
+    for _ in range(n):
+        p = rnd.randint(-0x1000, 0x1000)
+        y = rnd.randint(-0x1000, 0x1000)
+        rows.append([p, y, list(movement.direction_from_angles(p, y))])
+    path = f"{out}/dircheck.json"
+    with open(path, "w") as f:
+        json.dump(rows, f, separators=(",", ":"))
     return path
 
 

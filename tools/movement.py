@@ -192,6 +192,52 @@ def game_cos(a):
     return _q(a - 0xC00)
 
 
+def _s16(v):
+    v &= 0xFFFF
+    return v - 0x10000 if v >= 0x8000 else v
+
+
+def rot_matrix_x(a):
+    """`0x80016598`: nine halfwords, a rotation about the first axis."""
+    s, c = game_sin(a), game_cos(a)
+    return (0x1000, 0, 0,
+            0, c, -s,
+            0, s, c)
+
+
+def rot_matrix_y(a):
+    """`0x8001660c`: the same for the second axis."""
+    s, c = game_sin(a), game_cos(a)
+    return (c, 0, -s,
+            0, 0x1000, 0,
+            s, 0, c)
+
+
+def apply_matrix(m, v):
+    """`ApplyMatrixLV` (0x80074840): MVMVA with no translation, MAC1..3 out.
+
+    The GTE shifts each row's dot product right by 12, and the routine stores
+    the **MAC** registers rather than IR, so nothing is saturated to 16 bits
+    here. The caller does that itself.
+    """
+    return tuple(sum(m[3 * r + k] * v[k] for k in range(3)) >> 12
+                 for r in range(3))
+
+
+def direction_from_angles(pitch, yaw):
+    """`direction_from_angles` (0x800167cc): a pair of angles to a unit vector.
+
+    Rotate (0, 0, 0x1000) by the **negated** first angle about the first axis
+    and then by the second about the second. Between the two stages the game
+    copies the three 32-bit results into a 16-bit `SVECTOR`, so the truncation
+    is part of the answer, not an accident of the port.
+    """
+    v = apply_matrix(rot_matrix_x(-pitch), (0, 0, 0x1000))
+    v = tuple(_s16(x) for x in v)
+    w = apply_matrix(rot_matrix_y(yaw), v)
+    return tuple(_s16(x) for x in w)
+
+
 # The game's own arctangent: `vec_angle` (0x80016ab8) with `arctan_unit`
 # (0x800742ac) under it. Twelve CORDIC iterations over the table at
 # 0x8009591c, which holds atan(2**-i) in the game's 0x1000-to-the-turn units --

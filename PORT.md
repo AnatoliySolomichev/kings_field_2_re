@@ -29,7 +29,7 @@ that it reproduces it correctly.** `status` says how far that went:
 | --- | --- | --- | --- | --- | --- |
 | boot | 10 | 1 | 0 | 115 | 50 (43%) |
 | open | 293 | 6 | 0 | 20002 | 1066 (5%) |
-| game | 818 | 35 | 5 | 93468 | 11965 (12%) |
+| game | 818 | 39 | 5 | 93468 | 12098 (12%) |
 | end | 167 | 0 | 0 | 9966 | 0 (0%) |
 
 Those percentages are of *all* the code in the image, which includes
@@ -42,7 +42,10 @@ floor, not a score.
 | --- | --- | --- | --- |
 | [`godot/boot.gd:66`](godot/boot.gd#L66) | `func _exec` | `boot:0x80010038` shell_main | transcribed |
 | [`godot/game.gd:45`](godot/game.gd#L45) | `(the file)` | `game:0x80014bd4` game_main | partial |
-| [`godot/collision.gd:135`](godot/collision.gd#L135) | `func vec_angle` | `game:0x80016ab8` vec_angle | transcribed |
+| [`godot/collision.gd:109`](godot/collision.gd#L109) | `func rot_matrix_x` | `game:0x80016598` rot_matrix_x | verified |
+| [`godot/collision.gd:116`](godot/collision.gd#L116) | `func rot_matrix_y` | `game:0x8001660c` rot_matrix_y | verified |
+| [`godot/collision.gd:137`](godot/collision.gd#L137) | `func direction_from_angles` | `game:0x800167cc` direction_from_angles | verified |
+| [`godot/collision.gd:188`](godot/collision.gd#L188) | `func vec_angle` | `game:0x80016ab8` vec_angle | transcribed |
 | [`godot/actors.gd:253`](godot/actors.gd#L253) | `func _in_range` | `game:0x80016ec8` in_range | transcribed |
 | [`godot/equip.gd:49`](godot/equip.gd#L49) | `func add_armour` | `game:0x800293e4` add_armour_ratings | verified |
 | [`godot/equip.gd:25`](godot/equip.gd#L25) | `const RATINGS` | `game:0x80029500` player_recalc_stats | partial |
@@ -58,10 +61,10 @@ floor, not a score.
 | [`godot/player.gd:304`](godot/player.gd#L304) | `func _turn` | `game:0x8002f5c0` player_look | transcribed |
 | [`godot/player.gd:248`](godot/player.gd#L248) | `func _ramp` | `game:0x8002f9bc` player_walk | verified |
 | [`godot/player.gd:212`](godot/player.gd#L212) | `func _process` | `game:0x80030fcc` player_controller | partial |
-| [`godot/collision.gd:279`](godot/collision.gd#L279) | `func _layer` | `game:0x800324f0` select_cell_layer | transcribed |
-| [`godot/collision.gd:296`](godot/collision.gd#L296) | `(the file)` | `game:0x8003260c` tile_collision | verified |
-| [`godot/collision.gd:425`](godot/collision.gd#L425) | `func _notch` | `game:0x80032d3c` 0x80032d3c | transcribed |
-| [`godot/collision.gd:441`](godot/collision.gd#L441) | `func surface` | `game:0x80033b10` collide_surface | transcribed |
+| [`godot/collision.gd:332`](godot/collision.gd#L332) | `func _layer` | `game:0x800324f0` select_cell_layer | transcribed |
+| [`godot/collision.gd:349`](godot/collision.gd#L349) | `(the file)` | `game:0x8003260c` tile_collision | verified |
+| [`godot/collision.gd:478`](godot/collision.gd#L478) | `func _notch` | `game:0x80032d3c` 0x80032d3c | transcribed |
+| [`godot/collision.gd:494`](godot/collision.gd#L494) | `func surface` | `game:0x80033b10` collide_surface | transcribed |
 | [`godot/objects.gd:94`](godot/objects.gd#L94) | `var pcx` | `game:0x80046884` player_in_rect | transcribed |
 | [`godot/objects.gd:52`](godot/objects.gd#L52) | `const SLOTS` | `game:0x80047010` object_interpreter | partial |
 | [`godot/objects.gd:105`](godot/objects.gd#L105) | `func tick` | `game:0x80047010` object_interpreter | partial |
@@ -81,8 +84,9 @@ floor, not a score.
 | [`godot/items.gd:48`](godot/items.gd#L48) | `func take_item` | `game:0x8005d7f8` take_item | transcribed |
 | [`godot/items.gd:61`](godot/items.gd#L61) | `func give_item` | `game:0x8005d898` give_item | transcribed |
 | [`godot/cutscene.gd:44`](godot/cutscene.gd#L44) | `func _ready` | `game:0x80060d20` str_play | partial |
-| [`godot/collision.gd:107`](godot/collision.gd#L107) | `func arctan_unit` | `game:0x800742ac` arctan_unit | transcribed |
-| [`godot/collision.gd:151`](godot/collision.gd#L151) | `func isqrt` | `game:0x80074508` game_isqrt | transcribed |
+| [`godot/collision.gd:160`](godot/collision.gd#L160) | `func arctan_unit` | `game:0x800742ac` arctan_unit | transcribed |
+| [`godot/collision.gd:204`](godot/collision.gd#L204) | `func isqrt` | `game:0x80074508` game_isqrt | transcribed |
+| [`godot/collision.gd:123`](godot/collision.gd#L123) | `func apply_matrix` | `game:0x80074840` ApplyMatrixLV | verified |
 | [`godot/collision.gd:65`](godot/collision.gd#L65) | `func game_sin` | `game:0x80076cc4` game_sin | transcribed |
 | [`godot/collision.gd:81`](godot/collision.gd#L81) | `func game_cos` | `game:0x80076da0` game_cos | transcribed |
 | [`godot/actors.gd:293`](godot/actors.gd#L293) | `func _rand` | `game:0x800796c0` rand | transcribed |
@@ -117,7 +121,6 @@ load-bearing whatever its size.
 | 12 | 40 | `0x80041eec` | announce |
 | 11 | 146 | `0x80033f38` | collide_query |
 | 11 | 58 | `0x80025f38` | sub_80025f38 |
-| 11 | 55 | `0x800167cc` | direction_from_angles |
 | 11 | 26 | `0x800279d8` | sub_800279d8 |
 | 11 | 20 | `0x80016928` | sub_80016928 |
 | 11 | 18 | `0x800168a8` | sub_800168a8 |
@@ -130,4 +133,5 @@ load-bearing whatever its size.
 | 9 | 405 | `0x800422b8` | render_frame |
 | 9 | 224 | `0x80026acc` | sub_80026acc |
 | 9 | 219 | `0x80024f88` | sub_80024f88 |
+| 9 | 93 | `0x800252f4` | sub_800252f4 |
 

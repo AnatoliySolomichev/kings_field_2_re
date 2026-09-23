@@ -92,6 +92,59 @@ func game_cos(a: int) -> int:
 	return sin_table[a - 0xC00]
 
 
+# A pair of angles to a unit direction, the way the GTE does it.
+#
+# `rot_matrix_x` (0x80016598) writes [0x1000,0,0; 0,cos,-sin; 0,sin,cos] and
+# `rot_matrix_y` (0x8001660c) writes [cos,0,-sin; 0,0x1000,0; sin,0,cos].
+# `ApplyMatrixLV` (0x80074840) loads a matrix into the GTE rotation registers
+# and runs MVMVA with no translation, storing MAC1..3 -- the 32-bit results,
+# not the saturated IR ones.
+#
+# `direction_from_angles` (0x800167cc) rotates (0, 0, 0x1000) by the
+# **negated** first angle about the first axis and then by the second about
+# the second. **Between the two stages the game copies the three 32-bit
+# results into a 16-bit SVECTOR**, so that truncation is part of the answer.
+# Eleven pieces of actor, object and effect code ask which way something
+# points, and this is what they ask.
+# @orig game:0x80016598 rot_matrix_x  status:verified
+func rot_matrix_x(a: int) -> PackedInt32Array:
+	var s := game_sin(a)
+	var c := game_cos(a)
+	return PackedInt32Array([0x1000, 0, 0, 0, c, -s, 0, s, c])
+
+
+# @orig game:0x8001660c rot_matrix_y  status:verified
+func rot_matrix_y(a: int) -> PackedInt32Array:
+	var s := game_sin(a)
+	var c := game_cos(a)
+	return PackedInt32Array([c, 0, -s, 0, 0x1000, 0, s, 0, c])
+
+
+# @orig game:0x80074840 ApplyMatrixLV  status:verified
+func apply_matrix(m: PackedInt32Array, v: PackedInt32Array) -> PackedInt32Array:
+	var out := PackedInt32Array([0, 0, 0])
+	for r in range(3):
+		var acc := m[3 * r] * v[0] + m[3 * r + 1] * v[1] + m[3 * r + 2] * v[2]
+		out[r] = acc >> 12
+	return out
+
+
+func _s16(v: int) -> int:
+	v &= 0xFFFF
+	return v - 0x10000 if v >= 0x8000 else v
+
+
+# @orig game:0x800167cc direction_from_angles  status:verified
+func direction_from_angles(pitch: int, yaw: int) -> PackedInt32Array:
+	var v := apply_matrix(rot_matrix_x(-pitch), PackedInt32Array([0, 0, 0x1000]))
+	for i in range(3):
+		v[i] = _s16(v[i])
+	var w := apply_matrix(rot_matrix_y(yaw), v)
+	for i in range(3):
+		w[i] = _s16(w[i])
+	return w
+
+
 # The game's own arctangent: vec_angle (0x80016ab8) with arctan_unit
 # (0x800742ac) under it. Twelve CORDIC iterations over a table of atan(2**-i)
 # in the game's 0x1000-to-the-turn units -- 511, 302, 159, 81, 41, 20, 10, 5,
