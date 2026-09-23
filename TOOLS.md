@@ -1024,12 +1024,20 @@ level is known, the condition is not — `native` when `GAME.EXE` writes it
 rather than any level, and `missing` when nothing writes it anywhere here.
 Of the 43: **27 solid, 5 partial, 1 native, 10 missing**.
 
-The ten draw a clean line. Doors, chests and levers write flags through the
-object interpreter, and the flag's number comes from the object's placement
-record rather than from an instruction, so a constant scan cannot see it —
-BACKLOG item 2. And **every one of the ten is above 120, while every flag
-below 120 that a conversation reads has a writer**: the array is split, and
-the part from 121 up is written by something this project has not read.
+The nine are a settled negative, not a gap in the method. Every word of
+`GAME.EXE` and every word of all 28 overlays has been scanned linearly for a
+store landing in the array — not only the parts control flow reaches — and no
+routine anywhere forms the array's base and then indexes it by a register. So
+**those nine `f9` branches cannot be taken** in a game that starts from
+`reset_story_flags`.
+
+**Withdrawn:** "doors, chests and levers write the flag, and its number comes
+from the object's placement record". There is no such write anywhere.
+
+Flag 121 left that list on the same pass: `actor_take_hit` sets it when a
+creature dies whose `actor[+1]` is below `0x2b`, and increments 122 as a
+count. The blacksmith's `flags[121] == 1` guard means he greets you
+differently once you have killed something.
 
 ### `tools/equip.py` — what a weapon and a piece of armour are worth
 

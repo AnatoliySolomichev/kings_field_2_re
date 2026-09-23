@@ -30,12 +30,25 @@ number comes from the object's own placement record rather than from an
 instruction, so no constant scan can see it. Those records are not decoded
 (BACKLOG item 2).
 
-The flags with no writer are **121, 123, 124, 126, 135, 137, 140, 143, 144 and
-147** -- every one of them above 120, and every flag below 120 that a
-conversation reads has a writer. So the array is split: the lower part is
-written by level code that can be read, and the part from 121 up is written by
-something else. A walkthrough built from this file has ten holes, all in the
-same place, and they are named rather than filled.
+The flags with no writer are **123, 124, 126, 135, 137, 140, 143, 144 and
+147**, and that is now a settled negative rather than a gap in the method.
+Every word of `GAME.EXE` and every word of all 28 overlays has been scanned
+linearly for a store landing in the array -- not only the parts control flow
+reaches -- and no routine anywhere forms the array's base and then indexes it
+by a register, so there is no computed write to hide behind either. Those nine
+`f9` branches cannot be taken in a game that starts from `reset_story_flags`.
+
+**Withdrawn:** "doors, chests and levers write flags through the object
+interpreter, and the flag's number comes from the object's placement record".
+There is no such write. The hypothesis was reasonable and it is wrong, and the
+scan that would have supported it is the one that killed it.
+
+**Flag 121 was in that list and is not any more.** `actor_take_hit` sets it
+to 1 when a creature dies whose `actor[+1]` is below `0x2b`, and increments
+**122** as a counter of the same. So the blacksmith's `flags[121] == 1` start
+guard means he greets you differently once you have killed something -- and
+`0x801baa2e`, which the array's arithmetic would call flag 166, is
+`script_speaker` and not a flag at all. The 256 bytes are not all flags.
 """
 import collections
 import json
@@ -111,25 +124,31 @@ def writes_read():
 def writes_in_game_exe():
     """{flag: [routine name]} -- the writes inside GAME.EXE itself.
 
-    Small but not empty, and leaving it out made one flag look unwritten:
-    `use_item` sets flag 35, which is how two people in the Forest of Varde
-    know you have used something.
+    Off `tools/rdis.py`'s references rather than a linear `lui`/`%lo` pairing,
+    which is what it used first and which missed `actor_take_hit`: the address
+    is formed there and stored through with offset 0, and only the walk's
+    constant propagation follows that.
     """
-    import calltree
-    import mips
+    import rdis
     import syms
+    w = rdis.build("game")
     out = collections.defaultdict(set)
-    e = mips.load("game")
-    g = calltree.Graph(e)
-    for a, v in mips.resolve(e).items():
-        if not (FLAGS <= v < FLAGS + FLAG_SPAN):
-            continue
-        _k, d = e.op(a)
-        if d.get("op") not in (0x28, 0x29, 0x2B):      # sb sh sw
-            continue
-        fn = g.owner(a)
-        out[v - FLAGS].add(syms.label_in("game", fn) if fn else f"{a:#x}")
-    return {k: sorted(v) for k, v in out.items()}
+    for f in w.funcs.values():
+        for r in getattr(f, "refs", []):
+            if not (isinstance(r, (tuple, list)) and len(r) >= 3):
+                continue
+            addr, kind = r[1], r[2]
+            if kind != "write" or not isinstance(addr, int):
+                continue
+            if not (FLAGS <= addr < FLAGS + FLAG_SPAN):
+                continue
+            width = r[3] if len(r) > 3 else 1
+            for k in range(width):
+                if addr - FLAGS + k < FLAG_SPAN:
+                    out[addr - FLAGS + k].add(syms.name(f.addr) or f"{f.addr:#x}")
+    # `save_restore` copies the whole array back from the card, so it writes
+    # every index and says nothing about any of them.
+    return {k: sorted(v) for k, v in out.items() if v != {"save_restore"}}
 
 
 def readers():

@@ -1741,7 +1741,7 @@
  "0x801baa2e": {
   "name": "script_speaker",
   "kind": "data",
-  "evidence": "the script record's +1, written by opcode 0xf6 and at the top of script_interpreter when the state's +0x10 is zero; the interpreter compares it with the record's +1 to decide whether to skip to the next 0xf0"
+  "evidence": "the script record's +1, written by opcode 0xf6 and at the top of script_interpreter when the state's +0x10 is zero; the interpreter compares it with the record's +1 to decide whether to skip to the next 0xf0. It sits at offset 166 of the 256 bytes reset_story_flags clears, so the span is not all flags"
  },
  "0x8018fae0": {
   "name": "level_hooks",
@@ -2097,5 +2097,15 @@
   "name": "str_play",
   "kind": "code",
   "evidence": "cutscene_step and 0x80061bc4 call it; builds the \\\\STR\\\\Snn.S name, reads cutscene_record and cutscene_pending, and runs its own DrawSync / res_wait loop inside EnterCriticalSection -- the streaming video player"
+ },
+ "0x801baa01": {
+  "name": "kill_flag",
+  "kind": "data",
+  "evidence": "actor_take_hit sets it to 1 after award_exp when the dead creature’s actor[+1] is below 0x2b. Index 121 of the story flag array, and the blacksmith on level 3 starts his conversation elsewhere when it holds"
+ },
+ "0x801baa02": {
+  "name": "kill_count",
+  "kind": "data",
+  "evidence": "actor_take_hit increments it beside kill_flag -- how many creatures of that kind have died. Index 122; nothing read so far tests it"
  }
 }
