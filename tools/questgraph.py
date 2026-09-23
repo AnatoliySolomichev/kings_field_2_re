@@ -24,13 +24,18 @@ condition -- and `partial` when only the walker sees it: the level is known,
 the condition is not. Neither is a guess; a partial edge is a real edge with
 a missing label.
 
-**What is outside this graph entirely.** Doors, chests and levers write flags
-too, through the object interpreter, and the flag's number comes from the
-object's own placement record rather than from an instruction. Those records
-are not decoded (BACKLOG item 2), so seven flags that conversations read --
-121, 135, 137, 140, 143, 144 and 147 -- have no writer anywhere in this
-reading. A walkthrough built from this file would have seven holes in it, and
-they are named rather than filled.
+**What is outside this graph entirely**, and it draws a clean line. Doors,
+chests and levers write flags through the object interpreter, and the flag's
+number comes from the object's own placement record rather than from an
+instruction, so no constant scan can see it. Those records are not decoded
+(BACKLOG item 2).
+
+The flags with no writer are **121, 123, 124, 126, 135, 137, 140, 143, 144 and
+147** -- every one of them above 120, and every flag below 120 that a
+conversation reads has a writer. So the array is split: the lower part is
+written by level code that can be read, and the part from 121 up is written by
+something else. A walkthrough built from this file has ten holes, all in the
+same place, and they are named rather than filled.
 """
 import collections
 import json
@@ -103,6 +108,30 @@ def writes_read():
     return out
 
 
+def writes_in_game_exe():
+    """{flag: [routine name]} -- the writes inside GAME.EXE itself.
+
+    Small but not empty, and leaving it out made one flag look unwritten:
+    `use_item` sets flag 35, which is how two people in the Forest of Varde
+    know you have used something.
+    """
+    import calltree
+    import mips
+    import syms
+    out = collections.defaultdict(set)
+    e = mips.load("game")
+    g = calltree.Graph(e)
+    for a, v in mips.resolve(e).items():
+        if not (FLAGS <= v < FLAGS + FLAG_SPAN):
+            continue
+        _k, d = e.op(a)
+        if d.get("op") not in (0x28, 0x29, 0x2B):      # sb sh sw
+            continue
+        fn = g.owner(a)
+        out[v - FLAGS].add(syms.label_in("game", fn) if fn else f"{a:#x}")
+    return {k: sorted(v) for k, v in out.items()}
+
+
 def readers():
     """{flag: [(level, entity, value, where)]} -- every conversation that reads it."""
     return escript.flag_graph()
@@ -144,6 +173,7 @@ def calls_out():
 def graph():
     """Every edge: a flag, where it is written, and which NPC reads it."""
     seen, cond, rd, out_calls = writes_seen(), writes_read(), readers(), calls_out()
+    native = writes_in_game_exe()
     edges = []
     for f in sorted(rd):
         who = sorted({(lv, k) for lv, k, _v, _w in rd[f]})
@@ -153,15 +183,19 @@ def graph():
         src_cond = sorted({lv for lv, _v, _g in cond.get(f, [])})
         src_seen = sorted(seen.get(f, set()))
         by_talk = sorted({k for k, fl in out_calls.items() if f in fl})
+        nat = native.get(f, [])
         if src_cond:
             state = "solid"
         elif src_seen:
             state = "partial"
+        elif nat:
+            state = "native"
         else:
             state = "missing"
         edges.append({"flag": f, "state": state, "items": items,
                       "written_on": src_cond or src_seen,
                       "written_by_talker": by_talk,
+                      "written_in_game_exe": nat,
                       "read_by": who,
                       "values": sorted({v for _l, _k, v, _w in rd[f]})})
     return edges
@@ -173,10 +207,12 @@ def report(out=sys.stdout):
     eds = graph()
     n = collections.Counter(e["state"] for e in eds)
     print(f"{len(eds)} флагов читают разговоры: {n['solid']} с прочитанным условием, "
-          f"{n['partial']} только с местом записи, {n['missing']} без писателя\n", file=out)
+          f"{n['partial']} только с местом записи, {n['native']} пишет сама GAME.EXE, "
+          f"{n['missing']} без писателя\n", file=out)
     for e in eds:
         f = e["flag"]
-        src = ", ".join(f"L{l} {ar[l]}" for l in e["written_on"]) or "нигде не найдено"
+        src = ", ".join(f"L{l} {ar[l]}" for l in e["written_on"]) \
+            or ", ".join(e["written_in_game_exe"]) or "нигде не найдено"
         print(f"flag {f:3d}  [{e['state']}]  пишут: {src}", file=out)
         if e["items"]:
             print(f"          нужно: {', '.join(item(i) for i in e['items'])}", file=out)

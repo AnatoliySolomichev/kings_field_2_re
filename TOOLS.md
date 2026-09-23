@@ -1020,13 +1020,16 @@ hiding it. `tools/ovdis.py` follows control flow into switch arms and finds
 **93 flags** written somewhere in a level's own code, but gives only the site;
 `tools/decomp.py` works the condition out by dominance and reaches **60**. An
 edge is `solid` when both agree, `partial` when only the walker saw it — the
-level is known, the condition is not — and `missing` when nothing writes it
-anywhere here. Of the 43: **27 solid, 5 partial, 11 missing**.
+level is known, the condition is not — `native` when `GAME.EXE` writes it
+rather than any level, and `missing` when nothing writes it anywhere here.
+Of the 43: **27 solid, 5 partial, 1 native, 10 missing**.
 
-The eleven are the honest hole. Doors, chests and levers write flags through
-the object interpreter, and the flag's number comes from the object's
-placement record rather than from an instruction, so a constant scan cannot
-see it. That record is BACKLOG item 2.
+The ten draw a clean line. Doors, chests and levers write flags through the
+object interpreter, and the flag's number comes from the object's placement
+record rather than from an instruction, so a constant scan cannot see it —
+BACKLOG item 2. And **every one of the ten is above 120, while every flag
+below 120 that a conversation reads has a writer**: the array is split, and
+the part from 121 up is written by something this project has not read.
 
 ### `tools/equip.py` — what a weapon and a piece of armour are worth
 
