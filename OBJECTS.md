@@ -73,12 +73,12 @@ the same boundary `model_of_type` changes its mind at.
 
   0x80047cbc  opcode 0x00
       347 instructions in 60 blocks
-      calls sub_800445b8, vec_angle, object_sound, facing_test, sub_8001660c, sub_80074840, collide_query
+      calls sub_800445b8, vec_angle, object_sound, facing_test, rot_matrix_y, ApplyMatrixLV, collide_query
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table, points at object_table, reads player_pos
 
   0x8004814c  opcode 0x01   -- 42 objects in the game
       257 instructions in 41 blocks
-      calls sub_800445b8, vec_angle, object_sound, facing_test, sub_8001660c, sub_80074840, collide_query
+      calls sub_800445b8, vec_angle, object_sound, facing_test, rot_matrix_y, ApplyMatrixLV, collide_query
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table, reads player_pos, writes player_strafe_speed
 
   0x800475f8  opcode 0x02   -- 118 objects in the game
@@ -149,7 +149,7 @@ the same boundary `model_of_type` changes its mind at.
 
   0x80047858  opcode 0x1b   -- 18 objects in the game
       348 instructions in 60 blocks
-      calls sub_800445b8, vec_angle, object_sound, facing_test, sub_8001660c, sub_80074840, collide_query
+      calls sub_800445b8, vec_angle, object_sound, facing_test, rot_matrix_y, ApplyMatrixLV, collide_query
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table, points at object_table, reads player_pos
 
   0x8004b154  opcode 0x31

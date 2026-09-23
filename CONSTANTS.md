@@ -84,7 +84,7 @@ In `game:draw_model_plain`, `game:sub_8001b254`, `game:sub_80026acc`, `game:draw
 flag_gate masks the gate byte with 0x7f, which is why the flag array is 128 long and not 64.
 
 174 sites: 115 loaded, 22 argument, 17 mask, 11 compared with, 9 bound.
-In `open:sub_80028f70`, `open:sub_8002607c`, `game:sound_play_3d`, `game:sub_80060d20`, `game:sub_80071bb4`, `end:sub_8001c5a0`, `open:play_movie`, `open:sub_800211d0`, `game:game_main`, `game:player_controller`, `game:sub_8006a060`, `end:sub_80011d14` and 62 more.
+In `open:sub_80028f70`, `open:sub_8002607c`, `game:sound_play_3d`, `game:str_play`, `game:sub_80071bb4`, `end:sub_8001c5a0`, `open:play_movie`, `open:sub_800211d0`, `game:game_main`, `game:player_controller`, `game:sub_8006a060`, `end:sub_80011d14` and 62 more.
 
 `python3 tools/consts.py 0x7f` for every site.
 
@@ -278,12 +278,12 @@ routines is the object record's stride showing up as a field.
 
 | offset | loads | stores | routines |
 | --- | --- | --- | --- |
-| `+0x0` | 2090 | 1232 | 522 |
-| `+0x4` | 807 | 346 | 287 |
+| `+0x0` | 2090 | 1232 | 523 |
+| `+0x4` | 807 | 346 | 288 |
 | `+0x8` | 394 | 283 | 212 |
 | `+0xc` | 326 | 234 | 152 |
 | `+0x10` | 284 | 221 | 142 |
-| `+0x2` | 312 | 189 | 159 |
+| `+0x2` | 312 | 189 | 160 |
 | `+0x6` | 279 | 155 | 139 |
 | `+0x18` | 206 | 127 | 115 |
 | `+0x14` | 207 | 124 | 104 |

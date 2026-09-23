@@ -2072,5 +2072,30 @@
   "name": "cutscene_record",
   "kind": "data",
   "evidence": "the pointer into seq_data cutscene_step leaves for the rest of the machine"
+ },
+ "0x80016598": {
+  "name": "rot_matrix_x",
+  "kind": "code",
+  "evidence": "from one angle, writes nine halfwords [0x1000,0,0; 0,cos,-sin; 0,sin,cos] -- a rotation about the first axis, the pitch"
+ },
+ "0x8001660c": {
+  "name": "rot_matrix_y",
+  "kind": "code",
+  "evidence": "from one angle, writes [cos,0,-sin; 0,0x1000,0; sin,0,cos] -- a rotation about the second axis, the yaw. The pair with rot_matrix_x is how every angle in the game becomes a matrix"
+ },
+ "0x80074840": {
+  "name": "ApplyMatrixLV",
+  "kind": "code",
+  "evidence": "loads five words from $a0 into the GTE rotation registers R11R12..R33, loads $a1 as VXY0/VZ0, MVMVA with no translation, and stores MAC1..3 to $a2, returning $a2 -- PSY-Q’s ApplyMatrixLV"
+ },
+ "0x800167cc": {
+  "name": "direction_from_angles",
+  "kind": "code",
+  "evidence": "takes a pair of angles at $a0 -- $a0+0 negated as pitch, $a0+2 as yaw -- rotates the vector (0,0,0x1000) by rot_matrix_x then rot_matrix_y through ApplyMatrixLV, and writes the unit direction to $a1. Eleven callers, all of them actor, object or effect code asking which way something points"
+ },
+ "0x80060d20": {
+  "name": "str_play",
+  "kind": "code",
+  "evidence": "cutscene_step and 0x80061bc4 call it; builds the \\\\STR\\\\Snn.S name, reads cutscene_record and cutscene_pending, and runs its own DrawSync / res_wait loop inside EnterCriticalSection -- the streaming video player"
  }
 }

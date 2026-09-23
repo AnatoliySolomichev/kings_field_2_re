@@ -80,7 +80,7 @@ floor, not a score.
 | [`godot/items.gd:41`](godot/items.gd#L41) | `func has_item` | `game:0x8005d7bc` has_item | transcribed |
 | [`godot/items.gd:48`](godot/items.gd#L48) | `func take_item` | `game:0x8005d7f8` take_item | transcribed |
 | [`godot/items.gd:61`](godot/items.gd#L61) | `func give_item` | `game:0x8005d898` give_item | transcribed |
-| [`godot/cutscene.gd:44`](godot/cutscene.gd#L44) | `func _ready` | `game:0x80060d20` 0x80060d20 | partial |
+| [`godot/cutscene.gd:44`](godot/cutscene.gd#L44) | `func _ready` | `game:0x80060d20` str_play | partial |
 | [`godot/collision.gd:107`](godot/collision.gd#L107) | `func arctan_unit` | `game:0x800742ac` arctan_unit | transcribed |
 | [`godot/collision.gd:151`](godot/collision.gd#L151) | `func isqrt` | `game:0x80074508` game_isqrt | transcribed |
 | [`godot/collision.gd:65`](godot/collision.gd#L65) | `func game_sin` | `game:0x80076cc4` game_sin | transcribed |
@@ -117,7 +117,7 @@ load-bearing whatever its size.
 | 12 | 40 | `0x80041eec` | announce |
 | 11 | 146 | `0x80033f38` | collide_query |
 | 11 | 58 | `0x80025f38` | sub_80025f38 |
-| 11 | 55 | `0x800167cc` | sub_800167cc |
+| 11 | 55 | `0x800167cc` | direction_from_angles |
 | 11 | 26 | `0x800279d8` | sub_800279d8 |
 | 11 | 20 | `0x80016928` | sub_80016928 |
 | 11 | 18 | `0x800168a8` | sub_800168a8 |
