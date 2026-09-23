@@ -235,15 +235,49 @@ class Walk:
         return new
 
     def _walk_one(self, start):
-        """Follow control flow from one entry point until it stops."""
-        e = self.exe
+        """Follow control flow from one entry point until it stops.
+
+        Two passes are not enough. A switch arm can hold a switch of its own,
+        and it can hold an indirect call with live code after it, so the walk
+        is run again over whatever the newly-resolved tables reach, analysed
+        again, and repeated until a round turns up nothing. Before this was a
+        loop the second pass had neither a `jalr` arm nor a `jr` arm, so
+        **everything after an indirect call inside a switch arm was lost** --
+        among it the 0xf4 opcode's tail in `script_interpreter` -- and a table
+        inside an arm was never resolved at all.
+        """
         fn = Func(start, self.nick)
-        seen, queue = set(), [start]
+        seen = set()
+        self._flow(fn, [start], seen)
+        self._settle(fn, seen)
+        for _round in range(8):
+            extra = [t for tb in fn.tables for t in tb["targets"]
+                     if t not in seen and t in self.exe]
+            if not extra:
+                break
+            self._flow(fn, extra, seen, allow=set(extra))
+            self._settle(fn, seen)
+        return fn
+
+    def _settle(self, fn, seen):
+        fn.body = sorted(seen)
+        fn.end = (fn.body[-1] + 4) if fn.body else fn.addr
+        self._analyse(fn)
+
+    def _flow(self, fn, seeds, seen, allow=()):
+        """Walk control flow from `seeds`, folding what it reaches into `seen`.
+
+        `allow` is the set of addresses that may be entered although they are
+        known entry points: a switch arm sometimes lands on one.
+        """
+        e = self.exe
+        start = fn.addr
+        queue = list(seeds)
         while queue:
             a = queue.pop()
             if a in seen or a not in e:
                 continue
-            if a != start and a in self.hard:
+            if a != start and a in self.hard and a not in allow:
                 fn.into_next.append(a)
                 continue
             w = e.word(a)
@@ -274,10 +308,11 @@ class Walk:
             elif i.kind == "jr":
                 if i.rs == 31:
                     fn.rets.append(a)
-                else:
+                elif a not in fn.switches:
                     fn.switches.append(a)
             elif i.kind == "jalr":
-                fn.indirect.append(a)
+                if a not in fn.indirect:
+                    fn.indirect.append(a)
                 queue.append(nxt)
             elif i.kind in ("syscall", "break"):
                 pass
@@ -290,52 +325,6 @@ class Walk:
                     if di.kind != "invalid":
                         seen.add(a + 4)
                         self.insns[a + 4] = di
-        fn.body = sorted(seen)
-        fn.end = (fn.body[-1] + 4) if fn.body else start
-        self._analyse(fn)
-        # A switch found on the first pass adds code the walk had stopped at,
-        # so anything a table reached is walked now and folded in.
-        if fn.tables:
-            extra = [t for tb in fn.tables for t in tb["targets"]
-                     if t not in seen and t in e]
-            if extra:
-                more = set(fn.body)
-                q = list(extra)
-                while q:
-                    a = q.pop()
-                    if a in more or a not in e:
-                        continue
-                    if a != fn.addr and a in self.hard and a not in extra:
-                        continue
-                    w = e.word(a)
-                    if w is None:
-                        continue
-                    i = mipsdis.decode(w, a)
-                    if i.kind == "invalid":
-                        continue
-                    more.add(a)
-                    self.insns[a] = i
-                    if i.kind == "branch":
-                        q += [i.target, a + 8]
-                    elif i.kind == "call":
-                        fn.calls.append((a, i.target, None))
-                        q.append(a + 8)
-                    elif i.kind == "jump":
-                        q.append(i.target)
-                    elif i.kind in ("jr", "syscall", "break"):
-                        pass
-                    else:
-                        q.append(a + 4)
-                    if i.kind in ("branch", "call", "jump", "jr", "jalr") \
-                            and a + 4 in e:
-                        di = mipsdis.decode(e.word(a + 4), a + 4)
-                        if di.kind != "invalid":
-                            more.add(a + 4)
-                            self.insns[a + 4] = di
-                fn.body = sorted(more)
-                fn.end = fn.body[-1] + 4
-                self._analyse(fn)
-        return fn
 
     # --- what is inside one function ------------------------------------
 
