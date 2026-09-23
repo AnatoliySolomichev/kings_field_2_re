@@ -49,8 +49,9 @@ ROOTS = [
     ("flags", 0x80061940, "the story flags"),
     ("camera", 0x8002B330, "the eye and the three view angles"),
     ("sound", 0x800156BC, "the listener, and the two task servicers"),
-    ("sound", 0x80018CD0, ""),
-    ("sound", 0x80015A48, ""),
+    ("resources", 0x80018CD0, "the queue that pushes a texture into VRAM or "
+                              "sound into the SPU"),
+    ("resources", 0x80015A48, ""),
     ("render", 0x800422B8, "everything drawn"),
 ]
 

@@ -22,8 +22,8 @@ extends Node
 #   11  camera_pose             0x8002b330   the eye and the three view angles
 #   12  audio_listener_set      0x800156bc   the same pose, for 3D sound
 #   13  light_table_step        0x80034300   interpolate the lighting
-#   14  0x80018cd0                           the sound task, type 0x40
-#   15  0x80015a48                           the sound task, type 0x30
+#   14  res_upload_vram         0x80018cd0   a texture into VRAM, if one waits
+#   15  res_upload_spu          0x80015a48   sound into the SPU, if one waits
 #   16  render_frame            0x800422b8   everything drawn
 #
 # and render_frame is seventeen more:
@@ -63,8 +63,8 @@ const FRAME := [
 	[0x8002b330, "camera_pose", true],
 	[0x800156bc, "audio_listener_set", false],
 	[0x80034300, "light_table_step", false],
-	[0x80018cd0, "sound_task_40", false],
-	[0x80015a48, "sound_task_30", false],
+	[0x80018cd0, "res_upload_vram", false],
+	[0x80015a48, "res_upload_spu", false],
 	[0x800422b8, "render_frame", true],
 ]
 

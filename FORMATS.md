@@ -1528,7 +1528,7 @@ back to `OPEN.EXE`, 3 and 4 both go to `END.EXE` with `overlay_arg` 2 and 3.
 | 11 | `camera_pose` | `0x8002b330` — the eye and the three view angles |
 | 12 | `audio_listener_set` | `0x800156bc` — the same pose, for 3D sound |
 | 13 | `light_table_step` | `0x80034300` — the interpolation that moves torchlight |
-| 14, 15 | the two sound tasks | `0x80018cd0` for type `0x40`, `0x80015a48` for `0x30` |
+| 14, 15 | the **resource queue** | `res_upload_vram` pushes a texture into VRAM when the request at `0x801c1728` is type `0x40`; `res_upload_spu` hands sound to the SPU at `0xa000` when it is `0x30`. One queue, two kinds of payload |
 | 16 | `render_frame` | `0x800422b8` |
 
 **The eye is `player_y + bob + crouch - 0x640`.** `camera_pose` forms it that

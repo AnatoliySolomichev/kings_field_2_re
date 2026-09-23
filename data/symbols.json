@@ -1615,9 +1615,9 @@
   "evidence": "24-byte records, and +0x16 is the **MP cost**: cast_spell reads it, doubles it when equipment slot 0x801b25d4 holds 0x26, halves it when 0x801b25d5 holds 0x2e, and announces 9 when player_mp is below it. effect_driver indexes the same table by a slot's +1 byte and skill_unlock sets a record's +0 to 1 when a skill crosses a threshold -- so a record is a spell, a skill makes it available, and casting it puts an instance in effect_slots"
  },
  "0x801c1728": {
-  "name": "sound_task",
+  "name": "res_request",
   "kind": "data",
-  "evidence": "the record the two servicers in game_main's frame poll: 0x80018cd0 acts when its +0 is 0x40 and its +0x10 is 1, 0x80015a48 when they are 0x30 and 2. 0x8001a438 sets it up and 0x8001967c advances it"
+  "evidence": "the resource request the two uploaders poll: +0 is the type (0x40 an image, 0x30 sound), +0x10 the state each waits for, +0x1c the data. 0x8001a438 sets it up and 0x8001967c advances it"
  },
  "0x800357e8": {
   "name": "view_pose_set",
@@ -1883,5 +1883,15 @@
   "name": "casting_spell",
   "kind": "data",
   "evidence": "spell_begin points it at the spell_table record being cast"
+ },
+ "0x80018cd0": {
+  "name": "res_upload_vram",
+  "kind": "code",
+  "evidence": "the frame's fourteenth call. Acts when the request at res_request has type 0x40 and its +0x10 is 1, and what it does is LoadImage(request+4, data) and DrawSync -- it pushes a texture into VRAM. Named the sound task at first, from its neighbour"
+ },
+ "0x80015a48": {
+  "name": "res_upload_spu",
+  "kind": "code",
+  "evidence": "the frame's fifteenth call. Acts when the request has type 0x30 and its +0x10 is 2, and hands the data to 0x80067500 with 0xa000 -- an SPU address -- with 0x80061e00 fetching from the CD. The sound half of the same queue"
  }
 }

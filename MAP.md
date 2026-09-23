@@ -29,9 +29,10 @@ handlers and whatever a pointer table reaches have to be.
 | menu | 45 | 3474 | 1 |
 | boot | 52 | 2438 | 6 |
 | items | 20 | 2136 | 8 |
-| sound | 29 | 1234 | 2 |
+| resources | 27 | 1119 | 2 |
 | lighting | 3 | 244 | 2 |
 | flags | 2 | 129 | 1 |
+| sound | 2 | 115 | 2 |
 | camera | 1 | 30 | 1 |
 | render_state | 1 | 26 | 1 |
 
@@ -910,23 +911,21 @@ use_item and the inventory primitives.
 | `0x80079a98` | 4 | 1 | sub_80079a98 |  |
 | `0x8007c344` | 4 | 1 | sub_8007c344 |  |
 
-## sound
+## resources
 
-the listener, and the two task servicers.
+the queue that pushes a texture into VRAM or sound into the SPU.
 
-29 routines, 1234 instructions.
+27 routines, 1119 instructions.
 
 | address | instructions | callers | name | what it touches |
 | --- | --- | --- | --- | --- |
 | `0x800696d8` | 192 | 1 | sub_800696d8 |  |
-| `0x80018cd0` | 163 | 5 | sub_80018cd0 | calls LoadImage, DrawSync; reads sound_task |
+| `0x80018cd0` | 163 | 5 | res_upload_vram | calls LoadImage, DrawSync; reads sound_task |
 | `0x80067500` | 91 | 1 | sub_80067500 |  |
-| `0x80015a48` | 85 | 5 | sub_80015a48 | reads sound_task |
+| `0x80015a48` | 85 | 5 | res_upload_spu | reads sound_task |
 | `0x80061e00` | 82 | 13 | sub_80061e00 | calls CD_cw |
-| `0x800324f0` | 71 | 4 | select_cell_layer | points at level_grid, writes collision_layer_offset, writes collision_scratch, reads collision_scratch |
 | `0x80063410` | 68 | 2 | sub_80063410 | calls CD_cw |
 | `0x800199b8` | 47 | 1 | sub_800199b8 |  |
-| `0x800156bc` | 44 | 1 | audio_listener_set | calls select_cell_layer; points at player_pos_mirror1, writes player_pos_mirror1, reads collision_layer_offset |
 | `0x80071d84` | 42 | 1 | sub_80071d84 |  |
 | `0x800672d4` | 41 | 2 | sub_800672d4 |  |
 | `0x80072808` | 35 | 4 | sub_80072808 |  |
@@ -970,6 +969,17 @@ the story flags.
 | --- | --- | --- | --- | --- |
 | `0x80061940` | 108 | 2 | flag_gate | reads level_hooks, points at story_flags |
 | `0x80030810` | 21 | 1 | sub_80030810 | writes player_state, writes player_velocity, points at player_pitch, reads player_pitch |
+
+## sound
+
+the listener, and the two task servicers.
+
+2 routines, 115 instructions.
+
+| address | instructions | callers | name | what it touches |
+| --- | --- | --- | --- | --- |
+| `0x800324f0` | 71 | 4 | select_cell_layer | points at level_grid, writes collision_layer_offset, writes collision_scratch, reads collision_scratch |
+| `0x800156bc` | 44 | 1 | audio_listener_set | calls select_cell_layer; points at player_pos_mirror1, writes player_pos_mirror1, reads collision_layer_offset |
 
 ## camera
 
