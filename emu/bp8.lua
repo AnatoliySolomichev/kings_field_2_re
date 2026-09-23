@@ -20,7 +20,12 @@
 -- Watching three of them rather than one guards against the array being filled
 -- in some order other than front to back.
 
-local LOG = '/home/solo/my/projects/kings_field_2_english/out/lua_bp8.log'
+-- out/ beside emu/, wherever the project lives: from this file's own path when
+-- dofile was given one, else from the working directory, which run.sh makes
+-- emu/.
+local HERE = debug and debug.getinfo(1, 'S').source:match('^@(.*)[/\\][^/\\]*$') or '.'
+local OUT = HERE .. '/../out/'
+local LOG = OUT .. 'lua_bp8.log'
 local out = io.open(LOG, 'a')
 local lines = 0
 local function log(s)

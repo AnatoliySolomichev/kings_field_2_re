@@ -55,12 +55,17 @@
 -- Never `return false` from the callback: PCSX-Redux reads it as "delete this
 -- breakpoint", and then the silence afterwards means nothing.
 
-local LOG = '/home/solo/my/projects/kings_field_2_english/out/lua_bp16.log'
+-- out/ beside emu/, wherever the project lives: from this file's own path when
+-- dofile was given one, else from the working directory, which run.sh makes
+-- emu/.
+local HERE = debug and debug.getinfo(1, 'S').source:match('^@(.*)[/\\][^/\\]*$') or '.'
+local OUT = HERE .. '/../out/'
+local LOG = OUT .. 'lua_bp16.log'
 -- The same state, one line, overwritten every frame, inside the Godot project so
 -- the port can read it as res://live.txt. Written to a temporary name and
 -- renamed, because Godot polls it on its own clock and would otherwise catch
 -- half a line.
-local LIVE = '/home/solo/my/projects/kings_field_2_english/out/godot/live.txt'
+local LIVE = OUT .. 'godot/live.txt'
 local LIVE_TMP = LIVE .. '.tmp'
 
 local out = io.open(LOG, 'a')

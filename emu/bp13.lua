@@ -1,6 +1,6 @@
 -- What does tile_collision actually answer, and who is asking?
 --
---   dofile('/home/solo/my/projects/kings_field_2_english/emu/bp13.lua')
+--   dofile('bp13.lua')      -- run.sh starts the emulator in emu/
 --
 -- The struct at 0x801e6470 is global scratch and ten call sites reach the
 -- wrapper above it, object_motion among them -- so reading the mask out of RAM
@@ -14,7 +14,12 @@
 -- Volume is the hazard: the routine runs per object per frame. Hits are
 -- therefore logged in full only while they are new, and sparsely after that.
 
-local LOG = '/home/solo/my/projects/kings_field_2_english/out/lua_bp13.log'
+-- out/ beside emu/, wherever the project lives: from this file's own path when
+-- dofile was given one, else from the working directory, which run.sh makes
+-- emu/.
+local HERE = debug and debug.getinfo(1, 'S').source:match('^@(.*)[/\\][^/\\]*$') or '.'
+local OUT = HERE .. '/../out/'
+local LOG = OUT .. 'lua_bp13.log'
 local out = io.open(LOG, 'a')
 local lines = 0
 local function log(s)

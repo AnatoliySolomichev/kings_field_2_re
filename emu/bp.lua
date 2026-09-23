@@ -11,7 +11,12 @@
 -- runtime; putting it in pcsx.json does not take. It also needs the
 -- interpreter, since the binary warns the debugger and dynarec conflict.
 
-local LOG = '/home/solo/my/projects/kings_field_2_english/out/lua_bp.log'
+-- out/ beside emu/, wherever the project lives: from this file's own path when
+-- dofile was given one, else from the working directory, which run.sh makes
+-- emu/.
+local HERE = debug and debug.getinfo(1, 'S').source:match('^@(.*)[/\\][^/\\]*$') or '.'
+local OUT = HERE .. '/../out/'
+local LOG = OUT .. 'lua_bp.log'
 local out = io.open(LOG, 'a')
 local lines = 0
 local function log(s)

@@ -2,7 +2,7 @@
 --
 -- Load this into a running emulator from the Lua console, without restarting:
 --
---   dofile('/home/solo/my/projects/kings_field_2_english/emu/bp5.lua')
+--   dofile('bp5.lua')      -- run.sh starts the emulator in emu/
 --
 -- Two crossings under bp.lua showed that 0x80017c78 is not the answer: going
 -- one way it fired once with every argument zero, going back it did not fire
@@ -14,7 +14,12 @@
 -- 0x8001796c, 0x80018358, 0x80029188 and 0x8005f444; they are armed as well so
 -- the order of events is visible even if the watchpoint proves unreliable.
 
-local LOG = '/home/solo/my/projects/kings_field_2_english/out/lua_bp5.log'
+-- out/ beside emu/, wherever the project lives: from this file's own path when
+-- dofile was given one, else from the working directory, which run.sh makes
+-- emu/.
+local HERE = debug and debug.getinfo(1, 'S').source:match('^@(.*)[/\\][^/\\]*$') or '.'
+local OUT = HERE .. '/../out/'
+local LOG = OUT .. 'lua_bp5.log'
 local out = io.open(LOG, 'a')
 local lines = 0
 local function log(s)

@@ -1,6 +1,6 @@
 -- The player's own move routine, in and out.
 --
---   dofile('/home/solo/my/projects/kings_field_2_english/emu/bp14.lua')
+--   dofile('bp14.lua')      -- run.sh starts the emulator in emu/
 --
 -- `actor_move_horizontal` (0x8004dbc8) turned out to belong to the monsters:
 -- its actor comes from the pointer at 0x8018fab4, which `actor_select`
@@ -20,7 +20,12 @@
 -- this breakpoint", the point fires once, and the silence afterwards means
 -- nothing.
 
-local LOG = '/home/solo/my/projects/kings_field_2_english/out/lua_bp14.log'
+-- out/ beside emu/, wherever the project lives: from this file's own path when
+-- dofile was given one, else from the working directory, which run.sh makes
+-- emu/.
+local HERE = debug and debug.getinfo(1, 'S').source:match('^@(.*)[/\\][^/\\]*$') or '.'
+local OUT = HERE .. '/../out/'
+local LOG = OUT .. 'lua_bp14.log'
 local out = io.open(LOG, 'a')
 local lines = 0
 local function log(s)

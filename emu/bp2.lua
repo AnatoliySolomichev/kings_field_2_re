@@ -6,7 +6,12 @@
 -- breakpoint reports itself enabled, and whether a breakpoint on an address
 -- that provably executes ever fires.
 
-local LOG = '/home/solo/my/projects/kings_field_2_english/out/lua_bp2.log'
+-- out/ beside emu/, wherever the project lives: from this file's own path when
+-- dofile was given one, else from the working directory, which run.sh makes
+-- emu/.
+local HERE = debug and debug.getinfo(1, 'S').source:match('^@(.*)[/\\][^/\\]*$') or '.'
+local OUT = HERE .. '/../out/'
+local LOG = OUT .. 'lua_bp2.log'
 local out = io.open(LOG, 'a')
 local lines = 0
 

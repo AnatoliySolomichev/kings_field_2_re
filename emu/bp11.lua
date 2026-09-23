@@ -1,6 +1,6 @@
 -- Do breakpoints stop because they are one-shot, or because we asked them to?
 --
---   dofile('/home/solo/my/projects/kings_field_2_english/emu/bp11.lua')
+--   dofile('bp11.lua')      -- run.sh starts the emulator in emu/
 --
 -- Every breakpoint in this project so far has fired exactly once and gone
 -- quiet, which was written down as "breakpoints here are one-shot". But every
@@ -20,7 +20,12 @@
 -- Either answer is worth having, and the two real breakpoints ride along under
 -- the same convention so a crossing measured now is measured properly.
 
-local LOG = '/home/solo/my/projects/kings_field_2_english/out/lua_bp11.log'
+-- out/ beside emu/, wherever the project lives: from this file's own path when
+-- dofile was given one, else from the working directory, which run.sh makes
+-- emu/.
+local HERE = debug and debug.getinfo(1, 'S').source:match('^@(.*)[/\\][^/\\]*$') or '.'
+local OUT = HERE .. '/../out/'
+local LOG = OUT .. 'lua_bp11.log'
 local out = io.open(LOG, 'a')
 local lines = 0
 local function log(s)

@@ -22,7 +22,12 @@
 -- Never `return false` from the callback: PCSX-Redux reads that as "delete this
 -- breakpoint", and a watchpoint that fires once tells you nothing afterwards.
 
-local LOG = '/home/solo/my/projects/kings_field_2_english/out/lua_bp15.log'
+-- out/ beside emu/, wherever the project lives: from this file's own path when
+-- dofile was given one, else from the working directory, which run.sh makes
+-- emu/.
+local HERE = debug and debug.getinfo(1, 'S').source:match('^@(.*)[/\\][^/\\]*$') or '.'
+local OUT = HERE .. '/../out/'
+local LOG = OUT .. 'lua_bp15.log'
 local out = io.open(LOG, 'a')
 local lines = 0
 local function log(s)

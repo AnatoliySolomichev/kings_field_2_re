@@ -2,7 +2,7 @@
 --
 -- Load from the emulator's own Lua console, so the session survives:
 --
---   dofile('/home/solo/my/projects/kings_field_2_english/emu/bp10.lua')
+--   dofile('bp10.lua')      -- run.sh starts the emulator in emu/
 --
 -- Every object slot in the game is taken through find_free_slot at 0x80046034,
 -- which scans for a record whose type id is 0xff and evicts the oldest if none
@@ -15,7 +15,12 @@
 -- hundred allocations still leaves a readable log and every distinct caller
 -- shows up exactly once.
 
-local LOG = '/home/solo/my/projects/kings_field_2_english/out/lua_bp10.log'
+-- out/ beside emu/, wherever the project lives: from this file's own path when
+-- dofile was given one, else from the working directory, which run.sh makes
+-- emu/.
+local HERE = debug and debug.getinfo(1, 'S').source:match('^@(.*)[/\\][^/\\]*$') or '.'
+local OUT = HERE .. '/../out/'
+local LOG = OUT .. 'lua_bp10.log'
 local out = io.open(LOG, 'a')
 local lines = 0
 local function log(s)

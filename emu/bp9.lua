@@ -2,7 +2,7 @@
 --
 -- Load from the emulator's own Lua console, so the session survives:
 --
---   dofile('/home/solo/my/projects/kings_field_2_english/emu/bp9.lua')
+--   dofile('bp9.lua')      -- run.sh starts the emulator in emu/
 --
 -- bp8 watched the type id of the first three object slots across a save load
 -- and a level change, and caught nothing but the BIOS clearing memory at boot.
@@ -20,7 +20,12 @@
 --   LOAD      an Exec breakpoint on level_load, which is the kind that has
 --             demonstrably worked all along.
 
-local LOG = '/home/solo/my/projects/kings_field_2_english/out/lua_bp9.log'
+-- out/ beside emu/, wherever the project lives: from this file's own path when
+-- dofile was given one, else from the working directory, which run.sh makes
+-- emu/.
+local HERE = debug and debug.getinfo(1, 'S').source:match('^@(.*)[/\\][^/\\]*$') or '.'
+local OUT = HERE .. '/../out/'
+local LOG = OUT .. 'lua_bp9.log'
 local out = io.open(LOG, 'a')
 local lines = 0
 local function log(s)

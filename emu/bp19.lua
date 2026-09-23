@@ -32,8 +32,13 @@
 -- Never `return false` from a callback: PCSX-Redux reads that as "remove this
 -- breakpoint", and silence afterwards would mean nothing.
 
-local LOG = '/home/solo/my/projects/kings_field_2_english/out/lua_bp19.log'
-local LIVE = '/home/solo/my/projects/kings_field_2_english/out/godot/live.txt'
+-- out/ beside emu/, wherever the project lives: from this file's own path when
+-- dofile was given one, else from the working directory, which run.sh makes
+-- emu/.
+local HERE = debug and debug.getinfo(1, 'S').source:match('^@(.*)[/\\][^/\\]*$') or '.'
+local OUT = HERE .. '/../out/'
+local LOG = OUT .. 'lua_bp19.log'
+local LIVE = OUT .. 'godot/live.txt'
 local out = io.open(LOG, 'a')
 local lines = 0
 local function log(s)

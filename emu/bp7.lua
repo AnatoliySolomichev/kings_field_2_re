@@ -1,6 +1,6 @@
 -- Who reads the per-level 254-entry table?
 --
---   dofile('/home/solo/my/projects/kings_field_2_english/emu/bp7.lua')
+--   dofile('bp7.lua')      -- run.sh starts the emulator in emu/
 --
 -- The table lives at a fixed address: comparing four RAM snapshots against
 -- FDAT on the disc puts the offsets at 0x801d11ac and the data they point into
@@ -12,7 +12,12 @@
 -- Two watchpoints rather than one: reading an offset and reading the record it
 -- points at are different steps and may well be different code.
 
-local LOG = '/home/solo/my/projects/kings_field_2_english/out/lua_bp7.log'
+-- out/ beside emu/, wherever the project lives: from this file's own path when
+-- dofile was given one, else from the working directory, which run.sh makes
+-- emu/.
+local HERE = debug and debug.getinfo(1, 'S').source:match('^@(.*)[/\\][^/\\]*$') or '.'
+local OUT = HERE .. '/../out/'
+local LOG = OUT .. 'lua_bp7.log'
 local out = io.open(LOG, 'a')
 local lines = 0
 local function log(s)

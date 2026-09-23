@@ -5,7 +5,12 @@
 -- assigning to it succeeded while changing nothing. Set the real boolean, read
 -- it back, then let the canary answer whether breakpoints evaluate at last.
 
-local LOG = '/home/solo/my/projects/kings_field_2_english/out/lua_bp4.log'
+-- out/ beside emu/, wherever the project lives: from this file's own path when
+-- dofile was given one, else from the working directory, which run.sh makes
+-- emu/.
+local HERE = debug and debug.getinfo(1, 'S').source:match('^@(.*)[/\\][^/\\]*$') or '.'
+local OUT = HERE .. '/../out/'
+local LOG = OUT .. 'lua_bp4.log'
 local out = io.open(LOG, 'a')
 local function log(s) out:write(tostring(s) .. '\n') out:flush() end
 

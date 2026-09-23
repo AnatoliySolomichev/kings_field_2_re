@@ -1,6 +1,6 @@
 -- Who writes an object's type id?
 --
---   dofile('/home/solo/my/projects/kings_field_2_english/emu/bp12.lua')
+--   dofile('bp12.lua')      -- run.sh starts the emulator in emu/
 --
 -- This question was asked twice before, by bp8 and bp9, and both times the
 -- answer was silence -- but both returned `false` from their callbacks, which
@@ -16,7 +16,12 @@
 -- than one in case the fill does not start at the front. CONTROL rides along
 -- so that a negative result is worth something.
 
-local LOG = '/home/solo/my/projects/kings_field_2_english/out/lua_bp12.log'
+-- out/ beside emu/, wherever the project lives: from this file's own path when
+-- dofile was given one, else from the working directory, which run.sh makes
+-- emu/.
+local HERE = debug and debug.getinfo(1, 'S').source:match('^@(.*)[/\\][^/\\]*$') or '.'
+local OUT = HERE .. '/../out/'
+local LOG = OUT .. 'lua_bp12.log'
 local out = io.open(LOG, 'a')
 local lines = 0
 local function log(s)
