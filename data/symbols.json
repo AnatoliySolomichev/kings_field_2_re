@@ -352,12 +352,12 @@
  "0x801b2538": {
   "name": "offense_ratings",
   "kind": "data",
-  "evidence": "9 u16, slash blow stab then the six magics"
+  "evidence": "eight u16 recomputed by player_recalc_stats from the equipped weapon"
  },
  "0x801b254a": {
   "name": "defense_ratings",
   "kind": "data",
-  "evidence": "9 u16, same order, butted against offense"
+  "evidence": "eight u16 recomputed by player_recalc_stats from the seven worn pieces"
  },
  "0x801c172c": {
   "name": "archive_descriptors",
@@ -370,9 +370,9 @@
   "evidence": "where the block lands off the disc; nothing points at it"
  },
  "0x801d37a4": {
-  "name": "boot_block_a",
+  "name": "weapon_table",
   "kind": "data",
-  "evidence": "scattered from FDAT entries 96/97 at boot"
+  "evidence": "FDAT 97 block 1 scattered here at boot: 48 records of 68 bytes, item ids 0..33 used, eight offense values at +6. 3264 of 3264 bytes match RAM"
  },
  "0x801e4464": {
   "name": "tile_shapes",
@@ -385,9 +385,9 @@
   "evidence": "the shapes themselves, past the 254 offsets"
  },
  "0x801e64b8": {
-  "name": "boot_block_b",
+  "name": "armour_table",
   "kind": "data",
-  "evidence": "scattered from FDAT entries 96/97 at boot"
+  "evidence": "FDAT 97 block 2 scattered here at boot: 66 records of 32 bytes, item ids 34..99, eight defense values at +2..+0x12. add_armour_ratings addresses it from 0x801e6078, which is this minus 34*32. 2112 of 2112 bytes match RAM"
  },
  "0x8018c7e8": {
   "name": "entity_table",
@@ -1810,9 +1810,9 @@
   "evidence": "(spell). Takes spell_table + 24*spell, reads the MP cost at its +0x16, doubles or halves it for two pieces of equipment, announces 9 when player_mp is short, and otherwise spends it. player_turn calls it -- the routine that also reads the button edges"
  },
  "0x801b25d4": {
-  "name": "equipped_a",
+  "name": "equipped_armour",
   "kind": "data",
-  "evidence": "one of four equipment bytes at 0x801b25d4..0x801b25da, all set to 0xff by new_character. cast_spell doubles a spell's MP cost when this one holds 0x26; player_take_hit reads all four to scale its timings"
+  "evidence": "seven armour item ids, 0xff for none. Slot 0 is the head and slot 1 the body: cast_spell doubles the MP cost when slot 0 holds 0x26 (groundal crown) and halves it when slot 1 holds 0x2e (orladin’s mail)"
  },
  "0x801b25d5": {
   "name": "equipped_b",
@@ -1913,5 +1913,20 @@
   "name": "script_find_label",
   "kind": "code",
   "evidence": "scans a conversation block from +0x14 for a 0xf2 byte, compares the byte after it against $a1 and returns the pc just past it, giving up at the first 0xff; both script_prescan's guards and the interpreter's 0xf9 arm resolve their target through it"
+ },
+ "0x80029500": {
+  "name": "player_recalc_stats",
+  "kind": "code",
+  "evidence": "zeroes the eight offense ratings at 0x801b2538 and the eight defense at 0x801b254a, copies the five skills down to a working set, then adds the equipped weapon (68-byte record at weapon_table + 68*id) and the seven worn pieces (32-byte record at armour_table + 32*(id-34)) and the flat bonuses; twelve callers, all of them things that change a stat. Verified against RAM: 16 of 16 ratings"
+ },
+ "0x800293e4": {
+  "name": "add_armour_ratings",
+  "kind": "code",
+  "evidence": "takes an armour id, skips 0xff, and adds the eight u16 at +2,+4,+6,+a,+c,+e,+0x10,+0x12 of armour_table[id-34] into defense_ratings; called seven times by player_recalc_stats, once per worn slot"
+ },
+ "0x801b25af": {
+  "name": "equipped_weapon",
+  "kind": "data",
+  "evidence": "the weapon item id, 0xff for none; player_recalc_stats indexes weapon_table with it"
  }
 }
