@@ -1005,6 +1005,29 @@ assumed. **23 of 23** arms agree with what `tools/ovdis.py` resolves
 independently; the other eleven levels are comparison chains, which have no
 table for a walker to resolve.
 
+### `tools/questgraph.py` — which NPC opens which, and what to carry there
+
+```
+python3 tools/questgraph.py         every edge, NPC to NPC
+python3 tools/questgraph.py --json  the same, into out/questgraph.json
+```
+
+The **reading** end is complete: a conversation reads a story flag only in its
+`f1` guards and its `f9`, both fully decoded — 43 flags, 96 branches.
+
+The **writing** end is not, and the tool marks the difference rather than
+hiding it. `tools/ovdis.py` follows control flow into switch arms and finds
+**93 flags** written somewhere in a level's own code, but gives only the site;
+`tools/decomp.py` works the condition out by dominance and reaches **60**. An
+edge is `solid` when both agree, `partial` when only the walker saw it — the
+level is known, the condition is not — and `missing` when nothing writes it
+anywhere here. Of the 43: **27 solid, 5 partial, 11 missing**.
+
+The eleven are the honest hole. Doors, chests and levers write flags through
+the object interpreter, and the flag's number comes from the object's
+placement record rather than from an instruction, so a constant scan cannot
+see it. That record is BACKLOG item 2.
+
 ### `tools/equip.py` — what a weapon and a piece of armour are worth
 
 ```
