@@ -169,12 +169,25 @@ holds all 131 descriptions. What is left is cosmetic: `R` in *Recovery*, an `S`
 in a kerned *Sword*, the `t` in *Effect*, and the pair in *Key*. Low priority —
 the text is readable as it stands.
 
-## 4. NPC conversations
+## 4. NPC conversations — done, and the corpus was wrong twice
 
-Narrower now. Entity scripts are animation sequencers, the `0x8001dxxx` cluster
-is the pause menu, and the object text path shows a fixed line. But the level
-overlays call `announce` 190 times, so what an NPC says on a condition is in
-there too, next to the `has_item` that gates it.
+Settled. An entity's **block 0** is its conversation when it begins `0x70`,
+and 43 entities in the game have one, saying 594 lines. `tools/escript.py`
+decodes them, `tools/story.py` prints them in the order the game tells them,
+and `python3 tools/escript.py check` replays what `emu/bp21.lua` recorded in
+play — **44 of 44** steps and lines over four conversations.
+
+Both earlier readings were wrong and both are withdrawn in FORMATS.md §9:
+"entity scripts are animation sequencers" (they are dialogue; the `0x2b` test
+gates a different call) and "1086 scripts" (those were blocks 1..15 of each
+record, which are not scripts — the pointer list starts at `+0x38`, not
+`+0x3c`).
+
+**What is left here** is the other fifteen blocks. Nothing in `GAME.EXE`
+reads them; they are relocated for the level's own overlay and their kind
+bytes repeat across entities — every entity on level 0 has a `0x00`, and all
+but one end with a `0x02` then a `0x03`. `tools/ovdis.py` now walks the
+overlays properly, so whichever routine indexes `record+0x38+4n` is findable.
 
 ## 4. The walls — done, bar the tail of the opcode table
 
@@ -395,25 +408,35 @@ Worth checking against the collision opcodes that have never appeared in a log �
 `0x25` (41 cells on level 0), `0x18` and `0x31`. A door that is solid until
 pressed has to be solid *somehow*, and none of those three is transcribed.
 
-## 6. Who branches on the story flags
+## 6. Who branches on the story flags — done
 
-The script language is decoded (FORMATS.md section 9) and `story_flags` at
-`0x801ba988` is found, but no entity script tests or sets a flag. The nine
-sites that reach the array are the whole remaining search space:
-`script_interpreter`, `apply_level_state`, `object_trigger`, `0x8005c1e8`,
-`0x8005ea64` in the interaction cluster, and `0x80061940`. Reading those out
-gives the quest conditions.
+`python3 tools/story.py quests` prints both ends. **43 flags are read by a
+conversation** — through its `f1` guards or its `f9` — **26 are written by a
+conversation hook**, and **15 are both**; those fifteen are the quest steps.
+The writing end is entry 4 of a level's overlay, which the `0xf4` opcode
+calls and which `tools/quest.py` reads arm by arm.
+
+"no entity script tests or sets a flag" was the wrong corpus. A conversation
+never writes a flag directly — `f7` does not occur anywhere in the 43 — but
+78 `f9` and 18 guards read them, and `f4` is how a conversation asks the
+level's own code to write one.
+
+**What is left**: `story_flags` 93, 101 and 102 are not story at all —
+`cutscene_step` and `level_overlay_tick` use them as phase state within a
+single fade. Where the story part of the array ends is not settled.
 
 ## 7. Leftovers in the entity format
 
-The container is read: 265 entities across the game, each owning 3 to 8 scripts
-in a shared per-level block, all of it dumped by `tools/entities.py` (FORMATS.md
-section 4). The opcodes are not.
+The container is read and the count corrected: **265 entities, 1617 blocks**,
+sixteen pointers a record starting at `+0x38`, all dumped by
+`tools/entities.py`. "3 to 8 scripts" counted from the wrong offset and
+"the script bytes are transformed on load" was the same mistake seen from RAM
+— block 0 is on the disc verbatim, and `entity_table_init` only turns the
+offsets into pointers.
 
-Watching the block in RAM will not work — the script bytes are transformed on
-load and do not appear verbatim. The way in is `entity_table` at `0x8018c7e8`:
-thirteen pieces of code reach the records, and whichever of them follows a
-record's script pointer is the interpreter. That is a static job.
+What is still open is the *first* byte of each block. Kind `0x70` is a
+conversation; `0x00`, `0x02`, `0x03`, `0x06`, `0x13`, `0x18`, `0x19` and
+`0x1a` are not, and nothing in `GAME.EXE` reads them.
 
 KingsFieldRE documents a 124-byte entity structure for the first US game with
 HP at `+0x1a`, dropped item at `+0x0b` and state at `+0x0e`. Our records are
@@ -448,6 +471,25 @@ chests. The remaining classes, and the meaning of the object indices at `+0x3b`
 and `+0x40`, are open.
 
 ---
+
+## 11. What only a controller can settle
+
+`emu/bp22.lua` arms nine breakpoints and every one is a reading nothing has
+checked. TOOLS.md has the five numbered things to do in the game; in short:
+
+* **the saved level record.** Both sides of it were read off the code and
+  agree with each other, which after §4 is a weakness rather than a number.
+  Pick something up and change level, and the `STATE` and `APPLY` lines are
+  the stream itself.
+* **the flat equipment bonuses.** `tools/equip.py` reproduces 16 of 16
+  ratings from one snapshot. A second set with something else worn would
+  settle the four bonuses that are read and unchecked.
+* **the `0xf4` hook.** Sixty-two of them in the game and none has been seen
+  run, though `tools/quest.py` now says exactly what each one does.
+* **a guard or an `f9` taken.** Ninety-six branches in the conversation
+  language, none yet seen taken in play.
+* **the shop and the inn.** The arm of `script_interpreter` that runs when a
+  talker's header `+0x12` is not `0xff`.
 
 ## Last: putting a translation back on the disc
 

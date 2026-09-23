@@ -81,13 +81,44 @@ has happened.
 A change is finished when all of these hold:
 
 1. The claim is verified against the game, with a number in the output.
-2. `python3 tools/collision.py` still reports every logged call reproduced.
+2. `python3 tools/build.py --check` still reports every number below.
 3. If it touches the Godot build, `python3 tools/level3d.py 0` ends with
    `godot loads the project cleanly`.
 4. FORMATS.md, BOOT.md, BACKLOG.md, TOOLS.md and the symbol tables are updated
    to match, including anything now withdrawn.
 
 Do not report a step as complete without 1 and 4.
+
+### What is standing, as of the last run
+
+```
+the collision, against the game's own answers          8075 of 8078
+the level table, against the snapshots                 13 of 13
+the movement, against the watchpoint                   48 of 48, 15 of 15
+the conversations, against what was played             44 of 44
+the equipment tables, against a RAM snapshot           3264/3264, 2112/2112, 16/16
+the conversation hooks, two readings of one table      23 of 23
+the port's markers                                     56 in 13 files, all resolving
+```
+
+and in the Godot self-test:
+
+```
+movement 690 of 690 · levels 40 of 40 · angles 400 of 400
+conversations 43 of 43, and 25 of 25 steps the emulator recorded
+damage 6 of 6 · equipment 16 of 16 · directions 400 of 400
+```
+
+**Tell the two kinds apart.** Against a recording or a RAM snapshot — the
+conversations, the damage, the equipment, the collision, the movement — the
+game is the answer. Between two of this project's own readings — the
+directions, the levels, the angles, the 43-of-43 — the number says only that
+two copies agree, and they have agreed about the wrong thing before: 1086 of
+1086 entity scripts, for months, about bytes that were not scripts.
+
+The exception worth keeping is the hooks: those two readings share nothing,
+one scanning a routine's first instructions for a bound and a base and the
+other running the whole overlay through the walker's switch resolver.
 
 ---
 
