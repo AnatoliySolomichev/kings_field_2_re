@@ -2187,5 +2187,15 @@
   "name": "map_mark_seen",
   "kind": "code",
   "evidence": "called by object_trigger, player_controller and object_interact -- whenever the world changes under the player -- and walks level_map_rects from a counter of 0x9f, testing one bit per record"
+ },
+ "0x800261dc": {
+  "name": "ui_draw_label",
+  "kind": "code",
+  "evidence": "thirteen callers. Sets texture page 3 with ui_set_tpage and then walks the structure ui_menu_label fills -- the two u16 of position at +0 and +2, the glyphs from +4, stopping at 0xff -- emitting one sprite per glyph through ui_sprite_begin"
+ },
+ "0x800168a8": {
+  "name": "vec_rotate",
+  "kind": "code",
+  "evidence": "builds a rotation matrix through 0x800166f4, which composes rot_matrix_x with two more, and applies it to the caller’s vector with ApplyMatrixLV. Eleven callers, all actor, object or effect code"
  }
 }

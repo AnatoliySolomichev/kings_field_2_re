@@ -42,6 +42,13 @@ single random roll. Torches and fires, in other words.
 
 `world_shift` moves the live positions when the world does, which is what
 says they are world-space and not per-cell.
+
+**Which archive the model index reaches is not settled.** `render_walk` hands
+`draw_model_lit` the index `(id & 0x7fff) + 0x28`, and level 0 uses only ids
+0 and 1 -- models 40 and 41, nine of them -- so `MO.T[40]`, `MO.T[256]` and
+`MOF.T[40]` all parse as something and nothing yet tells them apart. Until it
+does, the port has the positions and not the meshes. `tools/tmd.py`'s
+`model_of` is for an object *type*, which is a different numbering.
 """
 import json
 import os
