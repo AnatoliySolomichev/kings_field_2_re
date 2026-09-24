@@ -51,7 +51,14 @@ not settled, though the name groups leave little room.
 Checked against a RAM snapshot taken while the game was running with
 *excellector* and a *leather plate*: **3264 of 3264** weapon bytes and **2112
 of 2112** armour bytes are what the disc holds, and **16 of 16** ratings come
-out of the two records.
+out of the two records. Then against five states `emu/bp23.lua` logged while
+the player put things on and took them off: **80 of 80**, and between them
+they exercise what one snapshot could not -- nothing worn, no weapon, one
+piece, the other, and both at once.
+
+**Still unexercised**: the four flat bonuses. None of the five states had the
+byte at `0x801b255e`, `0x801b256a`, `0x801b256e` or `0x801b2578` set, so the
+curse, the `+0x32`, the `+0x1e` and the `+5` are read and unseen.
 """
 import json
 import os
@@ -221,13 +228,33 @@ def check(ram_path):
     return bad == 0 and n == 2 * RATINGS
 
 
-# What a RAM snapshot of the running game held: the equipped ids, and the
-# sixteen ratings player_recalc_stats had left in memory. The port is checked
-# against this rather than against tools/equip.py alone.
+# The equipped ids and the sixteen ratings `player_recalc_stats` left, from a
+# RAM snapshot and then from `emu/bp23.lua`, which sat on the routine's last
+# instruction while the player put things on and took them off.
+#
+# Five states, and between them they exercise what one snapshot could not:
+# **nothing worn** (every rating zero), **no weapon** (0xff skipped, the
+# offense side zero while the defense side stands), one piece, the other, and
+# **both at once** -- 14+13, 4+6 and 2+4 giving 27, 10 and 6, which is the sum
+# across slots seen rather than assumed.
 RECORDED = [
+    # a RAM snapshot, and then the five states emu/bp23.lua logged while the
+    # player put things on and took them off again
     {"weapon": 0, "worn": [255, 42, 255, 255, 255, 255, 255],
      "offense": [39, 32, 9, 0, 0, 0, 0, 0],
      "defense": [13, 6, 4, 0, 0, 0, 0, 0]},
+    {"weapon": 0, "worn": [255, 255, 255, 255, 255, 255, 255],
+     "offense": [39, 32, 9, 0, 0, 0, 0, 0],
+     "defense": [0, 0, 0, 0, 0, 0, 0, 0]},
+    {"weapon": 255, "worn": [255, 42, 255, 255, 255, 255, 255],
+     "offense": [0, 0, 0, 0, 0, 0, 0, 0],
+     "defense": [13, 6, 4, 0, 0, 0, 0, 0]},
+    {"weapon": 0, "worn": [34, 42, 255, 255, 255, 255, 255],
+     "offense": [39, 32, 9, 0, 0, 0, 0, 0],
+     "defense": [27, 10, 6, 0, 0, 0, 0, 0]},
+    {"weapon": 0, "worn": [34, 255, 255, 255, 255, 255, 255],
+     "offense": [39, 32, 9, 0, 0, 0, 0, 0],
+     "defense": [14, 4, 2, 0, 0, 0, 0, 0]},
 ]
 
 
