@@ -2172,5 +2172,20 @@
   "name": "level_props",
   "kind": "data",
   "evidence": "128 records of 24 bytes, the extra models a level places itself. render_walk walks them every frame and draws each with draw_model_lit, model index (id & 0x7fff) + 0x28 and brightness record[+5] + 0x80; world_shift moves their positions with the world. 389 of them across the game, 54 of 54 fields checked against a RAM snapshot"
+ },
+ "0x801ba6fc": {
+  "name": "level_map_rects",
+  "kind": "data",
+  "evidence": "block 5 of FDAT entry 3n+1, 640 bytes copied whole: 160 records of x, z, width, height in half cells -- the map the game draws. 0x8001bd48 draws it through ui_prim_begin and 0x8001bea8, called by object_trigger, player_controller and object_interact, walks the same records with a counter from 0x9f testing one bit each, which is what the player has seen. On every level with a grid the rectangles cover 94-97% of the open floor, and 2811 of the 2999 ink pixels of ITEM.T 721 -- the level-0 map the game hands the player, at the same half-cell scale -- fall inside them"
+ },
+ "0x8001bd48": {
+  "name": "ui_draw_map",
+  "kind": "code",
+  "evidence": "walks level_map_rects and draws through ui_prim_begin, indexed by [0x8018fadd]"
+ },
+ "0x8001bea8": {
+  "name": "map_mark_seen",
+  "kind": "code",
+  "evidence": "called by object_trigger, player_controller and object_interact -- whenever the world changes under the player -- and walks level_map_rects from a counter of 0x9f, testing one bit per record"
  }
 }

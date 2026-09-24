@@ -93,11 +93,14 @@ one, clamped into `op1..op2` so the slope can start and stop partway.
 `negu` and a shift by 7. The grid is at `0x801d4464`, a cell at `+ cz*800 +
 cx*10`, both of them constants in the code at `0x80033b8c`.
 """
+import os
 import re
 import sys
 
 sys.path.insert(0, "tools")
 import tiles  # noqa: E402
+
+ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 
 GRID, W, CELL = 0x801D4464, 80, 10
 WALLOPS = {0x20, 0x21, 0x22}
@@ -114,10 +117,41 @@ def s16(v):
 
 
 class Level:
+    """One level's grid and its tile shapes.
+
+    **The grid used to come from `out/grid_live_lv0.bin` whatever level was
+    asked for**, so every level but 0 was given level 0's floor with its own
+    shape table -- and `tools/gdcoll.py` wrote that into every `collNN.json`
+    the port has. Nothing caught it because the one recording this model is
+    checked against is on level 0.
+
+    The grid is on the disc: `FDAT.T` entry `3n` opens with the length word
+    64000 -- 6400 cells of 10 bytes -- and the rest is the grid, which
+    `level_load` copies to `level_grid`. For level 0 it is 62253 of 64000
+    bytes against the live dump; the 1747 that differ are in fields 2, 5, 8
+    and 9, which is objects stamping themselves into cells after the load and
+    the per-frame state.
+
+    So a dump is preferred when one exists for that level, because it is the
+    floor as the recording saw it, and the disc is used otherwise.
+    """
+
+    GRID_ENTRY = 4             # the length word before the grid
+
     def __init__(self, lv, grid=None):
+        self.lv = lv
         self.tail, self.offs = tiles.table(lv)
-        self.grid = grid or open("out/grid_live_lv0.bin", "rb").read()
+        self.grid = grid or self._grid(lv)
         self.cache = {}
+
+    @staticmethod
+    def _grid(lv):
+        dump = os.path.join(ROOT, "out", f"grid_live_lv{lv}.bin")
+        if os.path.exists(dump):
+            return open(dump, "rb").read()
+        from tarc import TArc
+        raw = TArc(os.path.join(ROOT, "extract", "CD", "COM", "FDAT.T")).raw(lv * 3)
+        return raw[Level.GRID_ENTRY:Level.GRID_ENTRY + W * W * CELL]
 
     def shape(self, sid):
         if sid not in self.cache:
