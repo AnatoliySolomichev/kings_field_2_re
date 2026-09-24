@@ -2147,5 +2147,20 @@
   "name": "ui_label_table",
   "kind": "data",
   "evidence": "28-byte records in rows of nine, 252 bytes a row: u16 x, u16 y and a 0x7f-terminated string of glyph codes. ui_menu_label reads it"
+ },
+ "0x80045ac8": {
+  "name": "object_collide",
+  "kind": "code",
+  "evidence": "collide_query calls it when its mask has bit 0x20, and leaves the answer in [0x801e6490]. It walks all 396 object slots, skipping a type of 0xff, a byte +0 of zero and current_object, and tests each live one two ways: a **circle** of radius `object_type_table[type] + 4`, scaled by the object’s byte +0x38 over 128 when the row’s byte +3 has bit 0x10, through in_range; or, when that radius is zero and the object’s own byte +3 has bit 4, an **oriented rectangle** with half-extents from the row’s +0xe and +0x10, through in_oriented_rect. Returns the slot index or -1"
+ },
+ "0x80016d3c": {
+  "name": "in_oriented_rect",
+  "kind": "code",
+  "evidence": "object_collide’s only caller: takes the offset to the object, its length from game_isqrt and its bearing from vec_angle, turns it into the object’s own frame with game_cos and game_sin off the angle at object+0x24, and compares against two half-extents"
+ },
+ "0x801e6490": {
+  "name": "collide_object",
+  "kind": "data",
+  "evidence": "the object slot collide_query last found the query point inside, or -1. player_horizontal reads it and, when the object’s byte +3 has bit 4, slides the player around the object using its angle at +0x26"
  }
 }

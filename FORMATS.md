@@ -1902,6 +1902,38 @@ Names confirmed this way are written with a trailing `!` in the tools; a name
 merely taken from `ITEM.T` at the same index gets a `?`, because that archive
 shares numbering with the object types only in part.
 
+### What makes an object solid — found
+
+`collide_query` takes a mask, and bit `0x20` of it means "test the objects".
+That branch calls **`object_collide` (`0x80045ac8`)** and leaves its answer —
+a slot index, or `-1` — in **`collide_object` (`0x801e6490`)**, beside the
+actor answer at `0x801e648c`.
+
+`object_collide` walks all 396 slots and skips three kinds: a type id of
+`0xff`, a byte `+0` of zero, and whichever slot is `current_object`. What is
+left it tests **two ways**:
+
+| | |
+| --- | --- |
+| a **circle** | radius = the `u16` at `object_type_table[type] + 4`, through `in_range`. When the row's byte `+3` has bit `0x10` the radius is scaled by the object's own byte `+0x38` over 128 — the same byte `level_state_write` saves |
+| an **oriented rectangle** | only when that radius is zero *and* the object's own byte `+3` has bit `4`: half-extents from the row's `+0xe` and `+0x10`, through `in_oriented_rect` (`0x80016d3c`), which turns the offset into the object's frame with `game_cos` and `game_sin` off the angle at `object+0x24` |
+
+So an object's collision is **in its type's row, not in its placement
+record** — which is why looking for it in the record found nothing. The
+record carries the scale byte that stretches it and the angle that turns it,
+and nothing else about it.
+
+On level 0, of the objects live in a RAM snapshot, **24 have a non-zero
+radius**, and the values are 128, 150, 200, 400, 450, 500, 600, 750 and
+1792 — the same units as the player's own 800.
+
+`player_horizontal` is the other half: it reads `collide_object`, checks the
+object's byte `+3` for bit `4` again, and slides the player around it using
+the angle at `object+0x26`.
+
+**This is read and not yet checked against the game.** `emu/bp23.lua` logs
+every call with the shape and the numbers it was given.
+
 ### The scale triple is a switch, and an object stamps itself into the terrain
 
 `+0x2c`, `+0x2e` and `+0x30` were read as the object's size, `0x1000` being
