@@ -2162,5 +2162,15 @@
   "name": "collide_object",
   "kind": "data",
   "evidence": "the object slot collide_query last found the query point inside, or -1. player_horizontal reads it and, when the object’s byte +3 has bit 4, slides the player around the object using its angle at +0x26"
+ },
+ "0x80043a08": {
+  "name": "level_props_init",
+  "kind": "code",
+  "evidence": "level_load hands it block 4 of FDAT entry 3n+1, 2048 bytes: it unpacks 128 records of 16 into 128 of 24 at level_props, turning a cell and an offset into a world position, taking the height from collide_at_cell plus the record’s +14, and rolling the brightness once as rand() * record[+3] >> 15"
+ },
+ "0x80182968": {
+  "name": "level_props",
+  "kind": "data",
+  "evidence": "128 records of 24 bytes, the extra models a level places itself. render_walk walks them every frame and draws each with draw_model_lit, model index (id & 0x7fff) + 0x28 and brightness record[+5] + 0x80; world_shift moves their positions with the world. 389 of them across the game, 54 of 54 fields checked against a RAM snapshot"
  }
 }

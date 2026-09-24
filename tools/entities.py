@@ -108,7 +108,7 @@ def blocks(lv, path=FDAT):
     | 1 | 13000 | 3200 | `actor_table_build` |
     | 2 | 16204 | 768 | `0x8019175c` -- **32 more rows of `object_type_table`, starting at type 300** |
     | 3 | 16976 | 8400 | `load_object_placement` |
-    | 4 | 25380 | 2048 | not read yet |
+    | 4 | 25380 | 2048 | `level_props_init` -- 128 records of 16, the models a level places itself |
     | 5 | 27432 | 640 | `0x801ba6fc` |
 
     So `4 + the entry's first u32` is where the *second* block begins, not the

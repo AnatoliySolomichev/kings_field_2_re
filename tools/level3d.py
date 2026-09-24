@@ -1035,6 +1035,11 @@ def project(lv, out="out/godot", start=(57, 4)):
     except Exception as e:                       # no disc, no scripts
         print(f"entity scripts skipped: {e}")
     try:
+        import props
+        props.export(out)
+    except Exception as e:                       # no disc, no props
+        print(f"props skipped: {e}")
+    try:
         import objcoll
         objcoll.export(out)
     except Exception as e:                       # no disc, no collision shapes

@@ -25,7 +25,7 @@ handlers and whatever a pointer table reaches have to be.
 | effects | 31 | 7495 | 3 |
 | actors | 45 | 6706 | 13 |
 | unreached | 58 | 4017 | 3 |
-| level | 36 | 3702 | 10 |
+| level | 36 | 3702 | 11 |
 | menu | 44 | 3468 | 6 |
 | boot | 52 | 2438 | 6 |
 | flags | 40 | 2149 | 2 |
@@ -696,7 +696,7 @@ the level's own code, and the fades; the seven-state load.
 | address | instructions | callers | name | what it touches |
 | --- | --- | --- | --- | --- |
 | `0x80044d9c` | 843 | 1 | load_object_placement | calls block_copy, block_zero, grid_query_area, player_in_rect and 1 more; points at object_table, points at object_type_ |
-| `0x80018358` | 575 | 9 | level_load | calls read_archive_entry, free_object_resource, grid_query_area, block_copy and 7 more; points at fdat_load_buffer, read |
+| `0x80018358` | 575 | 9 | level_load | calls read_archive_entry, free_object_resource, grid_query_area, block_copy and 8 more; points at fdat_load_buffer, read |
 | `0x8005c864` | 223 | 3 | sub_8005c864 | calls actors_retire_marked, level_load, object_trigger, player_recalc_stats and 1 more; points at script_opcode_table, r |
 | `0x8005f444` | 222 | 1 | apply_level_state | calls level_state_unpack, init_object_record, rand, select_cell_layer; points at actor_table, points at entity_table, po |
 | `0x8006f14c` | 207 | 1 | sub_8006f14c | calls bios_printf |
@@ -708,7 +708,7 @@ the level's own code, and the fades; the seven-state load.
 | `0x80072b70` | 94 | 1 | sub_80072b70 |  |
 | `0x80071e2c` | 92 | 1 | sub_80071e2c |  |
 | `0x80015b9c` | 81 | 1 | sub_80015b9c |  |
-| `0x80043a08` | 76 | 1 | sub_80043a08 | calls collide_at_cell, rand |
+| `0x80043a08` | 76 | 1 | level_props_init | calls collide_at_cell, rand; points at level_props, writes level_props |
 | `0x80019bbc` | 66 | 3 | sub_80019bbc | calls file_checksum; reads res_request |
 | `0x8007197c` | 64 | 1 | sub_8007197c |  |
 | `0x8006a54c` | 55 | 2 | sub_8006a54c |  |

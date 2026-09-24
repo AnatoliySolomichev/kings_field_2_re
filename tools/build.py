@@ -106,6 +106,9 @@ def main(quick=False, only_check=False):
     run(["tools/equip.py", "--check", "out/ram.bin"],
         "the equipment tables, against a RAM snapshot",
         keep=["match RAM", "reproduced"])
+    run(["tools/props.py", "--check"],
+        "the level's own props, against a RAM snapshot",
+        keep=["fields of"])
     run(["tools/levelstate.py", "--check"],
         "the saved level record, against what was played",
         keep=["decode exactly"])
