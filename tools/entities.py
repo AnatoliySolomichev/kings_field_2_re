@@ -95,6 +95,49 @@ def entry(lv, path=FDAT):
     return raw, base, recs
 
 
+def blocks(lv, path=FDAT):
+    """[(offset of the data, length)] for entry `3n + 1`, which is a chain.
+
+    `level_load` walks it as one: it reads a `u32` length, uses the bytes
+    after it, then steps over both and reads the next. Six blocks, and the
+    offsets are the same on every level:
+
+    | # | at | bytes | where it goes |
+    | --- | --- | --- | --- |
+    | 0 | 4 | 12992 | `entity_table`, 0xcb0 words -- the 40 records and the blocks they point at |
+    | 1 | 13000 | 3200 | `actor_table_build` |
+    | 2 | 16204 | 768 | `0x8019175c` -- **32 more rows of `object_type_table`, starting at type 300** |
+    | 3 | 16976 | 8400 | `load_object_placement` |
+    | 4 | 25380 | 2048 | not read yet |
+    | 5 | 27432 | 640 | `0x801ba6fc` |
+
+    So `4 + the entry's first u32` is where the *second* block begins, not the
+    end of anything: this file used to treat that word as "the size of
+    everything below", which is true only of block 0.
+    """
+    raw = TArc(path).raw(lv * 3 + 1)
+    out, o = [], 0
+    while o + 4 <= len(raw):
+        n = struct.unpack_from("<I", raw, o)[0]
+        if n == 0 or o + 4 + n > len(raw):
+            break
+        out.append((o + 4, n))
+        o += 4 + n
+    return raw, out
+
+
+TYPE_BLOCK = 2                 # the block holding the level's own type rows
+
+
+def level_type_rows(lv, path=FDAT):
+    """The 32 `object_type_table` rows a level brings with it, types 300..331."""
+    raw, bs = blocks(lv, path)
+    if len(bs) <= TYPE_BLOCK:
+        return []
+    o, n = bs[TYPE_BLOCK]
+    return [raw[o + 24 * i:o + 24 * (i + 1)] for i in range(n // 24)]
+
+
 def spans(raw, base, recs):
     """offset -> (start, end) for every block on the level.
 

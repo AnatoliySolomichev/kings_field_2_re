@@ -106,6 +106,9 @@ def main(quick=False, only_check=False):
     run(["tools/equip.py", "--check", "out/ram.bin"],
         "the equipment tables, against a RAM snapshot",
         keep=["match RAM", "reproduced"])
+    run(["tools/objops.py", "--types"],
+        "the object type table, against a RAM snapshot",
+        keep=["of 7968", "rows"])
     run(["tools/quest.py", "--check"],
         "the conversation hooks, two readings of the same table",
         keep=["agree"])

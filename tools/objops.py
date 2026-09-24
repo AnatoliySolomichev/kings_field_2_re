@@ -200,26 +200,42 @@ def profile(w, fn, blocks):
 TYPES_ENTRY, TYPES_OFFSET = 97, 4     # FDAT.T entry 97, past its length word
 
 
-def type_rows(path=None):
-    """The object type table, off the disc: 300 rows of 24 bytes.
+def type_rows(path=None, level=None):
+    """The object type table: **300 shared rows, then 32 the level brings.**
 
-    `FDAT.T` entry 97 opens with a length word of **7200 = 300 * 24** and the
-    table follows it. All 300 rows are byte for byte what a level-0 RAM
-    snapshot holds at `object_type_table`, so it is loaded whole and it is the
-    same on every level -- there is nothing per-level about it.
+    `FDAT.T` entry 97 opens with a length word of 7200 = 300 * 24 and the
+    shared table follows it. All 300 are byte for byte what a level-0 RAM
+    snapshot holds at `object_type_table`.
 
-    **300 is where `model_of_type` changes its mind too.** Below that type the
-    model is `type + 0x100`; from 300 up the level is added, and from 300 up
-    there is no row here either. The two facts are the same boundary seen from
-    either side, and either one on its own reads like a coincidence.
+    **The table does not stop there, and saying it did was wrong.** Entry
+    `3n + 1` is a chain of six blocks and its third is 768 bytes -- 32 more
+    rows -- which `level_load` copies to `0x8019175c`, exactly 7200 bytes past
+    the base, so they are types **300 to 331**. On level 0 those 768 bytes are
+    768 of 768 against the same snapshot, and `emu/bp23.lua` logged the game
+    colliding with types 301, 308, 314, 324, 325 and 326 using them.
+
+    That also explains the other half of the old boundary. `model_of_type`
+    takes the model as `type + 0x100` below 300 and adds the level from 300
+    up -- because from 300 up the *row* is the level's own too. The two facts
+    were filed as "the same boundary seen from either side"; they are one
+    fact.
+
+    With `level`, the 32 are appended, so `rows[325]` is that level's row.
     """
     import struct
     from tarc import TArc
-    raw = TArc(path or os.path.join(ROOT, "extract", "CD", "COM",
-                                    "FDAT.T")).raw(TYPES_ENTRY)
+    path = path or os.path.join(ROOT, "extract", "CD", "COM", "FDAT.T")
+    raw = TArc(path).raw(TYPES_ENTRY)
     n = struct.unpack_from("<I", raw, 0)[0] // TYPE_ROW
-    return [raw[TYPES_OFFSET + TYPE_ROW * t:
-                TYPES_OFFSET + TYPE_ROW * (t + 1)] for t in range(n)]
+    rows = [raw[TYPES_OFFSET + TYPE_ROW * t:TYPES_OFFSET + TYPE_ROW * (t + 1)]
+            for t in range(n)]
+    if level is not None:
+        import entities
+        rows += entities.level_type_rows(level, path)
+    return rows
+
+
+SHARED_ROWS = 300              # where a level's own 32 rows begin
 
 
 # What a type's 24-byte row holds. Only the fields that are established are
@@ -264,11 +280,11 @@ def modelless(out=sys.stdout):
     import collections
     import placement
     import tmd
-    rows = type_rows()
     mk = markers()
     never = {0xE5, 0xE9}
     cache, acc, left, total = {}, collections.Counter(), collections.Counter(), 0
     for lv in range(28):
+        rows = type_rows(level=lv)
         for o in placement.objects(lv):
             t = o["type"]
             total += 1
@@ -282,7 +298,7 @@ def modelless(out=sys.stdout):
             if cache[key]:
                 continue
             if t >= len(rows):
-                acc["past the type table, type 300 or above"] += 1
+                acc["past the type table, type 332 or above"] += 1
             elif t in mk:
                 acc["a marker: the row is empty past +3"] += 1
             elif rows[t][0] in never:
@@ -323,20 +339,51 @@ def export(out_dir):
     return out
 
 
+RAM = os.path.join(ROOT, "out", "ram.bin")
+TYPE_BASE = 0x8018FB3C
+
+
+def check_types(ram=RAM, level=0, out=sys.stdout):
+    """The 332 rows off the disc, against a RAM snapshot of that level.
+
+    300 shared plus the 32 the level brings: if the second piece were read
+    from the wrong block, or placed at the wrong type, this is where it would
+    show.
+    """
+    if not os.path.exists(ram):
+        print(f"  no RAM snapshot at {ram}; the type table is unchecked", file=out)
+        return True
+    d = open(ram, "rb").read()
+    rows = type_rows(level=level)
+    blob = b"".join(rows)
+    off = TYPE_BASE - 0x80000000
+    live = d[off:off + len(blob)]
+    same = sum(1 for x, y in zip(blob, live) if x == y)
+    print(f"  {len(rows)} type rows off the disc: {same} of {len(blob)} bytes "
+          f"match RAM at {TYPE_BASE:#x}", file=out)
+    return same == len(blob)
+
+
 def census(levels=range(28)):
     """Which opcodes the game actually uses, over every level, from the disc.
 
-    An object of type 300 or above has no row -- the table stops there -- and
-    those are counted separately rather than read off the end of it, which is
-    what an earlier pass did: it took whatever followed the table in RAM as
-    three hundred more type rows and reported classes for types that have none.
+    **Withdrawn: "an object of type 300 or above has no row".** The table does
+    not stop at 300; it has 32 more rows that the level brings with it, out of
+    the third block of `FDAT.T` entry `3n + 1`. So the rows are taken per
+    level here, and the objects that used to be counted as having no type are
+    counted under their opcode like everything else.
+
+    What stays true is the correction that note was defending: reading *past*
+    332 is reading whatever follows the table in RAM, and an earlier pass did
+    exactly that and reported classes for types that have none.
     """
     import placement
-    rows = type_rows()
+    rows = None
     out = collections.defaultdict(lambda: {"objects": 0, "types": set(),
                                            "levels": set()})
     over = {"objects": 0, "types": set()}
     for lv in levels:
+        rows = type_rows(level=lv)
         for o in placement.objects(lv):
             t = o["type"]
             if t >= len(rows):
@@ -417,13 +464,24 @@ def document(path=None):
         p()
         p("## Every placed object in the game, by opcode")
         p()
-        p("The type table is one block on the disc -- `FDAT.T` entry 97 at")
-        p("offset 4, 300 rows of 24 bytes -- and it is the same on every")
-        p("level, so this is the whole game and not one level of it.")
+        p("The type table is **332 rows of 24 bytes in two pieces**. The first")
+        p("300 are one block on the disc -- `FDAT.T` entry 97 at offset 4 --")
+        p("and are the same on every level. The other **32 the level brings")
+        p("with it**: the third block of entry `3n + 1`, 768 bytes, which")
+        p("`level_load` copies to `0x8019175c`, exactly 7200 bytes past the")
+        p("base, so they are types 300 to 331. Against a level-0 RAM snapshot")
+        p("all 332 rows are **7968 of 7968 bytes**.")
         p()
-        p(f"**{over['objects']} placed objects have a type of 300 or above**,")
-        p("which is where the table stops, so they have no row and no opcode:")
-        p("the same boundary `model_of_type` changes its mind at.")
+        p("**Withdrawn: \"1424 placed objects have a type of 300 or above,")
+        p("which is where the table stops, so they have no row and no")
+        p("opcode\".** They have a row, from their own level. It also")
+        p("explains the boundary `model_of_type` changes its mind at -- the")
+        p("model is `type + 0x100` below 300 and takes the level from 300 up")
+        p("because from 300 up the *row* is the level's too. Two facts filed")
+        p("as a coincidence were one fact.")
+        p()
+        p(f"**{over['objects']} placed objects are past type 332**, where")
+        p("reading a row would be reading whatever follows the table.")
         p()
         p("| opcode | objects | levels | types |")
         p("| --- | --- | --- | --- |")
@@ -473,6 +531,8 @@ if __name__ == "__main__":
         report(None, sys.stdout, "player")
     elif a and a[0] == "--types":
         print(ROW.strip())
+        print()
+        check_types()
         print()
         mk = markers()
         print(f"{len(mk)} of the 300 types are markers -- the row is empty "

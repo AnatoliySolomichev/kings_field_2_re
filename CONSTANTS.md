@@ -134,7 +134,7 @@ In `game:object_interpreter`.
 396 object records, the bound on every index into the table at 0x80191a5c: `slti $v0, $a0, 0x18c`.
 
 10 sites: 5 bound, 5 loaded.
-In `game:object_interpreter`, `game:find_object`, `game:sub_80045ac8`, `game:level_state_write`, `game:apply_level_state`.
+In `game:object_interpreter`, `game:find_object`, `game:object_collide`, `game:level_state_write`, `game:apply_level_state`.
 
 `python3 tools/consts.py 0x18c` for every site.
 

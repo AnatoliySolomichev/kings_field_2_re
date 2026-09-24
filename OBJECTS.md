@@ -14,56 +14,75 @@ machine with 236 opcodes.
 
 ## Every placed object in the game, by opcode
 
-The type table is one block on the disc -- `FDAT.T` entry 97 at
-offset 4, 300 rows of 24 bytes -- and it is the same on every
-level, so this is the whole game and not one level of it.
+The type table is **332 rows of 24 bytes in two pieces**. The first
+300 are one block on the disc -- `FDAT.T` entry 97 at offset 4 --
+and are the same on every level. The other **32 the level brings
+with it**: the third block of entry `3n + 1`, 768 bytes, which
+`level_load` copies to `0x8019175c`, exactly 7200 bytes past the
+base, so they are types 300 to 331. Against a level-0 RAM snapshot
+all 332 rows are **7968 of 7968 bytes**.
 
-**1424 placed objects have a type of 300 or above**,
-which is where the table stops, so they have no row and no opcode:
-the same boundary `model_of_type` changes its mind at.
+**Withdrawn: "1424 placed objects have a type of 300 or above,
+which is where the table stops, so they have no row and no
+opcode".** They have a row, from their own level. It also
+explains the boundary `model_of_type` changes its mind at -- the
+model is `type + 0x100` below 300 and takes the level from 300 up
+because from 300 up the *row* is the level's too. Two facts filed
+as a coincidence were one fact.
+
+**0 placed objects are past type 332**, where
+reading a row would be reading whatever follows the table.
 
 | opcode | objects | levels | types |
 | --- | --- | --- | --- |
-| `0xff` | 997 | 24 | 153, 155, 157, 161, 163, 164, 166, 206, 207, 208 |
+| `0xff` | 2161 | 24 | 153, 155, 157, 161, 163, 164, 166, 206, 207, 208 |
+| `0x09` | 600 | 22 | 183, 184, 185, 186, 188, 190, 191, 192, 193, 194 |
 | `0x40` | 496 | 24 | 0, 3, 4, 5, 6, 7, 8, 9, 12, 14 |
-| `0x09` | 467 | 22 | 183, 184, 185, 186, 188, 190, 191, 192, 193, 194 |
 | `0x06` | 178 | 20 | 152, 154, 156, 160 |
 | `0xe6` | 136 | 13 | 287 |
 | `0xe2` | 134 | 27 | 297 |
-| `0x02` | 118 | 19 | 170, 174, 175, 176, 179 |
+| `0x02` | 128 | 19 | 170, 174, 175, 176, 179, 301, 305, 306, 310, 311 |
 | `0xe0` | 86 | 22 | 280 |
 | `0x14` | 76 | 17 | 299 |
 | `0x51` | 73 | 4 | 216, 217, 218, 219, 221 |
-| `0x03` | 64 | 6 | 171 |
+| `0x03` | 66 | 8 | 171, 305, 306 |
 | `0xe3` | 63 | 25 | 282 |
 | `0x1f` | 61 | 16 | 283 |
 | `0xe1` | 50 | 14 | 284 |
 | `0x0e` | 48 | 24 | 227 |
+| `0xe9` | 43 | 5 | 288, 291, 318 |
+| `0x0d` | 43 | 16 | 198, 199, 200, 202, 204, 226, 300, 301, 304, 310 |
 | `0x01` | 42 | 7 | 177, 178 |
-| `0xe9` | 42 | 4 | 288, 291 |
 | `0x07` | 37 | 10 | 159, 172, 173 |
+| `0x53` | 24 | 6 | 259, 260, 300, 304, 305, 317 |
+| `0x1b` | 23 | 6 | 165, 167, 304, 309, 311 |
 | `0x52` | 21 | 2 | 220 |
-| `0x0d` | 20 | 9 | 198, 199, 200, 202, 204, 226 |
 | `0x5f` | 20 | 2 | 290 |
 | `0xe5` | 19 | 6 | 158 |
 | `0x17` | 19 | 3 | 162 |
-| `0x1b` | 18 | 3 | 165, 167 |
+| `0x18` | 18 | 4 | 257, 319 |
 | `0x1a` | 18 | 3 | 258 |
-| `0x18` | 14 | 3 | 257 |
+| `0x56` | 17 | 1 | 301 |
+| `0xeb` | 16 | 7 | 300, 301, 308, 313, 321, 324, 325 |
+| `0x05` | 15 | 5 | 180, 307, 314 |
 | `0xf2` | 13 | 1 | 267, 268, 269, 270, 271, 272, 273, 274, 275, 276 |
 | `0xf0` | 12 | 12 | 264, 265 |
-| `0x53` | 12 | 3 | 259, 260 |
+| `0xe8` | 12 | 1 | 319 |
+| `0x00` | 12 | 2 | 301 |
 | `0x15` | 10 | 6 | 298 |
-| `0x05` | 10 | 3 | 180 |
 | `0xe4` | 9 | 7 | 285 |
 | `0xea` | 8 | 2 | 289 |
 | `0x54` | 7 | 3 | 224 |
 | `0x16` | 7 | 7 | 254 |
+| `0x58` | 4 | 1 | 316 |
 | `0x12` | 3 | 3 | 251 |
+| `0x32` | 2 | 2 | 241, 306 |
 | `0x55` | 2 | 1 | 222 |
 | `0x5a` | 2 | 1 | 225 |
 | `0x0f` | 1 | 1 | 203 |
-| `0x32` | 1 | 1 | 241 |
+| `0xa6` | 1 | 1 | 302 |
+| `0xa7` | 1 | 1 | 320 |
+| `0x04` | 1 | 1 | 302 |
 
 ## Every arm
 
@@ -71,7 +90,7 @@ the same boundary `model_of_type` changes its mind at.
 236 opcodes through 44 arms; 191 of them reach 0x8004b4b4, which is a call through level_hooks -- an opcode it does not know is handed to the level's own code
   and 2 reach 0x8004b4d0, the loop's continue, which does nothing
 
-  0x80047cbc  opcode 0x00
+  0x80047cbc  opcode 0x00   -- 12 objects in the game
       347 instructions in 60 blocks
       calls sub_800445b8, vec_angle, object_sound, facing_test, rot_matrix_y, ApplyMatrixLV, collide_query
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table, points at object_table, reads player_pos
@@ -81,22 +100,22 @@ the same boundary `model_of_type` changes its mind at.
       calls sub_800445b8, vec_angle, object_sound, facing_test, rot_matrix_y, ApplyMatrixLV, collide_query
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table, reads player_pos, writes player_strafe_speed
 
-  0x800475f8  opcode 0x02   -- 118 objects in the game
+  0x800475f8  opcode 0x02   -- 128 objects in the game
       221 instructions in 37 blocks
       calls sub_800445b8, object_sound, collide_query
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
 
-  0x800470c4  opcode 0x03   -- 64 objects in the game
+  0x800470c4  opcode 0x03   -- 66 objects in the game
       176 instructions in 32 blocks
       calls object_sound, sub_800443c8, collide_query
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
 
-  0x80047290  opcode 0x04
+  0x80047290  opcode 0x04   -- 1 objects in the game
       177 instructions in 33 blocks
       calls object_sound, sub_800443c8, collide_query
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
 
-  0x80047444  opcode 0x05   -- 10 objects in the game
+  0x80047444  opcode 0x05   -- 15 objects in the game
       177 instructions in 33 blocks
       calls object_sound, sub_800443c8, collide_query
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
@@ -116,7 +135,7 @@ the same boundary `model_of_type` changes its mind at.
       calls object_sound, sub_80016240, sub_800168f0, sub_80044900, sub_80015f18
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
 
-  0x80048c34  opcode 0x09   -- 467 objects in the game
+  0x80048c34  opcode 0x09   -- 600 objects in the game
       18 instructions in 5 blocks
       points at object_table
 
@@ -137,7 +156,7 @@ the same boundary `model_of_type` changes its mind at.
       calls sub_80044900, sub_800168a8, fixed_madd, object_sound
       points at object_table
 
-  0x8004aeb8  opcode 0x18   -- 14 objects in the game
+  0x8004aeb8  opcode 0x18   -- 18 objects in the game
       82 instructions in 16 blocks
       calls object_use_state
       reads current_level_block, reads pending_level, points at object_table
@@ -147,7 +166,7 @@ the same boundary `model_of_type` changes its mind at.
       calls object_use_state
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table, points at object_table
 
-  0x80047858  opcode 0x1b   -- 18 objects in the game
+  0x80047858  opcode 0x1b   -- 23 objects in the game
       348 instructions in 60 blocks
       calls sub_800445b8, vec_angle, object_sound, facing_test, rot_matrix_y, ApplyMatrixLV, collide_query
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table, points at object_table, reads player_pos
@@ -155,7 +174,7 @@ the same boundary `model_of_type` changes its mind at.
   0x8004b154  opcode 0x31
       5 instructions in 1 blocks
 
-  0x8004b168  opcode 0x32   -- 1 objects in the game
+  0x8004b168  opcode 0x32   -- 2 objects in the game
       27 instructions in 7 blocks
       points at actor_table
 
@@ -169,7 +188,7 @@ the same boundary `model_of_type` changes its mind at.
       calls object_sound, player_in_rect, object_set_present, sub_80046760, collide_query, actor_attack_player
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
 
-  0x80048c7c  opcode 0x53   -- 12 objects in the game
+  0x80048c7c  opcode 0x53   -- 24 objects in the game
       205 instructions in 55 blocks
       calls object_sound, sub_800463bc
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table, reads current_level_block
@@ -183,7 +202,7 @@ the same boundary `model_of_type` changes its mind at.
       calls object_sound, sub_80046760, collide_query, actor_attack_player
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
 
-  0x80049fcc  opcode 0x56
+  0x80049fcc  opcode 0x56   -- 17 objects in the game
       85 instructions in 14 blocks
 
   0x80049574  opcode 0x57
@@ -191,7 +210,7 @@ the same boundary `model_of_type` changes its mind at.
       calls object_sound, sub_800445b8
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
 
-  0x8004ab40  opcode 0x58
+  0x8004ab40  opcode 0x58   -- 4 objects in the game
       132 instructions in 26 blocks
       calls sub_800445b8, object_sound
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
@@ -245,7 +264,7 @@ the same boundary `model_of_type` changes its mind at.
       calls player_in_rect
       points at cutscene_number, reads cutscene_number, writes cutscene_phase, writes cutscene_number, reads cutscene_phase
 
-  0x8004b4d0  opcodes 0xe5, 0xe9   -- 61 objects in the game
+  0x8004b4d0  opcodes 0xe5, 0xe9   -- 62 objects in the game
       49 instructions in 6 blocks
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
 
@@ -259,7 +278,7 @@ the same boundary `model_of_type` changes its mind at.
       calls player_in_rect, sub_80046c00, grid_query_area, place_player_on_terrain, res_wait, sub_8003d624
       reads player_pos, writes player_pos, writes player_facing, reads player_facing
 
-  0x8004a66c  opcode 0xe8
+  0x8004a66c  opcode 0xe8   -- 12 objects in the game
       102 instructions in 16 blocks
       calls player_in_rect, screen_capture, grid_query_area, place_player_on_terrain
       reads player_pos, writes player_pos, writes player_facing, reads player_facing
@@ -269,7 +288,7 @@ the same boundary `model_of_type` changes its mind at.
       calls player_in_rect, grid_query_area, sub_80046cb0
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table, reads player_pos
 
-  0x8004a2e0  opcode 0xeb
+  0x8004a2e0  opcode 0xeb   -- 16 objects in the game
       182 instructions in 35 blocks
       calls player_in_rect, sub_80046c00, actors_retire_marked, sub_80019538, level_load, object_trigger, res_wait
       reads current_level_block, writes player_state, points at player_pitch, reads player_pitch, writes player_pos, writes player_y

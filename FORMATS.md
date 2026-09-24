@@ -1902,6 +1902,38 @@ Names confirmed this way are written with a trailing `!` in the tools; a name
 merely taken from `ITEM.T` at the same index gets a `?`, because that archive
 shares numbering with the object types only in part.
 
+### `FDAT.T` entry `3n + 1` is a chain of six blocks
+
+`level_load` walks it the way it walks entry 97: read a `u32` length, use the
+bytes after it, step over both, read the next. Six blocks, at the same offsets
+on every level:
+
+| # | at | bytes | where it goes |
+| --- | --- | --- | --- |
+| 0 | 4 | 12992 | `entity_table`, 0xcb0 words — the 40 records and the blocks they point at |
+| 1 | 13000 | 3200 | `actor_table_build` |
+| 2 | 16204 | 768 | `0x8019175c` — **32 more rows of `object_type_table`** |
+| 3 | 16976 | 8400 | `load_object_placement` |
+| 4 | 25380 | 2048 | not read yet |
+| 5 | 27432 | 640 | `0x801ba6fc` |
+
+`0x8019175c` is `object_type_table + 7200`, which is 300 rows of 24 — so
+block 2 is **types 300 to 331, and they belong to the level**.
+
+**Withdrawn: "1424 placed objects have a type of 300 or above, which is where
+the table stops, so they have no row and no opcode."** The table is 332 rows
+in two pieces, and with the level's own 32 in place **every one of the 4838
+placed objects in the game has a row**. Against a level-0 RAM snapshot the
+whole table is **7968 of 7968 bytes**.
+
+It also dissolves a coincidence this document recorded. `model_of_type` takes
+an object's model as `type + 0x100` below 300 and adds the level from 300 up;
+that was filed as "the same boundary seen from either side". It is one fact:
+from 300 up the *row* is the level's own too, so the model has to be.
+
+What found it was `emu/bp23.lua` logging the game colliding with types 301,
+308, 314, 324, 325 and 326 — types that, by the old reading, did not exist.
+
 ### What makes an object solid — found
 
 `collide_query` takes a mask, and bit `0x20` of it means "test the objects".

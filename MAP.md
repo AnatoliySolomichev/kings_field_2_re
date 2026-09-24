@@ -19,7 +19,7 @@ handlers and whatever a pointer table reaches have to be.
 | subsystem | routines | instructions | named |
 | --- | --- | --- | --- |
 | player | 213 | 23539 | 59 |
-| objects | 94 | 14706 | 40 |
+| objects | 94 | 14706 | 42 |
 | render | 66 | 13981 | 29 |
 | library | 85 | 7597 | 56 |
 | effects | 31 | 7495 | 3 |
@@ -281,7 +281,7 @@ the object interpreter and its 44 handlers.
 | `0x8004352c` | 167 | 4 | sub_8004352c | calls model_ptr |
 | `0x800445b8` | 157 | 2 | sub_800445b8 | points at level_grid |
 | `0x800463bc` | 147 | 1 | sub_800463bc | points at object_table |
-| `0x80033f38` | 146 | 11 | collide_query | calls collide_wrapper_actor, actor_spot_taken; writes collision_surface, reads collision_cell_ptr, points at level_grid, |
+| `0x80033f38` | 146 | 11 | collide_query | calls collide_wrapper_actor, actor_spot_taken, object_collide; writes collision_surface, reads collision_cell_ptr, write |
 | `0x80015410` | 145 | 2 | sound_play_3d | calls game_isqrt, vec_angle, game_sin, sound_play; reads player_pos_mirror1 |
 | `0x80046dcc` | 145 | 1 | sub_80046dcc | calls direction_from_angles, vec_scale |
 | `0x80044900` | 144 | 1 | sub_80044900 | points at object_table, points at object_type_table |
@@ -289,8 +289,8 @@ the object interpreter and its 44 handlers.
 | `0x8006a6d8` | 142 | 1 | sub_8006a6d8 |  |
 | `0x8004d838` | 125 | 1 | sub_8004d838 | calls in_range; points at actor_table, reads current_actor, points at entity_table |
 | `0x800443c8` | 124 | 2 | sub_800443c8 | calls game_cos, game_sin; points at level_grid |
-| `0x80045ac8` | 109 | 1 | sub_80045ac8 | calls in_range; points at object_table, reads object_table, reads current_object, points at object_type_table |
-| `0x80016d3c` | 99 | 1 | sub_80016d3c | calls game_isqrt, vec_angle, game_cos, game_sin |
+| `0x80045ac8` | 109 | 1 | object_collide | calls in_range, in_oriented_rect; points at object_table, reads object_table, reads current_object, points at object_typ |
+| `0x80016d3c` | 99 | 1 | in_oriented_rect | calls game_isqrt, vec_angle, game_cos, game_sin |
 | `0x80074380` | 98 | 5 | sub_80074380 |  |
 | `0x80015790` | 94 | 4 | sound_play |  |
 | `0x80016ab8` | 84 | 20 | vec_angle | calls arctan_unit |
