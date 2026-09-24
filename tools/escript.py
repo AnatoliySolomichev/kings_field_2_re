@@ -143,6 +143,9 @@ SERVICE = {
     0x10: "nothing further",
     0x20: "nothing further",
     0x30: "the shop: 0x80021aac, then load_entry(6, item + 0x1e8)",
+    # Seen once: emu/bp23.lua logged `SERVICE 40` while the player talked to
+    # level 0's innkeeper, whose header +0x12 is 0x40. tools/menutext.py page
+    # 7 is `stay` / `do not stay`, so 0x8002200c is what puts that up.
     0x40: "0x8002200c(n), then [0x801e824c] = 1 and [0x801e8260] = n & 3",
 }
 NO_SERVICE = 0xFF              # +0x12 == 0xff is also what lets the use button
