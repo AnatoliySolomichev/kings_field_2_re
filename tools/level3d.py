@@ -1035,6 +1035,11 @@ def project(lv, out="out/godot", start=(57, 4)):
     except Exception as e:                       # no disc, no scripts
         print(f"entity scripts skipped: {e}")
     try:
+        import menutext
+        menutext.export(out)
+    except Exception as e:                       # no exe, no menu text
+        print(f"menu text skipped: {e}")
+    try:
         import quest
         quest.export(out)
     except Exception as e:                       # no disc, no quest hooks

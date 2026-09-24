@@ -2107,5 +2107,45 @@
   "name": "kill_count",
   "kind": "data",
   "evidence": "actor_take_hit increments it beside kill_flag -- how many creatures of that kind have died. Index 122; nothing read so far tests it"
+ },
+ "0x8007ded4": {
+  "name": "SetSprt",
+  "kind": "code",
+  "evidence": "five instructions: length 4 words at +3 and GPU code 0x64 at +7 -- PSY-Q’s SetSprt, and 0x64 is the variable-size textured rectangle"
+ },
+ "0x8007a830": {
+  "name": "SetDrawTPage",
+  "kind": "code",
+  "evidence": "writes length 2 at +3 -- a 12-byte DR_TPAGE -- and fills it through 0x8007ab2c and 0x8007ad68; PSY-Q’s SetDrawTPage"
+ },
+ "0x80027560": {
+  "name": "ui_sprite_begin",
+  "kind": "code",
+  "evidence": "takes 20 bytes off the current draw slot’s bump pointer at +8, SetSprt’s them, and paints +4, +5 and +6 from the current text colour at $gp+0x5c, +0x60 and +0x64. Five callers, all of them drawing glyphs"
+ },
+ "0x80027610": {
+  "name": "ui_set_tpage",
+  "kind": "code",
+  "evidence": "takes 12 bytes off the same bump pointer, SetDrawTPage’s them and AddPrim’s the result at ot_pointer + 4*$a0 + 4 -- the texture page a run of glyphs is drawn from"
+ },
+ "0x80016928": {
+  "name": "vec_scale",
+  "kind": "code",
+  "evidence": "(factor, SVECTOR): multiplies each of the three halfwords at $a1 by the s16 $a0, shifts right by 12 and stores back in place. Eleven callers, all of them actor, object or effect code"
+ },
+ "0x800279d8": {
+  "name": "pad_drain_press",
+  "kind": "code",
+  "evidence": "when the word at $gp+0x34 is 1 it clears it and spins PadRead(1) with a VSync between, up to eight frames, until nothing is held, then clears $gp+0x4c -- swallowing the press that opened a screen. Eleven callers, every one a menu"
+ },
+ "0x80027688": {
+  "name": "ui_menu_label",
+  "kind": "code",
+  "evidence": "(dest, page, line): copies 16 bytes from 0x8007e67c + 252*page + 28*line + 4 into dest+4 and writes 31 and 32 as two halfwords at dest+0 and dest+2. The table is 28-byte records -- u16 x, u16 y, then a 0x7f-terminated string in the game’s own glyph alphabet, not ASCII. Fifteen callers"
+ },
+ "0x8007e67c": {
+  "name": "ui_label_table",
+  "kind": "data",
+  "evidence": "28-byte records in rows of nine, 252 bytes a row: u16 x, u16 y and a 0x7f-terminated string of glyph codes. ui_menu_label reads it"
  }
 }

@@ -107,7 +107,7 @@ load-bearing whatever its size.
 | 32 | 30 | `0x8002792c` | ui_sound |
 | 16 | 431 | `0x80025468` | ui_panel |
 | 15 | 316 | `0x800222fc` | ui_menu_chrome |
-| 15 | 40 | `0x80027688` | sub_80027688 |
+| 15 | 40 | `0x80027688` | ui_menu_label |
 | 15 | 26 | `0x80019ab4` | res_wait |
 | 14 | 39 | `0x80027494` | ui_prim_quad |
 | 14 | 32 | `0x80027414` | ui_prim_begin |
@@ -121,8 +121,7 @@ load-bearing whatever its size.
 | 12 | 40 | `0x80041eec` | announce |
 | 11 | 146 | `0x80033f38` | collide_query |
 | 11 | 58 | `0x80025f38` | sub_80025f38 |
-| 11 | 26 | `0x800279d8` | sub_800279d8 |
-| 11 | 20 | `0x80016928` | sub_80016928 |
+| 11 | 20 | `0x80016928` | vec_scale |
 | 11 | 18 | `0x800168a8` | sub_800168a8 |
 | 10 | 1970 | `0x80053c84` | effect_spawn |
 | 10 | 116 | `0x80025be8` | sub_80025be8 |
@@ -134,4 +133,5 @@ load-bearing whatever its size.
 | 9 | 224 | `0x80026acc` | sub_80026acc |
 | 9 | 219 | `0x80024f88` | sub_80024f88 |
 | 9 | 93 | `0x800252f4` | sub_800252f4 |
+| 9 | 38 | `0x80027728` | sub_80027728 |
 

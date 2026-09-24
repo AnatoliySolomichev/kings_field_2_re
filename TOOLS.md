@@ -1005,6 +1005,29 @@ assumed. **23 of 23** arms agree with what `tools/ovdis.py` resolves
 independently; the other eleven levels are comparison chains, which have no
 table for a walker to resolve.
 
+### `tools/menutext.py` — the menu's own words
+
+```
+python3 tools/menutext.py           every label, by page and line
+python3 tools/menutext.py --godot   write them out for the port
+```
+
+`ui_menu_label` (`0x80027688`, fifteen callers) copies sixteen bytes from
+`ui_label_table + 252*page + 28*line + 4`. The table is 28-byte records nine
+to a page: a `u16` x, a `u16` y, then a `0xff`-terminated label in the game's
+own glyph alphabet — `0x00..0x19` is `a..z`, `0x20` up are the digits, `0x35`
+is a slash and `0x7f` a space. The alphabet fell out of the words: `14 12 04`
+is `use`, and `0e 0f 13 08 0e 0d 7f 21` is `option 1`.
+
+**43 labels over ten pages**, and line 8 of each page is its title rather
+than a ninth item — it sits at the exact x and y `ui_menu_label` writes.
+
+Two pages answer questions asked elsewhere here. Page 7 is `stay` / `do not
+stay`, the inn that `script_interpreter` opens for a header `+0x12` in the
+0x30 range; page 8 is `intellectual` / `blacksmith`, the choice the level 3
+blacksmith offers, which `tools/quest.py` found as a conversation opening a
+menu and reading the answer back into two story flags.
+
 ### `tools/questgraph.py` — which NPC opens which, and what to carry there
 
 ```
