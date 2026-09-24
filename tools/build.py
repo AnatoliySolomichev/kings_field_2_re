@@ -106,6 +106,9 @@ def main(quick=False, only_check=False):
     run(["tools/equip.py", "--check", "out/ram.bin"],
         "the equipment tables, against a RAM snapshot",
         keep=["match RAM", "reproduced"])
+    run(["tools/levelstate.py", "--check"],
+        "the saved level record, against what was played",
+        keep=["decode exactly"])
     run(["tools/objcoll.py", "--check"],
         "the object collision, against what was played",
         keep=["recorded touches"])

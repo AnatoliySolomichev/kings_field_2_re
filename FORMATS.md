@@ -3064,17 +3064,20 @@ was built**: the decoder calls `init_object_record`, stamps the kind byte
 that it shifts up by 4. So **what you drop is saved as a spawn instruction**,
 and the three kinds are three flavours of it.
 
-**Read, and checked by nothing.** Both sides of this were read off the code
-and they agree with each other, which after §9 is worth stating plainly as a
-weakness rather than a strength. `emu/bp22.lua` dumps the stream
-`level_state_write` builds and the one `apply_level_state` is handed; until
-that has run, the section counts above are a claim about the encoder, not
-about a byte anyone has seen.
+**Checked.** `emu/bp23.lua` logged both ends while the game was played. The
+543-byte stream written on level 0 is **byte for byte** the one
+`apply_level_state` was handed when the player came back, and it decodes to
+34 actors with three gone, six conversations — entity 9 stopped at pc 7 with
+the retry flag set, which is exactly where the first conversation recording
+left it — and **396 object records ending on the last byte of the stream**.
+A second, from level 4, decodes the same way and exercises the three-byte
+`0xf4` form seven times. `tools/levelstate.py` holds all three and reports
+3 of 3.
 
-The one arm that writes nothing when the state is below 2 is the part to
-distrust first: in lockstep, a record that is sometimes absent desyncs
-everything after it. Either that class never reaches the encoder, or the
-reading of it is wrong.
+That last number is the one that mattered. A lockstep reading out by one
+record ends early or runs off the end, and the arm that writes nothing when
+the state is below 2 was the part to distrust for exactly that reason — it
+never fired in either stream, so it remains unexercised rather than wrong.
 
 Two things the same experiment shows are *not* settled. `inventory_a` does not
 appear in the save verbatim, so the carried items are written in some other
