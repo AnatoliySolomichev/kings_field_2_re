@@ -1001,7 +1001,7 @@ def project(lv, out="out/godot", start=(57, 4)):
                  "labels.gd", "pad.gd", "boot.gd", "opening.gd",
                  "cutscene.gd", "actors.gd", "levelup.gd",
                  "game.gd", "objects.gd", "escript.gd", "items.gd",
-                 "damage.gd", "equip.gd"):
+                 "damage.gd", "equip.gd", "objcoll.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening
@@ -1034,6 +1034,11 @@ def project(lv, out="out/godot", start=(57, 4)):
         escript.export(out)
     except Exception as e:                       # no disc, no scripts
         print(f"entity scripts skipped: {e}")
+    try:
+        import objcoll
+        objcoll.export(out)
+    except Exception as e:                       # no disc, no collision shapes
+        print(f"object collision skipped: {e}")
     try:
         import menutext
         menutext.export(out)

@@ -152,6 +152,9 @@ func _init() -> void:
 	if not _directions():
 		quit(1)
 		return
+	if not _objects():
+		quit(1)
+		return
 	quit(0)
 
 
@@ -287,6 +290,41 @@ func _equip() -> bool:
 			if int(got["defense"][k]) == int(r["defense"][k]):
 				ok += 1
 	print("equipment: %d of %d ratings match what the game had in memory" % [ok, want])
+	return ok == want
+
+
+# The collision shape every object type gives, against what the game did.
+func _objects() -> bool:
+	if not FileAccess.file_exists("res://objcoll.json"):
+		print("objects: no shapes to check against")
+		return true
+	var d = JSON.parse_string(
+		FileAccess.get_file_as_string("res://objcoll.json"))
+	if typeof(d) != TYPE_DICTIONARY:
+		print("objects: objcoll.json is not a dictionary")
+		return false
+	var rec: Array = d.get("recorded", [])
+	var ok := 0
+	var want := 0
+	for r in rec:
+		var n: int = int(r["times"])
+		want += n
+		var got := KFObjectCollision.shape_of(int(r["row3"]), int(r["radius"]),
+			int(r["rect"][0]), int(r["rect"][1]), int(r["scale"]))
+		var want_kind: String = "circle" if int(r["expect_radius"]) > 0 else (
+			"rect" if (int(r["row3"]) & KFObjectCollision.RECT_BIT) else "none")
+		var good: bool = str(got["kind"]) == want_kind
+		if good and want_kind == "circle":
+			good = int(got["a"]) == int(r["expect_radius"])
+		if good and want_kind == "rect":
+			good = int(got["a"]) == int(r["rect"][0]) \
+				and int(got["b"]) == int(r["rect"][1])
+		if good:
+			ok += n
+		elif ok + n == want:
+			print("  type %d: godot %s %d,%d" % [
+				int(r["type"]), got["kind"], int(got["a"]), int(got["b"])])
+	print("objects: %d of %d touches emu/bp23.lua recorded in play" % [ok, want])
 	return ok == want
 
 

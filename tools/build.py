@@ -106,6 +106,9 @@ def main(quick=False, only_check=False):
     run(["tools/equip.py", "--check", "out/ram.bin"],
         "the equipment tables, against a RAM snapshot",
         keep=["match RAM", "reproduced"])
+    run(["tools/objcoll.py", "--check"],
+        "the object collision, against what was played",
+        keep=["recorded touches"])
     run(["tools/objops.py", "--types"],
         "the object type table, against a RAM snapshot",
         keep=["of 7968", "rows"])

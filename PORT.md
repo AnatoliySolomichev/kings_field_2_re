@@ -29,7 +29,7 @@ that it reproduces it correctly.** `status` says how far that went:
 | --- | --- | --- | --- | --- | --- |
 | boot | 10 | 1 | 0 | 115 | 50 (43%) |
 | open | 293 | 6 | 0 | 20002 | 1066 (5%) |
-| game | 818 | 39 | 5 | 93468 | 12098 (12%) |
+| game | 818 | 41 | 5 | 93468 | 12306 (13%) |
 | end | 167 | 0 | 0 | 9966 | 0 (0%) |
 
 Those percentages are of *all* the code in the image, which includes
@@ -46,6 +46,7 @@ floor, not a score.
 | [`godot/collision.gd:116`](godot/collision.gd#L116) | `func rot_matrix_y` | `game:0x8001660c` rot_matrix_y | verified |
 | [`godot/collision.gd:137`](godot/collision.gd#L137) | `func direction_from_angles` | `game:0x800167cc` direction_from_angles | verified |
 | [`godot/collision.gd:188`](godot/collision.gd#L188) | `func vec_angle` | `game:0x80016ab8` vec_angle | transcribed |
+| [`godot/objcoll.gd:74`](godot/objcoll.gd#L74) | `func hits` | `game:0x80016d3c` in_oriented_rect | transcribed |
 | [`godot/actors.gd:253`](godot/actors.gd#L253) | `func _in_range` | `game:0x80016ec8` in_range | transcribed |
 | [`godot/equip.gd:49`](godot/equip.gd#L49) | `func add_armour` | `game:0x800293e4` add_armour_ratings | verified |
 | [`godot/equip.gd:25`](godot/equip.gd#L25) | `const RATINGS` | `game:0x80029500` player_recalc_stats | partial |
@@ -65,6 +66,9 @@ floor, not a score.
 | [`godot/collision.gd:349`](godot/collision.gd#L349) | `(the file)` | `game:0x8003260c` tile_collision | verified |
 | [`godot/collision.gd:478`](godot/collision.gd#L478) | `func _notch` | `game:0x80032d3c` 0x80032d3c | transcribed |
 | [`godot/collision.gd:494`](godot/collision.gd#L494) | `func surface` | `game:0x80033b10` collide_surface | transcribed |
+| [`godot/objcoll.gd:26`](godot/objcoll.gd#L26) | `const SCALE_BIT` | `game:0x80045ac8` object_collide | verified |
+| [`godot/objcoll.gd:50`](godot/objcoll.gd#L50) | `(the file)` | `game:0x80045ac8` object_collide | verified |
+| [`godot/objcoll.gd:58`](godot/objcoll.gd#L58) | `var r` | `game:0x80045ac8` object_collide | verified |
 | [`godot/objects.gd:94`](godot/objects.gd#L94) | `var pcx` | `game:0x80046884` player_in_rect | transcribed |
 | [`godot/objects.gd:52`](godot/objects.gd#L52) | `const SLOTS` | `game:0x80047010` object_interpreter | partial |
 | [`godot/objects.gd:105`](godot/objects.gd#L105) | `func tick` | `game:0x80047010` object_interpreter | partial |
