@@ -17,7 +17,9 @@ The **writing** end is not, and the difference is worth stating plainly.
   own code. What it gives is the site, not the value or the condition.
 * `tools/decomp.py` reads statements and works the condition out by dominance,
   which is what turns a write into `story_flags[3] = 1 when has_item(2) &&
-  has_item(130) …`. It follows a simpler path and reaches **60**.
+  has_item(130) …`. Seeded from the walker's routines and run through returns,
+  it reaches **94** -- it reached 60 when it started only at the 32 entry
+  pointers and stopped at the first `jr $ra`.
 
 So an edge is `solid` when both agree -- there is a write and a readable
 condition -- and `partial` when only the walker sees it: the level is known,
@@ -99,21 +101,38 @@ def writes_seen():
 
 
 def writes_read():
-    """{flag: [(level, value, [conditions])]} -- the ones with a condition."""
+    """{flag: [(level, value, [conditions])]} -- the ones with a condition.
+
+    Seeded from every routine `tools/ovdis.py` walks rather than from the 32
+    entry pointers, and run through returns, because an overlay routine has
+    one return per arm and stopping at the first left most of it unread. With
+    that and two fixes inside `tools/decomp.py` -- a spent `lui` is cleared,
+    and a store sitting in a delay slot is kept -- this reaches **94** flags
+    where it reached 60.
+    """
+    import ovdis
     out = collections.defaultdict(list)
     for lv in range(28):
+        w = ovdis.walk(lv)
         r = decomp.Reader(lv)
         if not r.raw:
             continue
-        for e in r.entries:
-            stmts = r.run(e)
+        starts = sorted(w.funcs) if w else list(r.entries)
+        seen_site = set()
+        for e in starts:
+            stmts = r.run(e, limit=900, through_returns=True)
             for idx, (a, st) in enumerate(stmts):
                 if st[0] != "store" or not str(st[1]).startswith("story_flags["):
                     continue
+                if a in seen_site:
+                    continue
+                seen_site.add(a)
                 f = int(str(st[1])[12:str(st[1]).index("]")])
                 g = []
                 for _b, prev in stmts[:idx]:
-                    if prev[0] == "branch" and prev[4] > a and prev[5] is not None:
+                    if prev[0] == "return":
+                        g = []               # a return ends the path
+                    elif prev[0] == "branch" and prev[4] > a and prev[5] is not None:
                         c = decomp.cond_of(prev, negate=True)
                         if c not in g:
                             g.append(c)

@@ -109,7 +109,24 @@ class Reader:
         elif op == 0 and (w & 0x3F) in (0x21, 0x25) and rs == 0 and rt == 0:
             regs[rd] = 0
 
-    def run(self, start, limit=400):
+    def _note_delay(self, j, regs, hi, into):
+        """Keep a delay slot that stores, so the jump does not swallow it."""
+        if j >= len(self.w):
+            return
+        w = self.w[j]
+        op, rs, rt = w >> 26, (w >> 21) & 31, (w >> 16) & 31
+        if op not in (0x28, 0x29, 0x2B):
+            return
+        imm = w & 0xFFFF
+        simm = imm - 0x10000 if imm > 0x7FFF else imm
+        base = regs[rs] if isinstance(regs.get(rs), int) else hi.get(rs)
+        if not isinstance(base, int):
+            return
+        into[j] = (self.addr(j),
+                   ("store", flag_name((base + simm) & 0xFFFFFFFF),
+                    regs.get(rt, 0 if rt == 0 else None)))
+
+    def run(self, start, limit=400, through_returns=False):
         """Statements from an entry point until the routine returns.
 
         The instruction after a `jal` or a branch is its **delay slot** and runs
@@ -118,6 +135,14 @@ class Reader:
         gives every call the argument of the one before it, which is wrong in a
         way that reads perfectly plausibly -- the first version of this printed
         `has_item(0)` where the game asks for item 133.
+
+        `through_returns` keeps going past a `jr $ra` instead of stopping.
+        An overlay routine often has several returns -- one per arm of a
+        decision -- and stopping at the first left everything after it unread:
+        five flags the walker could see written had no condition for exactly
+        this reason. The registers are cleared at each return, because what
+        follows is a different path, and the `return` statement stays in the
+        list so a reader can tell where one path ends and the next begins.
         """
         out = []
         regs = {}                       # register -> a constant, when known
@@ -126,6 +151,11 @@ class Reader:
         end = min(len(self.w), i + limit)
         pend_call = None                # the last call, for the branch after it
         skip = set()
+        # A delay slot's instruction runs, and it is not always harmless: an
+        # overlay writes a story flag in the delay slot of its `jal` into
+        # `script_interpreter`. Swallowing the slot whole lost that write, so
+        # a slot that stores is kept and emitted after the jump it belongs to.
+        delay_store = {}
         # A `lui` on its own says nothing here: its value always reappears in
         # the load or store that completes the address. When one is consumed
         # the line is dropped, so the listing shows the access and not its
@@ -134,6 +164,8 @@ class Reader:
         lui_at = {}
         while i < end:
             if i in skip:
+                if i in delay_store:
+                    out.append(delay_store.pop(i))
                 i += 1
                 continue
             a, w = self.addr(i), self.w[i]
@@ -153,10 +185,15 @@ class Reader:
                 regs[rt] = simm
             elif op == 9 and rs in hi:                      # addiu rt, hi, lo
                 regs[rt] = (hi[rs] + simm) & 0xFFFFFFFF
+                # The `lui` is spent. Leaving it pending made a later
+                # `sb $s0, ($s1)` read its base as the bare 0x801c0000
+                # instead of the address the pair had just built.
+                hi.pop(rt, None)
             elif op == 0 and (w & 0x3F) in (0x21, 0x25) and rs == 0 and rt == 0:
                 regs[rd] = 0                                # move rd, zero
             elif op == 3:                                   # jal
                 if i + 1 < end:
+                    self._note_delay(i + 1, regs, hi, delay_store)
                     self.effect(self.w[i + 1], regs, hi)
                     skip.add(i + 1)
                 args = [regs.get(4 + k) for k in range(4)]
@@ -166,8 +203,15 @@ class Reader:
                     regs.pop(r, None)
                     hi.pop(r, None)
                     lui_at.pop(r, None)
-            elif op in (0x28, 0x29, 0x2B) and rs in hi:     # sb/sh/sw to a global
-                where = flag_name((hi[rs] + simm) & 0xFFFFFFFF)
+            elif op in (0x28, 0x29, 0x2B) \
+                    and (rs in hi or isinstance(regs.get(rs), int)):
+                # sb/sh/sw to a global. The base is either a pending `lui`,
+                # completed by this instruction's own offset, or a whole
+                # address a register already holds -- the second form was not
+                # accepted here, and an overlay builds the address of a flag
+                # into `$s1` once and stores through it later.
+                base = regs[rs] if isinstance(regs.get(rs), int) else hi[rs]
+                where = flag_name((base + simm) & 0xFFFFFFFF)
                 val = regs.get(rt, 0 if rt == 0 else None)
                 st = ("store", where, val)
                 if rs in lui_at and lui_at[rs] < len(out):
@@ -177,11 +221,13 @@ class Reader:
                 st = ("branch", op, rs, rt, t, pend_call)
                 pend_call = None
                 if i + 1 < end:
+                    self._note_delay(i + 1, regs, hi, delay_store)
                     self.effect(self.w[i + 1], regs, hi)
                     skip.add(i + 1)
             elif op == 2:                                   # j
                 st = ("goto", tgt)
                 if i + 1 < end:                             # its delay slot too
+                    self._note_delay(i + 1, regs, hi, delay_store)
                     self.effect(self.w[i + 1], regs, hi)
                     skip.add(i + 1)
             elif op == 0 and (w & 0x3F) == 8 and rs == 31:  # jr $ra
@@ -190,7 +236,12 @@ class Reader:
                 st = ("raw", a, self.text(a))
             out.append((a, st))
             if st[0] == "return":
-                break
+                if not through_returns:
+                    break
+                regs.clear()
+                hi.clear()
+                lui_at.clear()
+                pend_call = None
             i += 1
         return [(a, st) for a, st in out if st[0] != "dropped"]
 
