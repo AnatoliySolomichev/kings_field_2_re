@@ -1035,6 +1035,16 @@ def project(lv, out="out/godot", start=(57, 4)):
     except Exception as e:                       # no disc, no scripts
         print(f"entity scripts skipped: {e}")
     try:
+        import actors
+        actors.export(out)
+    except Exception as e:                       # no disc, no creatures
+        print(f"actors skipped: {e}")
+    try:
+        import levelstate
+        levelstate.export(out)
+    except Exception as e:                       # no recording, no streams
+        print(f"level state skipped: {e}")
+    try:
         import levelmap
         levelmap.export(out)
     except Exception as e:                       # no disc, no maps

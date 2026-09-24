@@ -353,6 +353,31 @@ class Machine:
                 for k, a in enumerate(self.a) if a and a["cat"] == 1]
 
 
+def export(out_dir, levels=range(28)):
+    """Every level's creatures, for the port.
+
+    The same records `table()` builds -- which `--check` holds against a RAM
+    snapshot -- with the empty slots dropped and the level they belong to as
+    the key.
+    """
+    import json
+    doc = {"_note": "link 1 of FDAT.T entry 3n+1, 200 records of 16 bytes, "
+                    "unpacked by 0x800530f8 into the 0x88-byte slots of "
+                    "actor_table at 0x80185da8: where a level's creatures "
+                    "stand, what they are and what wakes them",
+           "slots": SLOTS, "levels": {}}
+    for lv in levels:
+        try:
+            rows = [r for r in table(lv) if r]
+        except Exception:
+            continue
+        doc["levels"][str(lv)] = rows
+    path = os.path.join(out_dir, "actors.json")
+    with open(path, "w") as fh:
+        json.dump(doc, fh, separators=(",", ":"))
+    return path
+
+
 def check(lv=0, path=SNAP_RAM):
     """The disc's table against a RAM snapshot's, field by field."""
     ram = open(path, "rb").read()

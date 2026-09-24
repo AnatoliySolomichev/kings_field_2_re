@@ -106,6 +106,9 @@ def main(quick=False, only_check=False):
     run(["tools/equip.py", "--check", "out/ram.bin"],
         "the equipment tables, against a RAM snapshot",
         keep=["match RAM", "reproduced"])
+    run(["tools/actors.py", "0", "--check"],
+        "the creatures of level 0, against a RAM snapshot",
+        keep=["of 200", "match", "slots"])
     run(["tools/levelmap.py", "--check"],
         "the level maps, against the floor they should cover",
         keep=["open cells covered"])
