@@ -1076,15 +1076,23 @@ FDAT entry 97 blocks 1 and 2. **3264 of 3264** weapon bytes and **2112 of
 2112** armour bytes are what a running game held, and **16 of 16** ratings
 come out of the two records.
 
-**`bp22.lua`** is the one to run next, and unlike the others it has a
-checklist, because every reading it carries is one nothing has checked.
+**`bp23.lua`** is the one to run, and it supersedes `bp22.lua`: every
+breakpoint that script had is here, plus the one this session's reading most
+needs. Unlike the others it has a checklist, because every reading it carries
+is one nothing has checked.
 
 ```
-./emu/run.sh debug bp22.lua
+./emu/run.sh debug bp23.lua
 ```
 
 Then, in the game, in this order — each line is a different breakpoint:
 
+0. **Walk into things.** A tree, a barrel, a gravestone, a chest, a signpost,
+   a wall torch — and into a few things that turn out *not* to stop you,
+   because those are the interesting ones. Each `OBJ` line is one touch, with
+   the object's type, the radius its type row gives, the scale byte, the
+   rectangle's half-extents and both positions. That is the whole of "what
+   makes an object solid", read this session and checked by nothing.
 1. **Pick something up, open a chest, kill something** — then **walk through a
    door to another level and come back**. That is what makes
    `level_state_write` run, and the `STATE` lines are the byte stream this
@@ -1107,7 +1115,7 @@ Then, in the game, in this order — each line is a different breakpoint:
    ever seen run.
 
 Nothing needs doing quickly and nothing needs doing twice. The log is
-`out/lua_bp22.log`.
+`out/lua_bp23.log`.
 
 **`bp20.lua`** is the one for everything a player *does*, and it exists because
 five subsystems are read and none of them is checked: the object interpreter,
