@@ -112,6 +112,9 @@ def main(quick=False, only_check=False):
     run(["tools/levelmap.py", "--check"],
         "the level maps, against the floor they should cover",
         keep=["open cells covered"])
+    run(["tools/modelbank.py", "--check"],
+        "the resident model bank, against a RAM snapshot",
+        keep=["model pointers"])
     run(["tools/props.py", "--check"],
         "the level's own props, against a RAM snapshot",
         keep=["fields of"])

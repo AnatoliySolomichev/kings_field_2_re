@@ -153,7 +153,7 @@ reading a row would be reading whatever follows the table.
 
   0x8004847c  opcode 0x17   -- 19 objects in the game
       208 instructions in 36 blocks
-      calls sub_80044900, sub_800168a8, fixed_madd, object_sound
+      calls sub_80044900, vec_rotate, fixed_madd, object_sound
       points at object_table
 
   0x8004aeb8  opcode 0x18   -- 18 objects in the game
@@ -313,151 +313,151 @@ and it is the same one twice.
 
   0x800508b4  opcode 0x00
       171 instructions in 31 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c130 and 2 more
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c130 and 2 more
       reads actor_leader
 
   0x800508f4  opcode 0x01
       191 instructions in 36 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004db3c and 3 more
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004db3c and 3 more
       reads actor_leader
 
   0x80050400  opcode 0x02
       257 instructions in 57 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c130 and 2 more
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c130 and 2 more
       reads actor_leader
 
   0x800505a4  opcode 0x03
       371 instructions in 87 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, actor_retire and 9 more
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, actor_retire and 9 more
       reads actor_leader, reads level_hooks
 
   0x800514f8  opcode 0x04
       190 instructions in 34 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c130 and 4 more
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c130 and 4 more
       reads actor_leader
 
   0x80050b20  opcode 0x05
       275 instructions in 62 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004db3c and 6 more
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004db3c and 6 more
       reads actor_leader, reads player_pos
 
   0x8005205c  opcode 0x06
       313 instructions in 59 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004ea7c, sub_8004c130 and 6 more
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004ea7c, sub_8004c130 and 6 more
       reads actor_leader, points at collision_layers, reads collision_layers, writes collision_layers, reads player_pos
 
   0x80050e70  opcode 0x09
       273 instructions in 56 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c130 and 7 more
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c130 and 7 more
       reads actor_leader, reads player_pos, reads player_y
 
   0x80051054  opcode 0x0a
       287 instructions in 53 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e928, sub_8004c184 and 5 more
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e928, sub_8004c184 and 5 more
       reads actor_leader
 
   0x800517f8  opcode 0x0b
       305 instructions in 59 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c184, sub_8004e31c and 10 more
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c184, sub_8004e31c and 10 more
       reads actor_leader, reads player_pos, reads player_y
 
   0x80050978  opcodes 0x0c, 0x10
       261 instructions in 53 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004db08, sub_8004f008 and 5 more
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004db08, sub_8004f008 and 5 more
       reads actor_leader
 
   0x80050cf4  opcodes 0x0d, 0x11
       245 instructions in 48 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004db08, sub_8004c184 and 4 more
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004db08, sub_8004c184 and 4 more
       reads actor_leader, reads player_pos, reads player_y
 
   0x80051b78  opcode 0x0e
       227 instructions in 49 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c130
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c130
       reads actor_leader
 
   0x80051ca8  opcode 0x0f
       175 instructions in 30 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c184 and 2 more
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c184 and 2 more
       reads actor_leader
 
   0x80051a74  opcode 0x12
       220 instructions in 36 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c184 and 6 more
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c184 and 6 more
       reads actor_leader, reads player_pos, reads player_y
 
   0x80051d1c  opcode 0x13
       205 instructions in 43 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c104 and 2 more
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c104 and 2 more
       reads actor_leader, reads held_item_model
 
   0x80051dd8  opcode 0x14
       192 instructions in 35 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c184 and 2 more
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c184 and 2 more
       reads actor_leader
 
   0x80051ea8  opcode 0x15
       278 instructions in 51 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004db08, sub_8004c130 and 5 more
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004db08, sub_8004c130 and 5 more
       reads actor_leader, reads player_pos, points at collision_layers, reads collision_layers, writes collision_layers
 
   0x80051e80  opcode 0x16
       173 instructions in 33 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c104 and 2 more
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c104 and 2 more
       reads actor_leader
 
   0x80051598  opcode 0x17
       229 instructions in 40 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c130 and 4 more
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c130 and 4 more
       reads actor_leader
 
   0x800516d4  opcode 0x18
       228 instructions in 40 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c130 and 5 more
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c130 and 5 more
       reads actor_leader, reads player_pos
 
   0x800523f0  opcode 0x19
       286 instructions in 53 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c130 and 4 more
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c130 and 4 more
       reads actor_leader
 
   0x800522f8  opcode 0x1a
       220 instructions in 38 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c130
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c130
       reads actor_leader, points at object_table
 
   0x80052620  opcode 0x1b
       258 instructions in 54 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c130 and 7 more
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c130 and 7 more
       reads actor_leader
 
   0x80052840  opcode 0x1c
       207 instructions in 35 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c130, sub_8004e31c and 3 more
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c130, sub_8004e31c and 3 more
       reads actor_leader
 
   0x800527d0  opcode 0x1d
       178 instructions in 32 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c130, sub_8004e31c and 1 more
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c130, sub_8004e31c and 1 more
       reads actor_leader
 
   0x80052934  opcode 0x1e
       240 instructions in 37 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c130, sub_8004e31c and 2 more
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c130, sub_8004e31c and 2 more
       reads actor_leader, reads collision_layers
 
   0x80052aac  opcode 0x1f
       225 instructions in 47 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, actor_retire and 1 more
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, actor_retire and 1 more
       reads actor_leader
 
   0x80051274  opcode 0x84
       311 instructions in 49 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c130, sub_8004db3c and 4 more
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c130, sub_8004db3c and 4 more
       reads actor_leader, points at player_pos, reads player_pos, reads player_y
 
   0x80052be8  opcode 0xf0
       150 instructions in 25 blocks
-      calls grid_query_area, sub_800168a8, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e31c
+      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e31c
       reads actor_leader
 ```

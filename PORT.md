@@ -118,7 +118,7 @@ load-bearing whatever its size.
 | 14 | 12 | `0x80027530` | ui_prim_add |
 | 13 | 198 | `0x80024c70` | ui_prompt |
 | 13 | 137 | `0x80026570` | sub_80026570 |
-| 13 | 100 | `0x800261dc` | sub_800261dc |
+| 13 | 100 | `0x800261dc` | ui_draw_label |
 | 13 | 82 | `0x80061e00` | sub_80061e00 |
 | 13 | 15 | `0x80016a2c` | facing_test |
 | 12 | 67 | `0x800269c0` | sub_800269c0 |
@@ -126,7 +126,7 @@ load-bearing whatever its size.
 | 11 | 146 | `0x80033f38` | collide_query |
 | 11 | 58 | `0x80025f38` | sub_80025f38 |
 | 11 | 20 | `0x80016928` | vec_scale |
-| 11 | 18 | `0x800168a8` | sub_800168a8 |
+| 11 | 18 | `0x800168a8` | vec_rotate |
 | 10 | 1970 | `0x80053c84` | effect_spawn |
 | 10 | 116 | `0x80025be8` | sub_80025be8 |
 | 10 | 33 | `0x80019cc4` | read_entry_a |

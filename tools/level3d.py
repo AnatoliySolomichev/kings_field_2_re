@@ -1050,6 +1050,11 @@ def project(lv, out="out/godot", start=(57, 4)):
     except Exception as e:                       # no disc, no maps
         print(f"level maps skipped: {e}")
     try:
+        import modelbank
+        modelbank.export(out)
+    except Exception as e:                       # no disc, no bank
+        print(f"model bank skipped: {e}")
+    try:
         import props
         props.export(out)
     except Exception as e:                       # no disc, no props
