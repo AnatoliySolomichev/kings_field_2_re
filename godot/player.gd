@@ -1,8 +1,9 @@
 extends Node3D
 # Movement, transcribed from the game's own player_vertical at 0x8002ed60.
 #
-#   F   walk / fly      G  the collision, drawn      Esc  release the mouse
-#   WASD  move          Shift  faster                Q/E  down / up, flying
+#   F1  walk / fly      G  the collision, drawn      Esc  release the mouse
+#   the game's buttons on the emulator's keys (godot/pad.gd): arrows, Q/R, Z, X...
+#   Shift  faster       PgUp/PgDn  up / down, flying
 #
 # This was a guess -- "take the floor from the position you tried to reach and
 # snap to it" -- and then briefly a different mistake: `player_move` at
@@ -177,17 +178,14 @@ func _refresh() -> void:
 		above = str(last_surface - gy)
 	hud.text = ("%s   cell (%d, %d)   height %d\n" +
 		"state %d   vy %d   speed %d/%d   %s above the surface\n" +
-		"F walk/fly   G collision   Esc mouse   " +
-		"buttons: forward %s, strafe %s/%s, turn %s/%s, menu %s, use %s (key %s)\n" ) % [
+		"F1 walk/fly   G collision   Esc mouse   PgUp/PgDn fly up/down\n" +
+		"forward %s   strafe %s/%s   turn %s/%s   attack %s   use %s   menu %s   pause %s\n") % [
 		note, cx, cz, -gy, vstate, vvel, fwd_speed, stf_speed, above,
-		KFPad.name_of(KFPad.binding[KFPad.FORWARD]),
-		KFPad.name_of(KFPad.binding[KFPad.ALT_A]),
-		KFPad.name_of(KFPad.binding[KFPad.ALT_C]),
-		KFPad.name_of(KFPad.binding[KFPad.LEFT_SLOT]),
-		KFPad.name_of(KFPad.binding[KFPad.RIGHT_SLOT]),
-		KFPad.name_of(KFPad.binding[KFPad.PAUSE]),
-		KFPad.name_of(KFPad.binding[KFPad.USE]),
-		OS.get_keycode_string(KFPad.KEYS.get(KFPad.binding[KFPad.USE], [KEY_NONE])[0])]
+		KFPad.slot_key(KFPad.FORWARD), KFPad.slot_key(KFPad.ALT_A),
+		KFPad.slot_key(KFPad.ALT_C), KFPad.slot_key(KFPad.LEFT_SLOT),
+		KFPad.slot_key(KFPad.RIGHT_SLOT), KFPad.slot_key(KFPad.ATTACK),
+		KFPad.slot_key(KFPad.USE), KFPad.slot_key(KFPad.MENU_SLOT),
+		KFPad.slot_key(KFPad.PAUSE)]
 
 
 func _unhandled_input(e: InputEvent) -> void:
@@ -200,7 +198,7 @@ func _unhandled_input(e: InputEvent) -> void:
 		$Camera.rotation.x = pitch
 	elif e is InputEventKey and e.pressed and not e.echo:
 		match e.keycode:
-			KEY_F:
+			KEY_F1:
 				flying = not flying
 				vstate = 0
 				vvel = 0
@@ -228,8 +226,8 @@ func _process(dt: float) -> void:
 	if KFPad.held(KFPad.ALT_C): dir += transform.basis.x
 
 	if flying:
-		if Input.is_key_pressed(KEY_Q): dir -= Vector3.UP
-		if Input.is_key_pressed(KEY_E): dir += Vector3.UP
+		if Input.is_key_pressed(KEY_PAGEDOWN): dir -= Vector3.UP
+		if Input.is_key_pressed(KEY_PAGEUP): dir += Vector3.UP
 		var fast := 3.0 if Input.is_key_pressed(KEY_SHIFT) else 1.0
 		var d := dir.normalized() * FLY * fast * dt
 		gx += int(d.x)

@@ -7,7 +7,8 @@ extends Node
 # destination (p[+0x11], p[+0x12]) -- so the doorway's collision shape is a wall.
 # It also stores its yaw twice, at +0x26 and +0x42, and leaves +8, the state, 0.
 #
-# Pressing USE runs object_interact (0x8005e2d0), which asks find_object for
+# Pressing USE -- X, in the scheme the port starts with -- runs object_interact
+# (0x8005e2d0), which asks find_object for
 # the object in front and, for a door whose state is 0 and whose lock byte (+0x38)
 # is 0xff -- or 0xfd or 0xfe, unless the type is 0xae -- sets the state to 1. Any
 # other lock byte is a key or a message, and nothing here opens those.

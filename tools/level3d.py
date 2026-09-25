@@ -817,7 +817,7 @@ script = ExtResource("14")
 [node name="Hud" type="Label" parent="UI"]
 offset_left = 12.0
 offset_top = 8.0
-text = "F  walk / fly    N  object labels    K  the model gallery"
+text = "F1  walk / fly    N  object labels    K  the model gallery"
 
 [node name="Compare" type="Label" parent="UI"]
 offset_left = 12.0

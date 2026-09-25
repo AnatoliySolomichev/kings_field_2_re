@@ -50,27 +50,42 @@ const MAP := 12           # 0x80081880, never written by the options screen
 const PAUSE := 13         # 0x80081882, never written either
 
 # 0x8001f4c0, the seven movement schemes, in the order the code writes them:
-# forward, back, the two lateral slots, then the three shoulder slots.
+# forward, back, the two lateral slots, then the four shoulder slots.
 # Types A, B, C and G turn with the D-pad; D, E and F turn with the shoulders
 # and walk sideways with the D-pad.
+#
+# **The last slot was 0 in six of the seven**, and the four action schemes
+# below were wrong in three: both were read without the delay slots, and every
+# arm of 0x8001f4c0 stores its last value from the `ori` in the delay slot of
+# its jump. Replayed off the listing with the delay slots, scheme A is exactly
+# what the game's own slots held in the session emu/bp16.lua logged on
+# 2026-09-25 -- forward UP, back DOWN, LEFT/RIGHT, then L1, L2, R1, R2.
 const MOVE_PRESETS := [
-	[UP, DOWN, LEFT, RIGHT, L1, L2, R1, 0],       # A
-	[UP, DOWN, LEFT, RIGHT, R1, L1, R2, 0],       # B
-	[UP, DOWN, LEFT, RIGHT, L1, R1, L2, 0],       # C
-	[UP, DOWN, L1, R1, LEFT, L2, RIGHT, 0],       # D
-	[UP, DOWN, R1, R2, LEFT, L1, RIGHT, 0],       # E
-	[UP, DOWN, L1, L2, LEFT, R1, RIGHT, 0],       # F
+	[UP, DOWN, LEFT, RIGHT, L1, L2, R1, R2],      # A
+	[UP, DOWN, LEFT, RIGHT, R1, L1, R2, L2],      # B
+	[UP, DOWN, LEFT, RIGHT, L1, R1, L2, R2],      # C
+	[UP, DOWN, L1, R1, LEFT, L2, RIGHT, R2],      # D
+	[UP, DOWN, R1, R2, LEFT, L1, RIGHT, L2],      # E
+	[UP, DOWN, L1, L2, LEFT, R1, RIGHT, R2],      # F
 	[UP, DOWN, LEFT, RIGHT, L2, R1, R2, L1],      # G
 ]
 
-# The same routine's four action schemes: attack, action and use. The third
-# writes only the attack slot, and the fourth writes the menu slot as well.
+# The same routine's four action schemes, read with the delay slots: attack,
+# the menu (slot 5), action and use. Scheme 3 is the one the logged session
+# used -- attack SQUARE, menu CIRCLE, action TRIANGLE, use CROSS -- and all four
+# of its slots agree with what the game held.
 const ACTION_PRESETS := [
-	{ATTACK: SQUARE, ACTION: SQUARE, USE: CIRCLE},
-	{ATTACK: CROSS, ACTION: TRIANGLE, USE: CIRCLE},
-	{ATTACK: CROSS},
-	{ATTACK: SQUARE, ACTION: TRIANGLE, USE: CROSS, MENU_SLOT: CIRCLE},
+	{ATTACK: TRIANGLE, MENU_SLOT: CROSS, ACTION: SQUARE, USE: CIRCLE},
+	{ATTACK: SQUARE, MENU_SLOT: CROSS, ACTION: TRIANGLE, USE: CIRCLE},
+	{ATTACK: TRIANGLE, MENU_SLOT: CIRCLE, ACTION: SQUARE, USE: CROSS},
+	{ATTACK: SQUARE, MENU_SLOT: CIRCLE, ACTION: TRIANGLE, USE: CROSS},
 ]
+
+# The schemes the port starts with. The game's own default is A and 0, when a
+# save has not chosen; the port is played beside a save that chose A and 3, so
+# it starts with those, and the same keys do the same things in both windows.
+const START_MOVE := 0
+const START_ACTION := 3
 
 static var binding := PackedInt32Array()
 static var now := 0
@@ -85,13 +100,16 @@ static var prev := 0
 static var live_word := 0
 static var from_emulator := false
 
-# What a keyboard stands in for. The port has no PlayStation pad, so each bit
-# gets a key; a real gamepad is read as well, below.
+# What a keyboard stands in for: **the emulator's own keys**, so the same hands
+# play both windows. These are PCSX-Redux's pad 1 keys as emu/pcsx.json has
+# them -- Keyboard_PadCross 88 is X, PadSquare 90 Z, PadCircle 68 D,
+# PadTriangle 83 S, PadL1 81 Q, PadR1 82 R, PadL2 65 A, PadR2 70 F, Select
+# Backspace, Start Enter, the D-pad the arrows. A real gamepad is read as well,
+# below. The port's own debugging keys stay off every one of these.
 const KEYS := {
-	UP: [KEY_UP, KEY_W], DOWN: [KEY_DOWN, KEY_S],
-	LEFT: [KEY_LEFT], RIGHT: [KEY_RIGHT],
-	TRIANGLE: [KEY_I], CIRCLE: [KEY_L], CROSS: [KEY_K], SQUARE: [KEY_J],
-	L1: [KEY_A], R1: [KEY_D], L2: [KEY_Q], R2: [KEY_E],
+	UP: [KEY_UP], DOWN: [KEY_DOWN], LEFT: [KEY_LEFT], RIGHT: [KEY_RIGHT],
+	TRIANGLE: [KEY_S], CIRCLE: [KEY_D], CROSS: [KEY_X], SQUARE: [KEY_Z],
+	L1: [KEY_Q], R1: [KEY_R], L2: [KEY_A], R2: [KEY_F],
 	SELECT: [KEY_BACKSPACE], START: [KEY_ENTER],
 }
 const PADS := {
@@ -104,9 +122,10 @@ const PADS := {
 }
 
 
-# 0x8001f4c0. The defaults are scheme A and scheme 0, which is what the game
-# starts with when a save has not chosen otherwise.
-static func apply(move_type := 0, action_type := 0) -> void:
+# 0x8001f4c0, the schemes into the slots. See START_MOVE for what the port
+# starts with.
+# @orig game:0x8001f4c0 apply_control_scheme  status:transcribed
+static func apply(move_type := START_MOVE, action_type := START_ACTION) -> void:
 	binding = PackedInt32Array()
 	binding.resize(14)
 	var m: Array = MOVE_PRESETS[clampi(move_type, 0, MOVE_PRESETS.size() - 1)]
@@ -180,6 +199,15 @@ static func names_of(word: int) -> String:
 		if word & m:
 			out.append(name_of(m))
 	return " ".join(out) if out.size() else "-"
+
+
+# A slot's button and the key that presses it, for the HUD: "CROSS [X]".
+static func slot_key(slot: int) -> String:
+	if binding.is_empty():
+		apply()
+	var m: int = binding[slot]
+	var keys: Array = KEYS.get(m, [])
+	return "%s [%s]" % [name_of(m), OS.get_keycode_string(keys[0]) if keys else "-"]
 
 
 static func name_of(mask: int) -> String:

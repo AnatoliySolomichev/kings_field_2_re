@@ -537,8 +537,14 @@ translucent quads and hidden until you press G. Where the two disagree is worth
 looking at: a wall you can see through, or a room the geometry reaches and the
 collision seals off.
 
-In the project: **F** walks or flies, **G** shows the collision, **Space**
-jumps, **Shift** hurries, **Escape** frees the mouse. Flying passes through
+In the project the game's buttons are on **the emulator's own keys** -- the
+arrows, **X** CROSS, **Z** SQUARE, **D** CIRCLE, **S** TRIANGLE, **Q/R** L1/R1,
+**A/F** L2/R2, Enter START, Backspace SELECT, as `emu/pcsx.json` has them -- with
+the slots filled by scheme A and action scheme 3, the ones the player's save
+uses, so X uses, Z attacks and D opens the menu in both windows. The port's own
+keys keep off those: **F1** walks or flies, **G** shows the collision, **PgUp/PgDn**
+rise and sink while flying, **Shift** hurries, **Escape** frees the mouse,
+**F9** resyncs the compare, **F10** kills the nearest creature. Flying passes through
 everything on purpose — this level has rooms the game never lets you into. The
 readout names the cell you are in, in the game's own numbering, so anything
 found there can be pointed at in the data.
@@ -554,7 +560,8 @@ python3 tools/lighting.py --check   against out/tile_look.bin and every snapshot
 ```
 
 **Doors in the port.** The nine swinging doors of level 0 open with USE --
-CIRCLE on the pad, **L** on the keyboard, as the HUD says -- swing, stand open,
+CROSS in the scheme the port starts with, **X** on the keyboard as in the
+emulator -- swing, stand open,
 and close again once nobody is in the doorway (`godot/doors.gd`). Each is its
 own node in `objectsNN.gltf`, `dNNN` by slot, and `doorsNN.json` carries what
 the swing needs. `emu/bp24.lua` records a door frame by frame for checking it.
@@ -651,7 +658,7 @@ an emulator already running without it now says so and stops, instead of
 answering "already running".
 
 **C** compares, **B** takes the buttons from the emulator, **L** switches
-locked against free running, **R** resyncs, and **1/2/3** pick the rung.
+locked against free running, **F9** resyncs, and **1/2/3** pick the rung.
 
 **B is the one to reach for first.** The line `bp16.lua` writes carries the
 game's own decoded button word — `0x801b265c`, the same word

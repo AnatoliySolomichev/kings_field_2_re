@@ -24,7 +24,8 @@ extends Node
 # clears it after one pass.
 #
 # Not here: what an awake creature *does* -- the AI in actor_tick -- so an
-# actor stands at home. X kills the nearest awake one, to try the rules on.
+# actor stands at home. F10 kills the nearest awake one, to try the rules on --
+# not X, which is the emulator's CROSS and the port's too.
 
 const TICK_HZ := 15.0          # the game's frame, four blanks: see player.gd
 const SLOTS := 200
@@ -116,7 +117,7 @@ func _process(dt: float) -> void:
 
 func _unhandled_input(e: InputEvent) -> void:
 	# X, because K is the pad's cross in pad.gd and N the labels
-	if e is InputEventKey and e.pressed and not e.echo and e.keycode == KEY_X:
+	if e is InputEventKey and e.pressed and not e.echo and e.keycode == KEY_F10:
 		if player == null:
 			return
 		var k := _nearest(int(player.get("gx")), int(player.get("gz")), 3 << 11)
@@ -341,7 +342,7 @@ func summary() -> String:
 	for a in actors:
 		if a != null and a["cat"] != FREE and a["st"] >= 0 and a["st"] < 4:
 			n[a["st"]] += 1
-	var s := "%d drawn, %d dormant, %d held, %d gone   X kills the nearest" % [
+	var s := "%d drawn, %d dormant, %d held, %d gone   F10 kills the nearest" % [
 		n[ACTIVE], n[DORMANT], n[HELD], n[GONE]]
 	if not last.is_empty():
 		s += "\n" + "\n".join(last)

@@ -1,7 +1,7 @@
 extends Node3D
 # The game and the port, in one world, frame for frame.
 #
-#   C  compare on / off      L  locked / free      R  resync now
+#   C  compare on / off      L  locked / free      F9  resync now
 #   B  take the buttons from the emulator
 #   V  all the creatures / only the ones the game draws
 #
@@ -162,7 +162,7 @@ func _unhandled_input(e: InputEvent) -> void:
 			if not live_input:
 				KFPad.live_word = 0
 			_hud("")
-		KEY_R:
+		KEY_F9:
 			if prev.has("p"):
 				_resync(prev)
 		KEY_1:
@@ -446,7 +446,7 @@ func _hud(note: String) -> void:
 		"game  %8d %8d %8d\nport  %8d %8d %8d\ndiff  %8d %8d %8d" +
 		"      worst so far %d\n" +
 		"%d of %d frames exact (%d %%)   the game: %s\n%s\n" +
-		"C off   B buttons   V creatures   L lock/free   R resync   1/2/3 rung") % [
+		"C off   B buttons   V creatures   L lock/free   F9 resync   1/2/3 rung") % [
 		rung,
 		["", "height only", "ground and height", "from the buttons"][rung],
 		"locked" if locked else "FREE RUNNING",
