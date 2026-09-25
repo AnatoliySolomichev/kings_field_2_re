@@ -153,9 +153,10 @@ anyway.
 **Found: `FDAT.T` entry 96.** The object textures are a `LoadImage` stream in
 `RTIM.T`'s format that `init_level_state` sends into VRAM at game start, and
 `tools/level3d.py` now builds every level's VRAM from it and the level's own
-`RTIM.T` -- no snapshot. FORMATS.md, "Where the object textures are". What is
-left: the water on page `0x0f` is seven frames of one rect, and what animates
-it is not read. The note below is kept for how it was looked for.
+`RTIM.T` -- no snapshot. FORMATS.md, "Where the object textures are". The water
+on page `0x0f` is animated by `texture_scroll_step`, a row a frame, and the port
+does the same (`godot/scroll.gd`). The note below is kept for how it was looked
+for.
 
 **The object textures are not in `RTIM.T`.** The placed objects want texture
 pages `0x0b` to `0x0f` — VRAM from x=704 across — for **57 119 of their

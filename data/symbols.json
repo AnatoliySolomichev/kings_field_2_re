@@ -1626,7 +1626,7 @@
  "0x800351fc": {
   "name": "texture_scroll_step",
   "kind": "code",
-  "evidence": "two 0x18-byte records at 0x801aeb1c, each a countdown, a scroll offset and a rect, advanced with MoveImage inside VRAM. The animated water and lava surfaces"
+  "evidence": "two 0x18-byte records at 0x801aeb1c: +0 the kind (0xff free), +1 the delay, +2 its countdown, +3 the step, +4 the offset, +8 the rect shown and +0x10 the stash. When the countdown is spent it adds the step to the offset, wraps it at the height, and rebuilds the rect from the stash with two MoveImages so that row r is stash row (r - offset) mod h. Only the water is registered, one row a frame: each of eleven snapshots' VRAM is the stash turned by the offset its RAM holds, or by the next"
  },
  "0x80041f9c": {
   "name": "message_tick",
@@ -2272,5 +2272,10 @@
   "name": "play_minutes",
   "kind": "data",
   "evidence": "one more every 3600 blanks, from vblank_tick; new_character zeroes it, save_serialise writes it into the save and save_restore reads it back -- the play time a save shows"
+ },
+ "0x800350fc": {
+  "name": "texture_scroll_add",
+  "kind": "code",
+  "evidence": "(rect, delay, step, kind): takes a free record of texture_scroll_step's two, stores the four arguments and the rect twice, moves the second copy 0x20 halfwords left, quarters both widths for kind 1 (4-bit pixels), and MoveImages the rect into that stash. game_main calls it once, with the rect at 0x8009c214 -- (1016, 96, 32, 32), the water -- delay 0, step 1, kind 1"
  }
 }

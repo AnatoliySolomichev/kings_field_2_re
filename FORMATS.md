@@ -744,7 +744,7 @@ snapshots with a level loaded it matches **2 865 923 of 2 998 544** halfwords
 the two streams write, and **776 955 of 782 320** on the object pages. What is
 left is animation and the interface: entry 96 writes seven frames of a water
 texture into the same 8x32 rect at (1016, 96), and a snapshot holds whichever
-frame was showing.
+frame was showing -- which is not a frame at all: see below.
 
 So nothing on the object pages is borrowed from a snapshot any more, and every
 level has its objects' textures. It also settles something that looked like a
@@ -755,8 +755,22 @@ transparent. And twelve textures on page `0x0b` that the snapshot fill had got
 wrong -- it copied a page only when `RTIM.T` left it entirely empty, and the
 CLUT page was not -- went from 56 000 to 65 000 pixels off the game to 3 022.
 
-How the water is animated -- what sends the other frames after the first, or
-cycles them -- is not read.
+**The water scrolls; it does not cycle frames.** `game_main` calls
+`texture_scroll_add` (`0x800350fc`) once, with the rect at `0x8009c214` --
+(1016, 96), 32 by 32 pixels -- a delay of 0 and a step of 1. That copies the
+square to a stash 32 halfwords to its left, and `texture_scroll_step`
+(`0x800351fc`), in every frame's `render_frame`, adds one to an offset, wraps it
+at 32, and rebuilds the square from the stash with two `MoveImage`s so that row
+`r` is stash row `(r - offset) mod 32`. Each of the eleven snapshots' VRAM is
+the stash turned by the offset its own RAM holds, or by the next one (the VRAM
+was fetched a frame after the RAM), and every stash equals what entry 96 leaves
+in the square. With that copy applied, the object pages match on 779 760 of
+782 320 halfwords, and all 2 560 left are the square at its snapshot's offset.
+
+`godot/scroll.gd` does the same in a shader on every material of page `0x0f`:
+inside the square, `v` moves by the game's frame count at 15 a second; outside
+it nothing changes. The seven blocks entry 96 writes to the square are still
+unexplained -- only the last survives, and it is the one the scroll moves.
 
 ### The opening scene is a movie, and this is what starts it
 

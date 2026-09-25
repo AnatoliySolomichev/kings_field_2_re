@@ -32,10 +32,10 @@ own blocks on top**, which is what `level_vram` builds.
 
 It had been looked for and not found, because the search took whole rows of a
 page and the stream stores a page as 64x64-pixel squares. Against the
-snapshots, the halfwords the two streams write match on 261 465 of 273 728 on
-level 0 and 251 017 of 261 264 on level 4. What does not match is animation
-and the interface: entry 96 writes seven frames of water into the same 8x32
-rect at (1016, 96), and the snapshot holds whichever one was showing.
+snapshots, the halfwords the two streams write match on 2 868 728 of 2 998 544,
+and on the object pages 779 760 of 782 320 -- every one of the 2 560 left being
+the water, which `texture_scroll_step` scrolls a row a frame (godot/scroll.gd).
+The rest is the interface and whatever the game uploads as it runs.
 
 `vram` writes that buffer straight out and it **looks like noise**, correctly:
 four-bit indices shown as sixteen-bit colour cannot look like anything else. The
@@ -99,9 +99,26 @@ FDAT = "extract/CD/COM/FDAT.T"
 RESIDENT = 96          # the FDAT.T entry init_level_state streams at game start
 
 
+SCROLL = 0x8009C214     # the rect game_main hands texture_scroll_add
+
+
 def level_vram(lv):
-    """What the GPU holds once level `lv` is loaded: entry 96, then RTIM.T[lv]."""
-    return vram(lv, RTIM, vram(RESIDENT, FDAT))
+    """What the GPU holds once level `lv` is loaded: entry 96, then RTIM.T[lv].
+
+    And one MoveImage: `game_main` registers the water scroll with the rect at
+    `SCROLL`, (1016, 96, 32, 32) in pixels, and `texture_scroll_add`
+    (`0x800350fc`) copies that square to a stash 32 halfwords to its left,
+    which is where `texture_scroll_step` rebuilds it from every frame. The
+    square itself is left as the stream wrote it -- the scroll's offset 0.
+    """
+    import mips
+    buf = vram(lv, RTIM, vram(RESIDENT, FDAT))
+    x, y, w, h = struct.unpack("<4h", mips.load("game").bytes(SCROLL, 8))
+    w >>= 2                                   # kind 1: four pixels a halfword
+    for row in range(y, y + h):
+        a = (row * VW + x) * 2
+        buf[a - 0x40:a - 0x40 + w * 2] = buf[a:a + w * 2]
+    return buf
 
 
 def check():
