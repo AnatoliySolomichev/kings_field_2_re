@@ -15,7 +15,7 @@ The 16-byte record on the disc:
 
     +0   u16  the model, 0xffff ends the list. Bit 0x8000 picks the lit path
               -- `render_walk` adds 0x28 to `id & 0x7fff` for the model index
-              -- and without it the draw is gated by `object_flags_for_draw`
+              -- and without it the draw is gated by `view_bits_at`
     +2   u8   copied to the live record's +3, and it is what the flicker is
               scaled by
     +3   u8   copied to +4

@@ -1198,9 +1198,10 @@ turned into pillars, and a monument elsewhere with them. No automated check was
 going to notice — the column is geometry from the game's own archive, correctly
 parsed, correctly placed and correctly lit.
 
-`tools/level3d.py` keeps the list in `NOT_DRAWN`. Whether any other type belongs
-there is open; 299 is alone in being both always-readable and a coarse box, so
-nothing else is excluded on suspicion.
+The reason is read now: type 299 is class `0x14`, and `load_object_placement`'s
+arm for it zeroes the record's `+0`, which `render_walk` ANDs with the view
+byte. So the port no longer keeps a list -- `tools/objload.py` says which
+records are drawn, by the game's own rule, for every level.
 
 ### The turn, which was the last guess in the port's movement
 
@@ -1872,11 +1873,12 @@ are two states of one object and this byte is how the game shows one of them.
 Drawing both, which `tools/level3d.py` did, is a chest open and closed at the
 same time — reported by a player looking at the port.
 
-What sets a live record's class, and so what would flip a chest from one state
-to the other, is not read. The 24-byte type records are not a verbatim run
-anywhere in `GAME.EXE`, so something builds the table; `tools/level3d.py` takes
-it from a RAM snapshot, which means it carries that session's state and not a
-new game's.
+What sets a live record's class is read now: `load_object_placement`'s
+256-arm switch on the type's byte `+0`, which for most classes stores the
+class itself as the opcode (below, "read whole"). The type table is off the
+disc -- `FDAT.T` entry 97 and each level's own 32 rows -- so nothing here is
+borrowed from a snapshot any more. What flips a chest from one state to the
+other at run time is still the object interpreter's business.
 
 ### Type ids confirmed by experiment
 
@@ -2015,9 +2017,16 @@ resemblance is why it went unchecked: 321 placed objects have a non-`0xff`
 byte there, and only 22 of them match their cell's own `+5`.
 
 **What is left standing**, because it was established separately: the scale
-triple is a visible/not-visible switch, `0x1000` or `0`, reaching the renderer
-through `ScaleMatrix` which by `0x1000` applies nothing. The 59 objects on
-level 0 at `x0.00` are switched off.
+reaches the renderer through `ScaleMatrix`, which by `0x1000` applies nothing,
+and `object_set_present` switches it between `0x1000` and `0`.
+
+**Withdrawn: "the triple is only a switch, and the 59 objects at `x0.00` are
+switched off."** `load_object_placement` makes it a size on types with flag
+`0x10` -- `p[+0x10] << 5`, so `0x80` is 1.0 -- and those are the trees, types
+324 to 326, which is the "scatter" once put down to the graves. And of the 59
+zeroes on level 0, **49 are empty slots**; the ten objects are five doors of
+class `0x03`, one of `0x54`, and four of `0x51` that the loader takes away. The
+doors are zero because a door is drawn by the grid, not as a model.
 
 What the cell byte is *for* is now open again. It is a drawing change, not a
 collision one, and the thing to find out is which objects call it with
@@ -2054,7 +2063,7 @@ is a union, and the class byte in the type table says which reading applies:
 | doors 175–178 | `0x00` | `ff <x> <z> <n> 4e` | `<x>,<z>` is the door's own cell |
 | keyhole 257 | `0x00` | `ff ff <k> <n>` | `<k>` is 1–3, presumably which key fits |
 | chest 106 | `0x16` | `+0x38` = `00`, becomes `ff` when opened | the "still full" flag |
-| tree 324 | `0x00` | `+0x38` = 120–230 in steps of 10 | a height, probably (*unverified*) |
+| tree 324 | `0x00` | `+0x38` = 120–230 in steps of 10 | **its size**, `<< 5` into the scale on flag `0x10`; read off `load_object_placement` |
 
 The pickup path is worth reading in full, because it is the one place where a
 field in this block is unambiguous:
@@ -3448,13 +3457,14 @@ not the middle of its cell was displaced the same way.
 **Objects turn about three axes, not one.** The live record carries three
 halfwords at `+0x24`, `+0x26` and `+0x28`, and nine of level 0's objects are
 tilted about X and three about Z. The negated `u16` at +6 of the disc record
-reproduces the live Y for 336 of 347, so the yaw is read; the other two are
-not. Bytes 18 to 20 of the record scale by 64 into exactly the right angles for
-all nine tilted objects **and into nonsense for the rest** — 40 of 347 on the
-Y axis against the yaw field's 336 — so that field is conditional on something
-not yet found. `tools/level3d.py` takes the triple from a RAM snapshot instead,
-labelled borrowed like the scales and the object textures. A player found this
-one too: a helmet standing on end in the port and lying on its side in the game.
+reproduces the live Y for 336 of 347, so the yaw is read. Bytes 18 to 20 of
+the record scale by 64 into exactly the right angles for all nine tilted
+objects **and into nonsense for the rest**, so that field is conditional -- and
+the condition is now read: it is the class, `0x0d` or `0x40`
+(`load_object_placement`, read whole, below). With it, all three angles come
+off the disc for 347 of 347 objects on level 0 and 200 of 200 on level 4, and
+`tools/level3d.py` no longer borrows them. A player found this one: a helmet
+standing on end in the port and lying on its side in the game.
 
 **And the three are composed `M = Ry . Rx . Rz`** — a vertex is turned about Z
 first, then X, then Y. Read off `0x800166f4`:
@@ -3488,7 +3498,8 @@ y = -128 * cell[+6] + s16(record[12])
 
 which reproduces the live object table for **345 of level 0's 347 placed
 objects**. The two it misses are both type 280, whose records are mostly `0xff`
-filler and whose live Y is a round `-12800`, so something else positions them.
+filler and whose live Y is a round `-12800` -- class `0xe0`, a trigger, whose
+arm subtracts the fine offsets back out. With that, 347 of 347.
 
 That single field is what a chest is made of. A chest is not one object but
 three placed in the same cell: the body (type 155, 640 tall) at `h = 0`, the
@@ -3512,6 +3523,94 @@ game say, from the disc, with no emulator involved.
 never findable that way: the placement has no signature, no fixed offset from
 anything, and sits behind two length prefixes. What found it was asking the
 running game who wrote a byte.)*
+
+### `load_object_placement`, read whole
+
+`load_object_placement` (`0x80044d9c`, 843 instructions) was named for two of
+its stores and read for none of the rest, so the port borrowed four things from
+a level-0 RAM snapshot: the angles, the scale, whether an object is drawn, and
+-- through the grid -- the walls of every door. It is transcribed now, in
+`tools/objload.py`, and none of the four is borrowed.
+
+It walks the 350 placement records beside 350 `object_table` slots, skips a
+type of `0xffff` (or `0x00ff`), and fills every record the same way first:
+
+| Live | From |
+| --- | --- |
+| `+0x00` | the placement's byte 0 -- 2 on every one of the game's 4838 |
+| `+0x03` | `type_row[+3]`, the flags |
+| `+0x04` | `0xff`, until the class arm sets an opcode |
+| `+0x0c` | `type_row[+8]`, or `type_row[+8] * p[+0x10] >> 7` on flag `0x10` |
+| `+0x14`, `+0x1c` | `p[+2] << 11 + s16 p[+0xa]`, `p[+1] << 11 + s16 p[+8]` |
+| `+0x18` | `s16 p[+0xc] - (layer height << 7)`, the upper layer unless `+0` is 1 |
+| `+0x24..+0x28` | `0`, `-p[+6] & 0xfff`, `0` |
+| `+0x2c..+0x30` | `0x1000` each, or **`p[+0x10] << 5` on flag `0x10`** |
+| `+0x38..+0x3f` | `p[+0x10..+0x17]`, the parameter block, verbatim |
+| `+0x40..+0x43` | `0xff` |
+
+and then switches on `type_row[+0]` through 256 arms at `0x80011c54`. Most
+arms only store an opcode, and for most classes the opcode *is* the class. What
+the others do is the part the port needed:
+
+* **The angles.** Classes `0x0d`, and `0x40` unless `type_row[+1]` is `0x20`,
+  set each of the three angles from `p[+0x12..+0x14] << 6`, leaving any byte of
+  `0xff` alone. That is the condition the placement record section above was
+  missing.
+* **The doors are drawn by the grid.** Classes `0x03`, `0x04`, `0x05`, `0x54`
+  and `0x57` zero the scale -- the model is never drawn -- and write the door
+  into `level_grid` instead: `stamp_table` (`0x800443c8`) walks 10-byte entries
+  in GAME.EXE at `0x8008288c..0x8008297c`, turning each cell offset by the
+  object's angle through `game_cos` and `game_sin`, and writes shapes and tiles;
+  `stamp_rect` (`0x800445b8`) copies a rectangle of layer-1 cells from
+  elsewhere on the grid, turned by a quarter of the angle. The rooms of a level
+  that the game never lets you into are the rectangles it copies from.
+* **Some arms hide the object** by zeroing its `+0`, which `render_walk` ANDs
+  with the cell's view byte: classes `0x0b`, `0x14`, `0x15`, `0x1f`, `0x59`,
+  `0x5f`, `0xe0` to `0xe4`, `0xe6`, `0xe7` and `0xea`. Type 299, the readable
+  marker, is class `0x14` -- which is why the game never drew it, and why
+  `NOT_DRAWN` was right without anyone knowing the reason.
+* **Some take themselves away**: `object_set_present(r, 0, type_row[+0x17])`
+  in class `0x07` when `type_row[+0xc]` is set and in `0x51`/`0x52` when their
+  byte in the block is.
+* **Class `0xe0` is a trigger**, and stands at its cell's corner: the fine
+  offsets are subtracted back out. That is the two type-280 objects this
+  document said "something else positions".
+* **200 classes go to the level's own code**, `level_hooks + 0x20`. On level 0
+  that is two objects and on level 4 three.
+
+Two more routines in the same neighbourhood were misnamed and are renamed:
+`grid_query_area` (`0x80033c4c`) queries nothing -- it is **`grid_mark`**, which
+adds 4 to byte `+2` of every cell within `r + 0x800` of a point. Byte `+2` is
+the lower layer's rotation in its two low bits and this count above them. Every
+object with a `type_row[+4]` marks its cells at load, the player marks its own
+with `r = 800`, and creatures mark and unmark as they move. And
+`object_flags_for_draw` is **`view_bits_at`**: it reads a 25x25 table of cells
+round the camera (`view_table`, `0x801aec84`), whose bytes in every snapshot
+are 0, 8, 26 or 30 -- bit 2 is what a placed record's `+0` selects.
+
+**The first frame does one more thing.** Opcode 9 (`0x80048c34`, 18
+instructions) runs once: it takes a slot number from the `u16` at `+0x3a`,
+zeroes that object's `+0` and `+0x38`, and sets its own opcode to `0xff`. Every
+class-9 record in every snapshot is `0xff`, and the objects they name are
+items, which from the first frame on are not drawn. What shows one again is
+not read.
+
+**Checked** against all 13 snapshots with a level in them, twelve of level 0
+and one of level 4:
+
+    angles    4344 of 4352   the 8 are a door and chest lids, opened in play
+    scale     4352 of 4352
+    position  4352 of 4352
+    opcode    4226 of 4226   the hook's objects and the runtime arms left out
+    byte +0   4016 of 4226   18 items on level 0 and 1 on level 4, the same
+                              in every snapshot -- taken, by all appearances
+    the grid  exact on 7 of 13, outside the occupancy count; the other six
+              are the ones where a door or chest had been opened
+
+And the grid is the part that changes the port most: **every level but 0 was
+built with no doors in it**, because the only grid with the stamps was a dump
+of level 0. From the disc it differs from the live grid by 32 to 72 bytes;
+from the loader, by none.
 
 ### What a watchpoint caught instead: the world shifts
 

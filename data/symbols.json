@@ -262,7 +262,7 @@
  "0x80191a5c": {
   "name": "object_table",
   "kind": "data",
-  "evidence": "396 records of 0x44, formed as object_types + 0x1f20. +0x06 the type id, +0x2c/+0x2e/+0x30 the scale with 0x1000 = 1.0 -- PER OBJECT, not per type: across level 0 it reads x1.00 on 271, x0.00 on 59, x1.99 on 34 and a scatter between on the graves. The record carries no pointer to the model. Its slots line up exactly with the 24-byte disc records: 347 of 347 agree on the type id, so placement is not the reason objects look like the wrong things"
+  "evidence": "396 records of 0x44, formed as object_types + 0x1f20, filled by load_object_placement (see there and tools/objload.py for the layout). +0x04 the opcode, +0x06 the type id, +0x24/+0x26/+0x28 the three angles, +0x2c/+0x2e/+0x30 the scale with 0x1000 = 1.0 -- PER OBJECT: p[+0x10] << 5 on flag 0x10, which is the trees (types 324 to 326), once put down as graves, and 0 for doors and for whatever object_set_present has taken away. The record carries no pointer to the model. Its slots line up exactly with the 24-byte disc records"
  },
  "0x8019838c": {
   "name": "object_table_end",
@@ -554,9 +554,9 @@
   "evidence": "where level_load reads FDAT entries before scattering them"
  },
  "0x80033c4c": {
-  "name": "grid_query_area",
+  "name": "grid_mark",
   "kind": "code",
-  "evidence": "the block of cells within a radius of a position"
+  "evidence": "(x, z, r, n): adds 4*n to byte +2 of every cell from (x-r-0x800)>>11 to (x+r+0x800)>>11 on both axes, skipping any outside the 80x80 grid. Byte +2 is layer 0's rotation in its low two bits and this count above them, which is why the collision's & 3 never sees it. It queries nothing: the old name grid_query_area was a guess from its arguments. load_object_placement marks every object whose type_row[+4] is set, the player marks its own cell with r 800, and creatures add and take away as they wake and move. tools/objload.py carries it, and the grid it leaves matches the snapshot's outside byte +2 exactly"
  },
  "0x80043894": {
   "name": "free_object_resource",
@@ -601,7 +601,7 @@
  "0x80044d9c": {
   "name": "load_object_placement",
   "kind": "code",
-  "evidence": "writes scale 0x1000 into +0x2c/+0x2e/+0x30 of every placed object, and negates the record rotation before storing it"
+  "evidence": "turns the level's 350 placement records into object_table and stamps the doors into level_grid. Common part: +4 0xff, +6 type, +0 p[0], +3 type_row[+3], +0xc type_row[+8] (times p[+0x10] >> 7 on flag 0x10), +0x14/+0x1c the position, +0x18 the height from the grid, +0x26 = -p[+6] & 0xfff, the scale triple 0x1000 or p[+0x10] << 5 on flag 0x10, +0x38..+0x3f p[+0x10..+0x17]; then a 256-arm switch on type_row[+0] at 0x80011c54. Classes 0x0d and 0x40 set all three angles from p[+0x12..+0x14] << 6; the door classes 0x03, 0x04, 0x05, 0x54 and 0x57 zero the scale and draw through the grid instead (stamp_rect, stamp_table); 200 classes go to the level overlay's hook at level_hooks+0x20. tools/objload.py transcribes it: angles, scale and position 4352 of 4352 across 13 snapshots on levels 0 and 4, opcode 4226 of 4226"
  },
  "0x801e6470": {
   "name": "collision_scratch",
@@ -946,7 +946,7 @@
  "0x80040ae4": {
   "name": "render_walk",
   "kind": "code",
-  "evidence": "two loops, not one. The first steps the ACTOR table at 0x80185da8 by 0x88 for 200 slots and draws a creature only when its +9 is 1; its model number is the mesh byte at +1 plus 0x80. The second steps object_table by 0x44 for 396 slots, skips a u16 type id of 0xff, clears bit 0x80 of +3 every frame and dispatches on the class byte at +4 -- 0xe9 and 0xe5 are skipped, 0x1f, 0xf0 and 0xf2 each have their own path. The old name here was object_walk, which described only the second half"
+  "evidence": "two loops, not one. The first steps the ACTOR table at 0x80185da8 by 0x88 for 200 slots and draws a creature only when its +9 is 1; its model number is the mesh byte at +1 plus 0x80. The second steps object_table by 0x44 for 396 slots, skips a u16 type id of 0xff, clears bit 0x80 of +3 every frame and dispatches on the class byte at +4 -- 0xe9 and 0xe5 are skipped, 0x1f, 0xf0 and 0xf2 each have their own path. The old name here was object_walk, which described only the second half. For everything else the draw test is view_bits_at(position) & record +0, or type flag +3 bit 8 to draw regardless: every visible cell's view byte carries 2, which a placed record's +0 is, so an arm that zeroes +0 -- classes 0x0b, 0x14, 0x15, 0x1f, 0x59, 0x5f, 0xe0 to 0xe4, 0xe6, 0xe7 and 0xea, and whatever opcode 9 names -- hides the object"
  },
  "_note_object_model": {
   "name": "object type -> model",
@@ -1379,9 +1379,9 @@
   "evidence": "the matrix render_walk draws an object against instead of view_matrix when record[+3] bit 0x40 is set, with the object's position written as zero -- so the object is placed in camera space, not world space (0x800413c4..0x800413dc)"
  },
  "0x80040694": {
-  "name": "object_flags_for_draw",
+  "name": "view_bits_at",
   "kind": "code",
-  "evidence": "render_walk calls it with object_table+0x14 and ANDs the result with the record's own +0 byte to decide whether to draw at all"
+  "evidence": "(position): view_table[(z>>11) + [0x801aec70]][(x>>11) + [0x801aec6c]], 0 outside the 25x25 window. render_walk ANDs it with the record's +0. The old name object_flags_for_draw said what it was for, not what it reads"
  },
  "0x80044b40": {
   "name": "object_set_present",
@@ -2197,5 +2197,25 @@
   "name": "vec_rotate",
   "kind": "code",
   "evidence": "builds a rotation matrix through 0x800166f4, which composes rot_matrix_x with two more, and applies it to the caller’s vector with ApplyMatrixLV. Eleven callers, all actor, object or effect code"
+ },
+ "0x800445b8": {
+  "name": "stamp_rect",
+  "kind": "code",
+  "evidence": "(b0, sx, sz, dx, dz, w, h, angle, mask): copies a w x h block of layer-1 cells from (sx, sz) to (dx, dz), turned by (-(angle >> 10)) & 3 quarter turns, the fields chosen by mask bits -- 1 tile, 2 height, 4 rotation (added to), 8 shape, 0x10/0x20/0x40 parts of +9. Nothing happens unless b0 & 2, or when sx, dx or w is 0xff. load_object_placement uses it for classes 0x01, 0x1b, 0x00, 0x02, 0x57 and 0x5a with mask 0x2d: the sealed rooms of a level are the blocks it copies from"
+ },
+ "0x800443c8": {
+  "name": "stamp_table",
+  "kind": "code",
+  "evidence": "(b0, x, z, angle, table, sel, flag): walks 10-byte entries until a 0xff, turns each (s8 +8, s8 +9) cell offset by game_cos/game_sin of the angle, and writes entry[sel*4 + 0..3] into the upper and lower layers' shape (+3, skipped on 0xfc) and tile (+0, skipped on 0xff); flag, unless 0xff, goes into bit 0x80 of +4. The tables are GAME.EXE data at 0x8008288c..0x8008297c. load_object_placement calls it for the doors, classes 0x03, 0x04, 0x05 and 0x54"
+ },
+ "0x80040708": {
+  "name": "view_bits_around",
+  "kind": "code",
+  "evidence": "(position, r): the OR of view_table over the (2r+1)^2 cells around a position; render_walk's test for a record whose +3 has bit 2 and not bit 8, with r = type_row[+0xc] -- an object big enough to be seen from cells it does not stand in"
+ },
+ "0x801aec84": {
+  "name": "view_table",
+  "kind": "data",
+  "evidence": "25x25 bytes centred on the camera, one per cell; the snapshots hold 0, 8, 26 and 30 in it. Bit 2 (value 2) is what a placed object's +0 selects"
  }
 }

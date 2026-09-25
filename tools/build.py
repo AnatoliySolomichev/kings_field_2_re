@@ -124,6 +124,9 @@ def main(quick=False, only_check=False):
     run(["tools/objcoll.py", "--check"],
         "the object collision, against what was played",
         keep=["recorded touches"])
+    run(["tools/objload.py", "--check"],
+        "the object loader, against every snapshot with a level",
+        keep=["over every snapshot"])
     run(["tools/objops.py", "--types"],
         "the object type table, against a RAM snapshot",
         keep=["of 7968", "rows"])
