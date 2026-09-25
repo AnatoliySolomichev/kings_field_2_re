@@ -279,11 +279,11 @@ the shared do-nothing tail; the other 18 are:
 | `0x23` | `0x80032b90` | diagonal wall |
 | `0x24` | `0x80032c3c` | slab |
 | `0x25` | `0x80032d3c` | **a wall with an L-shaped footprint** |
-| `0x30` | `0x80032f78` | ramp |
-| `0x31` | `0x800338c4` | runs only when the mask already has bit 0 — not transcribed |
+| `0x30` | `0x80032f78` | ramp, and a push when it is steep |
+| `0x31` | `0x800338c4` | **a gap in a wall**: runs only when the mask already has bit 0 |
 | `0x32` | `0x80033460` | diagonal ramp |
 | `0x33` `0x34` | `0x800331b0` `0x80033308` | corners, inner and outer |
-| `0x35` | `0x80033604` | not transcribed |
+| `0x35` | `0x80033604` | a ramp with a top: overhead, it is the ceiling |
 | `0x40` | `0x800339a8` | switches to the cell's other layer and **restarts the shape** |
 
 Counted across every shape program in the game, the opcodes in use are exactly
@@ -292,6 +292,54 @@ these eighteen minus `0x40`: `0x10` 1866, `0x11` 1325, `0x17` 13, `0x18` 42,
 **`0x25` 207 on all 28 levels**, `0x30` 616, `0x31` 11, `0x32` 34, `0x33` 39,
 `0x34` 26, `0x35` 4. So **no shape in the game uses an opcode with no handler** —
 the 31 empty arms are unused values, not a gap.
+
+### The ceiling, the push, and the two ramps' other handlers
+
+`tile_collision` leaves three more answers besides the mask and the nearest
+surface, and `player_horizontal` reads all three:
+
+```
+collision_ceiling  0x801e6478   the base - 40000 on entry (0xffff63c0 at
+                                0x80032628); overwritten, not kept lowest, by
+                                  0x11      its top when the head is below it,
+                                            or -100000 when you stand on it
+                                  0x20-0x25 a wall whose bottom is not below
+                                            the head: that bottom, a beam
+                                            overhead (0x80032954, 0x80032e3c)
+                                  0x31      its own, op3
+                                  0x35      its top, when the head is below it
+                                  0x18      itself, under arg5's bit 30
+tile_push          0x801e6498   zeroed on entry; a ramp -- 0x30 or 0x35 --
+tile_push_angle    0x801e649c   whose run op5 is under 0x40 writes
+                                (op4 << 7) / op5 and face << 10 (0x80033710),
+                                once the point is within its span
+```
+
+**`0x35`** (4 uses, none on level 0) is `0x30` with a top: the same span and
+height, but when the head is not above `op0 + base` it only sets the ceiling
+there. **`0x31`** (11 uses, always a shape's last opcode) is a doorway cut
+through a wall: armed only if a wall before it has set bit 0, and within
+`op0 + r <= u <= op1 - r` across its face it *sets* the surface to `op2` and
+the ceiling to `op3`, adds bit 3 if the head is above that ceiling, and clears
+bits 0, 2 and 9 if the floor is not above the feet -- the wall's refusal
+withdrawn. When bit 0 is clear it returns without stepping over its five
+operands, so the loop reads them as opcodes; being last, nothing follows.
+
+`player_horizontal` climbs a step only if the ceiling is more than a body
+(`0x6a4`) above the new surface, and every step it takes -- clear, or a step
+up -- first adds a push of `0x40` or more along `-angle - 0x400`, once, and
+asks again. Both of `player_step_distances`' calls to it are unconditional
+(`0x8002fda0`, `0x8002fdb4`; `player_walk` falls through into it), so a step
+of nothing still takes the push: **standing on a steep stair slides you down
+it, two pushes a frame**. And the diagonal slide's rotation is byte +2 of
+whatever cell and layer `0x801e6468` holds -- the *last* `tile_collision`
+call's, which after the shorter tries is the last of those, not the target.
+
+Checked against the recorded walking: at cells (31,18) and (32,18) of level 0
+the game stepped 21 where the model stepped 141, with a ramp of run 16 and rise
+15 at the target -- a push of 120. With the push, the ceiling, the two calls
+and the last cell, rung 2 goes from 118 207 to **118 288 of 118 500**, and the
+frames refused by a wall from 101 to 12.
 
 ### The L-shaped wall, which was the hole
 
@@ -1768,14 +1816,15 @@ the step up and before the wall's shorter tries:
   the player stays where it is (`local_58` reaching 2).
 
 **Checked**: 455 frames of the recorded walking touch an object -- 302 round
-ones and 145 rectangles -- and 447 come out exact, which takes rung 2 to
-**118 207 of 118 500**. Of the 293 left, 140 are within reach of a swinging
+ones and 145 rectangles -- and 447 come out exact, which took rung 2 to
+118 207 of 118 500; the ramp's push and the ceiling ("The ceiling, the push")
+took it to **118 288**. Of the 212 left, 140 are within reach of a swinging
 door, whose shove and restamped grid a recording of the player alone cannot
-replay; 101 were refused by a wall (the push at `0x801e6498`, the ceiling); 52
-took a clear step, which is creatures -- they collide with the player through
-bit `0x10` and knock it back, and the log does not hold where they were. The
-self-test holds `godot/player.gd` to the Python on 650 steps, 200 of them into
-an object. Still out: the wall push, the ceiling test, and the creatures.
+replay; 12 the model turned away at a wall; 60 the model took whole and the
+game did not, which is creatures -- they collide with the player through bit
+`0x10` and knock it back, and the log does not hold where they were. The
+self-test holds `godot/player.gd` to the Python on 750 steps, 200 of them into
+an object and 100 pushed by a ramp. Still out: the creatures.
 
 ### How long a frame lasts: four vertical blanks
 

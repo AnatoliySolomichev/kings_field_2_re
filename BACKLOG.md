@@ -354,24 +354,25 @@ settle it in one recording.
 
 What is left of movement:
 
-1. **The wall slide.** `player_horizontal` turns a refused step along the wall's
-   own facing, which `tile_collision` leaves at `0x801e6498` and `0x801e649c`
-   and which only `0x80033764` writes. `tools/collision.py` does not compute
-   them, so the port stops dead where the game slides. This is the last thing
-   between rung 2 and 100 %.
+1. **The wall slide — found, and it was a ramp's push.** `0x801e6498` and
+   `0x801e649c` are written by the ramps (`0x30`, `0x35`) whose run is under
+   `0x40`, and `player_horizontal` adds that push to any step it takes; the
+   ceiling (`0x801e6478`) gates the step up. Both are in `tools/collision.py`,
+   `tools/movement.py` and the port (FORMATS.md, "The ceiling, the push"), and
+   rung 2 stands at 118 288 of 118 500; 12 frames are still turned away at a
+   wall where the game went on.
 2. **The turn rate**, `0x8002fe1c`. The per-frame increment lives at
    `0x801b264c` and was seen ramping 0, 8, 16, 24, 32; the routine is unread, so
    the replay takes the facing from the game rather than deriving it.
 3. **Objects are solid — done; creatures are not yet.** `collide_query`'s bit
    `0x20` is `object_collide`, and `player_horizontal` slides along a
    rectangle or pushes out round anything else; `tools/movement.py` and
-   `godot/player.gd` carry both (FORMATS.md, "Objects in the way"), 447 of the
-   455 recorded frames that touch an object come out exact, and rung 2 is at
-   118 207 of 118 500. Bit `0x10` is the creatures, through
+   `godot/player.gd` carry both (FORMATS.md, "Objects in the way"), and 447 of
+   the 455 recorded frames that touch an object come out exact. Bit `0x10` is the creatures, through
    `actor_spot_taken` (`0x8004d644`), and it is not in the port's player: it
    skips a creature whose word at +0x28 has a bit in `0x8018faa8` -- which
    `player_controller` sets to 4 before it moves (`0x80031004`) -- and where
-   +0x28 comes from is not traced. 52 frames of the recording took a clear step
+   +0x28 comes from is not traced. 60 frames of the recording took a clear step
    the game did not, most on open floor, and creatures are the likely cause;
    `emu/bp16.lua` would have to log where they stand to say.
 4. **The door shoves the player — found.** The X writes `emu/bp15.lua` caught

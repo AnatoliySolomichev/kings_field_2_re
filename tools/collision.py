@@ -112,6 +112,12 @@ HOFF = 128                 # only for log lines older than `arg5`. The routine
 WALL_BIT, FLOOR_BIT, CEIL_BIT, DIAG_BIT = 5, 4, 8, 6
 
 
+def trunc(a, b):
+    """MIPS `div`, which truncates toward zero where Python floors."""
+    q = abs(a) // abs(b)
+    return -q if (a < 0) != (b < 0) else q
+
+
 def s16(v):
     return v - 0x10000 if v > 0x7FFF else v
 
@@ -247,18 +253,39 @@ def ceiling(s3, base, cur, op):
     """Handler 0x11: a slab overhead.
 
         top = op0 + base, bot = op1 + base
-        head between them  -> mask bit 3
-        head clear of it   -> it becomes the nearest surface instead
+        head below its top  -> it is the ceiling, at its top
+        head between them   -> mask bit 3, and the ceiling at its top
+        head clear above it -> it becomes the nearest surface instead, and
+                               the ceiling is none (-100000, absolute)
 
-    Returns (mask bit, new nearest).
+    Returns (mask bit, new nearest, new ceiling).
     """
     top = s16(op[0]) + base
     if not s3 < top:
-        return 0, cur
+        return 0, cur, top
     bot = s16(op[1]) + base
     if bot < s3:
-        return CEIL_BIT, cur
-    return 0, min(cur, bot)
+        return CEIL_BIT, cur, top
+    return 0, min(cur, bot), NO_CEILING
+
+
+def opening(face, tx, tz, a3, op):
+    """Handler 0x31: a gap in a wall, 11 uses in the game, always a shape's last.
+
+    Armed only if a wall before it in the same shape has already set mask bit
+    0, and only within its span across the face -- `op0 + r <= u <= op1 - r`,
+    `u` being tz, tx, 0x800 - tz or 0x800 - tx by the face (`0x800338c4`).
+    Inside, the surface *is* `op2` and the ceiling `op3`; the head above that
+    ceiling sets bit 3, and a floor not above the feet clears bits 0, 2 and 9
+    -- the wall's refusal withdrawn. So a doorway cut in a wall. (When bit 0 is
+    clear the handler returns without stepping over its operands, which the
+    loop then reads as opcodes; as it is always last, nothing follows them.)
+
+    Returns True if the point is in the gap.
+    """
+    u = (tz if face == 0 else tx if face == 1 else
+         0x800 - tz if face == 2 else 0x800 - tx)
+    return s16(op[0]) + a3 <= u <= s16(op[1]) - a3
 
 
 def ramp(face, tx, tz, a3, t6, op):
@@ -340,6 +367,22 @@ FAR = 100000               # what the routine seeds the nearest surface with,
 # one: nobody drowned while a breakpoint was armed.
 SURFACES = {0x17: 0x801E6484, 0x18: 0x801E647C, 0x19: 0x801E6480}
 
+# The ceiling, collision_ceiling (0x801e6478). It starts 40000 above the base
+# (`0xffff63c0` at 0x80032628), and handlers overwrite it rather than keep the
+# lowest: 0x11 with its top, or with -100000 when you are on it; every wall
+# (0x20-0x25) whose bottom is not below the head, with that bottom -- a beam
+# overhead; 0x31 and 0x35 with their own; 0x18 under its flag. player_horizontal
+# climbs a step only if the ceiling is more than a body (0x6a4) above it.
+CEIL_START = -40000
+NO_CEILING = -100000
+
+# A ramp steeper than this -- its run per step, op5, under 0x40 -- leaves a
+# push at 0x801e6498 of (op4 << 7) / op5 and its direction, face << 10, at
+# 0x801e649c (0x80033710). tile_collision zeroes both on entry. Both 0x30 and
+# 0x35 go through it; player_horizontal adds a push of 0x40 or more to a clear
+# step once, which is what slides you back down a stair you walk up the side of.
+STEEP = 0x40
+
 
 def collide(lvl, x, y, z, radius, base=None, cx=None, cz=None, arg5=None,
             layer=5, nearest=False, extra=None):
@@ -356,10 +399,15 @@ def collide(lvl, x, y, z, radius, base=None, cx=None, cz=None, arg5=None,
     cx = x >> 11 if cx is None else cx
     cz = z >> 11 if cz is None else cz
     if not (0 <= cx < W and 0 <= cz < W):
+        if extra is not None:
+            extra.update({0x801E6478: CEIL_START, 0x801E6498: 0, 0x801E649C: 0})
         return answer(0, FAR)
     c = lvl.cell(cx, cz)
     sid, rot = c[layer + 3], c[layer + 2] & 3
     base = -128 * c[layer + 1] if base is None else base
+    if extra is not None:                  # what the entry leaves, 0x8003269c
+        extra.update({0x801E6478: base + CEIL_START, 0x801E6498: 0,
+                      0x801E649C: 0})
     hdr, ins = lvl.shape(sid)
     if hdr is None:
         return answer(0, FAR)
@@ -371,6 +419,7 @@ def collide(lvl, x, y, z, radius, base=None, cx=None, cz=None, arg5=None,
     # by exactly one handler, 0x18. The rest of the routine never looks at it.
     flags = 0 if arg5 is None else (arg5 & 0xF0000000)
     cur, mask = FAR, 0
+    ceil, push, push_angle = base + CEIL_START, 0, 0
     floor_locked = False              # [sp+0x10], which 0x18 sets and 0x10 obeys
     for op, args in ins:
         if op == 0x10 and args and not floor_locked:
@@ -378,17 +427,40 @@ def collide(lvl, x, y, z, radius, base=None, cx=None, cz=None, arg5=None,
             cur = min(cur, h)
             if cur < y:
                 mask |= FLOOR_BIT
-        elif op == 0x30 and len(args) >= 6:
-            d = ramp((s16(args[3]) + rot) & 3, tx, tz, a3, t6, args)
-            if d is not None and d + base < cur:
+        elif op in (0x30, 0x35) and len(args) >= 6:
+            face = (s16(args[3]) + rot) & 3
+            d = ramp(face, tx, tz, a3, t6, args)
+            if d is None:
+                continue
+            top = s16(args[0]) + base
+            if op == 0x35 and not s3 < top:
+                ceil = top                  # 0x35 overhead: its top is the ceiling
+                continue
+            if d + base < cur:
                 cur = d + base
                 if cur < y:
                     mask |= FLOOR_BIT
+            if s16(args[5]) < STEEP:
+                push = trunc(s16(args[4]) << 7, s16(args[5]))
+                push_angle = face << 10
+        elif op == 0x31 and len(args) >= 5:
+            if not mask & 1:
+                continue
+            if not opening((s16(args[4]) + rot) & 3, tx, tz, a3, args):
+                continue
+            cur = s16(args[2]) + base
+            ceil = s16(args[3]) + base
+            if s3 < ceil:
+                mask |= CEIL_BIT
+            if not cur < y:
+                mask &= ~0x205
         elif op == 0x23 and len(args) >= 4:
             if not diag_wall((s16(args[3]) + rot) & 3, tx, tz, a3, args):
                 continue
             lo, hi = s16(args[1]) + base, s16(args[2]) + base
-            if s3 < lo and hi < cur:
+            if not s3 < lo:
+                ceil = lo
+            elif hi < cur:
                 cur = hi
                 if y > hi:
                     mask |= DIAG_BIT
@@ -399,7 +471,7 @@ def collide(lvl, x, y, z, radius, base=None, cx=None, cz=None, arg5=None,
                 if cur < y:
                     mask |= FLOOR_BIT
         elif op == 0x11 and len(args) >= 2:
-            bit, cur = ceiling(s3, base, cur, args)
+            bit, cur, ceil = ceiling(s3, base, cur, args)
             mask |= bit
         elif op in (0x33, 0x34) and len(args) >= 4:
             d = diagonal((s16(args[1]) + rot) & 3, tx, tz, args, op == 0x34)
@@ -411,7 +483,9 @@ def collide(lvl, x, y, z, radius, base=None, cx=None, cz=None, arg5=None,
             if not slab((s16(args[4]) + rot) & 3, tx, tz, a3, args):
                 continue
             lo, hi = s16(args[2]) + base, s16(args[3]) + base
-            if s3 < lo and hi < cur:
+            if not s3 < lo:
+                ceil = lo
+            elif hi < cur:
                 cur = hi
                 if y > hi:
                     mask |= WALL_BIT
@@ -427,15 +501,16 @@ def collide(lvl, x, y, z, radius, base=None, cx=None, cz=None, arg5=None,
                     mask |= FLOOR_BIT
                     floor_locked = True
             if flags & 0x40000000:                 # 0x80033a5c
-                if extra is not None:
-                    extra[0x801E6478] = h
+                ceil = h
                 if not (h < s3):
                     mask |= CEIL_BIT
         elif op == 0x25 and len(args) >= 7:
             if not notch((s16(args[6]) + rot) & 3, tx, tz, a3, args):
                 continue
             lo, hi = s16(args[4]) + base, s16(args[5]) + base
-            if s3 < lo and hi < cur:
+            if not s3 < lo:
+                ceil = lo
+            elif hi < cur:
                 cur = hi
                 if y > hi:
                     mask |= WALL_BIT
@@ -444,10 +519,16 @@ def collide(lvl, x, y, z, radius, base=None, cx=None, cz=None, arg5=None,
                            s16(args[0]), a3, t6):
                 continue
             lo, hi = s16(args[1]) + base, s16(args[2]) + base
-            if s3 < lo and hi < cur:
+            if not s3 < lo:
+                ceil = lo                   # a beam overhead, 0x80032954
+            elif hi < cur:
                 cur = hi
                 if y > hi:
                     mask |= WALL_BIT
+    if extra is not None:
+        extra[0x801E6478] = ceil
+        extra[0x801E6498] = push
+        extra[0x801E649C] = push_angle
     return answer(mask, cur)
 
 

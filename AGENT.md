@@ -133,7 +133,7 @@ the object loader, against 13 snapshots                angles 4344/4352, scale a
                                                        position 4352/4352, opcode
                                                        4226/4226, grid exact on 7
 the lighting table, against every snapshot             89 856 of 89 856 bytes
-the walking, against the recording (replay rung 2)     118 207 of 118 500 frames;
+the walking, against the recording (replay rung 2)     118 288 of 118 500 frames;
                                                        447 of the 455 that touch
                                                        an object
 the video memory, against every snapshot               object pages 779 760 of
@@ -144,7 +144,7 @@ the video memory, against every snapshot               object pages 779 760 of
 and in the Godot self-test:
 
 ```
-movement 690 of 690 · steps 650 of 650 · levels 40 of 40 · angles 400 of 400
+movement 690 of 690 · steps 750 of 750 · levels 40 of 40 · angles 400 of 400
 conversations 43 of 43, and 25 of 25 steps the emulator recorded
 damage 6 of 6 · equipment 16 of 16 · directions 400 of 400
 ```

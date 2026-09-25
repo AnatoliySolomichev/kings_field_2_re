@@ -629,14 +629,13 @@ The rungs: **height only** gives the game's ground move and asks about Y alone;
 three — the turn rate is in `0x8002fe1c` and is not transcribed, and putting an
 unread layer under a checked one would spoil the point of the ladder.
 
-`player_horizontal` is in whole but for three things, and the output counts
-the frames each explains rather than burying them in a total: a **swinging
-door** near the player (its shove and its restamped grid are not in a
-recording of the player alone), a step **refused by a wall** where the game
-pushed off it (the push at `0x801e6498`/`0x801e649c`, and the ceiling), and a
-**clear step** the game did not take -- creatures, whose positions the log
-does not hold. The objects are in: 447 of the 455 frames that touch one come
-out exact, and rung 2 stands at 118 207 of 118 500.
+`player_horizontal` is in whole -- the objects, a steep ramp's push, the
+ceiling -- and rung 2 stands at 118 288 of 118 500. The output counts what is
+left in three heaps rather than one total: a **swinging door** near the player
+(its shove and its restamped grid are not in a recording of the player alone),
+a step the model **turned away at a wall** where the game did not, and a
+**clear step** the model took whole and the game did not -- creatures, whose
+positions the log does not hold.
 
 ### Watching the two side by side
 

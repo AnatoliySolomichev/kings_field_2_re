@@ -34,22 +34,21 @@ the buttons and can be scored without any geometry at all.
 
 ## What it cannot do yet
 
-`player_horizontal` is in (`movement.horizontal`): its refusal, its shorter
-retries, its slides, and the objects -- the rectangle slide and the push-out
-round a circle, which took the ground rung from 117 686 to 118 207 of 118 500;
-455 frames of this recording touch an object and 447 of them come out exact.
-What is left is counted in three heaps rather than one total:
+`player_horizontal` is in whole (`movement.horizontal`) but for the creatures:
+its refusal, its shorter retries, its slides, the objects -- the rectangle
+slide and the push-out round a circle, 447 of the 455 frames that touch one --
+and a steep ramp's push with the ceiling that gates a step up. That took the
+ground rung from 117 686 to 118 288 of 118 500. What is left is counted in
+three heaps rather than one total:
 
-* **the wall**: the step was refused by a tile, and the game did something the
-  model does not -- the push `tile_collision` leaves at `0x801e6498` and
-  `0x801e649c` for a step close to a wall, or the ceiling test in the step up;
 * **a door**: the player was within reach of a swinging door (opcode 1), which
   shoves whoever stands in its sweep by 0x4c a frame while it opens and
   restamps the grid when it has -- neither of which a recording of the player
   alone can replay;
-* **the rest**, where the step the model took was clear: creatures, which
-  collide with the player (`collide_query` bit 0x10) and knock it back, and
-  whose positions `emu/bp16.lua` does not log.
+* **a wall**: the model turned the step away and the game did not;
+* **the rest**, where the model took the step whole: creatures, which collide
+  with the player (`collide_query` bit 0x10) and knock it back, and whose
+  positions `emu/bp16.lua` does not log.
 """
 import collections
 import os
@@ -125,12 +124,16 @@ def step_horizontal(lvl, p, ang, fwd_speed, strafe_speed):
     facing at `0x801b2612` is a quarter turn off the direction of travel, which
     the recording settled: at facing 0 the game moves in +Z, not +X. And the
     distances are not the speeds but `speed^2 / isqrt(sum of squares)`.
+
+    Both calls are made whatever the distances: `player_walk` falls through
+    into `player_step_distances`, which calls `player_horizontal` twice with
+    no test (`0x8002fda0`, `0x8002fdb4`). A step of nothing still asks the
+    collision and still takes a steep ramp's push, so a player standing on one
+    slides down it, and by two pushes a frame.
     """
     fd, sd = movement.step_distances(strafe_speed, fwd_speed)
-    if fd:
-        p, _ok = movement.horizontal(lvl, p, (ang + 0x400) & 0xFFF, fd)
-    if sd:
-        p, _ok = movement.horizontal(lvl, p, ang & 0xFFF, sd)
+    p, _ok = movement.horizontal(lvl, p, (ang + 0x400) & 0xFFF, fd)
+    p, _ok = movement.horizontal(lvl, p, ang & 0xFFF, sd)
     return p
 
 
@@ -184,18 +187,22 @@ def check(lvl, run, rung, objs=()):
             continue
         bad += 1
         cells[(r["p"][0] >> 11, r["p"][2] >> 11)] += 1
-        # Was the step blocked? Then this is the slide, which is not modelled,
-        # and saying so is the difference between a known gap and a bug.
-        fd, _sd = movement.step_distances(nxt["stf"], nxt["fwd"])
-        a = (nxt["ang"] + 0x400) & 0xFFF
-        tx = r["p"][0] + ((movement.game_cos(a) * fd) >> 12)
-        tz = r["p"][2] + ((movement.game_sin(a) * fd) >> 12)
+        # Did the model itself turn the step away? Then a wall had a say, and
+        # the frame is the wall's; if it took the step whole and the game did
+        # not, something the model cannot see was in the way.
+        fd, sd = movement.step_distances(nxt["stf"], nxt["fwd"])
+        a, b = (nxt["ang"] + 0x400) & 0xFFF, nxt["ang"] & 0xFFF
+        straight = (r["p"][0] + ((movement.game_cos(a) * fd) >> 12)
+                    + ((movement.game_cos(b) * sd) >> 12),
+                    r["p"][2] + ((movement.game_sin(a) * fd) >> 12)
+                    + ((movement.game_sin(b) * sd) >> 12))
+        took = step_horizontal(lvl, r["p"], nxt["ang"], nxt["fwd"], nxt["stf"])
         # The door first: a closed door is a wall in the model's grid, and a
         # frame spent walking through it after it opened is the door's.
         if any(abs(o["x"] - r["p"][0]) < DOOR_REACH
                and abs(o["z"] - r["p"][2]) < DOOR_REACH for o in objs):
             objected += 1
-        elif movement.query(lvl, tx, r["p"][1], tz)[0]:
+        elif (took[0], took[2]) != straight:
             walled += 1
 
     # free: carry our own position, take only the input from the log
@@ -344,8 +351,8 @@ def report(path="out/lua_bp16.log"):
         if tb:
             rest = tb - tw - to
             print(f"     of the {tb} that differ, {to} are within reach of a "
-                  f"swinging door, {tw} were refused by a wall"
-                  + ("" if rest <= 0 else f" and {rest} took a clear step "
+                  f"swinging door, {tw} the model turned away at a wall"
+                  + ("" if rest <= 0 else f" and {rest} it took whole "
                      "(creatures, which the log does not hold)"))
             for (cx, cz), n in cells.most_common(3):
                 print(f"     cell ({cx},{cz}) {n}x")

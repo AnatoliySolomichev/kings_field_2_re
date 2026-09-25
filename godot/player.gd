@@ -58,6 +58,7 @@ const FLY := 9000.0
 const STEP_UP := 0x500               # player_horizontal: the most a step may climb
 const SHRINK := 0x16                 # and how much shorter each retry is
 const AROUND := 0x370                # how far past an object's radius the push-out goes
+const STEEP_PUSH := 0x40             # the least push a taken step gains
 const RECT_TRIES := [0x400, 0x400, 0x3E8, 0x3E8, 0x418, 0x418]   # the turns back
                                      # along a rectangle's axes, one a try
 const PITCH_LIMIT := 0x2bc           # player_look stops the pitch here, either way
@@ -310,11 +311,11 @@ func _tick(dir: Vector3) -> void:
 		if fwd_speed < 0: fd = -fd
 		if stf_speed < 0: sd = -sd
 	# player_walk steps twice, forward along facing + 0x400 and the strafe along
-	# the facing, each through player_horizontal; then the height.
-	if fd != 0:
-		_horizontal((facing + 0x400) & 0xFFF, fd)
-	if sd != 0:
-		_horizontal(facing & 0xFFF, sd)
+	# the facing, each through player_horizontal; then the height. Both calls
+	# are made even for a step of nothing (0x8002fda0, 0x8002fdb4): that still
+	# takes a steep ramp's push, so standing on one slides you down it.
+	_horizontal((facing + 0x400) & 0xFFF, fd)
+	_horizontal(facing & 0xFFF, sd)
 	_move(0, 0)
 	_bob(coll.isqrt(fd * fd + sd * sd))
 
@@ -326,9 +327,12 @@ func _tick(dir: Vector3) -> void:
 # listing, in its order, and the same in tools/movement.py, where the
 # recording checks it:
 #
-#   clear                        take it
+#   clear                        take it, but first: a steep ramp's push of
+#                                0x40 or more is added once and the step asked
+#                                again -- a slide back down
 #   nothing outside 0x207, the surface no more than 0x500 above the feet,
-#   player state 0               a step up: take it
+#   player state 0, the ceiling more than a body above it
+#                                a step up: take it, the same way
 #   an object with a rectangle   (its byte +3 has bit 4) slide along one of its
 #                                axes: the step turned into its frame, one part
 #                                kept, turned back by its angle + 0x400, 0x3e8
@@ -340,11 +344,11 @@ func _tick(dir: Vector3) -> void:
 #   otherwise, a wall            try it 0x16 shorter at a time, once; then
 #                                slide, the X part dropped, then only the X
 #                                part; a diagonal wall (bit 2) slides along the
-#                                diagonal the cell's rotation gives; else stay
+#                                diagonal the rotation of the cell the last
+#                                query looked at gives; else stay
 #
-# Not here: the push tile_collision leaves at 0x801e6498/0x801e649c for a clear
-# step close to a wall, the ceiling test, and the creatures.
-# @orig game:0x8002e3f8 player_horizontal  status:partial -- tiles and objects; tools/replay.py: 118 207 of 118 500 ground frames
+# Not here: the creatures.
+# @orig game:0x8002e3f8 player_horizontal  status:partial -- all but the creatures; tools/replay.py: 118 288 of 118 500 ground frames
 func _horizontal(angle: int, dist: int) -> void:
 	var s4: int = (coll.game_cos(angle) * dist) >> 12
 	var s2: int = (coll.game_sin(angle) * dist) >> 12
@@ -355,25 +359,35 @@ func _horizontal(angle: int, dist: int) -> void:
 	var tries := 0
 	var pushes := 0
 	var rel := 0
+	var slid := false
+	var last := -1                    # the cell and layer 0x801e6468 points at
 	var x := gx
 	var z := gz
 	for _i in 64:
 		var tx := x + s4
 		var tz := z + s2
 		var q := coll.query_all(tx, gy, tz)
+		last = int(q["at"])
 		var mask: int = int(q["mask"])
-		if mask == 0:
+		var take := mask == 0
+		var blocked := false
+		if not take and mask & ~0x207 == 0:
+			if not (int(q["floor"]) + STEP_UP < gy) \
+					and int(q["ceil"]) - int(q["floor"]) < -coll.body:
+				take = true
+			elif not (mask & 2):
+				blocked = true
+		if take:
+			var push: int = q["push"]
+			if push >= STEEP_PUSH and not slid:
+				slid = true
+				var pa: int = -int(q["push_angle"]) - 0x400
+				s4 += (coll.game_cos(pa) * push) >> 12
+				s2 += (coll.game_sin(pa) * push) >> 12
+				continue
 			gx = tx
 			gz = tz
 			return
-		var blocked := false
-		if mask & ~0x207 == 0:
-			if not (int(q["floor"]) + STEP_UP < gy):
-				gx = tx
-				gz = tz
-				return
-			if not (mask & 2):
-				blocked = true
 		var oi: int = q["object"]
 		if oi != -1 and (int(coll.objects[oi][4]) & 4) and tries < RECT_TRIES.size():
 			var o: Array = coll.objects[oi]
@@ -414,7 +428,9 @@ func _horizontal(angle: int, dist: int) -> void:
 				var nx := x + ((vx + 0xFFF if vx < 0 else vx) >> 12)
 				var nz := z + ((vz + 0xFFF if vz < 0 else vz) >> 12)
 				s0 -= SHRINK
-				if int(coll.query_all(nx, gy, nz)["mask"]) == 0:
+				var sq := coll.query_all(nx, gy, nz)
+				last = int(sq["at"])
+				if int(sq["mask"]) == 0:
 					x = nx
 					z = nz
 					break
@@ -437,12 +453,9 @@ func _horizontal(angle: int, dist: int) -> void:
 				s2 = 0
 				continue
 			break
-		var cx := tx >> 11
-		var cz := tz >> 11
 		var rot := 0
-		if cx >= 0 and cx < 80 and cz >= 0 and cz < 80:
-			var i := (cz * 80 + cx) * 6
-			rot = coll.cells[i + coll._layer(i, gy - (coll.body >> 1)) + 1] & 3
+		if last >= 0:
+			rot = coll.cells[last + 1] & 3
 		if rot == 0 or rot == 2:
 			s4 = (first_x + first_z) >> 1
 			s2 = s4

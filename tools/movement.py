@@ -105,7 +105,7 @@ def vlen(a, b):
     return math.isqrt((a >> 3) ** 2 + (b >> 3) ** 2) << 3
 
 
-def query(lvl, x, y, z, radius=R, body=BODY, ymid=None):
+def query(lvl, x, y, z, radius=R, body=BODY, ymid=None, extra=None):
     """`0x80033f38` with the player's flags, as far as the tiles go.
 
     The wrapper picks the cell and the layer from the *middle* of the body —
@@ -123,10 +123,13 @@ def query(lvl, x, y, z, radius=R, body=BODY, ymid=None):
         ymid = y - (((body << 4) & 0xFFFFFFFF) >> 5)
     cx, cz = x >> 11, z >> 11
     if not (0 <= x <= GRID_MAX and 0 <= z <= GRID_MAX):
+        if extra is not None:
+            extra.update({0x801E6478: collision.CEIL_START, 0x801E6498: 0,
+                          0x801E649C: 0})
         return 0, collision.FAR
     lay = collision.layer_of(lvl.cell(cx, cz), ymid)
     return collision.collide(lvl, x, y, z, radius, cx=cx, cz=cz, arg5=body,
-                             layer=lay, nearest=True)
+                             layer=lay, nearest=True, extra=extra)
 
 
 def surface(lvl, x, y, z, radius=R, body=BODY):
@@ -519,13 +522,14 @@ def object_collide(objs, x, y, z, r=R, own=BODY):
     return None
 
 
-def query_all(lvl, x, y, z):
+def query_all(lvl, x, y, z, extra=None):
     """`collide_query` with the player's 0x31, objects included.
 
     Returns (mask, nearest surface, the object hit or None). Creatures, bit
-    0x10, are not here: their positions are not in the recording.
+    0x10, are not here: their positions are not in the recording. `extra`
+    gets the ceiling and the push tile_collision leaves, keyed by address.
     """
-    mask, cur = query(lvl, x, y, z)
+    mask, cur = query(lvl, x, y, z, extra=extra)
     cx, cz = x >> 11, z >> 11
     if not (0 <= cx < 80 and 0 <= cz < 80) or not lvl.cell(cx, cz)[2] & 0xFC:
         return mask, cur, None
@@ -536,6 +540,7 @@ def query_all(lvl, x, y, z):
 STEP_UP = 0x500        # the most player_horizontal lets a step climb
 SHRINK = 0x16          # how much shorter each retry of a refused step is
 AROUND = 0x370         # how far past an object's radius the push-out puts you
+STEEP_PUSH = 0x40      # the least push player_horizontal adds (0x8002e4e4)
 RECT_TRIES = (0x400, 0x400, 0x3E8, 0x3E8, 0x418, 0x418)
 
 
@@ -572,9 +577,13 @@ def horizontal(lvl, p, angle, dist, state=0, objects=True):
       `(dx - dz) / 2` and its negative for 1 and 3;
     * and if none of that is clear, it stays.
 
-    Not here: the push the tile collision leaves at `0x801e6498` and
-    `0x801e649c` for a clear step close to a wall, the ceiling test, and the
-    creatures. `objects=False` leaves the objects out as well.
+    And a step that is taken -- clear, or a step up -- first looks at the push
+    the tile collision left: a steep ramp's (`0x801e6498`, `0x801e649c`). If it
+    is `0x40` or more, and it has not been added already, the step gains
+    `push` along `-angle - 0x400` and is asked about again. The step up needs
+    the ceiling more than a body (`0x6a4`) above the surface as well.
+
+    Not here: the creatures. `objects=False` leaves the objects out as well.
 
     The caller (`0x8002f9bc`) makes this call twice a frame: once at `angle`
     with the forward distance and once at `angle + 0x400` with the strafe.
@@ -586,20 +595,32 @@ def horizontal(lvl, p, angle, dist, state=0, objects=True):
     shrunk = diag = False
     tries = pushes = 0
     rel = 0
+    slid = False
+    ex = {}
     for _ in range(64):
         tx, tz = x + s4, z + s2
+        last = (tx, tz)                 # where 0x801e6468 will point
         if objects:
-            mask, cur, obj = query_all(lvl, tx, y, tz)
+            mask, cur, obj = query_all(lvl, tx, y, tz, extra=ex)
         else:
-            (mask, cur), obj = query(lvl, tx, y, tz), None
-        if mask == 0:
-            return (tx, y, tz), True
+            (mask, cur), obj = query(lvl, tx, y, tz, extra=ex), None
+        take = mask == 0
         blocked = False
-        if mask & ~0x207 == 0:
-            if not cur + STEP_UP < y and state == 0:
-                return (tx, y, tz), True
-            if not mask & 2:
+        if not take and mask & ~0x207 == 0:
+            if (not cur + STEP_UP < y and state == 0
+                    and ex[0x801E6478] - cur < -BODY):
+                take = True
+            elif not mask & 2:
                 blocked = True
+        if take:
+            push = ex[0x801E6498]
+            if push >= STEEP_PUSH and not slid:
+                slid = True
+                a = -ex[0x801E649C] - 0x400
+                s4 += (game_cos(a) * push) >> 12
+                s2 += (game_sin(a) * push) >> 12
+                continue
+            return (tx, y, tz), True
         if obj is not None and obj["flags"] & 4 and tries < 6:
             tries += 1
             d = abs(dist)
@@ -635,6 +656,7 @@ def horizontal(lvl, p, angle, dist, state=0, objects=True):
                 nz = z + ((vz + 0xFFF if vz < 0 else vz) >> 12)
                 s0 -= SHRINK
                 q = query_all(lvl, nx, y, nz)[0] if objects else query(lvl, nx, y, nz)[0]
+                last = (nx, nz)
                 if q == 0:
                     x, z = nx, nz
                     break
@@ -655,7 +677,10 @@ def horizontal(lvl, p, angle, dist, state=0, objects=True):
                 s4, s2 = first_x, 0
                 continue
             break
-        cx, cz = tx >> 11, tz >> 11
+        # The rotation is the byte +2 of the cell *and layer* the last
+        # tile_collision call looked at (0x801e6468, written at 0x800326c8):
+        # after the shorter tries that is the last of them, not the target.
+        cx, cz = last[0] >> 11, last[1] >> 11
         c = lvl.cell(cx, cz) if 0 <= cx < 80 and 0 <= cz < 80 else bytes(10)
         lay = collision.layer_of(c, y - (((BODY << 4) & 0xFFFFFFFF) >> 5))
         if c[lay + 2] & 3 in (0, 2):

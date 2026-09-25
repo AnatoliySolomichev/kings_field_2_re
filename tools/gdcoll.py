@@ -145,34 +145,36 @@ def stepcheck(lvl, n=400):
 
     Every frame of the logged walking (`out/lua_bp16.log`) where the step the
     Python model takes is not the plain one -- refused, shortened, slid -- up to
-    `n`, then up to `n / 2` that run into an object, then a few plain ones. The
-    GDScript copy must land on the same spot.
+    `n`, then up to `n / 2` that run into an object and `n / 4` that a steep
+    ramp pushes, then a few plain ones. The GDScript copy must land on the same
+    spot.
     """
     try:
         import replay
     except Exception:
         return []
     rows, _binds = replay.load()
-    odd, plain, objected = [], [], []
+    odd, plain, objected, pushed = [], [], [], []
     for r, nxt in zip(rows, rows[1:]):
         if r["lv"] != lvl.lv or nxt["f"] != r["f"] + 1:
             continue
         fd, sd = movement.step_distances(nxt["stf"], nxt["fwd"])
         for ang, dist in (((nxt["ang"] + 0x400) & 0xFFF, fd), (nxt["ang"] & 0xFFF, sd)):
-            if not dist:
-                continue
             p = r["p"]
             q, _ok = movement.horizontal(lvl, p, ang, dist)
             straight = (p[0] + ((movement.game_cos(ang) * dist) >> 12),
                         p[2] + ((movement.game_sin(ang) * dist) >> 12))
             case = [p[0], p[1], p[2], ang, dist, q[0], q[2]]
-            if movement.query_all(lvl, straight[0], p[1], straight[1])[2]:
+            ex = {}
+            if movement.query_all(lvl, straight[0], p[1], straight[1], extra=ex)[2]:
                 objected.append(case)
+            elif ex[0x801E6498] >= movement.STEEP_PUSH:
+                pushed.append(case)
             else:
                 (plain if (q[0], q[2]) == straight else odd).append(case)
-        if len(odd) >= n and len(objected) >= n // 2:
+        if len(odd) >= n and len(objected) >= n // 2 and len(pushed) >= n // 4:
             break
-    return odd[:n] + objected[:n // 2] + plain[:n // 8]
+    return odd[:n] + objected[:n // 2] + pushed[:n // 4] + plain[:n // 8]
 
 
 def dircheck(out="out/godot", n=400):

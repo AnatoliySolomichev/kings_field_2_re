@@ -31,6 +31,14 @@ const CEIL_BIT := 8
 const DIAG_BIT := 6
 const BLOCKING := WALL_BIT | DIAG_BIT      # bits 0 and 1: something lateral
 
+# collision_ceiling (0x801e6478) starts 40000 above the base, and the handlers
+# overwrite it: 0x11, a wall whose bottom is not below the head (a beam), 0x31
+# and 0x35. A ramp whose run op5 is under 0x40 leaves a push of (op4 << 7) /
+# op5 along face << 10 (0x801e6498, 0x801e649c) -- tools/collision.py.
+const CEIL_START := -40000
+const NO_CEILING := -100000
+const STEEP := 0x40
+
 var cells := PackedInt32Array()
 var shapes := {}
 var radius := 800
@@ -366,7 +374,8 @@ var surfaces := {}
 func query(x: int, y: int, z: int, ymid := 0x7FFFFFFF) -> Dictionary:
 	if ymid == 0x7FFFFFFF:
 		ymid = y - (body >> 1)
-	var out := {"mask": 0, "floor": NO_SURFACE}
+	var out := {"mask": 0, "floor": NO_SURFACE, "ceil": CEIL_START, "push": 0,
+		"push_angle": 0, "at": -1}
 	var cx := x >> 11
 	var cz := z >> 11
 	if cx < 0 or cx >= W or cz < 0 or cz >= W:
@@ -374,11 +383,13 @@ func query(x: int, y: int, z: int, ymid := 0x7FFFFFFF) -> Dictionary:
 	var i := (cz * W + cx) * 6 + _layer((cz * W + cx) * 6, ymid)
 	var sid := cells[i]
 	var key := str(sid)
+	var base := -128 * cells[i + 2]
+	out["ceil"] = base + CEIL_START
+	out["at"] = i                    # the cell and layer, what 0x801e6468 holds
 	if sid == 255 or not shapes.has(key):
 		return out
 	var sh: Dictionary = shapes[key]
 	var rot := cells[i + 1]
-	var base := -128 * cells[i + 2]
 	var a3 := (radius * int(sh["scale"])) >> 12
 	var t6 := CELL - a3
 	var tx := x & 0x7FF
@@ -386,6 +397,9 @@ func query(x: int, y: int, z: int, ymid := 0x7FFFFFFF) -> Dictionary:
 	var s3 := y - body
 	var cur := NO_SURFACE
 	var mask := 0
+	var ceil := base + CEIL_START
+	var push := 0
+	var push_angle := 0
 	surfaces.clear()
 
 	for ins in sh["ins"]:
@@ -403,14 +417,38 @@ func query(x: int, y: int, z: int, ymid := 0x7FFFFFFF) -> Dictionary:
 				var bot := int(a[1]) + base
 				if bot < s3:
 					mask |= CEIL_BIT
+					ceil = top
 				else:
 					cur = int(min(cur, bot))
-		elif op == 0x30 and a.size() >= 6:
-			var d := _ramp((int(a[3]) + rot) & 3, tx, tz, a3, t6, a)
-			if d != NO_SURFACE and d + base < cur:
-				cur = d + base
-				if cur < y:
-					mask |= FLOOR_BIT
+					ceil = NO_CEILING
+			else:
+				ceil = top
+		elif (op == 0x30 or op == 0x35) and a.size() >= 6:
+			# 0x35 is 0x30 with a top: a head below it makes it the ceiling
+			# (0x80033604); either leaves its push when steep (0x80033710)
+			var face := (int(a[3]) + rot) & 3
+			var d := _ramp(face, tx, tz, a3, t6, a)
+			if d != NO_SURFACE:
+				var rtop := int(a[0]) + base
+				if op == 0x35 and not (s3 < rtop):
+					ceil = rtop
+				else:
+					if d + base < cur:
+						cur = d + base
+						if cur < y:
+							mask |= FLOOR_BIT
+					if int(a[5]) < STEEP:
+						push = _idiv(int(a[4]) << 7, int(a[5]))
+						push_angle = face << 10
+		elif op == 0x31 and a.size() >= 5:
+			# a gap in a wall, armed by a wall before it: tools/collision.py
+			if (mask & 1) and _opening((int(a[4]) + rot) & 3, tx, tz, a3, a):
+				cur = int(a[2]) + base
+				ceil = int(a[3]) + base
+				if s3 < ceil:
+					mask |= CEIL_BIT
+				if not (cur < y):
+					mask &= ~0x205
 		elif op == 0x32 and a.size() >= 6:
 			var d2 := _diag_ramp((int(a[3]) + rot) & 3, tx, tz, a)
 			if d2 != NO_SURFACE and d2 + base < cur:
@@ -427,7 +465,9 @@ func query(x: int, y: int, z: int, ymid := 0x7FFFFFFF) -> Dictionary:
 			if _diag_wall((int(a[3]) + rot) & 3, tx, tz, a3, a):
 				var lo := int(a[1]) + base
 				var hi := int(a[2]) + base
-				if s3 < lo and hi < cur:
+				if not (s3 < lo):
+					ceil = lo
+				elif hi < cur:
 					cur = hi
 					if y > hi:
 						mask |= DIAG_BIT
@@ -435,7 +475,9 @@ func query(x: int, y: int, z: int, ymid := 0x7FFFFFFF) -> Dictionary:
 			if _slab((int(a[4]) + rot) & 3, tx, tz, a3, a):
 				var lo2 := int(a[2]) + base
 				var hi2 := int(a[3]) + base
-				if s3 < lo2 and hi2 < cur:
+				if not (s3 < lo2):
+					ceil = lo2
+				elif hi2 < cur:
 					cur = hi2
 					if y > hi2:
 						mask |= WALL_BIT
@@ -446,7 +488,9 @@ func query(x: int, y: int, z: int, ymid := 0x7FFFFFFF) -> Dictionary:
 			if _notch((int(a[6]) + rot) & 3, tx, tz, a3, a):
 				var lo4 := int(a[4]) + base
 				var hi4 := int(a[5]) + base
-				if s3 < lo4 and hi4 < cur:
+				if not (s3 < lo4):
+					ceil = lo4
+				elif hi4 < cur:
 					cur = hi4
 					if y > hi4:
 						mask |= WALL_BIT
@@ -467,14 +511,26 @@ func query(x: int, y: int, z: int, ymid := 0x7FFFFFFF) -> Dictionary:
 			if hit:
 				var lo3 := int(a[1]) + base
 				var hi3 := int(a[2]) + base
-				if s3 < lo3 and hi3 < cur:
+				if not (s3 < lo3):
+					ceil = lo3
+				elif hi3 < cur:
 					cur = hi3
 					if y > hi3:
 						mask |= WALL_BIT
 
 	out["mask"] = mask
 	out["floor"] = cur
+	out["ceil"] = ceil
+	out["push"] = push
+	out["push_angle"] = push_angle
 	return out
+
+
+# Handler 0x31, from 0x800338c4: within op0 + r .. op1 - r across the face.
+# @orig game:0x800338c4  status:transcribed -- a label inside tile_collision, opcode 0x31
+func _opening(f: int, tx: int, tz: int, a3: int, a: Array) -> bool:
+	var u := tz if f == 0 else (tx if f == 1 else (CELL - tz if f == 2 else CELL - tx))
+	return int(a[0]) + a3 <= u and u <= int(a[1]) - a3
 
 
 # Handler 0x25, transcribed from 0x80032d3c. In the face's own frame -- `u`

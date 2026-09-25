@@ -1551,7 +1551,7 @@
  "0x801e6478": {
   "name": "collision_ceiling",
   "kind": "data",
-  "evidence": "the companion slot the wall and ceiling handlers leave the *lower* bound in; player_horizontal reads it at 0x8002e5e0"
+  "evidence": "collision_ceiling: tile_collision sets it to the base - 40000 on entry and its handlers overwrite it -- 0x11 with its top (or -100000 when you stand on it), any wall whose bottom is not below the head with that bottom, 0x31 and 0x35 with their own, 0x18 under arg5 bit 30. player_horizontal reads it at 0x8002e5e0: a step up needs it more than 0x6a4 above the new surface. Transcribed in tools/collision.py, checked by the recorded walking"
  },
  "0x800341e8": {
   "name": "light_table_reset",
@@ -2327,5 +2327,20 @@
   "name": "ratan_table",
   "kind": "data",
   "evidence": "1025 halfwords, ratan2’s arctangent table, 0 to 0x200 over a ratio of 0 to 1024"
+ },
+ "0x801e6498": {
+  "name": "tile_push",
+  "kind": "data",
+  "evidence": "zeroed by tile_collision on entry; a ramp (0x30 or 0x35) whose run op5 is under 0x40 writes (op4 << 7) / op5 at 0x8003376c once the point is within its span. player_horizontal adds a push of 0x40 or more to a step it takes, once, along -tile_push_angle - 0x400: the slide down a steep stair. Checked: cells (31,18)/(32,18) of level 0, a push of 120"
+ },
+ "0x801e649c": {
+  "name": "tile_push_angle",
+  "kind": "data",
+  "evidence": "the push's direction, the ramp's face << 10, written beside tile_push at 0x80033764"
+ },
+ "0x801e6468": {
+  "name": "collision_cell_layer",
+  "kind": "data",
+  "evidence": "the cell pointer plus the layer offset of the last tile_collision call, written at 0x800326c8; player_horizontal's diagonal slide reads the rotation at its byte +2, so after the shorter tries it is the last of those, not the step's target"
  }
 }

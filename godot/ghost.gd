@@ -333,13 +333,12 @@ func _advance(a: Dictionary, b: Dictionary) -> void:
 		if fwd < 0: fd = -fd
 		if stf < 0: sd = -sd
 	# Forward runs a quarter turn off the facing; strafe along it. Each through
-	# player_horizontal, which refuses and slides the way the game does.
+	# player_horizontal, which refuses and slides the way the game does -- and
+	# both always, as the game makes them, for a steep ramp's push.
 	var af: int = (int(b["ang"]) + 0x400) & 0xFFF
 	var ax: int = int(b["ang"]) & 0xFFF
-	if fd != 0:
-		player._horizontal(af, fd)
-	if sd != 0:
-		player._horizontal(ax, sd)
+	player._horizontal(af, fd)
+	player._horizontal(ax, sd)
 	player._move(0, 0)
 	# The bob rides on the step's magnitude, whether or not the step landed.
 	player._bob(player.coll.isqrt(fd * fd + sd * sd))
