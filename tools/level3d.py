@@ -66,6 +66,14 @@ def _rot3(rx, ry, rz):
     two multiplies are told apart by which argument they store through, which
     is the whole difference between them.
 
+    **The Y matrix had its signs the wrong way round**, and nothing checked it:
+    `rot_matrix_y` (`0x8001660c`) stores cos at [0][0], **-sin at [0][2]** and
+    **sin at [2][0]** (`negu $v1, $s0; sh $v1, 4($s1)` and `sh $s0, 0xc($s1)`),
+    where this had sin and -sin. So every object turned by -yaw instead of
+    yaw -- invisible at 0 and half a turn, half a turn wrong at the quarters --
+    and a door swung the wrong way, which is how a player caught it. The X and
+    Z matrices were right.
+
     An earlier version of this composed them the other way round and said so:
     it was a choice, not a reading, and a player looking at a helmet in both
     windows could see it was wrong. The angle triple is read at +0, +2 and +4
@@ -78,7 +86,7 @@ def _rot3(rx, ry, rz):
     cx, sx = cs(rx)
     cy, sy = cs(ry)
     cz, sz = cs(rz)
-    ry_m = ((cy, 0.0, sy), (0.0, 1.0, 0.0), (-sy, 0.0, cy))
+    ry_m = ((cy, 0.0, -sy), (0.0, 1.0, 0.0), (sy, 0.0, cy))
     rx_m = ((1.0, 0.0, 0.0), (0.0, cx, -sx), (0.0, sx, cx))
     rz_m = ((cz, -sz, 0.0), (sz, cz, 0.0), (0.0, 0.0, 1.0))
 
@@ -514,8 +522,9 @@ def build_actors_gltf(lv, out="out/godot"):
     The node carries the turn rather than the vertices. A creature has one
     angle: `render_walk` hands the actor's +0x40, +0x42 and +0x44 to the matrix
     builder and the spawner zeroes two of them. With the axes flipped the way
-    this file flips them, x kept and y and z negated, the game's Ry(t) is a turn
-    of -t about Godot's up axis.
+    this file flips them, x kept and y and z negated, the game's Ry(t) --
+    `rot_matrix_y`, cos, -sin / sin, cos -- is a turn of **+t** about Godot's up
+    axis. This said -t, from a Y matrix with its signs reversed.
     """
     import json
     import actors as act
@@ -554,7 +563,7 @@ def build_actors_gltf(lv, out="out/godot"):
         if not prims:
             missing += 1
             continue
-        half = -a["yaw"] * math.pi / 4096.0      # half of the turn, in radians
+        half = a["yaw"] * math.pi / 4096.0       # half of the turn, in radians
         items.append((f"a{a['slot']:03d}", prims,
                       (a["x"] / UNIT, -a["y"] / UNIT, -a["z"] / UNIT),
                       (0.0, math.sin(half), 0.0, math.cos(half))))

@@ -97,8 +97,9 @@ func _process(dt: float) -> void:
 				_step(d)
 	for d in doors:
 		if d["node"]:
-			# The game's Ry(t) is a turn of -t about Godot's up axis.
-			d["node"].rotation.y = -float(int(d["yaw"]) - int(d["yaw0"])) * TAU / 4096.0
+			# rot_matrix_y is cos, -sin / sin, cos, so with y and z flipped the
+			# game's Ry(t) is a turn of +t about Godot's up axis.
+			d["node"].rotation.y = float(int(d["yaw"]) - int(d["yaw0"])) * TAU / 4096.0
 
 
 # object_interact for the doors: find_object's point for class 1 is the player,
@@ -114,8 +115,9 @@ func _interact() -> void:
 		if not (lock == 0xFF or ((lock == 0xFD or lock == 0xFE) and int(d["type"]) != 0xAE)):
 			continue
 		var yaw := int(d["yaw"])
+		# Ry(yaw) . (-0x400, 0, 0) = (cos * -0x400, 0, sin * -0x400)
 		var px: int = player.gx + ((c.game_cos(yaw) * -0x400) >> 12)
-		var pz: int = player.gz + ((-c.game_sin(yaw) * -0x400) >> 12)
+		var pz: int = player.gz + ((c.game_sin(yaw) * -0x400) >> 12)
 		if _in_range(int(d["x"]), int(d["y"]), int(d["z"]), px, player.gy + 0x1f4, pz,
 				int(d["reach"]) + 0x320, int(d["height"]), 0x9c4) < 0:
 			continue
@@ -137,8 +139,9 @@ func _step(d: Dictionary) -> void:
 		if n < SHOVE_UNTIL and _facing((int(d["push"]) + 0x800) & 0xFFF, int(d["yaw0"]), 0x384) \
 				and _facing(int(d["push"]),
 					c.vec_angle(int(d["x"]) - player.gx, int(d["z"]) - player.gz), 0x400):
+			# Ry(a) . (0, 0, -0x4c) = (-sin * -0x4c, 0, cos * -0x4c)
 			var a := (int(d["yaw0"]) + 0x800) & 0xFFF
-			player.gx += (c.game_sin(a) * SHOVE) >> 12
+			player.gx += (-c.game_sin(a) * SHOVE) >> 12
 			player.gz += (c.game_cos(a) * SHOVE) >> 12
 			player.stf_speed = 0
 			player.fwd_speed = SHOVE
@@ -154,7 +157,7 @@ func _step(d: Dictionary) -> void:
 		if n == CLOSE_AT:
 			var a := int(d["yaw0"])
 			var qx: int = int(d["x"]) + ((c.game_cos(a) * 0x400) >> 12)
-			var qz: int = int(d["z"]) + ((-c.game_sin(a) * 0x400) >> 12)
+			var qz: int = int(d["z"]) + ((c.game_sin(a) * 0x400) >> 12)
 			# @orig game:0x80028e48 player_in_range  status:transcribed
 			if _in_range(player.gx, player.gy, player.gz, qx, int(d["y"]), qz,
 					CLEAR + PLAYER_R, PLAYER_BODY, int(d["height"])) >= 0:

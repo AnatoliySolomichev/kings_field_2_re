@@ -330,7 +330,9 @@ func refresh() -> void:
 		var a: Dictionary = actors[k]
 		var n: Node3D = nodes[k]
 		n.visible = show_all or (a["st"] == ACTIVE and a["cat"] != FREE)
-		n.basis = Basis(Vector3.UP, -float(a["ry"]) * TAU / 4096.0)
+		# rot_matrix_y (0x8001660c) is cos, -sin / sin, cos: with y and z
+		# flipped into Godot's axes, a turn of +ry about up.
+		n.basis = Basis(Vector3.UP, float(a["ry"]) * TAU / 4096.0)
 	shown = changes
 	var g := get_node_or_null("../Ghost")
 	if g and not g.get("compare"):

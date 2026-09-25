@@ -2243,6 +2243,16 @@ One thing the same reading does settle: **the Y angle is drawn with `0x800`
 added** — half a turn, since `0x1000` is the full circle — at `0x80041374` on
 the ordinary path and `0x80040f04` on the class `0xf2` one.
 
+**And the Y matrix itself was the wrong way round in the port.** `rot_matrix_y`
+(`0x8001660c`) stores cos at [0][0], `-sin` at [0][2] and `sin` at [2][0] --
+`negu $v1, $s0; sh $v1, 4($s1)` and `sh $s0, 0xc($s1)` -- and `tools/level3d.py`
+had those two signs swapped, so every object and creature turned by -yaw
+instead of yaw: invisible at 0 and half a turn, half a turn wrong at the
+quarters. A player caught it as a door swinging the wrong way, with the shove
+it gives going the other way from the swing -- `godot/doors.gd` had taken its
+offsets from the same wrong matrix. The X and Z builders (`0x80016598`,
+`0x80016680`) were right.
+
 **And the port left it out**, for as long as it placed objects: every object
 stood half a turn round from the game. Trees, grass and pillars hid it; a
 swinging door did not -- at rest its leaf lay inside the wall beside the
