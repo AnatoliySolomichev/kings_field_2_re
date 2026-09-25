@@ -331,14 +331,15 @@ func _advance(a: Dictionary, b: Dictionary) -> void:
 		sd = (stf * stf) / h
 		if fwd < 0: fd = -fd
 		if stf < 0: sd = -sd
-	# Forward runs a quarter turn off the facing; strafe along it.
+	# Forward runs a quarter turn off the facing; strafe along it. Each through
+	# player_horizontal, which refuses and slides the way the game does.
 	var af: int = (int(b["ang"]) + 0x400) & 0xFFF
 	var ax: int = int(b["ang"]) & 0xFFF
-	var dx: int = (player.coll.game_cos(af) * fd >> 12) \
-		+ (player.coll.game_cos(ax) * sd >> 12)
-	var dz: int = (player.coll.game_sin(af) * fd >> 12) \
-		+ (player.coll.game_sin(ax) * sd >> 12)
-	player._move(dx, dz)
+	if fd != 0:
+		player._horizontal(af, fd)
+	if sd != 0:
+		player._horizontal(ax, sd)
+	player._move(0, 0)
 	# The bob rides on the step's magnitude, whether or not the step landed.
 	player._bob(player.coll.isqrt(fd * fd + sd * sd))
 

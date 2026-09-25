@@ -90,6 +90,36 @@ func _step(p: Array, dx: int, dz: int, state: int, vel: int) -> Array:
 	return [x, y, z, (0x10 if d < 0x401 else 0x40), V_START]
 
 
+# player_horizontal, run by player.gd itself over steps tools/gdcoll.py took out
+# of the recorded walking -- the refused, shortened and slid ones first -- with
+# tools/movement.py's answer beside each.
+func _steps(doc: Dictionary) -> bool:
+	var cases: Array = doc.get("steps", [])
+	if cases.is_empty():
+		print("steps: none in movecheck00.json (no recording to take them from)")
+		return true
+	var pl = load("res://player.gd").new()
+	pl.coll = coll
+	var bad := 0
+	var first := ""
+	for c in cases:
+		pl.gx = int(c[0])
+		pl.gy = int(c[1])
+		pl.gz = int(c[2])
+		pl._horizontal(int(c[3]), int(c[4]))
+		if pl.gx != int(c[5]) or pl.gz != int(c[6]):
+			bad += 1
+			if first == "":
+				first = "%s: godot %d,%d python %d,%d" % [str(c), pl.gx, pl.gz,
+					int(c[5]), int(c[6])]
+	pl.free()
+	print("steps: %d of %d recorded steps land where tools/movement.py puts them"
+		% [cases.size() - bad, cases.size()])
+	if bad > 0:
+		print("  first difference: " + first)
+	return bad == 0
+
+
 func _init() -> void:
 	coll = KFCollision.new()
 	if not coll.load_from("res://coll00.json"):
@@ -132,6 +162,9 @@ func _init() -> void:
 		total - bad, total])
 	if bad > 0:
 		print("  first difference: " + first)
+		quit(1)
+		return
+	if not _steps(doc):
 		quit(1)
 		return
 	if not _levels():

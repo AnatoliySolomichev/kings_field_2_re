@@ -1112,7 +1112,7 @@ def verify(out="out/godot"):
                         "--script", "res://selftest.gd"],
                        capture_output=True, text=True, timeout=900)
     for line in (r.stdout + r.stderr).splitlines():
-        if line.startswith(("loaded:", "movement:", "levels:", "angles:",
+        if line.startswith(("loaded:", "movement:", "steps:", "levels:", "angles:",
                             "scripts:", "damage:", "FAIL", "  first",
                             "  level case", "  angle (", "  script level",
                             "  hit ")):

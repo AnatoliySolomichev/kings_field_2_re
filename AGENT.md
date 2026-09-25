@@ -199,7 +199,7 @@ still. `godot/player.gd` carries it; FORMATS.md, "The turn".
 
 What is left of it, and neither blocks anything: **`0x8002e3f8` is not
 transcribed** (the horizontal step is 201 units a frame at speed and ramps up
-from a standstill). **The frame rate is read**: `frame_limit` (`0x80019614`)
+from a standstill -- *update*: its refusal and slides are in, below). **The frame rate is read**: `frame_limit` (`0x80019614`)
 ends every pass of the loop by waiting for the fourth vertical blank, so the
 game runs at 15 frames a second, and `godot/player.gd` does now -- it ran at a
 guessed 30, twice the game's speed. `emu/bp16.lua` logs `vblank_count` as `vb=`

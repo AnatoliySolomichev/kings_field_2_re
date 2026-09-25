@@ -55,6 +55,8 @@ const SPEED_MAX := 200               # 0x801b2664 in the recorded session; the
 const SPEED_MAX_RUN := 400           # not the game's -- there is no run button, this is
                                      # for getting about the level quickly
 const FLY := 9000.0
+const STEP_UP := 0x500               # player_horizontal: the most a step may climb
+const SHRINK := 0x16                 # and how much shorter each retry is
 const EYE := 1.6
 # Read off the code, no longer a guess. The game's clock is the vertical blank:
 # vblank_tick (0x80019570), hooked to root counter 3 by 0x8001a438, adds one to
@@ -290,10 +292,107 @@ func _tick(dir: Vector3) -> void:
 		sd = (stf_speed * stf_speed) / h
 		if fwd_speed < 0: fd = -fd
 		if stf_speed < 0: sd = -sd
-	var f := -transform.basis.z
-	var r := transform.basis.x
-	_move(int(f.x * fd + r.x * sd), int(-(f.z * fd + r.z * sd)))
+	# player_walk steps twice, forward along facing + 0x400 and the strafe along
+	# the facing, each through player_horizontal; then the height.
+	if fd != 0:
+		_horizontal((facing + 0x400) & 0xFFF, fd)
+	if sd != 0:
+		_horizontal(facing & 0xFFF, sd)
+	_move(0, 0)
 	_bob(coll.isqrt(fd * fd + sd * sd))
+
+
+# player_horizontal (0x8002e3f8): a step of `dist` along `angle`, and what the
+# game does when collide_query at the player's height says no. Before this the
+# port took every step and let player_vertical lift it onto whatever it had
+# walked into, so any wall could be climbed; a player noticed. Read off the
+# listing, and the same in tools/movement.py, where the recording checks it:
+#
+#   clear                        take it
+#   nothing outside 0x207, the surface no more than 0x500 above the feet,
+#   player state 0               a step up: take it
+#   otherwise                    try it 0x16 shorter at a time, once; then slide,
+#                                the X part dropped, then only the X part; a
+#                                diagonal wall (bit 2) slides along the diagonal
+#                                the cell's rotation gives; else stay
+#
+# Not here: the push tile_collision leaves at 0x801e6498/0x801e649c for a clear
+# step close to a wall, the ceiling test, objects and creatures.
+# @orig game:0x8002e3f8 player_horizontal  status:partial -- the refusal and the slides; tools/replay.py: 117 686 of 118 500 ground frames
+func _horizontal(angle: int, dist: int) -> void:
+	var s4: int = (coll.game_cos(angle) * dist) >> 12
+	var s2: int = (coll.game_sin(angle) * dist) >> 12
+	var first_x := s4
+	var shrunk := false
+	var diag := false
+	var x := gx
+	var z := gz
+	for _i in 64:
+		var tx := x + s4
+		var tz := z + s2
+		var q := coll.query(tx, gy, tz)
+		var mask: int = int(q["mask"])
+		if mask == 0:
+			gx = tx
+			gz = tz
+			return
+		var blocked := false
+		if mask & ~0x207 == 0:
+			if not (int(q["floor"]) + STEP_UP < gy):
+				gx = tx
+				gz = tz
+				return
+			if not (mask & 2):
+				blocked = true
+		if not shrunk:
+			shrunk = true
+			var s0 := dist - SHRINK
+			while s0 >= 0:
+				var vx: int = coll.game_cos(angle) * s0
+				var vz: int = coll.game_sin(angle) * s0
+				var nx := x + ((vx + 0xFFF if vx < 0 else vx) >> 12)
+				var nz := z + ((vz + 0xFFF if vz < 0 else vz) >> 12)
+				s0 -= SHRINK
+				if int(coll.query(nx, gy, nz)["mask"]) == 0:
+					x = nx
+					z = nz
+					break
+		if blocked or (mask & 1):
+			if s4 != 0:
+				s4 = 0
+				continue
+			if s2 != 0:
+				s4 = first_x
+				s2 = 0
+				continue
+		if not (mask & 2):
+			break
+		if diag:
+			if s4 != 0:
+				s4 = 0
+				continue
+			if s2 != 0:
+				s4 = first_x
+				s2 = 0
+				continue
+			break
+		var cx := tx >> 11
+		var cz := tz >> 11
+		var rot := 0
+		if cx >= 0 and cx < 80 and cz >= 0 and cz < 80:
+			var i := (cz * 80 + cx) * 6
+			rot = coll.cells[i + coll._layer(i, gy - (coll.body >> 1)) + 1] & 3
+		var a: int = (coll.game_cos(angle) * dist) >> 12
+		var b: int = (coll.game_sin(angle) * dist) >> 12
+		if rot == 0 or rot == 2:
+			s4 = (a + b) >> 1
+			s2 = s4
+		else:
+			s4 = (a - b) >> 1
+			s2 = -s4
+		diag = true
+	gx = x
+	gz = z
 
 
 # The turn rate ramps to the cap and decays back to zero by a quarter of the cap

@@ -363,25 +363,92 @@ def step_distances(strafe_speed, forward_speed):
     return (-fwd if b < 0 else fwd), (-stf if a < 0 else stf)
 
 
-def horizontal(lvl, p, angle, dist):
+STEP_UP = 0x500        # the most player_horizontal lets a step climb
+SHRINK = 0x16          # how much shorter each retry of a refused step is
+
+
+def horizontal(lvl, p, angle, dist, state=0):
     """`player_horizontal` (`0x8002e3f8`): a step of `dist` along `angle`.
 
-    X takes the cosine and Z the sine, both shifted right by 12, and the whole
-    step is refused if the collision at the destination is not clear. The
-    *slide* along a refused wall is not modelled: it turns on the wall's own
-    facing, which `tile_collision` leaves at `0x801e6498` and `0x801e649c` and
-    which `tools/collision.py` does not compute. Until it does, a step into a
-    wall stops dead here where the game would slide along it.
+    X takes the cosine and Z the sine, shifted right by 12, and the step is
+    asked of `collide_query` at the player's height with flags `0x31`. What
+    happens when the answer is not clear, read off the listing:
+
+    * **a step up** is taken anyway if the mask has nothing outside `0x207`,
+      the surface it found is no more than `0x500` above the feet, the player
+      state (`0x801b25e5`) is 0 and the ceiling leaves room for the body --
+      that is what stops a wall being climbed: its top is the surface, and it
+      is higher than `0x500`;
+    * otherwise the same step is **tried shorter**, `0x16` at a time, once, and
+      the longest clear one is taken;
+    * then it **slides**: first with the X part dropped, then with only the X
+      part, and against a diagonal wall (mask bit 2) along the diagonal the
+      cell's rotation says -- `(dx + dz) / 2` both ways for rotations 0 and 2,
+      `(dx - dz) / 2` and its negative for 1 and 3;
+    * and if none of that is clear, it stays.
+
+    Not here: the push the tile collision leaves at `0x801e6498` and
+    `0x801e649c` for a clear step close to a wall, the ceiling test, and the
+    objects and creatures the player's `0x31` also asks about.
 
     The caller (`0x8002f9bc`) makes this call twice a frame: once at `angle`
     with the forward distance and once at `angle + 0x400` with the strafe.
     """
     x, y, z = p
-    nx = x + ((game_cos(angle) * dist) >> 12)
-    nz = z + ((game_sin(angle) * dist) >> 12)
-    if query(lvl, nx, y, nz)[0]:
-        return (x, y, z), False
-    return (nx, y, nz), True
+    s4 = (game_cos(angle) * dist) >> 12
+    s2 = (game_sin(angle) * dist) >> 12
+    first_x = s4
+    shrunk = diag = False
+    for _ in range(64):
+        tx, tz = x + s4, z + s2
+        mask, cur = query(lvl, tx, y, tz)
+        if mask == 0:
+            return (tx, y, tz), True
+        blocked = False
+        if mask & ~0x207 == 0:
+            if not cur + STEP_UP < y and state == 0:
+                return (tx, y, tz), True
+            if not mask & 2:
+                blocked = True
+        if not shrunk:
+            shrunk = True
+            s0 = dist - SHRINK
+            while s0 >= 0:
+                vx, vz = game_cos(angle) * s0, game_sin(angle) * s0
+                nx = x + ((vx + 0xFFF if vx < 0 else vx) >> 12)
+                nz = z + ((vz + 0xFFF if vz < 0 else vz) >> 12)
+                s0 -= SHRINK
+                if query(lvl, nx, y, nz)[0] == 0:
+                    x, z = nx, nz
+                    break
+        if blocked or mask & 1:
+            if s4 != 0:
+                s4 = 0
+                continue
+            if s2 != 0:
+                s4, s2 = first_x, 0
+                continue
+        if not mask & 2:
+            break
+        if diag:
+            if s4 != 0:
+                s4 = 0
+                continue
+            if s2 != 0:
+                s4, s2 = first_x, 0
+                continue
+            break
+        cx, cz = tx >> 11, tz >> 11
+        c = lvl.cell(cx, cz) if 0 <= cx < 80 and 0 <= cz < 80 else bytes(10)
+        lay = collision.layer_of(c, y - (((BODY << 4) & 0xFFFFFFFF) >> 5))
+        a, b = (game_cos(angle) * dist) >> 12, (game_sin(angle) * dist) >> 12
+        if c[lay + 2] & 3 in (0, 2):
+            s4 = s2 = (a + b) >> 1
+        else:
+            s4 = (a - b) >> 1
+            s2 = -s4
+        diag = True
+    return (x, y, z), (x, z) != (p[0], p[2])
 
 
 # The forward/back acceleration, out of 0x8002f9bc. `max` is 0x801b2664 and is

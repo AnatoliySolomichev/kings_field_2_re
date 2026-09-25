@@ -1673,6 +1673,34 @@ from where it is formed; it is the third of those depths.
 copy or naming the address it stands for and saying nothing runs. Six of the
 sixteen exist.
 
+### A step the game refuses: `player_horizontal`
+
+`player_horizontal` (`0x8002e3f8`) asks `collide_query` about the destination at
+the player's height with flags `0x31`, and when the answer is not clear:
+
+* **a step up** is still taken if the mask has nothing outside `0x207`, the
+  surface found is no more than `0x500` above the feet, the player state
+  (`0x801b25e5`) is 0 and the ceiling leaves room for the body (`0xf95c`,
+  -0x6a4). A wall's top is its surface, so a wall more than `0x500` high is
+  never climbed;
+* otherwise the same step is **tried shorter**, `0x16` at a time, once, and
+  the first clear one taken -- a second `collide_query` in its own loop;
+* then it **slides**: the X part dropped, then only the X part; against a
+  diagonal wall (mask bit 2) along the diagonal the cell's rotation picks --
+  `(dx + dz) / 2` both ways for rotations 0 and 2, `(dx - dz) / 2` and its
+  negative for 1 and 3;
+* and if none of that is clear, the player stays.
+
+The port had none of it: `_move` took every step and `player_vertical` then
+lifted the player onto whatever was in the way, so any wall could be climbed,
+which a player reported. `tools/movement.py` and `godot/player.gd` carry it
+now. Against the recorded walking, `tools/replay.py`'s rung 2 goes from 113 747
+to **117 686 of 118 500** frames exact, and the frames it put down to the wall
+slide from 4170 to 271; the self-test holds the GDScript copy to the Python on
+450 recorded steps, the refused and slid ones first. Still out: the push
+`tile_collision` leaves at `0x801e6498`/`0x801e649c` for a clear step close to a
+wall, the ceiling test, and the objects and creatures in the `0x31`.
+
 ### How long a frame lasts: four vertical blanks
 
 The port ran its movement at 30 frames a second on the strength of two

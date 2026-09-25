@@ -37,9 +37,11 @@ the buttons and can be scored without any geometry at all.
 Two things, and the report counts each separately rather than burying them in a
 total:
 
-* `player_horizontal` refuses a blocked step where the game **slides along the
-  wall**, turning it by the wall's own facing out of `0x801e6498` and
-  `0x801e649c`, which `tools/collision.py` does not compute.
+* `player_horizontal` is in for its refusal, its shorter retries and its
+  slides (`movement.horizontal`), but not for the push `tile_collision`
+  leaves at `0x801e6498` and `0x801e649c` for a clear step close to a wall,
+  which `tools/collision.py` does not compute -- the 271 "wall slide" frames
+  left are those.
 * the player also collides with **objects** — `collide_query`'s flag `0x10`,
   through `0x8004d644` — and nothing here models that at all, so the port walks
   through a cart the game stops at. Frames that disagree while standing within a

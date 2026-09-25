@@ -119,7 +119,7 @@ def movecheck(lv, lvl, out="out/godot"):
             frames.append([p[0], p[1], p[2], state, vel])
         runs.append({"name": name, "start": list(p0), "d": [dx, dz],
                      "frames": frames})
-    doc = {"level": lv, "runs": runs}
+    doc = {"level": lv, "runs": runs, "steps": stepcheck(lvl)}
     path = f"{out}/movecheck{lv:02d}.json"
     with open(path, "w") as f:
         json.dump(doc, f, separators=(",", ":"))
@@ -128,6 +128,37 @@ def movecheck(lv, lvl, out="out/godot"):
     anglecheck(out)
     dircheck(out)
     return path
+
+
+def stepcheck(lvl, n=400):
+    """Steps of `movement.horizontal` out of a recording, for selftest.gd.
+
+    Every frame of the logged walking (`out/lua_bp16.log`) where the step the
+    Python model takes is not the plain one -- refused, shortened, slid -- up to
+    `n`, then a few plain ones. The GDScript copy must land on the same spot.
+    """
+    try:
+        import replay
+    except Exception:
+        return []
+    rows, _binds = replay.load()
+    odd, plain = [], []
+    for r, nxt in zip(rows, rows[1:]):
+        if r["lv"] != lvl.lv or nxt["f"] != r["f"] + 1:
+            continue
+        fd, sd = movement.step_distances(nxt["stf"], nxt["fwd"])
+        for ang, dist in (((nxt["ang"] + 0x400) & 0xFFF, fd), (nxt["ang"] & 0xFFF, sd)):
+            if not dist:
+                continue
+            p = r["p"]
+            q, _ok = movement.horizontal(lvl, p, ang, dist)
+            straight = (p[0] + ((movement.game_cos(ang) * dist) >> 12),
+                        p[2] + ((movement.game_sin(ang) * dist) >> 12))
+            case = [p[0], p[1], p[2], ang, dist, q[0], q[2]]
+            (plain if (q[0], q[2]) == straight else odd).append(case)
+        if len(odd) >= n:
+            break
+    return odd[:n] + plain[:n // 8]
 
 
 def dircheck(out="out/godot", n=400):
