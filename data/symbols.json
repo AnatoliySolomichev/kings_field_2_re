@@ -2287,5 +2287,10 @@
   "name": "actor_in_range",
   "kind": "code",
   "evidence": "collide_query's flag 0x40: walks actor_table for a creature whose +9 is 1 and which is not current_actor, and returns the first one in_range of the point, into 0x801e648c"
+ },
+ "0x80044900": {
+  "name": "object_mode",
+  "kind": "code",
+  "evidence": "(slot, mode, value): mode 0 takes an object away by its class -- +0 = 0 and its state byte (+0x38; +0x3c for classes 0x09 and 0x15; +0x3e for 0x0d and 0x53; only +0x3e for 0x14) zeroed, class 0x40 re-taking its angles; mode 1 puts +0 = value back, except classes 0x14 and 0x15; mode 2 sets the state byte to 0xff; mode 3 writes +0xe. A slot of 0xffff does nothing. Chests call modes 0 and 3 on their contents on the first frame; tools/objload.py carries mode 0 and brings level 4's snapshot to 194 of 194"
  }
 }

@@ -76,9 +76,10 @@ def objects(lv, path=FDAT):
     `h` is the object's height **above the terrain**, a signed 16-bit at offset
     12 of the record, and it is what makes a chest a chest: the body stands at
     `h = 0`, the lid at `h = -640` -- one body-height up, since Y points down --
-    and the lock plate at `h = -256` on the front of it. Putting all three on
-    the floor, which is what this project did while the field was thought not
-    to exist, draws the lid inside the body.
+    and what is in it at `h = -256` (an item the lid hides until it is opened;
+    it was taken for a lock plate once). Putting them all on the floor, which is
+    what this project did while the field was thought not to exist, draws the
+    lid inside the body.
 
     **The two fine offsets are the other way round from how this used to read
     them.** The `u16` at +8 is the offset along **Z** and the one at +10 along

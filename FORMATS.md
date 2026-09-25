@@ -3647,11 +3647,16 @@ arm subtracts the fine offsets back out. With that, 347 of 347.
 That single field is what a chest is made of. A chest is not one object but
 three placed in the same cell: the body (type 155, 640 tall) at `h = 0`, the
 lid (type 154, 320 tall) at `h = -640` — one body-height up, Y pointing down —
-and the lock plate (type 106, 300 tall) at `h = -256` on the front of it. With
-every object put on the floor, which is what `tools/level3d.py` did while this
-was thought not to exist, the lid is drawn *inside* the body. A player looking
-at the port reported exactly that: chests drawn open and closed at the same
-time, and lock plates lying in mid-air with no chest under them.
+and what is in it at `h = -256`. With every object put on the floor, which is
+what `tools/level3d.py` did while this was thought not to exist, the lid is
+drawn *inside* the body. A player looking at the port reported exactly that:
+chests drawn open and closed at the same time.
+
+**Withdrawn: "the lock plate (type 106)".** Type 106 is the herbal liquid, an
+item, and it is the chest's contents: the lid (opcode 6) names its slot at
++0x3a and hides it on the first frame (`load_object_placement`, read whole,
+below). The "lock plates lying in mid-air with no chest under them" a player
+reported were chest contents the port drew and the game keeps hidden.
 
 Checked against a RAM snapshot slot by slot: **350 of 350 type ids match**, and
 the block places 347 objects where the snapshot holds 346 — the difference being
@@ -3731,12 +3736,20 @@ with `r = 800`, and creatures mark and unmark as they move. And
 round the camera (`view_table`, `0x801aec84`), whose bytes in every snapshot
 are 0, 8, 26 or 30 -- bit 2 is what a placed record's `+0` selects.
 
-**The first frame does one more thing.** Opcode 9 (`0x80048c34`, 18
-instructions) runs once: it takes a slot number from the `u16` at `+0x3a`,
-zeroes that object's `+0` and `+0x38`, and sets its own opcode to `0xff`. Every
-class-9 record in every snapshot is `0xff`, and the objects they name are
-items, which from the first frame on are not drawn. What shows one again is
-not read.
+**The first frame does more.** Opcode 9 (`0x80048c34`, 18 instructions)
+runs once: it takes a slot number from the `u16` at `+0x3a`, zeroes that
+object's `+0` and `+0x38`, and sets its own opcode to `0xff`. Every class-9
+record in every snapshot is `0xff`, and the objects they name are items, which
+from the first frame on are not drawn.
+
+**And a chest hides what is in it.** Opcodes 6 (a lid, 178 in the game) and 7
+(the big chest, 37) share a path at `0x80048b38` for a chest whose state is 0
+and whose lock byte is not `0xfe` -- one not yet opened: `object_mode`
+(`0x80044900`) in mode 0 takes away the slot `+0x3a` names -- `+0` and the
+class's state byte zeroed -- mode 3 zeroes its `+0xe`, and the chest's own
+state becomes 1. On level 0 that is eleven lids and two big chests, and what
+they hide is herbal liquid, a shield, boots, a sword, a key, a gold coin, a
+moon stone, a truth glass, a crystal flask and a triple fang.
 
 **Checked** against all 13 snapshots with a level in them, twelve of level 0
 and one of level 4:
@@ -3745,8 +3758,14 @@ and one of level 4:
     scale     4352 of 4352
     position  4352 of 4352
     opcode    4226 of 4226   the hook's objects and the runtime arms left out
-    byte +0   4016 of 4226   18 items on level 0 and 1 on level 4, the same
-                              in every snapshot -- taken, by all appearances
+    byte +0   4165 of 4226   the 61 are five objects on level 0, the same
+                              in every snapshot: three items two cells from
+                              where a new game starts, which the player took,
+                              by all appearances, and two class-9 objects.
+                              This read "18 on level 0 and 1 on level 4, taken
+                              in play" until the chests' first frame was read:
+                              thirteen of those and the one on level 4 were
+                              chest contents
     the grid  exact on 7 of 13, outside the occupancy count; the other six
               are the ones where a door or chest had been opened
 

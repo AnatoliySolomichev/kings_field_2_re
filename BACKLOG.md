@@ -63,8 +63,9 @@ signed 16-bit measured from the terrain, and `y = -128 * cell[+6] + h`
 reproduces the live table for 345 of level 0's 347 objects. The claim survived
 because every object it was checked against happened to have `h = 0`. What it
 cost was visible in the port: a chest is three objects in one cell — body, lid
-and lock plate at three different heights — and putting all three on the floor
-drew the lid inside the body. FORMATS.md section 16 has it.
+and contents at three different heights — and putting all three on the floor
+drew the lid inside the body. FORMATS.md section 16 has it. (The contents were
+called a lock plate here; that is withdrawn -- type 106 is the herbal liquid.)
 
 **The 53 without a model are found.** An `MO.T` entry is not a bare TMD: word 0
 is the total size, word 1 a count of one to three, and **word 2 is the offset of

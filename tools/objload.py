@@ -423,17 +423,61 @@ class Load:
         can look, and what it named is not drawn: 24 of 24 on level 0 and 52
         of 52 on level 4 read 0xff in the snapshots, and the objects they name
         -- items, class 0x40 -- read +0 = 0.
+
+        **Chests do the same with what is in them.** Opcodes 6 (a chest's lid,
+        `0x80048790`) and 7 (the big chest, `0x80048960`) share a path at
+        `0x80048b38` for state 0 with a lock byte other than 0xfe -- a chest
+        not yet opened: `object_mode(slot, 0)` hides the slot the u16 at +0x3a
+        names, `object_mode(slot, 3, 0)` zeroes its +0xe, and the chest's own
+        state becomes 1. That is 13 of the 18 objects on level 0 this used to
+        call "taken in play", and the one on level 4.
         """
         for k in sorted(self.recs):
             r = self.recs[k]
-            if r["op"] != 9:
-                continue
             t = struct.unpack_from("<H", r["tail"], 2)[0]
-            if t != 0xFFFF and t in self.recs:
-                self.recs[t]["b0"] = 0
-                self.recs[t]["tail"][0] = 0
-            r["op"] = 0xFF
+            if r["op"] == 9:
+                if t != 0xFFFF and t in self.recs:
+                    self.recs[t]["b0"] = 0
+                    self.recs[t]["tail"][0] = 0
+                r["op"] = 0xFF
+            elif r["op"] in (6, 7) and r["tail"][0] != 0xFE:
+                if t != 0xFFFF and t in self.recs:
+                    self.object_mode(self.recs[t], 0)
+                r["state"] = 1
         return self
+
+    def object_mode(self, r, mode, value=0):
+        """`object_mode` (`0x80044900`), modes 0 and 1, on one record.
+
+        Mode 0 takes an object away by its class: +0 = 0 and the class's own
+        state byte zeroed -- +0x38 for most, +0x3c for 0x09 and 0x15, +0x3e for
+        0x0d and 0x53, and +0x3e alone, +0 untouched, for 0x14. Class 0x40
+        also takes its three angles from +0x3a..+0x3c again, as the loader
+        does. Mode 1 puts one back: +0 = value, except classes 0x14 and 0x15.
+        """
+        cls, tail = r["cls"], r["tail"]
+        if mode == 1:
+            if not 0x14 <= cls <= 0x15:
+                r["b0"] = value
+            return
+        if mode != 0:
+            return
+        if cls == 0x14:
+            tail[6] = 0
+            return
+        r["b0"] = 0
+        if cls in (0x09, 0x15):
+            tail[4] = 0
+        elif cls in (0x0D, 0x53):
+            tail[6] = 0
+        else:
+            tail[0] = 0
+        if cls == 0x40 and r["type"] != 0x95:
+            for i in range(3):
+                if tail[2 + i] != 0xFF:
+                    r["angles"][i] = tail[2 + i] << 6
+            if tail[1] == 0:
+                r["op"] = 0x10
 
     def drawn(self, r):
         """Would `render_walk` draw this record, the view aside?
