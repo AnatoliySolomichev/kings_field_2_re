@@ -542,7 +542,8 @@ arrows, **X** CROSS, **Z** SQUARE, **D** CIRCLE, **S** TRIANGLE, **Q/R** L1/R1,
 **A/F** L2/R2, Enter START, Backspace SELECT, as `emu/pcsx.json` has them -- with
 the slots filled by scheme A and action scheme 3, the ones the player's save
 uses, so X uses, Z attacks and D opens the menu in both windows. The port's own
-keys keep off those: **F1** walks or flies, **G** shows the collision, **PgUp/PgDn**
+keys keep off those: **F1** walks or flies, **F2** turns the distance
+darkening off and on, **G** shows the collision, **PgUp/PgDn**
 rise and sink while flying, **Shift** hurries, **Escape** frees the mouse,
 **F9** resyncs the compare, **F10** kills the nearest creature. Flying passes through
 everything on purpose — this level has rooms the game never lets you into. The

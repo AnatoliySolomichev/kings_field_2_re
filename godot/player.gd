@@ -180,7 +180,7 @@ func _refresh() -> void:
 		above = str(last_surface - gy)
 	hud.text = ("%s   cell (%d, %d)   height %d\n" +
 		"state %d   vy %d   speed %d/%d   %s above the surface\n" +
-		"F1 walk/fly   G collision   Esc mouse   PgUp/PgDn fly up/down\n" +
+		"F1 walk/fly   F2 darkening   G collision   Esc mouse   PgUp/PgDn fly up/down\n" +
 		"forward %s   strafe %s/%s   turn %s/%s   attack %s   use %s   menu %s   pause %s\n") % [
 		note, cx, cz, -gy, vstate, vvel, fwd_speed, stf_speed, above,
 		KFPad.slot_key(KFPad.FORWARD), KFPad.slot_key(KFPad.ALT_A),

@@ -37,6 +37,9 @@ extends Node
 # on every material of the world, does the fade. One difference it owns: the
 # game takes one t per face, the mean of its three vertices, and this blends
 # per vertex.
+#
+# F2 turns the darkening off and on -- the port's own switch, not the game's,
+# for seeing what the black hides.
 # @orig game:0x800351fc texture_scroll_step  status:transcribed
 # @orig game:0x80035358 fog_range_set  status:transcribed
 
@@ -57,12 +60,13 @@ render_mode unshaded, %s, %s;
 uniform sampler2D page : source_color, filter_nearest;
 uniform float offset = 0.0;
 uniform bool scrolls = false;
+uniform bool cued = true;
 varying float cue;
 void vertex() {
 	float z = -(MODELVIEW_MATRIX * vec4(VERTEX, 1.0)).z * 1000.0;
 	float nearz = UV2.x;
 	float farz = UV2.y;
-	cue = (nearz >= %.1f || farz <= nearz) ? 0.0
+	cue = (!cued || nearz >= %.1f || farz <= nearz) ? 0.0
 		: clamp((z - nearz) / (farz - nearz), 0.0, %.6f);
 }
 void fragment() {
@@ -80,6 +84,8 @@ const CUT := "ALPHA = c.a;\n\tALPHA_SCISSOR_THRESHOLD = 0.5;"
 const MIXED := "if (c.a < 0.01) { discard; }\n\tALPHA = c.a;"
 
 var mats: Array[ShaderMaterial] = []
+var every: Array[ShaderMaterial] = []   # all of them, for the F2 switch
+var cued := true
 var clock := 0.0
 
 
@@ -120,10 +126,18 @@ func _swap(n: Node, shaders: Dictionary) -> void:
 			s.set_shader_parameter("page", m.albedo_texture)
 			s.set_shader_parameter("scrolls", scrolls)
 			n.set_surface_override_material(i, s)
+			every.append(s)
 			if scrolls:
 				mats.append(s)
 	for c in n.get_children():
 		_swap(c, shaders)
+
+
+func _unhandled_input(e: InputEvent) -> void:
+	if e is InputEventKey and e.pressed and not e.echo and e.keycode == KEY_F2:
+		cued = not cued
+		for s in every:
+			s.set_shader_parameter("cued", cued)
 
 
 func _process(dt: float) -> void:
