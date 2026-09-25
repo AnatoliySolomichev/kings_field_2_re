@@ -609,8 +609,13 @@ def build_objects_gltf(lv, out="out/godot"):
         llm, lcm, bk = light_class(look, c[9] & 0x3F, c[7] & 3)
         # Position, angles and scale are the live record's, as the loader
         # makes them: the angles already negated off the disc, the X and Z
-        # ones only for the classes that carry them.
-        m = _rot3(*o["angles"])
+        # ones only for the classes that carry them. And render_walk hands the
+        # matrix builder the Y angle **plus 0x800** -- `addiu $v0, $v0, 0x800`
+        # at 0x80041374 -- so every object is drawn half a turn round from its
+        # record. This file left that out for as long as it placed objects:
+        # symmetric things hid it, and a door stood closed inside its wall.
+        rx, ry, rz = o["angles"]
+        m = _rot3(rx, ry + 0x800, rz)
         placed += 1
         sx, sy, sz = (v / 4096.0 for v in o["scale"])
         ox, oy, oz = o["x"], o["y"], o["z"]

@@ -2138,6 +2138,13 @@ One thing the same reading does settle: **the Y angle is drawn with `0x800`
 added** — half a turn, since `0x1000` is the full circle — at `0x80041374` on
 the ordinary path and `0x80040f04` on the class `0xf2` one.
 
+**And the port left it out**, for as long as it placed objects: every object
+stood half a turn round from the game. Trees, grass and pillars hid it; a
+swinging door did not -- at rest its leaf lay inside the wall beside the
+doorway, which read as an open doorway, where the game's own screenshot of the
+same spot (`out/snap/door1.png`) is the door filling the view. `tools/level3d.py`
+adds the half turn now.
+
 ### The parameter block, `+0x38..+0x3f`
 
 Offsets here are four higher than they were written before the realignment
