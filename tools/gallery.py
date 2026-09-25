@@ -118,18 +118,14 @@ def build(out="out/godot", archive="MO", lv=0, spacing=None, per_row=None):
                            "prims": sum(len(a.prims) for a in objs), "ext": ext})
 
         prims = []
-        for (tpage, clut), (pos, nrm, uv, col) in groups.items():
-            name = f"tex_{tpage:04x}_{clut:04x}"
+        mats = {}
+        for key, (pos, nrm, uv, col) in groups.items():
             # The objects' own copy of the page, the one the world uses, so a
-            # model looks the same here as standing in the level.
-            rel = level3d.page_texture(out, lv, tpage, clut, vram)
-            # Pages at 8 or 16 bits a pixel are not written -- `page4` reads four
-            # -- so those primitives get a plain material rather than one naming
-            # a file that is not there, which Godot reports once per primitive.
-            m = (g.material(name, rel, double=True) if rel
-                 else g.plain(name + "_flat", (0.8, 0.75, 0.7, 1.0)))
+            # model looks the same here as standing in the level. Pages at 8 or
+            # 16 bits a pixel get a plain material rather than one naming a file
+            # that is not there, which Godot reports once per primitive.
             pr = g.primitive(pos, nrm, uv, col)
-            pr["material"] = m
+            pr["material"] = level3d.material_for(g, mats, out, lv, key, vram)
             prims.append(pr)
             ntri += len(pos) // 3
         if prims:

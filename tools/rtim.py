@@ -168,20 +168,34 @@ def png(buf, path, x=0, y=0, w=VW, h=VH):
     return path
 
 
-def page4(buf, tpage, clut):
+# How much of a semi-transparent texel covers what is behind it, by the page's
+# rate (tpage bits 5-6): 0 is half and half, 1 adds the texel to the background,
+# 2 takes it away, 3 adds a quarter of it. The port mixes rate 0 by this alpha
+# and adds or subtracts the others (godot/scroll.gd sets those blend modes).
+SEMI_ALPHA = (128, 255, 255, 64)
+
+
+def page4(buf, tpage, clut, semi=False):
     """A 4-bit texture page, expanded through its CLUT into RGBA pixels.
 
     `tpage` bits 0-3 are X in units of 64, bit 4 is Y in units of 256.
     `clut` is X in units of 16 and Y outright.
+
+    Colour 0 is transparent. With `semi` -- a primitive whose mode has ABE set
+    -- a colour whose bit 15 (STP) is set gets the page rate's alpha instead of
+    255: on the PlayStation only those texels are blended, and the rest of a
+    semi-transparent primitive is drawn solid.
     """
     px0, py0 = (tpage & 0xF) * 64, ((tpage >> 4) & 1) * 256
     cx, cy = (clut & 0x3F) * 16, (clut >> 6) & 0x1FF
+    part = SEMI_ALPHA[(tpage >> 5) & 3]
     pal = []
     for i in range(16):
         off = (cy * VW + cx + i) * 2
         v = buf[off] | (buf[off + 1] << 8)
         r, g, b = (v & 31) << 3, ((v >> 5) & 31) << 3, ((v >> 10) & 31) << 3
-        pal.append((r | r >> 5, g | g >> 5, b | b >> 5, 0 if v == 0 else 255))
+        a = 0 if v == 0 else (part if semi and v & 0x8000 else 255)
+        pal.append((r | r >> 5, g | g >> 5, b | b >> 5, a))
     out = []
     for row in range(256):
         for col in range(256):                    # 4bpp: 64 halfwords wide

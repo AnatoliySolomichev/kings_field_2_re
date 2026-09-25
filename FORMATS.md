@@ -1698,6 +1698,26 @@ Nothing scales movement by elapsed time: every speed, turn rate and fall in
 section 4 is per frame, so the port at 30 walked, turned and fell twice as
 fast as the game. `godot/player.gd` and `godot/actors.gd` tick at 15 now.
 
+### Semi-transparency, texel by texel
+
+A TMD primitive whose mode has **bit 1 (ABE)** set is semi-transparent, and the
+PlayStation applies that per texel: a CLUT colour with **bit 15 (STP)** set is
+blended with what is behind it at the texture page's rate -- tpage bits 5 and 6:
+0 half and half, 1 adds, 2 subtracts, 3 adds a quarter -- any other colour is
+drawn solid, and colour 0 is not drawn at all. Across the game 11 318 textured
+primitives carry ABE: 7916 at rate 0, 3045 at rate 1, 356 at rate 3 and one at
+rate 2. On level 0 the tiles have sixteen, and all sixteen are the water, whose
+CLUT has STP on every colour but 0.
+
+The port drew them all solid, so its water was a bright blue sheet where the
+game's is dark and shows the channel's bed through it. `tools/level3d.py` now
+keeps semi-transparent primitives in materials of their own, blended, with the
+texture's alpha carrying the rate for STP texels; rates 1 to 3 are named `_add`
+or `_sub` for `godot/scroll.gd` to set the blend the glTF cannot. One thing it
+approximates: in an adding material a texel without STP adds as well, where the
+console would draw it solid. `tools/shots.py b` shows the water beside the
+game's own screenshot.
+
 ### What the camera sees
 
 `0x80035394`, the graphics set-up `game_main` runs once, calls

@@ -53,7 +53,7 @@ class Gltf:
         self.accessors.append(a)
         return len(self.accessors) - 1
 
-    def material(self, name, png, double=False):
+    def material(self, name, png, double=False, blend=False):
         """`double` draws both faces.
 
         The PlayStation has **no backface culling in hardware** -- what a game
@@ -77,9 +77,14 @@ class Gltf:
             "pbrMetallicRoughness": {
                 "baseColorTexture": {"index": len(self.textures) - 1},
                 "metallicFactor": 0.0, "roughnessFactor": 1.0},
-            "alphaMode": "MASK", "alphaCutoff": 0.5,
             "doubleSided": bool(double),
             "extensions": {"KHR_materials_unlit": {}}})
+        # `blend` is a semi-transparent primitive: the texture's alpha says how
+        # much of each texel covers what is behind it (level3d.page_texture).
+        # Everything else is cut out at half, which is the PlayStation's own
+        # rule for colour 0.
+        self.materials[-1].update({"alphaMode": "BLEND"} if blend else
+                                  {"alphaMode": "MASK", "alphaCutoff": 0.5})
         return len(self.materials) - 1
 
     def plain(self, name, rgba):

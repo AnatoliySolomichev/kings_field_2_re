@@ -245,7 +245,7 @@ def build_gltf(lv, out="out/godot", limit=None):
                 nx, ny, nz = spin(raw, rot)
                 nrm = (nx / 4096.0, -ny / 4096.0, -nz / 4096.0)
                 pts = [place(obj.verts[i]) for i in pr.verts]
-                key = (pr.tpage, pr.clut)
+                key = (pr.tpage, pr.clut, bool(pr.mode & 2))
                 bag = groups.setdefault(key, ([], [], [], []))
                 for a, b, cc in ([(0, 1, 2), (1, 3, 2)] if pr.quad
                                  else [(0, 1, 2)]):
@@ -266,12 +266,9 @@ def build_gltf(lv, out="out/godot", limit=None):
                         bag[2].append((u / 256.0, v / 256.0))
                         bag[3].append((rgb[0], rgb[1], rgb[2], 1.0))
 
-    prims, ntri = [], 0
-    for (tpage, clut), (pos, nrm, uv, col) in groups.items():
-        name = f"tex_{tpage:04x}_{clut:04x}"
-        rel = page_texture(out, lv, tpage, clut, vram)
-        m = (g.material(name, rel) if rel
-             else g.plain(name + "_flat", (0.8, 0.75, 0.7, 1.0)))
+    prims, ntri, mats = [], 0, {}
+    for key, (pos, nrm, uv, col) in groups.items():
+        m = material_for(g, mats, out, lv, key, vram, double=False)
         p = g.primitive(pos, nrm, uv, col)
         p["material"] = m
         prims.append(p)
@@ -384,7 +381,7 @@ def object_vram(lv):
 _written = set()
 
 
-def page_texture(out, lv, tpage, clut, vram):
+def page_texture(out, lv, tpage, clut, vram, semi=False):
     """One page under one CLUT as a PNG; its path relative to `out`, or None.
 
     **The path carries the level and the VRAM it was cut from**, because the
@@ -410,17 +407,43 @@ def page_texture(out, lv, tpage, clut, vram):
     """
     if (tpage >> 7) & 3:
         return None
-    rel = f"tex/lv{lv:02d}/tex_{tpage:04x}_{clut:04x}.png"
+    rel = f"tex/lv{lv:02d}/tex_{tpage:04x}_{clut:04x}{'_semi' if semi else ''}.png"
     path = f"{out}/{rel}"
     if path not in _written:
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        tim.write_png(path, 256, 256, rtim.page4(vram, tpage, clut))
+        tim.write_png(path, 256, 256, rtim.page4(vram, tpage, clut, semi))
         _written.add(path)
     return rel
 
 
+# Semi-transparency the glTF cannot say: rates 1 and 3 add, rate 2 subtracts.
+# godot/scroll.gd reads the suffix and sets the material's blend mode.
+BLEND_SUFFIX = ("", "_add", "_sub", "_add")
+
+
+def material_for(g, mats, out, lv, key, vram, double=True):
+    """The glTF material for one (tpage, clut, semi) group, made once a file.
+
+    A primitive whose mode has ABE set (bit 1) is semi-transparent, and on the
+    PlayStation that works texel by texel: a colour with bit 15 set is blended
+    with what is behind it at the page's rate, any other is drawn solid, and
+    colour 0 not at all. Level 0's water is sixteen such primitives at rate 0,
+    half and half, and it was drawn as solid blue until this; the game's own
+    screenshot shows the bank through it.
+    """
+    tpage, clut, semi = key
+    name = f"tex_{tpage:04x}_{clut:04x}"
+    if semi:
+        name += "_semi" + BLEND_SUFFIX[(tpage >> 5) & 3]
+    if name not in mats:
+        rel = page_texture(out, lv, tpage, clut, vram, semi)
+        mats[name] = (g.material(name, rel, double=double, blend=semi) if rel
+                      else g.plain(name + "_flat", (0.8, 0.75, 0.7, 1.0)))
+    return mats[name]
+
+
 def emit_object(objs, place, colour, groups, normal_of=None):
-    """Append one model's triangles into `groups`, keyed by (tpage, clut).
+    """Append one model's triangles into `groups`, keyed by (tpage, clut, semi).
 
     **Shared deliberately.** The world build and the catalogue each had their own
     copy of this loop and the copies drifted: the catalogue never turned a
@@ -452,7 +475,8 @@ def emit_object(objs, place, colour, groups, normal_of=None):
             pts = [place(obj.verts[i]) for i in pr.verts]
             if len(pts) < (4 if pr.quad else 3):
                 continue
-            bag = groups.setdefault((pr.tpage, pr.clut), ([], [], [], []))
+            bag = groups.setdefault((pr.tpage, pr.clut, bool(pr.mode & 2)),
+                                    ([], [], [], []))
             # No winding correction: the materials are double-sided, because the
             # PlayStation does not cull and these models rely on it. Turning
             # each triangle to agree with its own normal was tried and made
@@ -522,14 +546,9 @@ def build_actors_gltf(lv, out="out/godot"):
         emit_object(objs, lambda v: (v[0] / UNIT, -v[1] / UNIT, -v[2] / UNIT),
                     lambda raw: shade(raw, llm, lcm, bk), groups)
         prims = []
-        for (tpage, clut), (pos, nrm, uv, col) in groups.items():
-            name = f"tex_{tpage:04x}_{clut:04x}"
-            if name not in mats:
-                rel = page_texture(out, lv, tpage, clut, vram)
-                mats[name] = (g.material(name, rel, double=True) if rel
-                              else g.plain(name + "_flat", (0.8, 0.75, 0.7, 1.0)))
+        for key, (pos, nrm, uv, col) in groups.items():
             pr = g.primitive(pos, nrm, uv, col)
-            pr["material"] = mats[name]
+            pr["material"] = material_for(g, mats, out, lv, key, vram)
             prims.append(pr)
             ntri += len(pos) // 3
         if not prims:
@@ -660,14 +679,9 @@ def build_objects_gltf(lv, out="out/godot"):
 
     def prims_of(bags):
         out_prims, n = [], 0
-        for (tpage, clut), (pos, nrm, uv, col) in bags.items():
-            name = f"tex_{tpage:04x}_{clut:04x}"
-            if name not in mats:
-                rel = page_texture(out, lv, tpage, clut, vram)
-                mats[name] = (g.material(name, rel, double=True) if rel
-                              else g.plain(name + "_flat", (0.8, 0.75, 0.7, 1.0)))
+        for key, (pos, nrm, uv, col) in bags.items():
             p = g.primitive(pos, nrm, uv, col)
-            p["material"] = mats[name]
+            p["material"] = material_for(g, mats, out, lv, key, vram)
             out_prims.append(p)
             n += len(pos) // 3
         return out_prims, n

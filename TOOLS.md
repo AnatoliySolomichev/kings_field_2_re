@@ -559,6 +559,23 @@ and close again once nobody is in the doorway (`godot/doors.gd`). Each is its
 own node in `objectsNN.gltf`, `dNNN` by slot, and `doorsNN.json` carries what
 the swing needs. `emu/bp24.lua` records a door frame by frame for checking it.
 
+**`shots.py`** — the port rendered from where each snapshot's screenshot was
+taken, beside the screenshot.
+
+```
+python3 tools/shots.py            every snapshot on the level out/godot holds
+python3 tools/shots.py b chest1   just those, into out/shots/b.png and chest1.png
+```
+
+Each snapshot's RAM holds the camera -- `player_pos`, the facing, the pitch -- so
+this puts the port's camera there and renders a frame: the game's 320x240
+doubled on the left, the port on the right. It opens a window for a second or
+two, since Godot renders nothing headless, and it writes inside the project
+first because a snap-installed Godot may write nowhere else. It found a door
+inside its wall, a potion in front of a chest the game keeps closed, and water
+drawn solid; it is the check to run after anything that changes how the level
+looks, before asking a person to.
+
 **`objload.py`** — `load_object_placement`, transcribed: the object table and
 the grid as the game leaves them after loading a level.
 
