@@ -56,6 +56,7 @@ const SPEED_MAX_RUN := 400           # not the game's -- there is no run button,
                                      # for getting about the level quickly
 const FLY := 9000.0
 const STEP_UP := 0x500               # player_horizontal: the most a step may climb
+const PITCH_LIMIT := 0x2bc           # player_look stops the pitch here, either way
 const SHRINK := 0x16                 # and how much shorter each retry is
 const EYE := 1.6
 # Read off the code, no longer a guess. The game's clock is the vertical blank:
@@ -125,7 +126,11 @@ const TURN_MAX_MOVING := 0x20        # 0x8003118c
 var coll := KFCollision.new()
 var have_coll := false
 var flying := true
-var pitch := 0.0
+# 0x801b2610, the view pitch, 0x1000 to the turn and positive looking down, and
+# 0x801b264e, the rate player_look drives it by.
+var pitch := 0
+var pitch_rate := 0
+var look_acc := 0.0
 # the position the game would keep: world units, Y increasing downward
 var gx := 0
 var gy := 0
@@ -196,8 +201,10 @@ func _unhandled_input(e: InputEvent) -> void:
 		# looking about and the turn buttons do not fight over the rotation.
 		facing = int(facing - e.relative.x * 2.0) & 0xFFF
 		rotation.y = float(facing) * TAU / 4096.0
-		pitch = clamp(pitch - e.relative.y * 0.003, -1.4, 1.4)
-		$Camera.rotation.x = pitch
+		# The mouse moves the game's own pitch, held to the same limits.
+		var sp := _signed(pitch) + int(e.relative.y * 2.0)
+		pitch = clampi(sp, -PITCH_LIMIT, PITCH_LIMIT) & 0xFFF
+		_aim()
 	elif e is InputEventKey and e.pressed and not e.echo:
 		match e.keycode:
 			KEY_F1:
@@ -226,6 +233,13 @@ func _process(dt: float) -> void:
 	if KFPad.held(KFPad.BACK): dir += transform.basis.z
 	if KFPad.held(KFPad.ALT_A): dir -= transform.basis.x
 	if KFPad.held(KFPad.ALT_C): dir += transform.basis.x
+
+	# player_look runs every frame the controller does; in flight too, so the
+	# view can be tilted with the game's own buttons either way.
+	look_acc = minf(look_acc + dt, 0.25)
+	while look_acc >= 1.0 / TICK_HZ:
+		look_acc -= 1.0 / TICK_HZ
+		_look()
 
 	if flying:
 		if Input.is_key_pressed(KEY_PAGEDOWN): dir -= Vector3.UP
@@ -404,7 +418,7 @@ func _horizontal(angle: int, dist: int) -> void:
 # The rate is kept in the game's own units, 0x1000 to the circle, so it can be
 # compared with 0x801b264c directly; the Godot rotation is derived from the
 # facing at the end, the way ghost.gd reads the game's own.
-# @orig game:0x8002f5c0 player_look  status:transcribed -- the yaw half; the pitch is not ported
+# @orig game:0x8002f5c0 player_look  status:transcribed -- the yaw here, the pitch in _look
 func _turn() -> void:
 	var cap := TURN_MAX_MOVING if (KFPad.held(KFPad.FORWARD)
 		or KFPad.held(KFPad.BACK)) else TURN_MAX_STILL
@@ -427,6 +441,62 @@ func _turn() -> void:
 			turn_rate = 0
 	facing = (facing + turn_rate) & 0xFFF             # 0x8002f738
 	rotation.y = float(facing) * TAU / 4096.0
+
+
+# The other half of player_look: the pitch. look_b (R2 in scheme A) adds 3 to
+# the rate a frame up to 0x20, look_a (L2) takes 3 away down to -0x20, neither
+# lets it decay by 3 to nothing, and both bring the view back to level -- the
+# rate steps by 8 towards the pitch that is left, no more than a quarter of it.
+# The pitch then takes the rate and stops at 0x2bc either way. Against the
+# recording, the rate this predicts is the one the game logged on 118 501 of
+# 118 502 frames, 1086 of them with a look button or the rate active.
+# @orig game:0x8002f5c0 player_look  status:transcribed -- the pitch half
+func _look() -> void:
+	var up := KFPad.held(KFPad.ALT_B)                 # bind_look_a
+	var down := KFPad.held(KFPad.ALT_D)               # bind_look_b
+	if down and up:
+		var sp := _signed(pitch)
+		if sp >= 0:                                   # at or below level: back up
+			pitch_rate -= 8
+			if pitch_rate < -(sp >> 2):
+				pitch_rate = -(sp >> 2)
+				if pitch_rate == 0:
+					pitch_rate = -sp
+		elif sp < 0:                                  # above level: back down
+			pitch_rate += 8
+			if (-sp) >> 2 < pitch_rate:
+				pitch_rate = (-sp) >> 2
+				if pitch_rate == 0:
+					pitch_rate = -sp
+	elif down:
+		pitch_rate = mini(pitch_rate + 3, 0x20)
+	elif up:
+		pitch_rate = maxi(pitch_rate - 3, -0x20)
+	elif pitch_rate > 0:
+		pitch_rate = maxi(pitch_rate - 3, 0)
+	elif pitch_rate < 0:
+		pitch_rate = mini(pitch_rate + 3, 0)
+	if pitch_rate > 0:
+		pitch = (pitch + pitch_rate) & 0xFFF
+		if _signed(pitch) > PITCH_LIMIT:
+			pitch = PITCH_LIMIT
+	elif pitch_rate < 0:
+		pitch = (pitch + pitch_rate) & 0xFFF
+		if _signed(pitch) < -PITCH_LIMIT:
+			pitch = (-PITCH_LIMIT) & 0xFFF
+	_aim()
+
+
+# The camera follows the pitch the way ghost.gd has it: negated, 0x1000 a turn.
+func _aim() -> void:
+	var cam := get_node_or_null("Camera")
+	if cam:
+		cam.rotation.x = -float(_signed(pitch)) * TAU / 4096.0
+
+
+static func _signed(a: int) -> int:
+	a &= 0xFFF
+	return a - 0x1000 if a >= 0x800 else a
 
 
 # 0x8002f298, the tail of player_vertical: the phase walks forward by the

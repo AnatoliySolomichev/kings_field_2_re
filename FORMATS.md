@@ -1673,6 +1673,28 @@ from where it is formed; it is the third of those depths.
 copy or naming the address it stands for and saying nothing runs. Six of the
 sixteen exist.
 
+### Looking up and down: the other half of `player_look`
+
+`player_look` (`0x8002f5c0`) turns the facing and then tilts the view. The
+pitch, `0x801b2610`, is driven by a rate at `0x801b264e`:
+
+```
+look_b held (R2 in scheme A)   rate += 3, at most  0x20     looking down
+look_a held (L2)               rate -= 3, at least -0x20    looking up
+both                           back to level: the rate steps by 8 toward the
+                               pitch that is left, no more than a quarter of it
+neither                        the rate decays by 3 to 0
+then                           pitch += rate, stopped at 0x2bc either way
+                               (sub_80016a78 compares angles centred on 0)
+```
+
+The rate is the eighth halfword of the block `emu/bp16.lua` logs, and the rule
+predicts it on **118 501 of 118 502** recorded frames, 1086 of them with a look
+button held or the rate moving; the one it misses is a frame where CIRCLE opened
+the menu. `godot/player.gd` runs it at 15 frames a second, so A and F -- L2 and
+R2 on the emulator's keys -- tilt the port's view as they do the game's, and the
+mouse moves the same pitch within the same limits.
+
 ### A step the game refuses: `player_horizontal`
 
 `player_horizontal` (`0x8002e3f8`) asks `collide_query` about the destination at

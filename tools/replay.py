@@ -97,6 +97,7 @@ def load(path="out/lua_bp16.log"):
             "vst": int(g[11]), "vv": int(g[12]), "pst": int(g[13]),
             "lv": int(g[14]), "ra": g[15],
             "stf": blk[3] if len(blk) > 3 else 0,
+            "prate": blk[7] if len(blk) > 7 else None,       # 0x801b264e
         })
     return rows, binds
 
@@ -221,6 +222,32 @@ def ramp(rows):
     return ok, bad
 
 
+def look_rate(rows, binds):
+    """The pitch rate `player_look` (`0x8002f5c0`) drives, frame by frame.
+
+    look_b (the `b11` slot, R2 in scheme A) adds 3 up to 0x20, look_a (`b9`,
+    L2) takes 3 down to -0x20, neither decays by 3 to 0. Both at once recentre
+    by the pitch, which the log does not carry, so those frames are left out.
+    The rate is the eighth halfword of the logged block, `0x801b264e`.
+    """
+    la, lb = binds.get("b9") or 1, binds.get("b11") or 2
+    ok = n = active = 0
+    for a, b in zip(rows, rows[1:]):
+        if b["f"] != a["f"] + 1 or a["prate"] is None or b["prate"] is None:
+            continue
+        up, down = a["btn"] & la, a["btn"] & lb
+        if up and down:
+            continue
+        r = a["prate"]
+        want = (min(r + 3, 0x20) if down else max(r - 3, -0x20) if up
+                else max(r - 3, 0) if r > 0 else min(r + 3, 0) if r < 0 else 0)
+        n += 1
+        active += bool(r or b["prate"] or up or down)
+        ok += want == b["prate"]
+    print(f"pitch rate: {ok} of {n} frames predicted by player_look's rule, "
+          f"{active} of them with a look button or the rate active")
+
+
 def blanks(rows):
     """How many vertical blanks each frame took, off the game's own clock.
 
@@ -263,6 +290,7 @@ def report(path="out/lua_bp16.log"):
     print(f"{len(rows)} frames")
     print(f"buttons: forward {BIND['forward']:#06x}, back {BIND['back']:#06x}")
     blanks(rows)
+    look_rate(rows, binds)
 
     ok, bad = ramp(rows)
     print(f"speed ramp: {ok} of {ok + bad} frames reproduced by accelerate()")

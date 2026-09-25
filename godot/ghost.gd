@@ -261,10 +261,11 @@ func _process(_dt: float) -> void:
 	player.rotation.y = float(int(cur["ang"]) & 0xFFF) * TAU / 4096.0
 	var cam := player.get_node_or_null("Camera")
 	if cam:
-		var pitch := int(cur["pitch"])
-		if pitch > 2048:
-			pitch -= 4096
-		cam.rotation.x = -float(pitch) * TAU / 4096.0
+		# Into the player's own pitch, which player_look's copy then aims the
+		# camera by, so the two do not fight over it.
+		player.pitch = int(cur["pitch"]) & 0xFFF
+		player.pitch_rate = 0
+		player._aim()
 
 	if int(cur["lv"]) != player._level():
 		_hud("the game is on level %d; this build has only level %d" % [
