@@ -23,9 +23,11 @@ finish, none of them blocking:
 * **Sound.** `OP.D`'s trailing VAB is extracted and unparsed, the title music
   is a streamed XA track inside `\OP\M2.S` that nothing decodes, and the two
   menu sounds are ids `0x3a` and `0x5a` into that bank.
-* **The frame rate, again.** The title screen gives up after `0x178` frames.
-  Whether that is six seconds or twelve is the same open question as
-  `player.gd`'s `TICK_HZ`, and one timestamped recording would answer both.
+* **The title screen's frame rate.** It gives up after `0x178` frames, and
+  whether that is six seconds or twelve is OPEN.EXE's own loop, not read.
+  `GAME.EXE`'s is settled: `frame_limit` holds every frame to four vertical
+  blanks, 15 a second (FORMATS.md, "How long a frame lasts"), and the port's
+  `TICK_HZ` is that now.
 
 Also worth doing and cheap: the port shows a still where the game plays a
 movie. `tools/str.py` decodes any frame correctly but is pure Python, so

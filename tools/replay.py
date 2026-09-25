@@ -84,7 +84,9 @@ def load(path="out/lua_bp16.log"):
         b = re.search(r"blk=(\S+)", line)
         if b:
             blk = [movement.s16(int(v, 16)) for v in b.group(1).split(",")]
+        v = re.search(r" vb=(\d+)", line)
         rows.append({
+            "vb": int(v.group(1)) if v else None,
             "f": int(g[0]), "t": float(g[1]),
             "btn": int(g[2], 16), "prev": int(g[3], 16),
             "ang": int(g[4]), "fwd": int(g[5]), "mag": int(g[6]),
@@ -217,6 +219,28 @@ def ramp(rows):
     return ok, bad
 
 
+def blanks(rows):
+    """How many vertical blanks each frame took, off the game's own clock.
+
+    `frame_limit` holds a frame to at least four -- 15 a second -- and a frame
+    whose work overruns takes more. `vb` is `vblank_count`, which bp16.lua logs
+    from 2026-09-25 on; older sessions do not have it.
+    """
+    per = collections.Counter()
+    for a, b in zip(rows, rows[1:]):
+        if a["vb"] is None or b["vb"] is None or b["f"] != a["f"] + 1:
+            continue
+        per[b["vb"] - a["vb"]] += 1
+    if not per:
+        print("vertical blanks a frame: not in this log (bp16.lua logs vb= now)")
+        return
+    n = sum(per.values())
+    mean = sum(k * v for k, v in per.items()) / n
+    print(f"vertical blanks a frame over {n} frames: "
+          + ", ".join(f"{k}: {v}" for k, v in sorted(per.items()))
+          + f" -- {60 / mean:.2f} frames a second on average")
+
+
 def report(path="out/lua_bp16.log"):
     rows, binds = load(path)
     if len(rows) < 3:
@@ -230,12 +254,13 @@ def report(path="out/lua_bp16.log"):
     for k in BIND:
         if binds.get(k):
             BIND[k] = binds[k]
-    span = rows[-1]["t"] - rows[0]["t"]
-    rate = (len(rows) - 1) / span if span > 0 else 0
     lv = collections.Counter(r["lv"] for r in rows).most_common(1)[0][0]
-    print(f"{len(rows)} frames over {span:.1f} s — {rate:.1f} a second, in this "
-          "session under the interpreter, which runs slower than the console")
+    # Wall clock is not reported: under the interpreter the emulator runs at
+    # its own speed, and a log can hold several sessions. The game's rate is
+    # read off the code (frame_limit, 15 a second) and measured below by vb.
+    print(f"{len(rows)} frames")
     print(f"buttons: forward {BIND['forward']:#06x}, back {BIND['back']:#06x}")
+    blanks(rows)
 
     ok, bad = ramp(rows)
     print(f"speed ramp: {ok} of {ok + bad} frames reproduced by accelerate()")

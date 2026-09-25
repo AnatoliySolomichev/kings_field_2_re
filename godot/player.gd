@@ -55,13 +55,17 @@ const SPEED_MAX_RUN := 400           # not the game's -- there is no run button,
                                      # for getting about the level quickly
 const FLY := 9000.0
 const EYE := 1.6
-const TICK_HZ := 30.0                # STILL A GUESS. Two recordings measured 26 and
-                                     # 34 frames a second, but the emulator runs
-                                     # uncapped under the interpreter, so wall clock
-                                     # says nothing about the console. 30 is the
-                                     # PlayStation's usual half-VSync and it sits
-                                     # between the two; counting game frames per
-                                     # VSync would settle it properly.
+# Read off the code, no longer a guess. The game's clock is the vertical blank:
+# vblank_tick (0x80019570), hooked to root counter 3 by 0x8001a438, adds one to
+# 0x801c12ec every blank -- and one minute of play to 0x801b2588 every 3600 of
+# them, so 60 a second. render_frame ends every pass of game_main's loop with
+# frame_limit (0x80019614), which calls VSync(0) until that count reaches 4 and
+# then zeroes it: **a frame lasts at least four blanks, so the game runs at 15
+# frames a second**, slower only when a frame's own work overruns. This was 30
+# for a long time, from two wall-clock measurements an uncapped emulator could
+# not give -- which made the port walk and turn twice as fast as the game.
+# @orig game:0x80019614 frame_limit  status:transcribed
+const TICK_HZ := 15.0
 
 # player_vertical's own constants, at the addresses named
 const V_START := 0x28                # 0x8002f254, the seed for either fall

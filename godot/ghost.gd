@@ -97,6 +97,11 @@ var drift := Vector3.ZERO
 var bad_cells := {}
 var checked := 0
 var matched := 0
+# The game's own frame rate, off vblank_count: frames over blanks since C, times
+# 60. frame_limit holds it to 15 at most; it says how often the console dips.
+var vb0 := -1
+var f0 := -1
+var game_fps := 0.0
 
 
 func _ready() -> void:
@@ -210,6 +215,7 @@ func _read() -> Dictionary:
 		"fwd": int(parts[7]), "stf": int(parts[8]),
 		"btn": int(parts[9]), "lv": int(parts[10]),
 		"pitch": int(parts[11]) if parts.size() > 11 else 0,
+		"vb": int(parts[12]) if parts.size() > 12 else -1,
 	}
 
 
@@ -235,6 +241,12 @@ func _process(_dt: float) -> void:
 	if int(cur["f"]) == last_frame:
 		return
 	last_frame = int(cur["f"])
+	if int(cur["vb"]) >= 0:
+		if vb0 < 0 or int(cur["vb"]) < vb0:
+			vb0 = int(cur["vb"])
+			f0 = int(cur["f"])
+		elif int(cur["vb"]) > vb0:
+			game_fps = 60.0 * float(int(cur["f"]) - f0) / float(int(cur["vb"]) - vb0)
 
 	# Where the game's player is, in Godot's axes.
 	var gp: Vector3i = cur["p"]
@@ -433,7 +445,7 @@ func _hud(note: String) -> void:
 		"held: %s\n" +
 		"game  %8d %8d %8d\nport  %8d %8d %8d\ndiff  %8d %8d %8d" +
 		"      worst so far %d\n" +
-		"%d of %d frames exact (%d %%)\n%s\n" +
+		"%d of %d frames exact (%d %%)   the game: %s\n%s\n" +
 		"C off   B buttons   V creatures   L lock/free   R resync   1/2/3 rung") % [
 		rung,
 		["", "height only", "ground and height", "from the buttons"][rung],
@@ -443,4 +455,5 @@ func _hud(note: String) -> void:
 		gp.x, gp.y, gp.z,
 		player.gx, player.gy, player.gz,
 		int(drift.x), int(drift.y), int(drift.z), worst,
-		matched, checked, pct, note]
+		matched, checked, pct,
+		("%.1f frames/s" % game_fps) if game_fps > 0.0 else "rate not logged", note]

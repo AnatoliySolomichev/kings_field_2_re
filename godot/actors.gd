@@ -26,7 +26,7 @@ extends Node
 # Not here: what an awake creature *does* -- the AI in actor_tick -- so an
 # actor stands at home. X kills the nearest awake one, to try the rules on.
 
-const TICK_HZ := 30.0          # player.gd's guess, so the same clock
+const TICK_HZ := 15.0          # the game's frame, four blanks: see player.gd
 const SLOTS := 200
 const DORMANT := 0
 const ACTIVE := 1

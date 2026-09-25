@@ -1681,7 +1681,7 @@
  "0x80035700": {
   "name": "frame_end_3d",
   "kind": "code",
-  "evidence": "DrawSync, PutDispEnv and PutDrawEnv for the buffer draw_buffer_index names, then DrawOTag on its ordering table. The last drawing call of a frame"
+  "evidence": "DrawSync, PutDispEnv and PutDrawEnv for the buffer draw_buffer_index names, then DrawOTag on its ordering table. The last drawing call of a frame. Its VSync(0) waits for the next blank before the flip; frame_limit, called right after it, is what holds the frame to four"
  },
  "0x80043940": {
   "name": "resource_sweep",
@@ -2242,5 +2242,35 @@
   "name": "light_matrix_turn",
   "kind": "code",
   "evidence": "(src, dst, quarters): nine halfwords turned about Y -- each row (a, b, c) becomes (a, b, c), (-c, b, a), (-a, b, -c) or (c, b, -a) for 0 to 3. light_table_step calls it three times per lighting record; tools/lighting.py carries it and rebuilds tile_look exactly"
+ },
+ "0x80019614": {
+  "name": "frame_limit",
+  "kind": "code",
+  "evidence": "render_frame's second-last call, so the end of every pass of game_main's loop: while frame_vblanks is below 4 it calls VSync(0), then zeroes it (sltiu $v0, $v0, 4 at 0x80019630). A frame therefore lasts at least four vertical blanks -- 15 a second at NTSC's 60 -- and longer only when its work overruns. The port's tick is this, 15 Hz, where it was a guessed 30"
+ },
+ "0x80019570": {
+  "name": "vblank_tick",
+  "kind": "code",
+  "evidence": "the handler 0x8001a438 hooks to root counter 3, the vertical blank: adds one to frame_vblanks, vblank_count and 0x801c12f0, and one to play_minutes whenever vblank_count is a multiple of 3600 (the multiply by 0x91a2b3c5 is a divide by 3600) -- a minute at 60 blanks a second"
+ },
+ "0x8001a438": {
+  "name": "timers_init",
+  "kind": "code",
+  "evidence": "game_main's, once: OpenEvent(RCntCNT3, EvSpINT, EvMdINTR, vblank_tick), EnableEvent, SetRCnt and StartRCnt on counter 3; zeroes the three counters; sets up the 24-slot resource request ring at 0x801c1304 and opens three more events for the CD"
+ },
+ "0x801c12e8": {
+  "name": "vblank_count",
+  "kind": "data",
+  "evidence": "vertical blanks since timers_init, one per blank from vblank_tick. load_object_placement, render_walk, object_interpreter and effect_spawn read it as the game's clock for timers"
+ },
+ "0x801c12ec": {
+  "name": "frame_vblanks",
+  "kind": "data",
+  "evidence": "blanks since the last frame ended: vblank_tick adds one, frame_limit waits for 4 and zeroes it"
+ },
+ "0x801b2588": {
+  "name": "play_minutes",
+  "kind": "data",
+  "evidence": "one more every 3600 blanks, from vblank_tick; new_character zeroes it, save_serialise writes it into the save and save_restore reads it back -- the play time a save shows"
  }
 }

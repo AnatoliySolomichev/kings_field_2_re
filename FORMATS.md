@@ -1659,6 +1659,35 @@ from where it is formed; it is the third of those depths.
 copy or naming the address it stands for and saying nothing runs. Six of the
 sixteen exist.
 
+### How long a frame lasts: four vertical blanks
+
+The port ran its movement at 30 frames a second on the strength of two
+wall-clock measurements -- 26 and 34 -- taken from an emulator that runs
+uncapped under the interpreter, which cannot measure the console at all. The
+code settles it without a recording:
+
+```
+timers_init    0x8001a438   OpenEvent(RCntCNT3, ..., vblank_tick) and start it:
+                            root counter 3 is the vertical blank
+vblank_tick    0x80019570   each blank: frame_vblanks += 1, vblank_count += 1,
+                            and play_minutes += 1 every 3600 of them
+render_frame   0x800422b8   ... frame_end_3d (DrawSync, VSync(0), the flip),
+                            then frame_limit, then resource_sweep
+frame_limit    0x80019614   while frame_vblanks < 4: VSync(0)
+                            frame_vblanks = 0
+```
+
+**A frame lasts at least four blanks, so the game runs at 15 frames a second**
+at NTSC's 60 -- the 3600 blanks to a minute of play time is the game saying
+60 itself -- and slower only when a frame's own work takes longer than four.
+Nothing scales movement by elapsed time: every speed, turn rate and fall in
+section 4 is per frame, so the port at 30 walked, turned and fell twice as
+fast as the game. `godot/player.gd` and `godot/actors.gd` tick at 15 now.
+
+How often a frame overruns is a question for a recording, and a cheap one:
+`emu/bp16.lua` logs `vblank_count` beside each frame as `vb=`, and
+`tools/replay.py` counts the blanks between consecutive frames.
+
 ## 5. Live RAM
 
 Found by diffing snapshots taken around a pickup, then pinned down against

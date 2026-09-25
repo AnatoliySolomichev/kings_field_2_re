@@ -50,7 +50,13 @@
 --
 -- `t` is wall clock, and it turned out to say less than hoped: the emulator runs
 -- uncapped under the interpreter, so two sessions measured 26 and 34 frames a
--- second and neither bounds the console. The port's 30 is still a guess.
+-- second and neither bounds the console.
+--
+--   vb    0x801c12e8  vblank_count, the game's own clock: one per vertical blank,
+--                     counted by vblank_tick. The difference between two lines is
+--                     how many blanks that frame took, whatever speed the
+--                     emulator runs at. frame_limit holds a frame to at least 4
+--                     -- 15 a second -- and this says how often one takes more.
 --
 -- Never `return false` from the callback: PCSX-Redux reads it as "delete this
 -- breakpoint", and then the silence afterwards means nothing.
@@ -104,6 +110,7 @@ local PITCH, ANG = 0x801b2610, 0x801b2612
 local STRAFE, FWD, MAG, MAX = 0x801b2646, 0x801b2648, 0x801b264a, 0x801b2664
 local VSTATE, VVEL = 0x801b25e8, 0x801b2656
 local PSTATE = 0x801b25e5
+local VBLANKS = 0x801c12e8        -- vblank_count
 local BLOCK = 0x801b2640          -- twelve halfwords, logged raw
 
 local clock = os and os.clock or function() return 0 end
@@ -158,9 +165,10 @@ arm(0x8002fe1c, 'frame', function()
 
     local live = io.open(LIVE_TMP, 'w')
     if live then
-        live:write(string.format('%d %d %d %d %d %d %d %d %d %d %d %d\n',
+        live:write(string.format('%d %d %d %d %d %d %d %d %d %d %d %d %d\n',
             frame, s32(PX), s32(PY), s32(PZ), s16(ANG), u8(VSTATE), s16(VVEL),
-            s16(FWD), s16(STRAFE), u16(BTN), u8(0x8018fad9), s16(PITCH)))
+            s16(FWD), s16(STRAFE), u16(BTN), u8(0x8018fad9), s16(PITCH),
+            s32(VBLANKS)))
         live:close()
         os.rename(LIVE_TMP, LIVE)
     end
@@ -169,11 +177,12 @@ arm(0x8002fe1c, 'frame', function()
     for i = 0, 11 do raw[#raw + 1] = string.format('%04x', u16(BLOCK + i * 2)) end
     log(string.format(
         'f=%6d t=%9.3f btn=%04x prev=%04x ang=%5d fwd=%6d mag=%6d max=%8d ' ..
-        'pos=%9d %9d %9d vst=%3d vv=%6d pst=%3d lv=%2d ra=%08x blk=%s',
+        'pos=%9d %9d %9d vst=%3d vv=%6d pst=%3d lv=%2d ra=%08x blk=%s vb=%d',
         frame, clock() - t0, u16(BTN), u16(BTNPREV), s16(ANG),
         s16(FWD), s16(MAG), s32(MAX),
         s32(PX), s32(PY), s32(PZ), u8(VSTATE), s16(VVEL), u8(PSTATE),
-        u8(0x8018fad9), g and tonumber(g.ra) or 0, table.concat(raw, ',')))
+        u8(0x8018fad9), g and tonumber(g.ra) or 0, table.concat(raw, ','),
+        s32(VBLANKS)))
 end)
 
 log('=== bp16 recording; play normally ===')

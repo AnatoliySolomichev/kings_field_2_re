@@ -580,7 +580,11 @@ the two part company, with a number.
 python3 tools/replay.py          then replay it
 ```
 
-`emu/bp16.lua` writes one line a frame — the buttons and the whole player state.
+`emu/bp16.lua` writes one line a frame — the buttons and the whole player state,
+and since 2026-09-25 `vb=`, the game's own count of vertical blanks, from which
+the replay reports how many blanks each frame took: four is the game's pace, 15
+a second (`frame_limit`), and more is a frame that overran. With the same count
+in `live.txt`, the port's compare readout shows the game's frame rate live.
 The replay runs three **rungs**, each releasing one layer of the model, and each
 in two modes. **Locked** resets to the game's own state every frame, so each
 disagreement is its own bug and carries the cell to go and look at. **Free**
