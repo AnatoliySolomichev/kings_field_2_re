@@ -29,8 +29,6 @@ import sys
 sys.path.insert(0, "tools")
 import gltf                                                           # noqa: E402
 import level3d                                                        # noqa: E402
-import rtim                                                           # noqa: E402
-import tim                                                            # noqa: E402
 import tmd                                                            # noqa: E402
 from tarc import TArc                                                 # noqa: E402
 
@@ -75,7 +73,6 @@ def build(out="out/godot", archive="MO", lv=0, spacing=None, per_row=None):
     n_ok = n_bad = ntri = 0
     catalogue = list(numbered())
     total = len(catalogue)
-    os.makedirs(f"{out}/tex", exist_ok=True)
     written = []
 
     for chunk in range((total + CHUNK - 1) // CHUNK):
@@ -123,14 +120,13 @@ def build(out="out/godot", archive="MO", lv=0, spacing=None, per_row=None):
         prims = []
         for (tpage, clut), (pos, nrm, uv, col) in groups.items():
             name = f"tex_{tpage:04x}_{clut:04x}"
-            path = f"{out}/tex/{name}.png"
-            if not (tpage >> 7) & 3 and not os.path.exists(path):
-                tim.write_png(path, 256, 256, rtim.page4(vram, tpage, clut))
+            # The objects' own copy of the page, the one the world uses, so a
+            # model looks the same here as standing in the level.
+            rel = level3d.page_texture(out, lv, tpage, clut, vram, "obj")
             # Pages at 8 or 16 bits a pixel are not written -- `page4` reads four
             # -- so those primitives get a plain material rather than one naming
             # a file that is not there, which Godot reports once per primitive.
-            m = (g.material(name, f"tex/{name}.png", double=True)
-                 if os.path.exists(path)
+            m = (g.material(name, rel, double=True) if rel
                  else g.plain(name + "_flat", (0.8, 0.75, 0.7, 1.0)))
             pr = g.primitive(pos, nrm, uv, col)
             pr["material"] = m

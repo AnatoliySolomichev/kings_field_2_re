@@ -500,6 +500,14 @@ python3 tools/rtim.py 0 page 7 0x7a00 one page through a CLUT -- brick and clay
 **`level3d.py`** — the whole level as glTF, textures and a Godot project.
 Level 0 comes out as 4637 cells, 42 788 triangles and 13 textures.
 
+Textures go to `out/godot/tex/lv<NN>/`, one folder a level, because a page and
+CLUT are different pixels on every level. They used to share one folder, written
+only when missing, and after levels 1 to 14 had been built level 0's trees wore
+another level's wall of statues. `tex_` files are cut from `RTIM.T` alone, for
+the geometry; `obj_` from `object_vram`, for the objects, the creatures and the
+gallery. The flat `tex/tex_*.png` files an older build left behind are named
+only by the other levels' old glTFs, until those levels are built again.
+
 ```
 python3 tools/level3d.py 0
 python3 tools/level3d.py 0 --cells 24    a corner of it, quickly
@@ -574,6 +582,17 @@ runs over the same input.
 ./emu/run.sh debug bp16.lua
 godot-4 --path out/godot
 ```
+
+**A plain `./emu/run.sh` feeds nothing**, and `live.txt` is not deleted when a
+session ends, so the last frame of the previous one stays in it. The port used
+to take that for the game: C jumped to where a player had stood weeks earlier
+and stayed there. It now goes by the file's age — more than 3 seconds without a
+new line and C and B say the feed has stopped, how long ago, and the two
+commands that restart it, and they move nothing. The line also stops while the
+game is not running the player's movement, on the title screen for one. And
+since a script is chosen only at launch, `./emu/run.sh debug bp16.lua` against
+an emulator already running without it now says so and stops, instead of
+answering "already running".
 
 **C** compares, **B** takes the buttons from the emulator, **L** switches
 locked against free running, **R** resyncs, and **1/2/3** pick the rung.

@@ -257,14 +257,12 @@ def build_gltf(lv, out="out/godot", limit=None):
                         bag[2].append((u / 256.0, v / 256.0))
                         bag[3].append((rgb[0], rgb[1], rgb[2], 1.0))
 
-    os.makedirs(f"{out}/tex", exist_ok=True)
     prims, ntri = [], 0
     for (tpage, clut), (pos, nrm, uv, col) in groups.items():
         name = f"tex_{tpage:04x}_{clut:04x}"
-        if not (tpage >> 7) & 3:
-            tim.write_png(f"{out}/tex/{name}.png", 256, 256,
-                          rtim.page4(vram, tpage, clut))
-        m = g.material(name, f"tex/{name}.png")
+        rel = page_texture(out, lv, tpage, clut, vram, "tex")
+        m = (g.material(name, rel) if rel
+             else g.plain(name + "_flat", (0.8, 0.75, 0.7, 1.0)))
         p = g.primitive(pos, nrm, uv, col)
         p["material"] = m
         prims.append(p)
@@ -280,18 +278,16 @@ def build_gltf(lv, out="out/godot", limit=None):
 
 def write(lv, out="out/godot", limit=None):
     verts, uvs, norms, faces, mats, vram, ncell = build(lv, limit)
-    os.makedirs(f"{out}/tex", exist_ok=True)
+    rels = {}
     for (tpage, clut), name in mats.items():
-        if (tpage >> 7) & 3:                     # 8-bit or 15-bit page
+        rels[name] = page_texture(out, lv, tpage, clut, vram, "tex")
+        if rels[name] is None:                   # 8-bit or 15-bit page
             print(f"  note: {name} is not a 4-bit page, skipping its texture")
-            continue
-        tim.write_png(f"{out}/tex/{name}.png", 256, 256,
-                      rtim.page4(vram, tpage, clut))
 
     with open(f"{out}/level{lv:02d}.mtl", "w") as f:
         for name in mats.values():
             f.write(f"newmtl {name}\nKd 1 1 1\nKa 1 1 1\nd 1\nillum 1\n"
-                    f"map_Kd tex/{name}.png\n\n")
+                    + (f"map_Kd {rels[name]}\n" if rels[name] else "") + "\n")
 
     obj = f"{out}/level{lv:02d}.obj"
     ntri = 0
@@ -492,6 +488,45 @@ def object_vram(lv):
     return bytes(v)
 
 
+# What this run has written already, so the objects, the creatures and the
+# gallery can share a page without cutting it three times.
+_written = set()
+
+
+def page_texture(out, lv, tpage, clut, vram, kind):
+    """One page under one CLUT as a PNG; its path relative to `out`, or None.
+
+    **The path carries the level and the VRAM it was cut from**, because the
+    same page and CLUT are different pixels on different levels: each level
+    loads its own `RTIM.T` into the same VRAM. These used to be
+    `tex/tex_<page>_<clut>.png` for every level, and the objects' copy was
+    written only when the file was missing. Building levels 1 to 14 therefore
+    left their pixels under names level 0 reuses, and level 0's 73 trees
+    (types 324 to 326) came out wearing another level's wall of statues in
+    niches -- which a player saw as big pictures standing among the things on
+    the ground. 9 of level 0's 100 object textures were another level's, or
+    the geometry's.
+
+    `kind` says which VRAM: "tex" is `RTIM.T` alone, which the level's own
+    geometry is drawn with, and "obj" is `object_vram`, which fills the pages
+    RTIM leaves empty from a snapshot. They differ on exactly those pages, so
+    they cannot share a file either: the geometry's copy of page 0x0d under
+    CLUT 0x7a88 is transparent throughout, and the objects' is not.
+
+    Pages at 8 or 16 bits a pixel are not written -- `page4` reads four -- and
+    get None, for a plain material rather than one naming a missing file.
+    """
+    if (tpage >> 7) & 3:
+        return None
+    rel = f"tex/lv{lv:02d}/{kind}_{tpage:04x}_{clut:04x}.png"
+    path = f"{out}/{rel}"
+    if path not in _written:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tim.write_png(path, 256, 256, rtim.page4(vram, tpage, clut))
+        _written.add(path)
+    return rel
+
+
 def emit_object(objs, place, colour, groups, normal_of=None):
     """Append one model's triangles into `groups`, keyed by (tpage, clut).
 
@@ -597,13 +632,9 @@ def build_actors_gltf(lv, out="out/godot"):
         prims = []
         for (tpage, clut), (pos, nrm, uv, col) in groups.items():
             name = f"tex_{tpage:04x}_{clut:04x}"
-            path = f"{out}/tex/{name}.png"
             if name not in mats:
-                os.makedirs(f"{out}/tex", exist_ok=True)
-                if not (tpage >> 7) & 3 and not os.path.exists(path):
-                    tim.write_png(path, 256, 256, rtim.page4(vram, tpage, clut))
-                mats[name] = (g.material(name, f"tex/{name}.png", double=True)
-                              if os.path.exists(path)
+                rel = page_texture(out, lv, tpage, clut, vram, "obj")
+                mats[name] = (g.material(name, rel, double=True) if rel
                               else g.plain(name + "_flat", (0.8, 0.75, 0.7, 1.0)))
             pr = g.primitive(pos, nrm, uv, col)
             pr["material"] = mats[name]
@@ -732,15 +763,11 @@ def build_objects_gltf(lv, out="out/godot"):
         emit_object(objs, place, lambda raw: shade(raw, llm, lcm, bk), groups,
                     spin_normal)
 
-    os.makedirs(f"{out}/tex", exist_ok=True)
     prims, ntri = [], 0
     for (tpage, clut), (pos, nrm, uv, col) in groups.items():
         name = f"tex_{tpage:04x}_{clut:04x}"
-        path = f"{out}/tex/{name}.png"
-        if not (tpage >> 7) & 3 and not os.path.exists(path):
-            tim.write_png(path, 256, 256, rtim.page4(vram, tpage, clut))
-        m = (g.material(name, f"tex/{name}.png", double=True)
-             if os.path.exists(path)
+        rel = page_texture(out, lv, tpage, clut, vram, "obj")
+        m = (g.material(name, rel, double=True) if rel
              else g.plain(name + "_flat", (0.8, 0.75, 0.7, 1.0)))
         p = g.primitive(pos, nrm, uv, col)
         p["material"] = m

@@ -151,6 +151,19 @@ understanding, and labelled as such in `object_vram`. Building without a
 snapshot still draws white, which is the honest failure rather than a silent
 one.
 
+**The level's own geometry reaches into those pages too, and draws nothing
+there.** Level 0's geometry names four page-and-CLUT pairs whose CLUTs `RTIM.T[0]`
+leaves empty — pages `0x0b`, `0x0d` and `0x0f` twice — so in the port they are
+transparent throughout and **404 of its triangles are invisible**: 6, 54, 48,
+and 296 that make one flat sheet at Y = -12160 spanning cells x 0 to 67 and z 11
+to 29. The geometry is still drawn from `RTIM.T` alone, deliberately. With the
+snapshot's pages three of the four come out mostly opaque, and turning them on
+changes how the level looks, which wants somebody who knows the game to look at
+those cells first rather than a reading of what the sheet ought to be.
+`page_texture` keeps the two readings in separate files (`tex_` and `obj_`)
+for exactly this reason: they disagree on those pages, and while one file
+served both, whichever was written first won.
+
 **Not every placed object is drawn.** Type 299 is the readable marker — a coarse
 box two cells across, 76 instances across the game and every one of them
 carrying a text index, which is exactly the number of readable things in it. It

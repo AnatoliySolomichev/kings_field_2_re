@@ -59,6 +59,15 @@ extends Node3D
 const LIVE := "res://live.txt"
 const UNIT := 1000.0
 const MARKERS := 64
+# **live.txt is only news while something is rewriting it.** Nothing deletes it
+# when the emulator stops, so the last session's last frame stays in it -- and
+# this used to take that for the game. With the emulator started plainly, which
+# loads no script, C jumped the port to where a player had stood two weeks
+# earlier and held it there, and nothing on screen said why: the hint about
+# starting the emulator with bp16.lua showed only when the file was missing
+# altogether. Past this many seconds without a new line the feed counts as
+# stopped. The file's time is kept to the second, hence not 1.
+const STALE := 3
 
 var player: Node3D
 var marker: MeshInstance3D
@@ -79,6 +88,7 @@ var log_buf := PackedStringArray()
 # is what this build drew before the machine was read.
 var only_drawn := true
 var live_input := false
+var feed := ""                     # why live.txt cannot be followed, "" if it can
 var last_btn := 0
 var last_frame := -1
 var prev := {}                     # the previous game frame
@@ -192,6 +202,8 @@ func _read() -> Dictionary:
 	if parts.size() < 11:
 		return {}
 	return {
+		"age": int(Time.get_unix_time_from_system()) -
+			FileAccess.get_modified_time(LIVE),
 		"f": int(parts[0]),
 		"p": Vector3i(int(parts[1]), int(parts[2]), int(parts[3])),
 		"ang": int(parts[4]), "vst": int(parts[5]), "vv": int(parts[6]),
@@ -205,7 +217,13 @@ func _process(_dt: float) -> void:
 	if player == null or not (compare or live_input):
 		return
 	var cur := _read()
-	if cur.is_empty():
+	var why := _why_not(cur)
+	if why != feed:
+		_hud("")
+	if why != "":
+		# Nothing new is coming, so nothing is held: the port must not keep
+		# walking on the last buttons of a session that has ended.
+		KFPad.live_word = 0
 		return
 	# The buttons cross over whether or not the comparison is running, so B
 	# works on its own.
@@ -355,15 +373,44 @@ func _redraw_flags() -> void:
 	m.surface_end()
 
 
+# Why the feed cannot be followed, in words a person can act on; "" when it can.
+func _why_not(cur: Dictionary) -> String:
+	var what := ""
+	if cur.is_empty():
+		what = "res://live.txt is not there, so there is nothing to follow."
+	elif int(cur["age"]) > STALE:
+		what = ("res://live.txt last changed %s ago, at game frame %d:" +
+			" nothing is writing it now.") % [_ago(int(cur["age"])), int(cur["f"])]
+	else:
+		return ""
+	return (what + "\n" +
+		"Only a breakpoint script writes it, so start the emulator with one:\n" +
+		"  ./emu/run.sh stop\n" +
+		"  ./emu/run.sh debug bp16.lua      (or bp19.lua)\n" +
+		"and get into the game. It is written from the player's movement, so\n" +
+		"it also stands still while that is not running -- on the title screen.")
+
+
+func _ago(s: int) -> String:
+	if s < 120:
+		return "%d s" % s
+	if s < 7200:
+		return "%d min" % (s / 60)
+	if s < 172800:
+		return "%d h" % (s / 3600)
+	return "%d days" % (s / 86400)
+
+
 func _hud(note: String) -> void:
 	var hud := get_node_or_null("../UI/Compare")
 	if hud == null:
 		return
-	if compare and _read().is_empty():
-		hud.text = ("COMPARE is on, but res://live.txt is not there.\n" +
-			"Only a breakpoint script that writes it feeds this: run\n" +
-			"  ./emu/run.sh debug bp16.lua      (or bp19.lua)\n" +
-			"C off   B buttons   V creatures")
+	feed = _why_not(_read()) if (compare or live_input) else ""
+	if feed != "":
+		hud.text = ("%s is on, but it has nothing to go on.\n%s\n" +
+			"C compare: %s   B buttons: %s   V creatures") % [
+			"COMPARE" if compare else "B", feed,
+			"on" if compare else "off", "on" if live_input else "off"]
 		return
 	if not compare:
 		var who := "all of them"
