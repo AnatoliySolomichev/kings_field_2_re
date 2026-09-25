@@ -720,6 +720,13 @@ texture={{
 }}
 """
 
+# The camera sees what the game's does. The GTE's projection distance is H = 200
+# -- SetGeomScreen(200), `ctc2 $t4, H` at 0x800353f8 and again at 0x800354d4,
+# and sub_8004290c sets the same -- on a 320x240 screen centred at (160, 120),
+# so the vertical field of view is 2 * atan(120 / 200) = 61.93 degrees and the
+# horizontal, at 4:3, 77.3. Godot's own 75 vertical showed more than the game
+# above and below. The eye is 1.6 up because sync_player_pos forms it as
+# player Y + EYE_HEIGHT, 0x640.
 # A .gltf imports as a scene, so it is instanced rather than assigned to a mesh.
 # There are **no lights**: the materials are unlit and carry the game's own
 # lighting in their vertex colours. Adding a light here would shade the level a
@@ -765,6 +772,7 @@ script = ExtResource("2")
 [node name="Camera" type="Camera3D" parent="Player"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
 current = true
+fov = 61.9275
 far = 400.0
 
 [node name="Actors" type="Node" parent="."]

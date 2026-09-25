@@ -1698,6 +1698,19 @@ Nothing scales movement by elapsed time: every speed, turn rate and fall in
 section 4 is per frame, so the port at 30 walked, turned and fell twice as
 fast as the game. `godot/player.gd` and `godot/actors.gd` tick at 15 now.
 
+### What the camera sees
+
+`0x80035394`, the graphics set-up `game_main` runs once, calls
+`SetGeomOffset(160, 120)` and `SetGeomScreen(200)` -- `ctc2 $t4, H` with 0xc8 at
+`0x800353f8`, again at `0x800354d4`, and `sub_8004290c` asks for 200 too -- on a
+320x240 screen. So the vertical field of view is `2 * atan(120 / 200)`, **61.93
+degrees**, and the horizontal 77.3 at 4:3. The port's camera had Godot's default
+of 75 vertical and showed more above and below than the game; it has 61.93 now,
+and a render from the `b` snapshot's pose lays the water, the wall and the herb
+on the same rows as the game's own screenshot. The eye is `player Y + EYE_HEIGHT`,
+0x640 above the feet, formed in `sync_player_pos` -- the port's 1.6 was already
+that.
+
 How often a frame overruns is a question for a recording, and a cheap one:
 `emu/bp16.lua` logs `vblank_count` beside each frame as `vb=`, and
 `tools/replay.py` counts the blanks between consecutive frames.
