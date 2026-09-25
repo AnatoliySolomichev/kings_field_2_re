@@ -240,6 +240,21 @@ Every opcode that has appeared in a log is transcribed and exact. `0x25`,
 one handler at its address in the table at `0x80011b0c`, scored the same way.
 Level 0 uses `0x25` in 41 cells and `0x31` in 4, so those two are reachable.
 
+## 4a. Distance darkening -- read, to port next
+
+FORMATS.md, "How far the game draws, and how it darkens". What the port needs:
+each vertex to carry its cell's lighting-class near and far (TEXCOORD_1 from
+`tools/level3d.py`: the tiles' own cell, an object's or a creature's cell), and
+every world material replaced at run time by one shader -- `godot/scroll.gd`
+already swaps page 0x0f's and would become the general one -- that computes
+`t = clamp((z - near) / (far - near), 0, 0x1f0f / 4096)` from the view depth in
+game units, per face as the game does (a `flat` varying is the nearest Godot
+has), and draws `texel * max(colour + t * (5/128 - colour), 0)`. It keeps the
+scroll and the blend modes that file already sets. `tools/shots.py b` is the
+check: the game's screenshot is black beyond the far wall.
+`draw_model_lit` blends two records' near and far with `fixed_madd`; read that
+before the objects get it.
+
 ## 4b. What the level looks like — read
 
 **Found.** `RTMD.T[level]` is a TMD of 240 objects and `cell[+5]` picks one per

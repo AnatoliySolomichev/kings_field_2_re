@@ -2292,5 +2292,15 @@
   "name": "object_mode",
   "kind": "code",
   "evidence": "(slot, mode, value): mode 0 takes an object away by its class -- +0 = 0 and its state byte (+0x38; +0x3c for classes 0x09 and 0x15; +0x3e for 0x0d and 0x53; only +0x3e for 0x14) zeroed, class 0x40 re-taking its angles; mode 1 puts +0 = value back, except classes 0x14 and 0x15; mode 2 sets the state byte to 0xff; mode 3 writes +0xe. A slot of 0xffff does nothing. Chests call modes 0 and 3 on their contents on the first frame; tools/objload.py carries mode 0 and brings level 4's snapshot to 194 of 194"
+ },
+ "0x80035358": {
+  "name": "fog_range_set",
+  "kind": "code",
+  "evidence": "(near, far): keeps both at 0x801aec7c and 0x801aec80 and calls SetFogFar(near, 200) -- near 0xffff when the two are equal. Every drawing routine calls it with +0x68 and +0x6a of the lighting record of what it draws; draw_tmd_object turns them into a per-vertex (SZ - near) * 4096 / (far - near) for NCDS's IR0"
+ },
+ "0x80077ad8": {
+  "name": "SetFogFar",
+  "kind": "code",
+  "evidence": "PSY-Q's shape: DQA = -(320 * a) / h, DQB = 0x1400000, so the automatic depth cue is 1.25 * (1 - a / SZ). fog_range_set is its only caller in the drawing, with h = 200"
  }
 }

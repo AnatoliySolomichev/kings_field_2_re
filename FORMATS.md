@@ -1718,6 +1718,30 @@ approximates: in an adding material a texel without STP adds as well, where the
 console would draw it solid. `tools/shots.py b` shows the water beside the
 game's own screenshot.
 
+### How far the game draws, and how it darkens -- read, not yet ported
+
+Every drawing routine -- `draw_tile`, `draw_model_lit`, `draw_model_plain`,
+`draw_model_cell_lit`, `draw_held_item` -- calls `fog_range_set` (`0x80035358`)
+with the `+0x68` and `+0x6a` of the lighting record of the cell it draws, a
+**near** and a **far** in view-space Z. It keeps both at `0x801aec7c` and
+`0x801aec80` and hands only the near to `SetFogFar(near, 200)` (`0x80077ad8`:
+DQA = -320 * near / 200, DQB = 0x1400000); the tiles do not use that automatic
+cue. `draw_tmd_object` (`0x8003ab04`) instead works out, for every vertex,
+
+```
+t = (SZ - near) * 4096 / (far - near)      0 below near, capped at 0x1f0f
+```
+
+-- 0 when near is 32000 or more -- and before each face's `NCDS` sets `IR0`
+to the mean of its three vertices' `t` (the multiply by 0x55555556 is the
+divide by three). NCDS then gives `colour + IR0 * (FC - colour)`, clamped at 0,
+with the far colour FC set once to `5 << 4` (`0x8003551c`). So a face fades
+from its lit colour at `near` to all but black at `far` and to black past it.
+Level 0's class 0, on 6234 of its cells, is near 18000 and far 22000 -- 8.8 to
+10.7 cells -- which is the black the game's screenshots show beyond about ten
+cells. The port draws everything to 400 metres, undarkened. BACKLOG.md item 4b
+has the plan.
+
 ### What the camera sees
 
 `0x80035394`, the graphics set-up `game_main` runs once, calls
