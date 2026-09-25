@@ -119,7 +119,7 @@ def build(out="out/godot", archive="MO", lv=0, spacing=None, per_row=None):
 
         prims = []
         mats = {}
-        for key, (pos, nrm, uv, col) in groups.items():
+        for key, (pos, nrm, uv, col, _fog) in groups.items():
             # The objects' own copy of the page, the one the world uses, so a
             # model looks the same here as standing in the level. Pages at 8 or
             # 16 bits a pixel get a plain material rather than one naming a file

@@ -23,7 +23,22 @@ extends Node
 # rate 0 mixes, which the glTF says itself, but rates 1 and 3 add and rate 2
 # subtracts, and those materials carry "_add" or "_sub" in their names for this
 # to act on. The water is rate 0.
+#
+# **And everything darkens with distance, as the game's does.** Every drawing
+# routine hands fog_range_set (0x80035358) the near and far of the lighting
+# class it draws with -- the record's +0x68 and +0x6a -- and draw_tmd_object
+# (0x8003ab04) works out for each vertex t = (SZ - near) * 4096 / (far - near),
+# 0 before near, capped at 0x1f0f, 0 altogether when near is 32000 or more; then
+# NCDS gives colour + t * (FC - colour), clamped at 0, with the far colour FC
+# set once to 5 << 4. So a face fades to near-black at `far` and to black past
+# it: 18000 to 22000 on most of level 0, which is the black beyond ten cells in
+# the game's screenshots and the distance the port used to draw to 400 metres.
+# tools/level3d.py puts each vertex's near and far in UV2 and this shader, now
+# on every material of the world, does the fade. One difference it owns: the
+# game takes one t per face, the mean of its three vertices, and this blends
+# per vertex.
 # @orig game:0x800351fc texture_scroll_step  status:transcribed
+# @orig game:0x80035358 fog_range_set  status:transcribed
 
 const PAGE := "tex_000f_"            # the page the square is on
 const X0 := 224.0                    # (1016 - 960) * 4 pixels
@@ -32,18 +47,32 @@ const SIZE := 32.0
 const STEP := 1.0                    # rows a frame
 const FRAME_HZ := 15.0               # see player.gd
 
+const FAR_COLOUR := 5.0 / 128.0      # FC, 5 << 4, over the texture's 128
+const CUE_CAP := 7951.0 / 4096.0     # t is capped at 0x1f0f
+const CUE_OFF := 32000.0             # a near this far means no cue at all
+
 const CODE := """
 shader_type spatial;
 render_mode unshaded, %s, %s;
 uniform sampler2D page : source_color, filter_nearest;
 uniform float offset = 0.0;
+uniform bool scrolls = false;
+varying float cue;
+void vertex() {
+	float z = -(MODELVIEW_MATRIX * vec4(VERTEX, 1.0)).z * 1000.0;
+	float nearz = UV2.x;
+	float farz = UV2.y;
+	cue = (nearz >= %.1f || farz <= nearz) ? 0.0
+		: clamp((z - nearz) / (farz - nearz), 0.0, %.6f);
+}
 void fragment() {
 	vec2 px = UV * 256.0;
-	if (px.x >= %.1f && px.y >= %.1f && px.y < %.1f) {
+	if (scrolls && px.x >= %.1f && px.y >= %.1f && px.y < %.1f) {
 		px.y = %.1f + mod(px.y - %.1f - offset, %.1f);
 	}
 	vec4 c = texture(page, px / 256.0);
-	ALBEDO = c.rgb * COLOR.rgb;
+	vec3 lit = COLOR.rgb;
+	ALBEDO = c.rgb * max(lit + cue * (vec3(%.6f) - lit), vec3(0.0));
 	%s
 }
 """
@@ -72,8 +101,7 @@ func _swap(n: Node, shaders: Dictionary) -> void:
 				m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 			elif m.resource_name.ends_with("_sub"):
 				m.blend_mode = BaseMaterial3D.BLEND_MODE_SUB
-			if not PAGE in m.albedo_texture.resource_path:
-				continue
+			var scrolls: bool = PAGE in m.albedo_texture.resource_path
 			var cull: String = "cull_disabled" \
 				if m.cull_mode == BaseMaterial3D.CULL_DISABLED else "cull_back"
 			# By the name tools/level3d.py gives it: an imported blended material
@@ -84,14 +112,16 @@ func _swap(n: Node, shaders: Dictionary) -> void:
 			var key := "%s %s %s" % [cull, blend, semi]
 			if not shaders.has(key):
 				var sh := Shader.new()
-				sh.code = CODE % [cull, blend, X0, Y0, Y0 + SIZE, Y0, Y0, SIZE,
-					MIXED if semi else CUT]
+				sh.code = CODE % [cull, blend, CUE_OFF, CUE_CAP, X0, Y0, Y0 + SIZE,
+					Y0, Y0, SIZE, FAR_COLOUR, MIXED if semi else CUT]
 				shaders[key] = sh
 			var s := ShaderMaterial.new()
 			s.shader = shaders[key]
 			s.set_shader_parameter("page", m.albedo_texture)
+			s.set_shader_parameter("scrolls", scrolls)
 			n.set_surface_override_material(i, s)
-			mats.append(s)
+			if scrolls:
+				mats.append(s)
 	for c in n.get_children():
 		_swap(c, shaders)
 

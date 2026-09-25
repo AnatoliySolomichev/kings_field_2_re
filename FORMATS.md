@@ -1746,7 +1746,7 @@ approximates: in an adding material a texel without STP adds as well, where the
 console would draw it solid. `tools/shots.py b` shows the water beside the
 game's own screenshot.
 
-### How far the game draws, and how it darkens -- read, not yet ported
+### How far the game draws, and how it darkens
 
 Every drawing routine -- `draw_tile`, `draw_model_lit`, `draw_model_plain`,
 `draw_model_cell_lit`, `draw_held_item` -- calls `fog_range_set` (`0x80035358`)
@@ -1767,8 +1767,21 @@ with the far colour FC set once to `5 << 4` (`0x8003551c`). So a face fades
 from its lit colour at `near` to all but black at `far` and to black past it.
 Level 0's class 0, on 6234 of its cells, is near 18000 and far 22000 -- 8.8 to
 10.7 cells -- which is the black the game's screenshots show beyond about ten
-cells. The port draws everything to 400 metres, undarkened. BACKLOG.md item 4b
-has the plan.
+cells. The tiles' vertices and their cell offsets are in world units -- the
+view matrix is unscaled, rows of 4096, in every snapshot -- so SZ is the
+distance along the view and the ranges are world units.
+
+**In the port:** `tools/level3d.py` gives every vertex its cell's lighting-class
+near and far as TEXCOORD_1 (tiles by their own cell, objects and creatures by
+the cell they stand in), and `godot/scroll.gd` replaces every material of the
+world with one shader that works out `t` from the view depth and draws
+`texel * max(colour + t * (5/128 - colour), 0)`. It blends `t` per vertex where
+the game takes one per face, the mean of its three. `tools/shots.py b` shows
+the far wall's surroundings going to black, as the game's screenshot does.
+
+What it does not do is the sky: looking one way from level 0 the game draws a
+dark red, clouded sky above the black horizon (`out/snap/inv1.png`), and the
+port's background is flat black. BACKLOG.md, item 4a.
 
 ### What the camera sees
 

@@ -99,8 +99,12 @@ class Gltf:
             "extensions": {"KHR_materials_unlit": {}}})
         return len(self.materials) - 1
 
-    def primitive(self, pos, nrm, uv, col):
-        """Each list is one entry per vertex, three vertices to a triangle."""
+    def primitive(self, pos, nrm, uv, col, fog=None):
+        """Each list is one entry per vertex, three vertices to a triangle.
+
+        `fog`, when given, is each vertex's (near, far) of the depth cue the
+        game fades it with, written as TEXCOORD_1 for godot/scroll.gd's shader.
+        """
         n = len(pos)
         xs = [p[0] for p in pos]
         ys = [p[1] for p in pos]
@@ -116,9 +120,12 @@ class Gltf:
                        "VEC4", FLOAT, n, ARRAY_BUFFER)
         ia = self._acc(struct.pack(f"<{n}I", *range(n)), "SCALAR", UINT, n,
                        ELEMENT_BUFFER)
-        return {"attributes": {"POSITION": pa, "NORMAL": na,
-                               "TEXCOORD_0": ta, "COLOR_0": ca},
-                "indices": ia}
+        attrs = {"POSITION": pa, "NORMAL": na, "TEXCOORD_0": ta, "COLOR_0": ca}
+        if fog:
+            attrs["TEXCOORD_1"] = self._acc(
+                struct.pack(f"<{n * 2}f", *[float(c) for p in fog for c in p]),
+                "VEC2", FLOAT, n, ARRAY_BUFFER)
+        return {"attributes": attrs, "indices": ia}
 
     def write(self, path, prims, name="level", node=None):
         """`node` may differ from the mesh name: Godot reads import hints off

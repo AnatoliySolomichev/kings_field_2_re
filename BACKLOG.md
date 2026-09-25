@@ -240,9 +240,17 @@ Every opcode that has appeared in a log is transcribed and exact. `0x25`,
 one handler at its address in the table at `0x80011b0c`, scored the same way.
 Level 0 uses `0x25` in 41 cells and `0x31` in 4, so those two are reachable.
 
-## 4a. Distance darkening -- read, to port next
+## 4a. The sky, now that distance darkening is in
 
-FORMATS.md, "How far the game draws, and how it darkens". What the port needs:
+The depth cue is ported (FORMATS.md, "How far the game draws, and how it
+darkens"). What the game draws beyond it is not: `out/snap/inv1.png`, looking
+north-east across level 0, has a dark red clouded sky over the horizon where
+`b.png`, looking north, is black. Find what draws it -- `render_frame`'s calls
+before the cells (`0x80034bf4`, `0x80035630`, `0x80043858`) are the place to
+start -- and whether it is a texture in VRAM or a model. The note below was
+the plan for the cue, kept for how it went:
+
+What the port needed:
 each vertex to carry its cell's lighting-class near and far (TEXCOORD_1 from
 `tools/level3d.py`: the tiles' own cell, an object's or a creature's cell), and
 every world material replaced at run time by one shader -- `godot/scroll.gd`

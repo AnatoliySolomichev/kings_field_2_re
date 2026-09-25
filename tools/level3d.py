@@ -104,6 +104,16 @@ def spin(v, rot):
     return x, y, z
 
 
+def fog_of(look, cls):
+    """The depth cue's (near, far) for a lighting class: its record's +0x68, +0x6a.
+
+    Every drawing routine hands these to fog_range_set (0x80035358) for what it
+    draws, and draw_tmd_object fades each face from its lit colour at `near`
+    toward the far colour at `far`; godot/scroll.gd does the same per vertex.
+    """
+    return struct.unpack_from("<2H", look, 108 * cls + 0x68)
+
+
 def light_class(look, cls, rot):
     """The GTE lighting a cell's class applies: (direction, colour, background).
 
@@ -238,6 +248,7 @@ def build_gltf(lv, out="out/godot", limit=None):
             ncell += 1
             rot = c[7] & 3
             llm, lcm, bk = light_class(look, c[9] & 0x3F, rot)
+            fog = fog_of(look, c[9] & 0x3F)
             ox, oy, oz = cx * CELL + CELL // 2, -128 * c[6], cz * CELL + CELL // 2
 
             def place(v):
@@ -254,7 +265,7 @@ def build_gltf(lv, out="out/godot", limit=None):
                 nrm = (nx / 4096.0, -ny / 4096.0, -nz / 4096.0)
                 pts = [place(obj.verts[i]) for i in pr.verts]
                 key = (pr.tpage, pr.clut, bool(pr.mode & 2))
-                bag = groups.setdefault(key, ([], [], [], []))
+                bag = groups.setdefault(key, ([], [], [], [], []))
                 for a, b, cc in ([(0, 1, 2), (1, 3, 2)] if pr.quad
                                  else [(0, 1, 2)]):
                     order = (a, b, cc)
@@ -273,11 +284,12 @@ def build_gltf(lv, out="out/godot", limit=None):
                         u, v = pr.uvs[i]
                         bag[2].append((u / 256.0, v / 256.0))
                         bag[3].append((rgb[0], rgb[1], rgb[2], 1.0))
+                        bag[4].append(fog)
 
     prims, ntri, mats = [], 0, {}
-    for key, (pos, nrm, uv, col) in groups.items():
+    for key, (pos, nrm, uv, col, fogs) in groups.items():
         m = material_for(g, mats, out, lv, key, vram, double=False)
-        p = g.primitive(pos, nrm, uv, col)
+        p = g.primitive(pos, nrm, uv, col, fogs)
         p["material"] = m
         prims.append(p)
         ntri += len(pos) // 3
@@ -450,7 +462,7 @@ def material_for(g, mats, out, lv, key, vram, double=True):
     return mats[name]
 
 
-def emit_object(objs, place, colour, groups, normal_of=None):
+def emit_object(objs, place, colour, groups, normal_of=None, fog=(0, 0)):
     """Append one model's triangles into `groups`, keyed by (tpage, clut, semi).
 
     **Shared deliberately.** The world build and the catalogue each had their own
@@ -484,7 +496,7 @@ def emit_object(objs, place, colour, groups, normal_of=None):
             if len(pts) < (4 if pr.quad else 3):
                 continue
             bag = groups.setdefault((pr.tpage, pr.clut, bool(pr.mode & 2)),
-                                    ([], [], [], []))
+                                    ([], [], [], [], []))
             # No winding correction: the materials are double-sided, because the
             # PlayStation does not cull and these models rely on it. Turning
             # each triangle to agree with its own normal was tried and made
@@ -497,6 +509,7 @@ def emit_object(objs, place, colour, groups, normal_of=None):
                     u, v = pr.uvs[i]
                     bag[2].append((u / 256.0, v / 256.0))
                     bag[3].append((rgb[0], rgb[1], rgb[2], 1.0))
+                    bag[4].append(fog)
 
 
 ACTOR_TABLE, ACTOR_STRIDE, ACTOR_SLOTS = 0x80185DA8, 0x88, 128
@@ -553,10 +566,11 @@ def build_actors_gltf(lv, out="out/godot"):
         llm, lcm, bk = light_class(look, c[9] & 0x3F, c[7] & 3)
         groups = {}
         emit_object(objs, lambda v: (v[0] / UNIT, -v[1] / UNIT, -v[2] / UNIT),
-                    lambda raw: shade(raw, llm, lcm, bk), groups)
+                    lambda raw: shade(raw, llm, lcm, bk), groups,
+                    fog=fog_of(look, c[9] & 0x3F))
         prims = []
-        for key, (pos, nrm, uv, col) in groups.items():
-            pr = g.primitive(pos, nrm, uv, col)
+        for key, (pos, nrm, uv, col, fogs) in groups.items():
+            pr = g.primitive(pos, nrm, uv, col, fogs)
             pr["material"] = material_for(g, mats, out, lv, key, vram)
             prims.append(pr)
             ntri += len(pos) // 3
@@ -680,7 +694,7 @@ def build_objects_gltf(lv, out="out/godot"):
 
         own = {} if door else groups
         emit_object(objs, place, lambda raw: shade(raw, llm, lcm, bk), own,
-                    spin_normal)
+                    spin_normal, fog=fog_of(look, c[9] & 0x3F))
         if door:
             doors.append((o, own))
 
@@ -688,8 +702,8 @@ def build_objects_gltf(lv, out="out/godot"):
 
     def prims_of(bags):
         out_prims, n = [], 0
-        for key, (pos, nrm, uv, col) in bags.items():
-            p = g.primitive(pos, nrm, uv, col)
+        for key, (pos, nrm, uv, col, fogs) in bags.items():
+            p = g.primitive(pos, nrm, uv, col, fogs)
             p["material"] = material_for(g, mats, out, lv, key, vram)
             out_prims.append(p)
             n += len(pos) // 3
