@@ -165,8 +165,13 @@ func _ready() -> void:
 	_refresh()
 
 
+# The level out/godot was built for: tools/level3d.py names the project
+# "King's Field II - level N". This returned 0 whatever the build, so on any
+# other level the port read level 0's collision, doors and sky.
 func _level() -> int:
-	return 0
+	var name := str(ProjectSettings.get_setting("application/config/name", ""))
+	var i := name.rfind("level ")
+	return int(name.substr(i + 6)) if i >= 0 else 0
 
 
 func _to_godot() -> void:

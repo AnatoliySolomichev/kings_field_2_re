@@ -1656,7 +1656,7 @@
  "0x8003c35c": {
   "name": "draw_model_cell_lit",
   "kind": "code",
-  "evidence": "the third model draw beside draw_model_lit and draw_model_plain: MVMVA, ScaleMatrix and the tile_look lighting, called once from render_frame between the held item and the terrain"
+  "evidence": "the third model draw beside draw_model_lit and draw_model_plain: MVMVA, ScaleMatrix and the tile_look lighting, called once from render_frame between the held item and the terrain. What it draws is compass_models (0x80081c20): the compass in the top-right corner"
  },
  "0x8003bfd0": {
   "name": "draw_terrain",
@@ -2342,5 +2342,30 @@
   "name": "collision_cell_layer",
   "kind": "data",
   "evidence": "the cell pointer plus the layer offset of the last tile_collision call, written at 0x800326c8; player_horizontal's diagonal slide reads the rotation at its byte +2, so after the shorter tries it is the last of those, not the step's target"
+ },
+ "0x800400ac": {
+  "name": "draw_model_at_eye",
+  "kind": "code",
+  "evidence": "render_walk's draw for class 0xf0 (and the 0xf2 object it keeps at 0x8018faf4): the record's angles turned by the view matrix, the translation (0, 0x64, 0) in view space set at 0x800400e8 and never replaced -- the model sits on the eye -- lit by tile_look[+0x3b & 0x7f]; sub_80039428 files every face in the 8-entry side ordering table (0x801a9178) at (0x1fff - +0x3a) & 7, which frame_end_3d links into the main table at 0x1ffe, behind the world. It draws the sky dome; godot/sky.gd"
+ },
+ "0x801aeaea": {
+  "name": "sky_on",
+  "kind": "data",
+  "evidence": "render_walk draws class 0xf0 only while it is set (0x80040fb0). game_main starts it at 1 (0x80035610); a class-0xe3 zone that holds the player writes its +0x3b to it, at load (0x8004576c) and every frame (0x8004a99c)"
+ },
+ "0x801aeae9": {
+  "name": "zone_view_byte",
+  "kind": "data",
+  "evidence": "written beside sky_on by the class-0xe3 zones, from their +0x3a (13, 12 or 9 across the game; game_main starts it at 13); view_matrix_build reads it at 0x80034de0 and 0x80034e04"
+ },
+ "0x80081c20": {
+  "name": "compass_models",
+  "kind": "data",
+  "evidence": "0x24-byte records, 0xff-terminated, that draw_model_cell_lit draws: +0 on, +2 the lighting class, +4 the model, +8..+0xc a scale, +0x10..+0x14 (290, 32, 50) -- the top-right corner of the 320x240 screen, where the N of the compass stands in every screenshot -- +0x18 the pitch and +0x1a the facing with a drift. render_frame switches them by the bits of 0x801b25de"
+ },
+ "0x801a9178": {
+  "name": "side_ot",
+  "kind": "data",
+  "evidence": "two 8-entry ordering tables, one per buffer, cleared by frame_begin_3d with ClearOTagR(.., 8); render_walk hands the current one to the model drawers at 0x1f80000c, sub_80039428 files a face there when its depth argument is positive, and frame_end_3d links it into the main table at index 0x1ffe -- behind everything the world draws. The sky goes there"
  }
 }

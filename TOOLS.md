@@ -567,6 +567,13 @@ and close again once nobody is in the doorway (`godot/doors.gd`). Each is its
 own node in `objectsNN.gltf`, `dNNN` by slot, and `doorsNN.json` carries what
 the swing needs. `emu/bp24.lua` records a door frame by frame for checking it.
 
+**The sky in the port.** `level3d.py` writes the level's class-0xf0 object --
+the dome, model 44 of the resident bank -- as `skyNN.gltf`, and its class-0xe3
+zones as `skyNN.json`; `godot/sky.gd` keeps the dome on the camera, behind
+everything, and shows it while the zone the player stands in says so
+(FORMATS.md, "The sky"). `shots.py inv1` is the check: the red clouds over
+level 0's horizon, where they are in the game's screenshot.
+
 **`shots.py`** — the port rendered from where each snapshot's screenshot was
 taken, beside the screenshot.
 

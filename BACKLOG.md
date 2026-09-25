@@ -242,13 +242,15 @@ Level 0 uses `0x25` in 41 cells and `0x31` in 4, so those two are reachable.
 
 ## 4a. The sky, now that distance darkening is in
 
-The depth cue is ported (FORMATS.md, "How far the game draws, and how it
-darkens"). What the game draws beyond it is not: `out/snap/inv1.png`, looking
-north-east across level 0, has a dark red clouded sky over the horizon where
-`b.png`, looking north, is black. Find what draws it -- `render_frame`'s calls
-before the cells (`0x80034bf4`, `0x80035630`, `0x80043858`) are the place to
-start -- and whether it is a texture in VRAM or a model. The note below was
-the plan for the cue, kept for how it went:
+**Found and drawn.** It is a model: `render_walk` draws an object of class
+`0xf0` -- type 265, model 44 of the resident bank, a dome -- on the eye and at
+the back of the ordering table, while zones of class `0xe3` leave `sky_on` set
+(FORMATS.md, "The sky"). `godot/sky.gd` draws it and follows the zones. Still
+open: class `0xf2`, which level 4 places fifteen of (types 267 to 279) and
+which `render_walk` also sends to `draw_model_at_eye` through `0x8018faf4` --
+a backdrop of some other kind -- and what `0x801aeae9`, the zones' other byte
+(13, 12 or 9), does in `view_matrix_build`. The note below was the plan for
+the cue, kept for how it went:
 
 What the port needed:
 each vertex to carry its cell's lighting-class near and far (TEXCOORD_1 from

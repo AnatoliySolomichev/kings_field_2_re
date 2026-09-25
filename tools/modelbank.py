@@ -76,6 +76,29 @@ def models(path=FDAT):
     return out
 
 
+def load(index, path=FDAT):
+    """(flags, objects) of `model_table[index]`, parsed by tools/tmd.py.
+
+    The sky is one: `render_walk` draws a class-0xf0 object as
+    `model_table[type - 0xdd]`, and type 265 is index 44 -- the fifth model
+    here, a dome.
+    """
+    import tmd
+    raw, at, _n = block(path)
+    for i, off, size in models(path):
+        if i != index:
+            continue
+        data = raw[at + off:at + off + size]
+        o = tmd.find_tmd(data)
+        if o is None:
+            raise ValueError(f"model {index} holds no TMD")
+        data = data[o:]
+        _idv, flags, nobj = struct.unpack_from("<3I", data, 0)
+        return flags, [tmd.Obj(data, struct.unpack_from("<7i", data, tmd.HDR + 28 * k))
+                       for k in range(nobj)]
+    raise ValueError(f"model {index} is not in the bank")
+
+
 def check(ram=None, out=sys.stdout):
     ram = ram or os.path.join(ROOT, "out", "ram.bin")
     if not os.path.exists(ram):

@@ -1904,9 +1904,58 @@ world with one shader that works out `t` from the view depth and draws
 the game takes one per face, the mean of its three. `tools/shots.py b` shows
 the far wall's surroundings going to black, as the game's screenshot does.
 
-What it does not do is the sky: looking one way from level 0 the game draws a
-dark red, clouded sky above the black horizon (`out/snap/inv1.png`), and the
-port's background is flat black. BACKLOG.md, item 4a.
+The sky is not the cue's business; it is the next section.
+
+### The sky: a dome on the eye, at the back of the ordering table
+
+Looking north-east from level 0 the game draws a dark red, clouded sky over the
+black horizon (`out/snap/inv1.png`). It is an **object**. `render_walk` gives
+class `0xf0` a path of its own (`0x80040fac`): while `sky_on` (`0x801aeaea`) is
+set and `object_in_view` passes -- with +0x38 and +0x39 both 0x28, forty cells,
+it always does -- it draws `model_table[type - 0xdd]` through `draw_model_at_eye`
+(`0x800400ac`):
+
+```
+matrix       the record's angles at +0x24 (sub_800166f4) turned by the view
+             matrix -- and no + 0x800, which the ordinary path adds
+translation  (0, 0x64, 0), set before the angles and never replaced: the
+             model sits on the eye, 100 below it in view space, wherever
+             the player stands
+light        tile_look[+0x3b & 0x7f]: L at +0, colour at +0x50, BK at +0x64
+depth        0x1fff - +0x3a, and sub_80039428 (0x80039ca8) files every face
+             in the 8-entry side table render_walk hands it (0x801a9178,
+             cleared by frame_begin_3d) at that & 7; frame_end_3d links the
+             side table into the main one at 0x1ffe, so the dome is drawn
+             before anything the world puts in front of it
+```
+
+Levels 0 to 7 and 9 to 11 place one, always type 265 with +0x38..+0x3b =
+`28 28 00 3d`, and 25 places type 264. Type 265 is model 44 of the resident
+bank (`FDAT.T` entry 97 block 10, `tools/modelbank.py`): a textured, lit dome
+1000 across and 1250 high, 97 vertices and 96 faces, lit by class `0x3d`.
+
+**Zones switch it.** Class `0xe3` objects are rectangles of cells: each frame
+the interpreter's arm (`0x8004a954`) asks `player_in_rect` of the record's
+cell and +0x38 by +0x39 cells, and one that holds the player writes its +0x3a
+to `0x801aeae9` and its +0x3b to `sky_on` -- so the last in slot order wins,
+and the value stays when none does; `load_object_placement` does the same once
+at load (`0x8004576c`) and `game_main` starts `sky_on` at 1 (`0x80035610`).
+Level 0's three zones all say 1; level 3's whole-map zone says 0 and five
+smaller ones 1, level 7 turns it off in two small areas, and 8, 12 to 24 and
+26 have no dome at all.
+
+The port draws it (`godot/sky.gd`, `skyNN.gltf` and `skyNN.json` from
+`tools/level3d.py`): the dome follows the camera, and its shader pushes each
+vertex out along its own direction to just inside the far plane and writes no
+depth, so it shows only where nothing nearer was drawn -- the back of the
+ordering table by other means. `tools/shots.py inv1` puts the port's clouds
+where the game's are.
+
+The same records at `0x80081c20` that looked like a sky candidate are not: they
+are `draw_model_cell_lit`'s, two 0x24-byte entries switched by the bits of
+`0x801b25de`, their +0x18 the pitch and +0x1a the facing, and their
+translation (290, 32, 50) -- the top-right corner of a 320x240 screen, where
+the "N" of the compass stands in every screenshot.
 
 ### What the camera sees
 

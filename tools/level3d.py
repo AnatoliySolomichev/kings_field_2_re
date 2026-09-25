@@ -736,6 +736,82 @@ def build_objects_gltf(lv, out="out/godot"):
     return path
 
 
+# The sky. render_walk (0x80040ae4) gives an object of class 0xf0 a path of its
+# own: while sky_on (0x801aeaea) is set and object_in_view passes, it draws
+# model_table[type - 0xdd] through sub_800400ac -- the angles at +0x24 made a
+# matrix and turned by the view, but **no translation but (0, 0x64, 0), in view
+# space**: the model sits on the eye, 100 below it, whatever the player's
+# position -- lit by the class at +0x3b, its faces filed in the side ordering
+# table that frame_end_3d links in at 0x1ffe, so everything else is drawn over
+# it. Levels
+# 0-7 and 9-11 place one, type 265, which is model 44 of the resident bank: a
+# textured dome 1000 across and 1250 high, 97 vertices and 96 faces, lit by
+# class 0x3d.
+#
+# Class 0xe3 objects switch it: each frame the interpreter (0x8004a954) asks
+# player_in_rect of each one's cell rectangle, +0x38 by +0x39 cells, and one
+# that holds the player writes its +0x3a to 0x801aeae9 and +0x3b to sky_on, so
+# the last in slot order wins; game_main starts sky_on at 1 (0x80035610).
+SKY_CLASS = 0xF0
+SKY_MODEL_BASE = 0xDD        # model_table[type - 0xdd], at 0x80040fe0
+SKY_LIFT = 0x64              # the view-space translation, 0x800400e8
+ZONE_CLASS = 0xE3
+
+
+def build_sky_gltf(lv, out="out/godot"):
+    """The sky dome as `skyNN.gltf`, and the zones that switch it as `skyNN.json`."""
+    import json
+    import modelbank
+    import objload
+    load = objload.Load(lv)
+    recs = [r for _k, r in sorted(load.recs.items())]
+    zones = [[r["x"] >> 11, r["z"] >> 11, r["tail"][0], r["tail"][1],
+              r["tail"][2], r["tail"][3]] for r in recs if r["cls"] == ZONE_CLASS]
+    skies = [r for r in recs if r["cls"] == SKY_CLASS]
+    gl = f"{out}/sky{lv:02d}.gltf"
+    doc = {"zones": zones, "lift": SKY_LIFT, "sky": bool(skies)}
+    with open(f"{out}/sky{lv:02d}.json", "w") as f:
+        json.dump(doc, f, separators=(",", ":"))
+    if not skies:
+        for leftover in (gl, gl[:-5] + ".bin"):
+            if os.path.exists(leftover):
+                os.remove(leftover)
+        print(f"sky: none on level {lv}, {len(zones)} zones")
+        return None
+    o = skies[0]
+    index = o["type"] - SKY_MODEL_BASE
+    _flags, objs = modelbank.load(index)
+    look = lighting.table()
+    llm, lcm, bk = light_class(look, o["tail"][3] & 0x7F, 0)
+    rx, ry, rz = o["angles"]
+    m = _rot3(rx, ry, rz)              # no + 0x800 on this path
+
+    def place(v, m=m):
+        x, y, z = v
+        return ((m[0][0] * x + m[0][1] * y + m[0][2] * z) / UNIT,
+                -(m[1][0] * x + m[1][1] * y + m[1][2] * z) / UNIT,
+                -(m[2][0] * x + m[2][1] * y + m[2][2] * z) / UNIT)
+
+    groups = {}
+    emit_object(objs, place, lambda raw: shade(raw, llm, lcm, bk), groups)
+    g = gltf.Gltf()
+    mats = {}
+    vram = object_vram(lv)
+    prims = []
+    ntri = 0
+    for key, (pos, nrm, uv, col, fogs) in groups.items():
+        p = g.primitive(pos, nrm, uv, col, fogs)
+        p["material"] = material_for(g, mats, out, lv, key, vram)
+        prims.append(p)
+        ntri += len(pos) // 3
+    path, _n = g.write_nodes(gl, [("sky", prims, (0.0, 0.0, 0.0),
+                                   (0.0, 0.0, 0.0, 1.0))])
+    print(f"sky: slot {o['slot']}, type {o['type']} -> model {index}, "
+          f"{ntri} triangles, lit by class {o['tail'][3]:#x}, "
+          f"{len(zones)} zones -> {path}")
+    return path
+
+
 PROJECT = """config_version=5
 
 [application]
@@ -781,6 +857,7 @@ SCENE = """[gd_scene load_steps={load_steps} format=3]
 [ext_resource type="Script" path="res://cutscene.gd" id="14"]
 [ext_resource type="Script" path="res://scroll.gd" id="17"]
 [ext_resource type="Script" path="res://doors.gd" id="18"]
+[ext_resource type="Script" path="res://sky.gd" id="19"]
 {gallery_res}
 
 [sub_resource type="Environment" id="Env"]
@@ -820,6 +897,9 @@ script = ExtResource("18")
 
 [node name="Scroll" type="Node" parent="."]
 script = ExtResource("17")
+
+[node name="Sky" type="Node3D" parent="."]
+script = ExtResource("19")
 
 [node name="Ghost" type="Node3D" parent="."]
 script = ExtResource("5")
@@ -988,7 +1068,7 @@ def project(lv, out="out/godot", start=(57, 4)):
                        for i in range(len(pieces)))
     open(f"{out}/world.tscn", "w").write(
         SCENE.format(lv=lv, px=px, py=py, pz=pz, gallery_res=res,
-                     gallery_nodes=nodes, load_steps=11 + len(pieces)))
+                     gallery_nodes=nodes, load_steps=12 + len(pieces)))
     # The boot chain: the shell, the opening and the pad, which is where the
     # project now starts. world.tscn is still the level and boot.gd hands over
     # to it the way SLUS_002.55 hands over to GAME.EXE.
@@ -998,7 +1078,7 @@ def project(lv, out="out/godot", start=(57, 4)):
                  "cutscene.gd", "actors.gd", "levelup.gd",
                  "game.gd", "objects.gd", "escript.gd", "items.gd",
                  "damage.gd", "equip.gd", "objcoll.gd", "scroll.gd",
-                 "doors.gd"):
+                 "doors.gd", "sky.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening
@@ -1150,6 +1230,7 @@ if __name__ == "__main__":
         build_objects_gltf(lv)
         build_actors_gltf(lv)
         build_collision_gltf(lv)
+        build_sky_gltf(lv)
     project(lv)
     if "--no-check" not in sys.argv:
         verify()
