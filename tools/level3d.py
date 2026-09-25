@@ -148,7 +148,7 @@ def grid_of(lv):
 def build(lv, limit=None):
     grid = grid_of(lv)
     _flags, objs = tmd.load("RTMD", lv)
-    vram = rtim.vram(lv)
+    vram = object_vram(lv)
 
     mats = {}                                    # (tpage, clut) -> name
     verts, uvs, norms, faces = [], [], [], {}
@@ -213,7 +213,7 @@ def build_gltf(lv, out="out/godot", limit=None):
     """The level as glTF: baked lighting, nearest sampling, no engine lights."""
     grid = grid_of(lv)
     _flags, objs = tmd.load("RTMD", lv)
-    vram = rtim.vram(lv)
+    vram = object_vram(lv)
     look = open("out/tile_look.bin", "rb").read()
     g = gltf.Gltf()
     groups = {}
@@ -268,7 +268,7 @@ def build_gltf(lv, out="out/godot", limit=None):
     prims, ntri = [], 0
     for (tpage, clut), (pos, nrm, uv, col) in groups.items():
         name = f"tex_{tpage:04x}_{clut:04x}"
-        rel = page_texture(out, lv, tpage, clut, vram, "tex")
+        rel = page_texture(out, lv, tpage, clut, vram)
         m = (g.material(name, rel) if rel
              else g.plain(name + "_flat", (0.8, 0.75, 0.7, 1.0)))
         p = g.primitive(pos, nrm, uv, col)
@@ -288,7 +288,7 @@ def write(lv, out="out/godot", limit=None):
     verts, uvs, norms, faces, mats, vram, ncell = build(lv, limit)
     rels = {}
     for (tpage, clut), name in mats.items():
-        rels[name] = page_texture(out, lv, tpage, clut, vram, "tex")
+        rels[name] = page_texture(out, lv, tpage, clut, vram)
         if rels[name] is None:                   # 8-bit or 15-bit page
             print(f"  note: {name} is not a 4-bit page, skipping its texture")
 
@@ -363,44 +363,19 @@ def build_collision_gltf(lv, out="out/godot"):
     return path
 
 
-SNAP_VRAM = "out/snap/b.vram"
-
-
 def object_vram(lv):
-    """VRAM for the objects, which is not all in `RTIM.T[lv]`.
+    """What the GPU holds on level `lv`: `FDAT.T` entry 96, then `RTIM.T[lv]`.
 
-    The placed objects want texture pages `0x0b` to `0x0f` — VRAM from x=704
-    across — for 57 119 of their primitives, and `RTIM.T[lv]` leaves that whole
-    region empty. In the running game it is full, so something else loads it and
-    **we have not found what**: the bytes are not a verbatim run in any of the
-    nine archives.
-
-    Until that is found, those pages are taken from a RAM snapshot. This is not
-    a reading and it is not fitted either — it is the game's own VRAM, obtained
-    by looking rather than by understanding — and it is why objects that came
-    out white now have their textures. Anything built without `out/snap/b.vram`
-    still gets the white, which is the honest failure rather than a silent one.
+    The objects sample pages `0x0b` to `0x0f`, which `RTIM.T` leaves empty,
+    and for a long time this filled them from a level-0 RAM snapshot because
+    nothing on the disc seemed to hold them. Entry 96 does: `init_level_state`
+    streams it into VRAM once at game start, the same way `level_load` streams
+    each level's `RTIM.T` on top (tools/rtim.py, `level_vram`). Rebuilt that
+    way, the object pages match the snapshots on 776 955 of 782 320 halfwords,
+    the rest being frames of an animated water texture -- so the geometry, the
+    objects and the creatures all sample this now, on every level.
     """
-    v = bytearray(rtim.vram(lv))
-    if not os.path.exists(SNAP_VRAM):
-        return bytes(v)
-    snap = open(SNAP_VRAM, "rb").read()
-    filled = 0
-    for page in range(32):
-        x0, y0 = (page & 0xF) * 64, ((page >> 4) & 1) * 256
-        here = any(v[(r * 1024 + c) * 2:(r * 1024 + c) * 2 + 2] != b"\0\0"
-                   for r in range(y0, y0 + 256, 8)
-                   for c in range(x0, x0 + 64, 4))
-        if here:
-            continue
-        for r in range(y0, y0 + 256):
-            a = (r * 1024 + x0) * 2
-            v[a:a + 128] = snap[a:a + 128]
-        filled += 1
-    if filled:
-        print(f"object textures: {filled} pages RTIM leaves empty, taken from "
-              f"{SNAP_VRAM} — the archive that loads them is not found yet")
-    return bytes(v)
+    return bytes(rtim.level_vram(lv))
 
 
 # What this run has written already, so the objects, the creatures and the
@@ -408,7 +383,7 @@ def object_vram(lv):
 _written = set()
 
 
-def page_texture(out, lv, tpage, clut, vram, kind):
+def page_texture(out, lv, tpage, clut, vram):
     """One page under one CLUT as a PNG; its path relative to `out`, or None.
 
     **The path carries the level and the VRAM it was cut from**, because the
@@ -422,18 +397,19 @@ def page_texture(out, lv, tpage, clut, vram, kind):
     the ground. 9 of level 0's 100 object textures were another level's, or
     the geometry's.
 
-    `kind` says which VRAM: "tex" is `RTIM.T` alone, which the level's own
-    geometry is drawn with, and "obj" is `object_vram`, which fills the pages
-    RTIM leaves empty from a snapshot. They differ on exactly those pages, so
-    they cannot share a file either: the geometry's copy of page 0x0d under
-    CLUT 0x7a88 is transparent throughout, and the objects' is not.
+    One VRAM serves the geometry, the objects and the creatures alike --
+    `object_vram`, the disc's two streams -- so one file per page and CLUT is
+    enough within a level. There used to be two, when the geometry saw
+    `RTIM.T` alone and the objects a snapshot's pages, and they disagreed:
+    level 0's water sheet sampled a CLUT only the snapshot had, and was
+    invisible.
 
     Pages at 8 or 16 bits a pixel are not written -- `page4` reads four -- and
     get None, for a plain material rather than one naming a missing file.
     """
     if (tpage >> 7) & 3:
         return None
-    rel = f"tex/lv{lv:02d}/{kind}_{tpage:04x}_{clut:04x}.png"
+    rel = f"tex/lv{lv:02d}/tex_{tpage:04x}_{clut:04x}.png"
     path = f"{out}/{rel}"
     if path not in _written:
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -548,7 +524,7 @@ def build_actors_gltf(lv, out="out/godot"):
         for (tpage, clut), (pos, nrm, uv, col) in groups.items():
             name = f"tex_{tpage:04x}_{clut:04x}"
             if name not in mats:
-                rel = page_texture(out, lv, tpage, clut, vram, "obj")
+                rel = page_texture(out, lv, tpage, clut, vram)
                 mats[name] = (g.material(name, rel, double=True) if rel
                               else g.plain(name + "_flat", (0.8, 0.75, 0.7, 1.0)))
             pr = g.primitive(pos, nrm, uv, col)
@@ -660,7 +636,7 @@ def build_objects_gltf(lv, out="out/godot"):
     prims, ntri = [], 0
     for (tpage, clut), (pos, nrm, uv, col) in groups.items():
         name = f"tex_{tpage:04x}_{clut:04x}"
-        rel = page_texture(out, lv, tpage, clut, vram, "obj")
+        rel = page_texture(out, lv, tpage, clut, vram)
         m = (g.material(name, rel, double=True) if rel
              else g.plain(name + "_flat", (0.8, 0.75, 0.7, 1.0)))
         p = g.primitive(pos, nrm, uv, col)

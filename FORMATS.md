@@ -709,18 +709,54 @@ The one type still at nothing is 309, which is 704 primitives of mode `0x30` —
 untextured gouraud, and with `ilen` 4 where the format wants 6. It draws nothing
 either way, since untextured primitives are skipped.
 
-### Where the object textures are not
+### Where the object textures are: `FDAT.T` entry 96
 
 The placed objects name texture pages `0x0b` to `0x0f` — VRAM from x=704 across
 — on 57 119 of their primitives, and `RTIM.T[lv]` leaves that region entirely
 empty. Every one of those primitives therefore drew white, which is what a
 player saw as "big white things where the grass should be".
 
-A RAM snapshot shows all 32 pages full while the game runs, so the region is
-loaded by something we have not found. It is not a verbatim copy of any of the
-nine archives — searching for the first rows of it finds nothing — so the load
-packs or rearranges. `tools/level3d.py` fills those pages from a snapshot in the
-meantime and says so when it does.
+**Withdrawn: "it is not a verbatim copy of any of the nine archives, so the
+load packs or rearranges."** It is verbatim, in `FDAT.T` entry 96, and the
+search missed it because it looked for whole rows of a page while the entry
+stores a page as 64x64-pixel squares. Short samples found it: 39 of 159
+sixteen-byte pieces of those pages turned up in the one entry.
+
+Entry 96 is not a chain of blocks like its neighbours. It is **a `LoadImage`
+stream in exactly `RTIM.T`'s format** — a rect written twice, then its
+halfwords — 556 blocks: CLUTs of 16x1 and 64x64-pixel pieces of the object
+pages. The code that sends it:
+
+```
+init_level_state   vram_stream(4, 96)                0x80017794
+vram_stream        queue_vram_stream(archive, entry, fdat_load_buffer,
+                                     vram_stream_ready)   0x80018c60
+queue_vram_stream  res_queue(0x40, ...)              0x80019e48
+res_upload_vram    for a request of type 0x40 whose +0x10 the callback has
+                   set: compare the two rects, LoadImage, at most 0x8000
+                   bytes a frame, until a zero size or x = 0xffff
+```
+
+and `level_load` calls `vram_stream(3, level)` — archive 3 is `RTIM.T` — so a
+level's VRAM is entry 96 from game start with the level's own blocks on top.
+`tools/rtim.py`'s `level_vram` builds exactly that, and against the 12
+snapshots with a level loaded it matches **2 865 923 of 2 998 544** halfwords
+the two streams write, and **776 955 of 782 320** on the object pages. What is
+left is animation and the interface: entry 96 writes seven frames of a water
+texture into the same 8x32 rect at (1016, 96), and a snapshot holds whichever
+frame was showing.
+
+So nothing on the object pages is borrowed from a snapshot any more, and every
+level has its objects' textures. It also settles something that looked like a
+separate problem: level 0's geometry draws **its water** from page `0x0f` — a
+flat sheet of 296 triangles at Y = -12160 — with a CLUT that only entry 96
+writes, so while the geometry was drawn from `RTIM.T` alone the sea was
+transparent. And twelve textures on page `0x0b` that the snapshot fill had got
+wrong -- it copied a page only when `RTIM.T` left it entirely empty, and the
+CLUT page was not -- went from 56 000 to 65 000 pixels off the game to 3 022.
+
+How the water is animated -- what sends the other frames after the first, or
+cycles them -- is not read.
 
 ### The opening scene is a movie, and this is what starts it
 

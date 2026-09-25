@@ -19,16 +19,25 @@ eleven blocks are:
 
 | block | length | what |
 | --- | --- | --- |
-| 0 | 7200 | the **object type table**, 300 rows of 24; byte +0 is the behaviour opcode and the render class |
+| 0 | 7200 | the **object type table**, 300 rows of 24; byte +0 is the class `load_object_placement` switches on |
+| 1 | 3264 | the weapon table |
+| 2 | 2112 | the armour table |
 | 3 | 1200 | the **level table**, 100 rows of 12, the last one zero; HP, MP, a stat gain and the experience for the next level |
 | 4 | 2304 | the **spell table**, 96 records of 24 |
 | 5 | 2304 | the **lighting table's source**, 48 entries of 48 bytes |
+| 10 | 102900 | the **resident model bank**, `model_table[40..109]` |
 
-and the other eight are not identified yet. The two unnamed per-level blocks
-are at least *placed*: `level_load` copies them to `0x8019175c` and
-`0x801ba6fc`, which abut `object_table` and `story_flags`. Naming one of them is a matter of
-finding what reads it, and `out/rdis/game.json` answers that: every routine's
-`reads` list is in there.
+`init_level_state` copies all eleven in order, which is where each one's
+address comes from; blocks 7 and 9 are placed (`0x801b0fec`, `0x80116154`) and
+not yet read.
+
+**Entry 96 is not a chain.** It is the resident textures: a stream of
+`LoadImage` blocks in `RTIM.T`'s format, sent into VRAM once at game start,
+holding the objects' texture pages. A search for it by whole page rows found
+nothing, because it stores a page as 64x64-pixel squares.
+
+Every block of a level's `3n + 1` entry is identified now: the entity records,
+the actor table, 32 more type rows, the placement, the props and the map.
 """
 import collections
 import json
@@ -64,6 +73,13 @@ KNOWN = {
              "the counts exactly. 0x80060800 expands it into 0x80198468 at "
              "startup and 0x800608ec looks an id up there -- which is what "
              "script_interpreter calls for an entity that is not a talker",
+    (97, 1): "the weapon table, copied whole to weapon_table by "
+             "init_level_state (tools/equip.py)",
+    (97, 2): "the armour table, copied whole to armour_table by "
+             "init_level_state (tools/equip.py)",
+    (97, 10): "the **resident model bank** -- a count of 70 and that many "
+              "length-prefixed models, copied to 0x800aedc4 and registered as "
+              "model_table[40..109] (tools/modelbank.py)",
     (97, 5): "the **lighting table's source**, 48 entries of 48 bytes, which "
              "light_table_reset expands into tile_look's 108-byte records at "
              "the top of every frame -- the last 16 of its 64 entries come "
@@ -84,16 +100,22 @@ PER_LEVEL = {
             "block starts at 4804 (tools/entities.py, tools/escript.py)",
     (1, 1): "the actor table -- 200 records of 16 (tools/actors.py)",
     (1, 3): "the object placement -- 350 records of 24 (tools/placement.py)",
-    (1, 4): "2048 bytes of tile shapes, copied to 0x801e4464",
-    # The two that are not identified are at least *placed*: level_load copies
-    # each to a fixed address, and both sit immediately before a table that is
-    # known, which is worth writing down even though nothing has been found
-    # reading either of them yet.
-    (1, 2): "copied to 0x8019175c by level_load -- which is exactly 0x300 "
-            "below object_table, so it abuts it. Nothing has been found "
-            "reading it",
-    (1, 5): "copied to 0x801ba6fc by level_load, 0x28c below story_flags. "
-            "Nothing has been found reading it",
+    (1, 4): "the level's own props -- 128 records of 16 that level_props_init "
+            "unpacks into level_props (tools/props.py)",
+    (1, 2): "**32 more rows of object_type_table**, types 300 to 331, copied "
+            "to 0x8019175c, which is the table's base plus 7200 "
+            "(tools/objops.py)",
+    (1, 5): "the map the game draws -- 160 rectangles of x, z, width and "
+            "height in half cells, copied to 0x801ba6fc (tools/levelmap.py)",
+}
+
+# Shared entries that are not chains of blocks, by what reads them.
+ENTRIES = {
+    96: "**the resident textures** -- a stream of LoadImage blocks, each a "
+        "rect written twice and its halfwords, the format RTIM.T uses. "
+        "init_level_state streams it into VRAM once at game start "
+        "(vram_stream(4, 96), then res_upload_vram), and it holds the "
+        "objects' texture pages 0x0b-0x0f and their CLUTs (tools/rtim.py)",
 }
 
 
@@ -119,7 +141,7 @@ def kind(i):
     if i < LEVELS * 3:
         return ("the grid", "the entities and placement",
                 "the level's own code")[i % 3] + f", level {i // 3}"
-    return "shared"
+    return "shared" + (f": {ENTRIES[i]}" if i in ENTRIES else "")
 
 
 def show(which=None, out=sys.stdout):
@@ -130,7 +152,7 @@ def show(which=None, out=sys.stdout):
             continue
         raw = a.raw(i)
         cs = chain(raw)
-        if which is None and not cs:
+        if which is None and not cs and i not in ENTRIES:
             continue
         print(f"\n  entry {i:3d}  {len(raw):7d} bytes  {kind(i)}"
               f"  -- {len(cs)} block{'s' if len(cs) != 1 else ''}", file=out)

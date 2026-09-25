@@ -1886,7 +1886,7 @@
  "0x80018cd0": {
   "name": "res_upload_vram",
   "kind": "code",
-  "evidence": "the frame's fourteenth call. Acts when the request at res_request has type 0x40 and its +0x10 is 1, and what it does is LoadImage(request+4, data) and DrawSync -- it pushes a texture into VRAM. Named the sound task at first, from its neighbour"
+  "evidence": "the frame's fourteenth call. Acts when the request at res_request has type 0x40 and its +0x10 is 1, and what it does is LoadImage(request+4, data) and DrawSync -- it pushes a texture into VRAM. Named the sound task at first, from its neighbour. The data is a stream of blocks, each a 16-byte header -- the RECT written twice, which it compares, stopping at a mismatch or a zero width or height -- and w*h halfwords; x = 0xffff ends it too. It sends at most 0x8000 bytes a frame, splitting a block's rows to do so. FDAT.T entry 96 and RTIM.T are both in this format"
  },
  "0x80015a48": {
   "name": "res_upload_spu",
@@ -2217,5 +2217,25 @@
   "name": "view_table",
   "kind": "data",
   "evidence": "25x25 bytes centred on the camera, one per cell; the snapshots hold 0, 8, 26 and 30 in it. Bit 2 (value 2) is what a placed object's +0 selects"
+ },
+ "0x80018c60": {
+  "name": "vram_stream",
+  "kind": "code",
+  "evidence": "(archive, entry): queue_vram_stream(archive, entry, fdat_load_buffer, vram_stream_ready). init_level_state calls it once with (4, 96) -- FDAT.T entry 96, the resident textures -- and level_load with archive 3 for each level's RTIM.T. The two streams rebuild the snapshots' VRAM on 2 865 923 of 2 998 544 halfwords, the rest animation and interface (tools/rtim.py --check)"
+ },
+ "0x80019e48": {
+  "name": "queue_vram_stream",
+  "kind": "code",
+  "evidence": "(archive, entry, buffer, callback): reads the entry's size through read_entry_a and hands res_queue a request of type 0x40 -- the ori in the delay slot at 0x80019ec0 runs on both paths -- which is the type res_upload_vram acts on"
+ },
+ "0x80019bbc": {
+  "name": "res_queue",
+  "kind": "code",
+  "evidence": "(type, position, size, buffer, callback): fills the next 0x2c-byte request in the ring at 0x801c1724 -- +0 the type, +0x14 the disc position, +0x1c the buffer, +0x20 the size in sectors, +0x24 the callback -- wrapping to 0x801c1304, and starts the read when the request is the current one"
+ },
+ "0x80018c54": {
+  "name": "vram_stream_ready",
+  "kind": "code",
+  "evidence": "three instructions: sets +0x10 of the request to 1, which is the flag res_upload_vram waits for before it sends a stream to the GPU"
  }
 }

@@ -489,12 +489,15 @@ keyhole plate the notes called it, and that `MO.T[128]` — the thing hanging in
 the air where the game hands you a sword — is a sword.
 
 **`rtim.py`** — a level's textures. Not TIM files: blocks to be pushed into
-video memory, each headed by its rect written twice.
+video memory, each headed by its rect written twice. `FDAT.T` entry 96 is the
+same kind of stream, sent once at game start, and it holds the objects' pages;
+`level_vram` lays the level's blocks over it, the order the game uses.
 
 ```
 python3 tools/rtim.py 0               the blocks
 python3 tools/rtim.py 0 vram          rebuild VRAM (looks like noise, correctly)
 python3 tools/rtim.py 0 page 7 0x7a00 one page through a CLUT -- brick and clay
+python3 tools/rtim.py --check         the rebuilt VRAM against every snapshot
 ```
 
 **`level3d.py`** — the whole level as glTF, textures and a Godot project.
@@ -503,10 +506,11 @@ Level 0 comes out as 4637 cells, 42 788 triangles and 13 textures.
 Textures go to `out/godot/tex/lv<NN>/`, one folder a level, because a page and
 CLUT are different pixels on every level. They used to share one folder, written
 only when missing, and after levels 1 to 14 had been built level 0's trees wore
-another level's wall of statues. `tex_` files are cut from `RTIM.T` alone, for
-the geometry; `obj_` from `object_vram`, for the objects, the creatures and the
-gallery. The flat `tex/tex_*.png` files an older build left behind are named
-only by the other levels' old glTFs, until those levels are built again.
+another level's wall of statues. Everything -- geometry, objects, creatures,
+gallery -- is cut from the one VRAM the disc's two streams build, so there is
+one file per page and CLUT. The flat `tex/tex_*.png` files an older build left
+behind are named only by the other levels' old glTFs, until those levels are
+built again.
 
 ```
 python3 tools/level3d.py 0

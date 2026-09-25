@@ -122,7 +122,7 @@ def build(out="out/godot", archive="MO", lv=0, spacing=None, per_row=None):
             name = f"tex_{tpage:04x}_{clut:04x}"
             # The objects' own copy of the page, the one the world uses, so a
             # model looks the same here as standing in the level.
-            rel = level3d.page_texture(out, lv, tpage, clut, vram, "obj")
+            rel = level3d.page_texture(out, lv, tpage, clut, vram)
             # Pages at 8 or 16 bits a pixel are not written -- `page4` reads four
             # -- so those primitives get a plain material rather than one naming
             # a file that is not there, which Godot reports once per primitive.

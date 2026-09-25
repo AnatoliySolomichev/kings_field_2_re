@@ -148,6 +148,13 @@ of 82 types above 95 % usable primitives to **81 of 82**. Only type 309 is left,
 704 primitives of untextured gouraud with the wrong `ilen`, and nothing draws it
 anyway.
 
+**Found: `FDAT.T` entry 96.** The object textures are a `LoadImage` stream in
+`RTIM.T`'s format that `init_level_state` sends into VRAM at game start, and
+`tools/level3d.py` now builds every level's VRAM from it and the level's own
+`RTIM.T` -- no snapshot. FORMATS.md, "Where the object textures are". What is
+left: the water on page `0x0f` is seven frames of one rect, and what animates
+it is not read. The note below is kept for how it was looked for.
+
 **The object textures are not in `RTIM.T`.** The placed objects want texture
 pages `0x0b` to `0x0f` — VRAM from x=704 across — for **57 119 of their
 primitives**, and `RTIM.T[0]` leaves that whole region empty, so every one of
@@ -159,6 +166,10 @@ rearranged load. Until it is found, `tools/level3d.py` takes those pages from
 understanding, and labelled as such in `object_vram`. Building without a
 snapshot still draws white, which is the honest failure rather than a silent
 one.
+
+**Answered, and it is the sea.** The four materials below sample entry 96's
+CLUTs; the flat sheet is level 0's water, drawn with a frame of the animated
+water texture at (1016, 96), and the port draws it now. Kept for the record:
 
 **The level's own geometry reaches into those pages too, and draws nothing
 there.** Level 0's geometry names four page-and-CLUT pairs whose CLUTs `RTIM.T[0]`
