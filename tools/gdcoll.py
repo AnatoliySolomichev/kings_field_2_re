@@ -77,6 +77,16 @@ def export(lv, out="out/godot"):
         # is a product shifted right by 12, so a rounding difference between
         # this and a float sine lands in the position as a whole unit.
         "sin": list(movement._table()),
+        # And the objects that stop you (movement.solids): slot, 0 for a circle
+        # or 1 for a rectangle, its two sizes, its byte +3, x, y, z, its top,
+        # its angle and the radius the push-out goes round. With them the
+        # occupancy count of every cell, byte +2 >> 2 -- collide_query looks at
+        # objects only where it is not zero -- and ratan2's table.
+        "objects": [[o["slot"], 0 if o["kind"] == "circle" else 1, o["a"], o["b"],
+                     o["flags"], *o["pos"], o["top"], o["ang"], o["push"]]
+                    for o in movement.solids(lvl)],
+        "occ": [lvl.cell(cx, cz)[2] >> 2 for cz in range(W) for cx in range(W)],
+        "ratan": list(movement.ratan_table()),
     }
     os.makedirs(out, exist_ok=True)
     path = f"{out}/coll{lv:02d}.json"
@@ -135,14 +145,15 @@ def stepcheck(lvl, n=400):
 
     Every frame of the logged walking (`out/lua_bp16.log`) where the step the
     Python model takes is not the plain one -- refused, shortened, slid -- up to
-    `n`, then a few plain ones. The GDScript copy must land on the same spot.
+    `n`, then up to `n / 2` that run into an object, then a few plain ones. The
+    GDScript copy must land on the same spot.
     """
     try:
         import replay
     except Exception:
         return []
     rows, _binds = replay.load()
-    odd, plain = [], []
+    odd, plain, objected = [], [], []
     for r, nxt in zip(rows, rows[1:]):
         if r["lv"] != lvl.lv or nxt["f"] != r["f"] + 1:
             continue
@@ -155,10 +166,13 @@ def stepcheck(lvl, n=400):
             straight = (p[0] + ((movement.game_cos(ang) * dist) >> 12),
                         p[2] + ((movement.game_sin(ang) * dist) >> 12))
             case = [p[0], p[1], p[2], ang, dist, q[0], q[2]]
-            (plain if (q[0], q[2]) == straight else odd).append(case)
-        if len(odd) >= n:
+            if movement.query_all(lvl, straight[0], p[1], straight[1])[2]:
+                objected.append(case)
+            else:
+                (plain if (q[0], q[2]) == straight else odd).append(case)
+        if len(odd) >= n and len(objected) >= n // 2:
             break
-    return odd[:n] + plain[:n // 8]
+    return odd[:n] + objected[:n // 2] + plain[:n // 8]
 
 
 def dircheck(out="out/godot", n=400):

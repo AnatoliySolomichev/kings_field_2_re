@@ -2302,5 +2302,30 @@
   "name": "SetFogFar",
   "kind": "code",
   "evidence": "PSY-Q's shape: DQA = -(320 * a) / h, DQB = 0x1400000, so the automatic depth cue is 1.25 * (1 - a / SZ). fog_range_set is its only caller in the drawing, with h = 200"
+ },
+ "0x80074380": {
+  "name": "ratan2",
+  "kind": "code",
+  "evidence": "the PlayStation library’s ratan2(y, x): the smaller of |y| and |x| over the larger, scaled to 1024, indexes a 1025-entry table at 0x8009594c; the octant is put back with 0x400 -, 0x800 - and a negation, 0 for (0, 0). player_horizontal takes the bearing of a step with it for the rectangle slide and the push-out; transcribed as movement.ratan2 and KFCollision.ratan2, checked by the 447 object frames of the recording"
+ },
+ "0x80033d84": {
+  "name": "collide_target",
+  "kind": "code",
+  "evidence": "what collide_query last ran into, for whoever asked: the player (mask bit 0x80) with radius 0x320 and height 0x6a4, else the creature at [0x801e648c] (its +0x2c position, +0x1c radius, +0x1e height), else the object at collide_object (its +0x14 position; radius the row’s +4 scaled by +0x38 over 128 on byte +3 bit 0x10, the row’s +0x10 on bit 4 with +0xe at 0x801e64b4, else the row’s +4; height the row’s +8), into 0x801e64a0.. and 0x801e64b0/b2. player_horizontal’s push-out goes round it at radius + 0x370"
+ },
+ "0x801e64a0": {
+  "name": "collide_target_pos",
+  "kind": "data",
+  "evidence": "four words: the position collide_target (0x80033d84) found, x y z and a fourth"
+ },
+ "0x801e64b0": {
+  "name": "collide_target_radius",
+  "kind": "data",
+  "evidence": "a half: the radius collide_target found; the half after it, 0x801e64b2, is the height and 0x801e64b4 a rectangle’s other half-extent"
+ },
+ "0x8009594c": {
+  "name": "ratan_table",
+  "kind": "data",
+  "evidence": "1025 halfwords, ratan2’s arctangent table, 0 to 0x200 over a ratio of 0 to 1024"
  }
 }

@@ -37,6 +37,10 @@ var radius := 800
 var body := 1700
 var isqrt_table := PackedInt32Array()
 var sin_table := PackedInt32Array()
+var ratan_table := PackedInt32Array()
+var occ := PackedInt32Array()        # each cell's occupancy count, byte +2 >> 2
+var objects := []                    # [slot, 0 circle / 1 rect, a, b, byte +3,
+                                     #  x, y, z, top, angle, push radius]
 
 
 func load_from(path: String) -> bool:
@@ -56,6 +60,12 @@ func load_from(path: String) -> bool:
 		isqrt_table = PackedInt32Array(d["isqrt"])
 	if d.has("sin"):
 		sin_table = PackedInt32Array(d["sin"])
+	if d.has("ratan"):
+		ratan_table = PackedInt32Array(d["ratan"])
+	if d.has("occ"):
+		occ = PackedInt32Array(d["occ"])
+	if d.has("objects"):
+		objects = d["objects"]
 	return true
 
 
@@ -484,6 +494,111 @@ func _notch(f: int, tx: int, tz: int, a3: int, a: Array) -> bool:
 	if int(a[1]) + a3 < u and v < int(a[2]) - a3:
 		return false
 	return not (u < int(a[0]) - a3 or int(a[3]) + a3 < v)
+
+
+# -- the objects: what the player's 0x31 asks after the tiles ----------------
+#
+# collide_query (0x80033f38) goes on to the things in the level only where the
+# cell under the query has an occupancy count, which load_object_placement
+# gives every cell within an object's radius + 0x800. Then object_collide
+# (0x80045ac8) walks the slots in order and answers with the first one hit, and
+# the mask gains bit 0x20. The list is movement.solids' -- present objects whose
+# type row gives them a shape -- as tools/gdcoll.py writes it.
+const OBJECT_BIT := 0x20
+
+
+# 0x80074380, the library's ratan2 over its 1025-entry table.
+# @orig game:0x80074380 ratan2  status:transcribed
+func ratan2(y: int, x: int) -> int:
+	var negx := x < 0
+	var negy := y < 0
+	x = absi(x)
+	y = absi(y)
+	if x == 0 and y == 0:
+		return 0
+	var v := 0
+	if y < x:
+		var t := y / (x >> 10) if (y & 0x7FE00000) != 0 else (y << 10) / x
+		v = ratan_table[t]
+	else:
+		var t := x / (y >> 10) if (x & 0x7FE00000) != 0 else (x << 10) / y
+		v = 0x400 - ratan_table[t]
+	if negx:
+		v = 0x800 - v
+	return -v if negy else v
+
+
+# 0x80016ec8 and the height test it shares with in_oriented_rect: a thing at
+# py whose top is `top` above its feet against one at y whose top is `own`
+# above; Y grows downward.
+func _heights(py: int, y: int, top: int, own: int) -> bool:
+	if py < y:
+		return not (py < y - own)
+	return not (y < py - top)
+
+
+# @orig game:0x80016ec8 in_range  status:transcribed
+func in_range(px: int, py: int, pz: int, x: int, y: int, z: int, r: int,
+		top: int, own: int) -> int:
+	var dx := px - x
+	if dx < -r or dx > r:
+		return -1
+	var dz := pz - z
+	if dz < -r or dz > r:
+		return -1
+	if not _heights(py, y, top, own):
+		return -1
+	var d := isqrt((dx >> 3) * (dx >> 3) + (dz >> 3) * (dz >> 3)) << 3
+	return -1 if d > r else d
+
+
+# 0x80016d3c: the offset to polar and back out along the rectangle's own axes.
+# @orig game:0x80016d3c in_oriented_rect  status:transcribed
+func in_oriented_rect(ang: int, px: int, py: int, pz: int, x: int, y: int,
+		z: int, a: int, b: int, top: int, own: int) -> int:
+	var ddx := (px - x) >> 3
+	var ddz := (pz - z) >> 3
+	var d := isqrt(ddx * ddx + ddz * ddz) << 3
+	var rel := (vec_angle(x - px, z - pz) & 0xFFFF) - _s16(ang) + 0x400
+	var lx := (game_cos(rel) * d) >> 12
+	var lz := (game_sin(rel) * d) >> 12
+	if lx < -a or lx > a or lz < -b or lz > b:
+		return -1
+	return d if _heights(py, y, top, own) else -1
+
+
+# 0x80045ac8: the index in `objects` of the first one (x, y, z) runs into.
+# @orig game:0x80045ac8 object_collide  status:transcribed
+func object_collide(x: int, y: int, z: int) -> int:
+	for i in objects.size():
+		var o: Array = objects[i]
+		var hit := -1
+		if int(o[1]) == 0:
+			hit = in_range(o[5], o[6], o[7], x, y, z, int(o[2]) + radius, o[8], body)
+		else:
+			hit = in_oriented_rect(o[9], o[5], o[6], o[7], x, y, z,
+				int(o[2]) + radius, int(o[3]) + radius, o[8], body)
+		if hit != -1:
+			return i
+	return -1
+
+
+# collide_query with the player's 0x31, the objects included: the tile answer
+# with "object" the index hit or -1.
+# @orig game:0x80033f38 collide_query  status:partial -- tiles and objects; not the creatures (0x10)
+func query_all(x: int, y: int, z: int) -> Dictionary:
+	var q := query(x, y, z)
+	q["object"] = -1
+	var cx := x >> 11
+	var cz := z >> 11
+	if cx < 0 or cx >= W or cz < 0 or cz >= W or occ.is_empty() \
+			or occ[cz * W + cx] == 0:
+		return q
+	var i := object_collide(x, y, z)
+	if i != -1:
+		q["mask"] = int(q["mask"]) | OBJECT_BIT
+		q["object"] = i
+	return q
 
 
 func blocked(x: int, y: int, z: int) -> bool:

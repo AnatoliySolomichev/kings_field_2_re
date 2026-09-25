@@ -56,8 +56,11 @@ const SPEED_MAX_RUN := 400           # not the game's -- there is no run button,
                                      # for getting about the level quickly
 const FLY := 9000.0
 const STEP_UP := 0x500               # player_horizontal: the most a step may climb
-const PITCH_LIMIT := 0x2bc           # player_look stops the pitch here, either way
 const SHRINK := 0x16                 # and how much shorter each retry is
+const AROUND := 0x370                # how far past an object's radius the push-out goes
+const RECT_TRIES := [0x400, 0x400, 0x3E8, 0x3E8, 0x418, 0x418]   # the turns back
+                                     # along a rectangle's axes, one a try
+const PITCH_LIMIT := 0x2bc           # player_look stops the pitch here, either way
 const EYE := 1.6
 # Read off the code, no longer a guess. The game's clock is the vertical blank:
 # vblank_tick (0x80019570), hooked to root counter 3 by 0x8001a438, adds one to
@@ -320,31 +323,44 @@ func _tick(dir: Vector3) -> void:
 # game does when collide_query at the player's height says no. Before this the
 # port took every step and let player_vertical lift it onto whatever it had
 # walked into, so any wall could be climbed; a player noticed. Read off the
-# listing, and the same in tools/movement.py, where the recording checks it:
+# listing, in its order, and the same in tools/movement.py, where the
+# recording checks it:
 #
 #   clear                        take it
 #   nothing outside 0x207, the surface no more than 0x500 above the feet,
 #   player state 0               a step up: take it
-#   otherwise                    try it 0x16 shorter at a time, once; then slide,
-#                                the X part dropped, then only the X part; a
-#                                diagonal wall (bit 2) slides along the diagonal
-#                                the cell's rotation gives; else stay
+#   an object with a rectangle   (its byte +3 has bit 4) slide along one of its
+#                                axes: the step turned into its frame, one part
+#                                kept, turned back by its angle + 0x400, 0x3e8
+#                                or 0x418; six tries
+#   anything else in the way     go round it: the target moves to the object's
+#                                centre plus its radius plus 0x370, along the
+#                                bearing from the centre; a second thing in the
+#                                way and the player stays
+#   otherwise, a wall            try it 0x16 shorter at a time, once; then
+#                                slide, the X part dropped, then only the X
+#                                part; a diagonal wall (bit 2) slides along the
+#                                diagonal the cell's rotation gives; else stay
 #
 # Not here: the push tile_collision leaves at 0x801e6498/0x801e649c for a clear
-# step close to a wall, the ceiling test, objects and creatures.
-# @orig game:0x8002e3f8 player_horizontal  status:partial -- the refusal and the slides; tools/replay.py: 117 686 of 118 500 ground frames
+# step close to a wall, the ceiling test, and the creatures.
+# @orig game:0x8002e3f8 player_horizontal  status:partial -- tiles and objects; tools/replay.py: 118 207 of 118 500 ground frames
 func _horizontal(angle: int, dist: int) -> void:
 	var s4: int = (coll.game_cos(angle) * dist) >> 12
 	var s2: int = (coll.game_sin(angle) * dist) >> 12
 	var first_x := s4
+	var first_z := s2
 	var shrunk := false
 	var diag := false
+	var tries := 0
+	var pushes := 0
+	var rel := 0
 	var x := gx
 	var z := gz
 	for _i in 64:
 		var tx := x + s4
 		var tz := z + s2
-		var q := coll.query(tx, gy, tz)
+		var q := coll.query_all(tx, gy, tz)
 		var mask: int = int(q["mask"])
 		if mask == 0:
 			gx = tx
@@ -358,6 +374,37 @@ func _horizontal(angle: int, dist: int) -> void:
 				return
 			if not (mask & 2):
 				blocked = true
+		var oi: int = q["object"]
+		if oi != -1 and (int(coll.objects[oi][4]) & 4) and tries < RECT_TRIES.size():
+			var o: Array = coll.objects[oi]
+			tries += 1
+			var d := absi(dist)
+			if tries == 1:
+				rel = coll._s16(coll.ratan2(s2, s4) - 0x400 - (int(o[9]) & 0xFFFF))
+			var u: int = (d * coll.game_cos(rel)) >> 12
+			var v: int = (d * coll.game_sin(rel)) >> 12
+			if tries & 1:
+				if v != 0: u = 0
+			elif u != 0:
+				v = 0
+			var turn: int = coll._s16(o[9]) + RECT_TRIES[tries - 1]
+			var c := coll.game_cos(turn)
+			var sn := coll.game_sin(turn)
+			s4 = ((u * c) >> 12) - ((v * sn) >> 12)
+			s2 = ((u * sn) >> 12) + ((v * c) >> 12)
+			continue
+		if mask & 0x30:
+			pushes += 1
+			if pushes == 2:
+				break
+			var o: Array = coll.objects[oi]
+			var ox: int = o[5]
+			var oz: int = o[7]
+			var bearing := coll.ratan2(s2 - (oz - z), s4 - (ox - x))
+			var r: int = int(o[10]) + AROUND
+			s4 = _trunc12(coll.game_cos(bearing) * r) + ox - x
+			s2 = _trunc12(coll.game_sin(bearing) * r) + oz - z
+			continue
 		if not shrunk:
 			shrunk = true
 			var s0 := dist - SHRINK
@@ -367,7 +414,7 @@ func _horizontal(angle: int, dist: int) -> void:
 				var nx := x + ((vx + 0xFFF if vx < 0 else vx) >> 12)
 				var nz := z + ((vz + 0xFFF if vz < 0 else vz) >> 12)
 				s0 -= SHRINK
-				if int(coll.query(nx, gy, nz)["mask"]) == 0:
+				if int(coll.query_all(nx, gy, nz)["mask"]) == 0:
 					x = nx
 					z = nz
 					break
@@ -396,17 +443,21 @@ func _horizontal(angle: int, dist: int) -> void:
 		if cx >= 0 and cx < 80 and cz >= 0 and cz < 80:
 			var i := (cz * 80 + cx) * 6
 			rot = coll.cells[i + coll._layer(i, gy - (coll.body >> 1)) + 1] & 3
-		var a: int = (coll.game_cos(angle) * dist) >> 12
-		var b: int = (coll.game_sin(angle) * dist) >> 12
 		if rot == 0 or rot == 2:
-			s4 = (a + b) >> 1
+			s4 = (first_x + first_z) >> 1
 			s2 = s4
 		else:
-			s4 = (a - b) >> 1
+			s4 = (first_x - first_z) >> 1
 			s2 = -s4
 		diag = true
 	gx = x
 	gz = z
+
+
+# A product over 4096 rounded towards zero, the way player_horizontal's
+# push-out does it (`addiu 0xfff` before the shift when negative).
+static func _trunc12(v: int) -> int:
+	return (v + 0xFFF if v < 0 else v) >> 12
 
 
 # The turn rate ramps to the cap and decays back to zero by a quarter of the cap

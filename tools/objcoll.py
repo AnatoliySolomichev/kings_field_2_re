@@ -29,7 +29,10 @@ turns it.
 
 `player_horizontal` is the other half: it reads the slot `collide_query` left
 at `collide_object` (`0x801e6490`), checks the object's byte `+3` for bit 4
-again, and slides the player around using the angle at `object+0x26`.
+again, and slides the player along a rectangle using the angle at
+`object+0x26`, or pushes it out round anything else. Both halves are in
+`tools/movement.py` now (`solids`, `object_collide`, `horizontal`), where the
+recorded walking checks them: 447 of the 455 frames that touch an object.
 
 **Checked against the game.** `emu/bp23.lua` sat where `player_horizontal`
 picks the answer up and logged every touch while the player walked into

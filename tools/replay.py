@@ -34,20 +34,22 @@ the buttons and can be scored without any geometry at all.
 
 ## What it cannot do yet
 
-Two things, and the report counts each separately rather than burying them in a
-total:
+`player_horizontal` is in (`movement.horizontal`): its refusal, its shorter
+retries, its slides, and the objects -- the rectangle slide and the push-out
+round a circle, which took the ground rung from 117 686 to 118 207 of 118 500;
+455 frames of this recording touch an object and 447 of them come out exact.
+What is left is counted in three heaps rather than one total:
 
-* `player_horizontal` is in for its refusal, its shorter retries and its
-  slides (`movement.horizontal`), but not for the push `tile_collision`
-  leaves at `0x801e6498` and `0x801e649c` for a clear step close to a wall,
-  which `tools/collision.py` does not compute -- the 271 "wall slide" frames
-  left are those.
-* the player also collides with **objects** — `collide_query`'s flag `0x10`,
-  through `0x8004d644` — and nothing here models that at all, so the port walks
-  through a cart the game stops at. Frames that disagree while standing within a
-  radius of a placed object are almost certainly this: in one recording, 209 of
-  the 225 that the wall slide did not explain were, and the objects were types
-  287, 325 and 324.
+* **the wall**: the step was refused by a tile, and the game did something the
+  model does not -- the push `tile_collision` leaves at `0x801e6498` and
+  `0x801e649c` for a step close to a wall, or the ceiling test in the step up;
+* **a door**: the player was within reach of a swinging door (opcode 1), which
+  shoves whoever stands in its sweep by 0x4c a frame while it opens and
+  restamps the grid when it has -- neither of which a recording of the player
+  alone can replay;
+* **the rest**, where the step the model took was clear: creatures, which
+  collide with the player (`collide_query` bit 0x10) and knock it back, and
+  whose positions `emu/bp16.lua` does not log.
 """
 import collections
 import os
@@ -56,7 +58,6 @@ import sys
 
 sys.path.insert(0, "tools")
 import movement  # noqa: E402
-import placement  # noqa: E402
 
 LINE = re.compile(
     r"f=\s*(\d+) t=\s*([\d.]+) btn=([0-9a-f]{4}) prev=([0-9a-f]{4}) "
@@ -161,6 +162,17 @@ BIND = {"forward": 0x1000, "back": 0x4000,
         "strafe_pos": 0x0008, "strafe_neg": 0x0004}
 
 
+# How near a swinging door a frame has to be to be put down to it: its sweep is
+# a leaf of 0x800 turning about the hinge, and the shove reaches past that.
+DOOR_REACH = 0x1000
+
+
+def doors(lv):
+    """The swinging doors of a level, out of tools/objload.py: opcode 1."""
+    import objload
+    return [r for r in objload.Load(lv).recs.values() if r["op"] == 1]
+
+
 def check(lvl, run, rung, objs=()):
     """Locked and free, over one continuous run. Returns a line of numbers."""
     locked = bad = walled = objected = 0
@@ -178,11 +190,13 @@ def check(lvl, run, rung, objs=()):
         a = (nxt["ang"] + 0x400) & 0xFFF
         tx = r["p"][0] + ((movement.game_cos(a) * fd) >> 12)
         tz = r["p"][2] + ((movement.game_sin(a) * fd) >> 12)
-        if movement.query(lvl, tx, r["p"][1], tz)[0]:
-            walled += 1
-        elif any(abs(o["x"] - r["p"][0]) < 1600 and abs(o["z"] - r["p"][2]) < 1600
-                 for o in objs):
+        # The door first: a closed door is a wall in the model's grid, and a
+        # frame spent walking through it after it opened is the door's.
+        if any(abs(o["x"] - r["p"][0]) < DOOR_REACH
+               and abs(o["z"] - r["p"][2]) < DOOR_REACH for o in objs):
             objected += 1
+        elif movement.query(lvl, tx, r["p"][1], tz)[0]:
+            walled += 1
 
     # free: carry our own position, take only the input from the log
     p = run[0]["p"]
@@ -301,7 +315,7 @@ def report(path="out/lua_bp16.log"):
         return
     lvl = movement.level(lv)
     try:
-        objs = placement.objects(lv)
+        objs = doors(lv)
     except Exception:
         objs = []
     print(f"level {lv}, {len(runs)} continuous run(s), "
@@ -329,9 +343,10 @@ def report(path="out/lua_bp16.log"):
                  if first is not None else "no drift"))
         if tb:
             rest = tb - tw - to
-            print(f"     of the {tb} that differ, {tw} are the wall slide and "
-                  f"{to} are within reach of a placed object — neither modelled"
-                  + ("" if rest <= 0 else f", leaving {rest} unexplained"))
+            print(f"     of the {tb} that differ, {to} are within reach of a "
+                  f"swinging door, {tw} were refused by a wall"
+                  + ("" if rest <= 0 else f" and {rest} took a clear step "
+                     "(creatures, which the log does not hold)"))
             for (cx, cz), n in cells.most_common(3):
                 print(f"     cell ({cx},{cz}) {n}x")
 

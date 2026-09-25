@@ -363,24 +363,209 @@ def step_distances(strafe_speed, forward_speed):
     return (-fwd if b < 0 else fwd), (-stf if a < 0 else stf)
 
 
+# -- objects: what the player's 0x31 asks after the tiles -------------------
+#
+# collide_query (0x80033f38) goes on to the things in the level only when the
+# cell under the query has an occupancy count -- byte +2 of its first layer,
+# `& 0xfc`, which grid_mark (0x80033c4c) adds 4 to for everything within its
+# radius + 0x800. load_object_placement marks every solid object that way, and
+# creatures mark themselves as they move. The player marks itself too, but
+# player_controller takes its own mark off (grid_mark(.., -1) at 0x80031008)
+# before it moves and puts it back (at 0x800320d8) after, so the player's own
+# query never sees it. Then flag 0x10 asks actor_spot_taken and flag 0x20
+# object_collide (0x80045ac8), whose answer lands at collide_object
+# (0x801e6490) and turns on bit 0x20 of the mask.
+
+RATAN_TABLE = 0x8009594C
+_RT = None
+
+
+def ratan_table():
+    global _RT
+    if _RT is None:
+        import struct
+        import disasm
+        base, _entry, text = disasm.load_text()
+        _RT = struct.unpack_from("<1025h", text, RATAN_TABLE - base)
+    return _RT
+
+
+def ratan2(y, x):
+    """`0x80074380`, the library's ratan2: 1025 entries at `0x8009594c`.
+
+    The smaller of |y| and |x| over the larger, scaled to 1024, indexes the
+    table; the octant is put back with `0x400 -`, `0x800 -` and a negation.
+    When both are 0 it answers 0.
+    """
+    rt = ratan_table()
+    negx, negy = x < 0, y < 0
+    x, y = abs(x), abs(y)
+    if x == 0 and y == 0:
+        return 0
+    if y < x:
+        t = y // (x >> 10) if y & 0x7FE00000 else (y << 10) // x
+        v = rt[t]
+    else:
+        t = x // (y >> 10) if x & 0x7FE00000 else (x << 10) // y
+        v = 0x400 - rt[t]
+    if negx:
+        v = 0x800 - v
+    return -v if negy else v
+
+
+def in_range(pos, x, y, z, r, top, own):
+    """`0x80016ec8`: the distance from `pos` to (x, z), or -1.
+
+    Square first, then the height: a thing standing at `pos` with its top `top`
+    above its feet, against one at y with its top `own` above -- they overlap
+    unless one is wholly above the other (Y grows downward). y = 0xffff skips
+    the height. Then the distance, to eight, through the game's own root.
+    """
+    dx = pos[0] - x
+    if dx < -r or dx > r:
+        return -1
+    dz = pos[2] - z
+    if dz < -r or dz > r:
+        return -1
+    if y != 0xFFFF:
+        if pos[1] < y:
+            if pos[1] < y - own:
+                return -1
+        elif y < pos[1] - top:
+            return -1
+    d = game_isqrt((dx >> 3) * (dx >> 3) + (dz >> 3) * (dz >> 3)) << 3
+    return -1 if d > r else d
+
+
+def in_oriented_rect(ang, pos, x, y, z, a, b, top, own):
+    """`0x80016d3c`: (x, z) inside a rectangle turned by `ang`, or -1.
+
+    The offset goes to polar -- its length by the root, its bearing by
+    vec_angle -- and back out along the rectangle's own axes: `cos(bearing -
+    ang + 0x400)` across and `sin(..)` along, each times the length. The height
+    test is in_range's.
+    """
+    ddx, ddz = (pos[0] - x) >> 3, (pos[2] - z) >> 3
+    d = game_isqrt(ddx * ddx + ddz * ddz) << 3
+    t = vec_angle(x - pos[0], z - pos[2]) & 0xFFFF
+    rel = t - _s16(ang) + 0x400
+    lx = (game_cos(rel) * d) >> 12
+    lz = (game_sin(rel) * d) >> 12
+    if lx < -a or lx > a or lz < -b or lz > b:
+        return -1
+    if y != 0xFFFF:
+        if pos[1] < y:
+            if pos[1] < y - own:
+                return -1
+        elif y < pos[1] - top:
+            return -1
+    return d
+
+
+def solids(lvl):
+    """The level's objects as object_collide sees them, slot order, cached.
+
+    From `tools/objload.py` after its first frame: every record with a type and
+    a byte +0 that is not zero, whose type row gives it a shape. Each carries
+    what the push-out reads besides -- `sub_80033d84` (0x80033d84) sets the
+    radius at 0x801e64b0 from the object's own byte +3: the row's +4 scaled by
+    the object's +0x38 on bit 0x10, else the row's +0x10 on bit 4, else the
+    row's +4. The order matters for a type with a radius *and* bit 4, which
+    object_collide tests as a circle and player_horizontal slides along as a
+    rectangle; none is placed on level 0, but the rule is the game's.
+    """
+    got = getattr(lvl, "_solids", None)
+    if got is not None:
+        return got
+    import objcoll
+    import objload
+    ld = objload.Load(lvl.lv).first_frame()
+    out = []
+    for k in sorted(ld.recs):
+        r = ld.recs[k]
+        if r["type"] == 0xFF or r["b0"] == 0:
+            continue
+        row = ld.rows[r["type"]]
+        kind, a, b = objcoll.shape(row, r["tail"][0], r["flags"])
+        if kind == "none":
+            continue
+        if r["flags"] & 0x10:
+            push = a
+        elif r["flags"] & 4:
+            push = row[0x10] | (row[0x11] << 8)
+        else:
+            push = row[4] | (row[5] << 8)
+        out.append({"slot": k, "type": r["type"], "kind": kind, "a": a, "b": b,
+                    "flags": r["flags"], "pos": (r["x"], r["y"], r["z"]),
+                    "top": r["height"], "ang": r["angles"][1], "push": push})
+    lvl._solids = out
+    return out
+
+
+def object_collide(objs, x, y, z, r=R, own=BODY):
+    """`0x80045ac8`: the first object (x, y, z) runs into, or None.
+
+    A circle grows by the querier's radius; a rectangle's two half-extents both
+    do. The object's top is its +0xc, and `own` is the querier's height.
+    """
+    for o in objs:
+        if o["kind"] == "circle":
+            hit = in_range(o["pos"], x, y, z, o["a"] + r, o["top"], own)
+        else:
+            hit = in_oriented_rect(o["ang"], o["pos"], x, y, z, o["a"] + r,
+                                   o["b"] + r, o["top"], own)
+        if hit != -1:
+            return o
+    return None
+
+
+def query_all(lvl, x, y, z):
+    """`collide_query` with the player's 0x31, objects included.
+
+    Returns (mask, nearest surface, the object hit or None). Creatures, bit
+    0x10, are not here: their positions are not in the recording.
+    """
+    mask, cur = query(lvl, x, y, z)
+    cx, cz = x >> 11, z >> 11
+    if not (0 <= cx < 80 and 0 <= cz < 80) or not lvl.cell(cx, cz)[2] & 0xFC:
+        return mask, cur, None
+    o = object_collide(solids(lvl), x, y, z)
+    return (mask | 0x20 if o else mask), cur, o
+
+
 STEP_UP = 0x500        # the most player_horizontal lets a step climb
 SHRINK = 0x16          # how much shorter each retry of a refused step is
+AROUND = 0x370         # how far past an object's radius the push-out puts you
+RECT_TRIES = (0x400, 0x400, 0x3E8, 0x3E8, 0x418, 0x418)
 
 
-def horizontal(lvl, p, angle, dist, state=0):
+def horizontal(lvl, p, angle, dist, state=0, objects=True):
     """`player_horizontal` (`0x8002e3f8`): a step of `dist` along `angle`.
 
     X takes the cosine and Z the sine, shifted right by 12, and the step is
     asked of `collide_query` at the player's height with flags `0x31`. What
-    happens when the answer is not clear, read off the listing:
+    happens when the answer is not clear, read off the listing in its order:
 
     * **a step up** is taken anyway if the mask has nothing outside `0x207`,
       the surface it found is no more than `0x500` above the feet, the player
       state (`0x801b25e5`) is 0 and the ceiling leaves room for the body --
       that is what stops a wall being climbed: its top is the surface, and it
       is higher than `0x500`;
-    * otherwise the same step is **tried shorter**, `0x16` at a time, once, and
-      the longest clear one is taken;
+    * **an object with a rectangle** (its byte +3 has bit 4) turns the step
+      into the rectangle's frame -- its bearing less `0x400` less the object's
+      angle at +0x26, worked out on the first try and kept -- and keeps one
+      axis of it: the second on tries 1, 3 and 5 unless that is zero, the first
+      on 2, 4 and 6 likewise. It turns back by the object's angle plus `0x400`,
+      `0x3e8` or `0x418` -- a quarter turn and then 24 either side of it, so a
+      corner that stops the square slide gets a slightly skewed one. Six tries;
+      the seventh falls through to the push-out;
+    * **anything else in the way** -- a round object, or a creature -- is gone
+      round: the target moves to the object's centre plus its radius plus
+      `0x370`, along the bearing from the centre to where the step was going,
+      each part rounded towards zero. If the second target runs into a thing as
+      well, the player stays where it is;
+    * otherwise, a wall: the same step is **tried shorter**, `0x16` at a time,
+      once, and the longest clear one is taken;
     * then it **slides**: first with the X part dropped, then with only the X
       part, and against a diagonal wall (mask bit 2) along the diagonal the
       cell's rotation says -- `(dx + dz) / 2` both ways for rotations 0 and 2,
@@ -389,7 +574,7 @@ def horizontal(lvl, p, angle, dist, state=0):
 
     Not here: the push the tile collision leaves at `0x801e6498` and
     `0x801e649c` for a clear step close to a wall, the ceiling test, and the
-    objects and creatures the player's `0x31` also asks about.
+    creatures. `objects=False` leaves the objects out as well.
 
     The caller (`0x8002f9bc`) makes this call twice a frame: once at `angle`
     with the forward distance and once at `angle + 0x400` with the strafe.
@@ -397,11 +582,16 @@ def horizontal(lvl, p, angle, dist, state=0):
     x, y, z = p
     s4 = (game_cos(angle) * dist) >> 12
     s2 = (game_sin(angle) * dist) >> 12
-    first_x = s4
+    first_x, first_z = s4, s2
     shrunk = diag = False
+    tries = pushes = 0
+    rel = 0
     for _ in range(64):
         tx, tz = x + s4, z + s2
-        mask, cur = query(lvl, tx, y, tz)
+        if objects:
+            mask, cur, obj = query_all(lvl, tx, y, tz)
+        else:
+            (mask, cur), obj = query(lvl, tx, y, tz), None
         if mask == 0:
             return (tx, y, tz), True
         blocked = False
@@ -410,6 +600,32 @@ def horizontal(lvl, p, angle, dist, state=0):
                 return (tx, y, tz), True
             if not mask & 2:
                 blocked = True
+        if obj is not None and obj["flags"] & 4 and tries < 6:
+            tries += 1
+            d = abs(dist)
+            if tries == 1:
+                rel = _s16(ratan2(s2, s4) - 0x400 - (obj["ang"] & 0xFFFF))
+            u = (d * game_cos(rel)) >> 12
+            v = (d * game_sin(rel)) >> 12
+            if tries & 1:
+                u = 0 if v else u
+            else:
+                v = 0 if u else v
+            turn = _s16(obj["ang"]) + RECT_TRIES[tries - 1]
+            c, s = game_cos(turn), game_sin(turn)
+            s4 = ((u * c) >> 12) - ((v * s) >> 12)
+            s2 = ((u * s) >> 12) + ((v * c) >> 12)
+            continue
+        if mask & 0x30:
+            pushes += 1
+            if pushes == 2:
+                break
+            ox, _oy, oz = obj["pos"]
+            b = ratan2(s2 - (oz - z), s4 - (ox - x))
+            r = obj["push"] + AROUND
+            s4 = trunc(game_cos(b) * r, 4096) + ox - x
+            s2 = trunc(game_sin(b) * r, 4096) + oz - z
+            continue
         if not shrunk:
             shrunk = True
             s0 = dist - SHRINK
@@ -418,7 +634,8 @@ def horizontal(lvl, p, angle, dist, state=0):
                 nx = x + ((vx + 0xFFF if vx < 0 else vx) >> 12)
                 nz = z + ((vz + 0xFFF if vz < 0 else vz) >> 12)
                 s0 -= SHRINK
-                if query(lvl, nx, y, nz)[0] == 0:
+                q = query_all(lvl, nx, y, nz)[0] if objects else query(lvl, nx, y, nz)[0]
+                if q == 0:
                     x, z = nx, nz
                     break
         if blocked or mask & 1:
@@ -441,11 +658,10 @@ def horizontal(lvl, p, angle, dist, state=0):
         cx, cz = tx >> 11, tz >> 11
         c = lvl.cell(cx, cz) if 0 <= cx < 80 and 0 <= cz < 80 else bytes(10)
         lay = collision.layer_of(c, y - (((BODY << 4) & 0xFFFFFFFF) >> 5))
-        a, b = (game_cos(angle) * dist) >> 12, (game_sin(angle) * dist) >> 12
         if c[lay + 2] & 3 in (0, 2):
-            s4 = s2 = (a + b) >> 1
+            s4 = s2 = (first_x + first_z) >> 1
         else:
-            s4 = (a - b) >> 1
+            s4 = (first_x - first_z) >> 1
             s2 = -s4
         diag = True
     return (x, y, z), (x, z) != (p[0], p[2])

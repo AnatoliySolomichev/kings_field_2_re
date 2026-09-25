@@ -629,11 +629,14 @@ The rungs: **height only** gives the game's ground move and asks about Y alone;
 three — the turn rate is in `0x8002fe1c` and is not transcribed, and putting an
 unread layer under a checked one would spoil the point of the ladder.
 
-What it cannot do yet: `player_horizontal` refuses a blocked step where the game
-**slides along the wall**, which needs the wall's facing out of `0x801e6498` and
-`0x801e649c`; `tools/collision.py` does not compute those. Pressing into a wall
-therefore disagrees, and the output counts that separately rather than burying
-it.
+`player_horizontal` is in whole but for three things, and the output counts
+the frames each explains rather than burying them in a total: a **swinging
+door** near the player (its shove and its restamped grid are not in a
+recording of the player alone), a step **refused by a wall** where the game
+pushed off it (the push at `0x801e6498`/`0x801e649c`, and the ceiling), and a
+**clear step** the game did not take -- creatures, whose positions the log
+does not hold. The objects are in: 447 of the 455 frames that touch one come
+out exact, and rung 2 stands at 118 207 of 118 500.
 
 ### Watching the two side by side
 

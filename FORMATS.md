@@ -1717,11 +1717,65 @@ The port had none of it: `_move` took every step and `player_vertical` then
 lifted the player onto whatever was in the way, so any wall could be climbed,
 which a player reported. `tools/movement.py` and `godot/player.gd` carry it
 now. Against the recorded walking, `tools/replay.py`'s rung 2 goes from 113 747
-to **117 686 of 118 500** frames exact, and the frames it put down to the wall
-slide from 4170 to 271; the self-test holds the GDScript copy to the Python on
-450 recorded steps, the refused and slid ones first. Still out: the push
-`tile_collision` leaves at `0x801e6498`/`0x801e649c` for a clear step close to a
-wall, the ceiling test, and the objects and creatures in the `0x31`.
+to 117 686 of 118 500 frames exact, and the frames it put down to the wall
+slide from 4170 to 271.
+
+### Objects in the way: the rest of `player_horizontal`
+
+The `0x31` the player asks with has bit `0x20`, the objects. `collide_query`
+(`0x80033f38`) goes on past the tiles only where the cell under the query has an
+occupancy count -- byte +2 of its first layer, `& 0xfc` -- which `grid_mark`
+(`0x80033c4c`) raises by 4 for every cell within an object's radius + `0x800`
+at load. The player marks itself too, but `player_controller` takes its mark
+off (`grid_mark(.., -1)` at `0x80031008`) before it moves and puts it back
+(`0x800320d8`) after, so the player never runs into itself. Then
+`object_collide` (`0x80045ac8`) answers with the first slot hit, the mask gains
+`0x20`, and `current_object`, which it skips, is 0 by then -- the interpreter
+clears it (`0x8004b4ec`) when its pass ends.
+
+The two tests take the player's radius `0x320` and height `0x6a4`:
+
+```
+in_range          0x80016ec8   |dx|, |dz| <= r first, then the heights overlap,
+  (pos, x, y, z,               then isqrt((dx>>3)^2 + (dz>>3)^2) << 3 <= r;
+   r, top, own)                heights: at pos.y < y fail if pos.y < y - own,
+                               else fail if y < pos.y - top (Y grows down)
+in_oriented_rect  0x80016d3c   the offset to polar -- length by the root,
+  (ang, pos, x, y,             bearing by vec_angle(x - pos.x, z - pos.z) --
+   z, a, b, top, own)          and back out along the object's axes:
+                               cos/sin(bearing - ang + 0x400) * length >> 12,
+                               each within its half-extent; heights as above
+```
+
+What `player_horizontal` does with the answer, in the listing's order, after
+the step up and before the wall's shorter tries:
+
+* **an object whose byte +3 has bit 4** -- a rectangle -- is slid along. On the
+  first try the step's bearing, `ratan2(dz, dx)` (`0x80074380`, the library's,
+  over 1025 entries at `0x8009594c`), less `0x400` less the object's angle at
+  +0x26 is kept at `sp+0x68`; each try turns the full step length into that
+  frame and keeps one part -- the second on tries 1, 3 and 5 unless it is zero,
+  the first on 2, 4 and 6 likewise -- and turns it back by the object's angle
+  plus `0x400`, `0x3e8` or `0x418`. So a slide that fails is tried again
+  24/4096 of a turn either side of square. The seventh try falls through;
+* **anything else in the way** is gone round. `collide_target` (`0x80033d84`)
+  puts the thing's position at `0x801e64a0` and its radius at `0x801e64b0` --
+  a creature's +0x1c when `collide_query` found one, else the object's: the
+  row's +4 scaled by +0x38 over 128 on byte +3 bit `0x10`, the row's +0x10 on
+  bit 4, the row's +4 otherwise -- and the step becomes the point at radius +
+  `0x370` from the centre along the bearing from the centre to where the step
+  was going, each part rounded towards zero. If that point hits a thing too,
+  the player stays where it is (`local_58` reaching 2).
+
+**Checked**: 455 frames of the recorded walking touch an object -- 302 round
+ones and 145 rectangles -- and 447 come out exact, which takes rung 2 to
+**118 207 of 118 500**. Of the 293 left, 140 are within reach of a swinging
+door, whose shove and restamped grid a recording of the player alone cannot
+replay; 101 were refused by a wall (the push at `0x801e6498`, the ceiling); 52
+took a clear step, which is creatures -- they collide with the player through
+bit `0x10` and knock it back, and the log does not hold where they were. The
+self-test holds `godot/player.gd` to the Python on 650 steps, 200 of them into
+an object. Still out: the wall push, the ceiling test, and the creatures.
 
 ### How long a frame lasts: four vertical blanks
 

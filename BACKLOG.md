@@ -362,15 +362,24 @@ What is left of movement:
 2. **The turn rate**, `0x8002fe1c`. The per-frame increment lives at
    `0x801b264c` and was seen ramping 0, 8, 16, 24, 32; the routine is unread, so
    the replay takes the facing from the game rather than deriving it.
-3. **Objects are solid and the port does not know it.** `collide_query`'s flag
-   `0x10` asks `0x8004d644` about objects and `0x20` about actors, and
-   `tools/collision.py` models neither. 212 of the frames that disagree are
-   within a radius of a placed object, and the types involved are 287, 325 and
-   324. This is the second-largest gap after the slide, and it overlaps item 2
-   above: 287 is one of the 53 with no parseable model.
-4. **Something else pushes the player.** Six of the X writes `emu/bp15.lua`
-   caught came from `0x800482e4`, in the actor cluster, moving the player about
-   37 a frame.
+3. **Objects are solid — done; creatures are not yet.** `collide_query`'s bit
+   `0x20` is `object_collide`, and `player_horizontal` slides along a
+   rectangle or pushes out round anything else; `tools/movement.py` and
+   `godot/player.gd` carry both (FORMATS.md, "Objects in the way"), 447 of the
+   455 recorded frames that touch an object come out exact, and rung 2 is at
+   118 207 of 118 500. Bit `0x10` is the creatures, through
+   `actor_spot_taken` (`0x8004d644`), and it is not in the port's player: it
+   skips a creature whose word at +0x28 has a bit in `0x8018faa8` -- which
+   `player_controller` sets to 4 before it moves (`0x80031004`) -- and where
+   +0x28 comes from is not traced. 52 frames of the recording took a clear step
+   the game did not, most on open floor, and creatures are the likely cause;
+   `emu/bp16.lua` would have to log where they stand to say.
+4. **The door shoves the player — found.** The X writes `emu/bp15.lua` caught
+   at `0x800482e4` are the swinging door (opcode 1, `0x8004814c`): while it
+   opens and the player is in its sweep it adds (0, 0, -0x4c) turned by its
+   yaw + 0x800 to the position, sets `player_speed` (`0x801b2648`) to -0x4c
+   and the strafe speed to 0. `godot/doors.gd` does all three; the replay
+   counts the frames near a door apart (140 on rung 2).
 
 The Godot build no longer collides against the drawn geometry: `godot/collision.gd`
 is `tools/collision.py` transcribed, and the player runs it per frame. Both of a
