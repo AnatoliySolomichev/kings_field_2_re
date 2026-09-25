@@ -242,9 +242,11 @@ class Load:
         r["scale"] = [0x1000] * 3
         if r["flags"] & 0x20:
             r["b2"] |= 0x80
+        r["height"] = struct.unpack_from("<H", tr, 8)[0]           # +0x0c
         if r["flags"] & 0x10:
             s = p[0x10] << 5
             r["scale"] = [s, s, s]
+            r["height"] = (r["height"] * p[0x10]) >> 7
         r["x"] = (p[2] << 11) + s16(struct.unpack_from("<H", p, 0xA)[0])
         r["z"] = (p[1] << 11) + s16(struct.unpack_from("<H", p, 8)[0])
         c = self.cell(p[2], p[1]) + (0 if p[0] == 1 else 5)

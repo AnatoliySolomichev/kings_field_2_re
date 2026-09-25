@@ -553,6 +553,12 @@ matrix, three quarter-turned copies of it, and its colour matrix.
 python3 tools/lighting.py --check   against out/tile_look.bin and every snapshot
 ```
 
+**Doors in the port.** The nine swinging doors of level 0 open with USE --
+CIRCLE on the pad, **L** on the keyboard, as the HUD says -- swing, stand open,
+and close again once nobody is in the doorway (`godot/doors.gd`). Each is its
+own node in `objectsNN.gltf`, `dNNN` by slot, and `doorsNN.json` carries what
+the swing needs. `emu/bp24.lua` records a door frame by frame for checking it.
+
 **`objload.py`** — `load_object_placement`, transcribed: the object table and
 the grid as the game leaves them after loading a level.
 

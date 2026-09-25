@@ -320,7 +320,14 @@ with an `f1` guard or an `f9` taken, and one whose header `+0x12` is not
 What would also help, and needs no new script: `bp20.lua` again with the five
 damage types it does not print added to the `HURT in` line.
 
-**8. Everything else in BACKLOG.md**, which is ordered roughly by what it
+**8. Swinging doors -- in the port, and one session from checked.**
+`godot/doors.gd` runs opcode 1's arm (FORMATS.md, "A door that swings") and
+agrees with the door1 and door2 snapshots' end states. Ask for a session with
+`emu/bp24.lua`: open the door at (41,10) on level 0, once standing in the
+doorway until it gives up waiting, once walking clear; then compare its
+per-frame log with the port. The other door classes are BACKLOG.md item 5c.
+
+**9. Everything else in BACKLOG.md**, which is ordered roughly by what it
 unblocks.
 
 ---

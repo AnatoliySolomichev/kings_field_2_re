@@ -178,14 +178,16 @@ func _refresh() -> void:
 	hud.text = ("%s   cell (%d, %d)   height %d\n" +
 		"state %d   vy %d   speed %d/%d   %s above the surface\n" +
 		"F walk/fly   G collision   Esc mouse   " +
-		"buttons: forward %s, strafe %s/%s, turn %s/%s, menu %s\n" ) % [
+		"buttons: forward %s, strafe %s/%s, turn %s/%s, menu %s, use %s (key %s)\n" ) % [
 		note, cx, cz, -gy, vstate, vvel, fwd_speed, stf_speed, above,
 		KFPad.name_of(KFPad.binding[KFPad.FORWARD]),
 		KFPad.name_of(KFPad.binding[KFPad.ALT_A]),
 		KFPad.name_of(KFPad.binding[KFPad.ALT_C]),
 		KFPad.name_of(KFPad.binding[KFPad.LEFT_SLOT]),
 		KFPad.name_of(KFPad.binding[KFPad.RIGHT_SLOT]),
-		KFPad.name_of(KFPad.binding[KFPad.PAUSE])]
+		KFPad.name_of(KFPad.binding[KFPad.PAUSE]),
+		KFPad.name_of(KFPad.binding[KFPad.USE]),
+		OS.get_keycode_string(KFPad.KEYS.get(KFPad.binding[KFPad.USE], [KEY_NONE])[0])]
 
 
 func _unhandled_input(e: InputEvent) -> void:

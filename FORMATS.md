@@ -2024,6 +2024,54 @@ from 300 up the *row* is the level's own too, so the model has to be.
 What found it was `emu/bp23.lua` logging the game colliding with types 301,
 308, 314, 324, 325 and 326 — types that, by the old reading, did not exist.
 
+### A door that swings: opcode 1
+
+Class `0x01` -- 42 objects in the game, nine on level 0, types 177 and 178 there
+-- is a door on a hinge. `load_object_placement` gives it opcode 1, keeps its yaw
+twice (`+0x26`, and `+0x42` to come back to), sets `+0x40` to 999, and stamps its
+closed state into the grid: `stamp_rect` copies `tr[+0xd]` x `tr[+0xe]` cells of
+layer 1 from `(p[+0x13] + 1, p[+0x14])` to `(p[+0x11], p[+0x12])` -- the doorway's
+collision shape becomes a wall. The door itself stops nothing as an object:
+its type row has radius 0 and no rectangle bit.
+
+**Opening.** USE runs `object_interact` (`0x8005e2d0`), which takes every
+object `find_object` offers in front of the player -- for class 1 the player's
+point moved `0x400` back along the door's own yaw, within the type's `+6` plus
+`0x320` of the door, and the door within `0x200` of the facing. For a door whose
+state `+8` is 0 it looks at the lock byte `+0x38`: `0xff` opens it (state 1), so
+do `0xfd` and `0xfe` unless the type is `0xae`; `0xf0`, `0xf1`, `0xf2`, `0x96`,
+`0x98` and `0x9a` are messages, and anything else is "locked". The loop does
+not stop at the first door, which is how both leaves of a double door open.
+
+**The swing** is `object_interpreter`'s arm for opcode 1 (`0x8004814c`), once a
+frame:
+
+```
+state 1           state 2, counter 0, keep the facing
+counter < 0x20    yaw += 0x20: a quarter turn in 32 frames. Under 0x15, if the
+                  player stands in the swing, shove them 0x4c along it
+  counter 0x18    stamp the open state -- the template at p[+0x13] + 0
+  counter 0x1f    counter = 0x118: twenty frames of standing open
+counter 0x12c     collide_query(the point 0x400 along the door, 0x5dc, 0xc0):
+                  if player_in_range (0x80028e48) or a creature says the
+                  doorway is taken, wait here; else stamp the template at
+                  p[+0x13] + 2 and start back
+counter < 0x14c   yaw -= 0x20
+after             state 0, +1 = 0x80, +0xe = -0x32
+```
+
+**Checked against two snapshots, as end states.** `door1` and `door2` hold the
+same door, slot 114 at (41,10), before and after the player pressed USE, from
+the same spot. door1: state 0, counter `0x14d`, yaw 0, `+1` `0x80`, `+0xe` -50,
+and shape 46 in both doorway cells -- one full cycle done. door2: state 2,
+counter `0x121`, yaw `0x400`, `+1` `0x81`, `+0xe` 240, shape 64 in both -- open
+and nine frames into the wait. The port, started from door1's player position
+and facing, opens exactly that door, reaches shape 64 at counter `0x18` and
+yaw `0x400` at `0x1f`, and -- once the player walks clear -- comes back to
+state 0, counter `0x14d` and shape 46. Every field it keeps agrees with both
+snapshots. No recording has followed a door frame by frame; `emu/bp24.lua` is
+the instrument for it.
+
 ### What makes an object solid — found
 
 `collide_query` takes a mask, and bit `0x20` of it means "test the objects".

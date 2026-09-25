@@ -434,6 +434,25 @@ Neither has been looked for. Recorded so the observation is not lost.
 
 ## 5c. Doors that open, and the ones that are hidden
 
+**The swinging doors are read and in the port** (FORMATS.md, "A door that
+swings"): class 0x01, 42 in the game, nine on level 0 -- `godot/doors.gd` opens
+them with USE, swings them, stamps the doorway's collision open and closed and
+waits while the player stands in it. What is left, in order of how many doors
+it would open:
+
+* **class 0x02, 128 objects** -- `stamp_rect` from `p[+0x13] + 2w`, marked with
+  radius 0x1130; its arm is not read.
+* **the grid-drawn doors, classes 0x03 to 0x05 (82) and 0x54 (7)** --
+  `stamp_table` writes their walls and tiles at load; opening one is their arms
+  writing the table's other half (`sel` 1), which means the level geometry has
+  to change at run time too, not only the collision.
+* **classes 0x00 (12) and 0x1b (23)**, `find_object` points 0x700 in front of or
+  behind them; 11 of the 12 class-0 doors carry lock byte `0x8c`, a key.
+* **keys and messages**: a lock byte other than 0xff, 0xfd or 0xfe is either an
+  item `use_item` takes or an `announce` code, and neither is in the port.
+* **a frame-by-frame check**: `emu/bp24.lua` logs the door arm's state, counter
+  and yaw and the doorway's shapes; nothing has been recorded with it yet.
+
 Reported from play: some walls hide lift-up doors that open when pressed. Doors
 in general are objects (see item 2), and the object record carries an
 interaction state at `+0x08` that the use handler tests and sets (FORMATS.md

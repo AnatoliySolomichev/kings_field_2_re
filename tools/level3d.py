@@ -551,6 +551,13 @@ def build_actors_gltf(lv, out="out/godot"):
     return path
 
 
+# The opcodes whose objects turn on a hinge: `object_interpreter`'s arm for
+# opcode 1 (0x8004814c) swings the model a quarter turn and back. godot/doors.gd
+# runs it; the other door classes (0x00, 0x1b, and the grid-drawn 0x03 to 0x05)
+# are not ported yet.
+DOOR_OPS = (0x01,)
+
+
 def build_objects_gltf(lv, out="out/godot"):
     """Everything standing on the level: doors, chests, trees, save points.
 
@@ -583,6 +590,7 @@ def build_objects_gltf(lv, out="out/godot"):
     drawn as models either: their arms zero the scale and stamp them into the
     grid, which draws them.
     """
+    import json
     import objload
     load = objload.Load(lv).first_frame()
     grid = grid_of(lv)
@@ -591,6 +599,7 @@ def build_objects_gltf(lv, out="out/godot"):
     g = gltf.Gltf()
     groups = {}
     placed = missing = hidden = 0
+    doors, door_rows = [], []
     for _k, o in sorted(load.recs.items()):
         # The game's own rule, read off load_object_placement and render_walk:
         # the opcode, the record's +0 against the view byte, and the scale.
@@ -619,6 +628,11 @@ def build_objects_gltf(lv, out="out/godot"):
         placed += 1
         sx, sy, sz = (v / 4096.0 for v in o["scale"])
         ox, oy, oz = o["x"], o["y"], o["z"]
+        # A door turns on its hinge, so it is a node of its own with its
+        # vertices about its own position (godot/doors.gd).
+        door = o["op"] in DOOR_OPS
+        if door:
+            ox = oy = oz = 0
 
         def place(v, m=m, sx=sx, sy=sy, sz=sz, ox=ox, oy=oy, oz=oz):
             x, y, z = v[0] * sx, v[1] * sy, v[2] * sz
@@ -636,26 +650,52 @@ def build_objects_gltf(lv, out="out/godot"):
             az = m[2][0] * nx + m[2][1] * ny + m[2][2] * nz
             return (ax / 4096.0, -ay / 4096.0, -az / 4096.0)
 
-        emit_object(objs, place, lambda raw: shade(raw, llm, lcm, bk), groups,
+        own = {} if door else groups
+        emit_object(objs, place, lambda raw: shade(raw, llm, lcm, bk), own,
                     spin_normal)
+        if door:
+            doors.append((o, own))
 
-    prims, ntri = [], 0
-    for (tpage, clut), (pos, nrm, uv, col) in groups.items():
-        name = f"tex_{tpage:04x}_{clut:04x}"
-        rel = page_texture(out, lv, tpage, clut, vram)
-        m = (g.material(name, rel, double=True) if rel
-             else g.plain(name + "_flat", (0.8, 0.75, 0.7, 1.0)))
-        p = g.primitive(pos, nrm, uv, col)
-        p["material"] = m
-        prims.append(p)
-        ntri += len(pos) // 3
+    mats = {}
+
+    def prims_of(bags):
+        out_prims, n = [], 0
+        for (tpage, clut), (pos, nrm, uv, col) in bags.items():
+            name = f"tex_{tpage:04x}_{clut:04x}"
+            if name not in mats:
+                rel = page_texture(out, lv, tpage, clut, vram)
+                mats[name] = (g.material(name, rel, double=True) if rel
+                              else g.plain(name + "_flat", (0.8, 0.75, 0.7, 1.0)))
+            p = g.primitive(pos, nrm, uv, col)
+            p["material"] = mats[name]
+            out_prims.append(p)
+            n += len(pos) // 3
+        return out_prims, n
+
+    prims, ntri = prims_of(groups)
     if not prims:
         print("no objects placed")
         return None
-    path, nbytes = g.write(f"{out}/objects{lv:02d}.gltf", prims, f"objects{lv}")
-    print(f"objects: {placed} placed, {missing} without a model, "
-          f"{hidden} the game does not draw, {ntri} triangles, "
-          f"{len(prims)} materials -> {path}")
+    items = [(f"objects{lv}", prims, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))]
+    for o, bags in doors:
+        dp, dn = prims_of(bags)
+        ntri += dn
+        items.append((f"d{o['slot']:03d}", dp,
+                      (o["x"] / UNIT, -o["y"] / UNIT, -o["z"] / UNIT),
+                      (0.0, 0.0, 0.0, 1.0)))
+        tr = load.rows[o["type"]]
+        door_rows.append({
+            "slot": o["slot"], "type": o["type"], "op": o["op"],
+            "x": o["x"], "y": o["y"], "z": o["z"], "yaw": o["angles"][1],
+            "b0": o["b0"], "height": o["height"], "tail": list(o["tail"][:8]),
+            "reach": struct.unpack_from("<H", tr, 6)[0],
+            "w": tr[0xD], "h": tr[0xE]})
+    path, nbytes = g.write_nodes(f"{out}/objects{lv:02d}.gltf", items)
+    with open(f"{out}/doors{lv:02d}.json", "w") as f:
+        json.dump(door_rows, f, separators=(",", ":"))
+    print(f"objects: {placed} placed, {len(doors)} of them doors on their own "
+          f"node, {missing} without a model, {hidden} the game does not draw, "
+          f"{ntri} triangles, {len(mats)} materials -> {path}")
     return path
 
 
@@ -696,6 +736,7 @@ SCENE = """[gd_scene load_steps={load_steps} format=3]
 [ext_resource type="Script" path="res://labels.gd" id="6"]
 [ext_resource type="Script" path="res://cutscene.gd" id="14"]
 [ext_resource type="Script" path="res://scroll.gd" id="17"]
+[ext_resource type="Script" path="res://doors.gd" id="18"]
 {gallery_res}
 
 [sub_resource type="Environment" id="Env"]
@@ -728,6 +769,9 @@ far = 400.0
 
 [node name="Actors" type="Node" parent="."]
 script = ExtResource("16")
+
+[node name="Doors" type="Node" parent="."]
+script = ExtResource("18")
 
 [node name="Scroll" type="Node" parent="."]
 script = ExtResource("17")
@@ -899,7 +943,7 @@ def project(lv, out="out/godot", start=(57, 4)):
                        for i in range(len(pieces)))
     open(f"{out}/world.tscn", "w").write(
         SCENE.format(lv=lv, px=px, py=py, pz=pz, gallery_res=res,
-                     gallery_nodes=nodes, load_steps=10 + len(pieces)))
+                     gallery_nodes=nodes, load_steps=11 + len(pieces)))
     # The boot chain: the shell, the opening and the pad, which is where the
     # project now starts. world.tscn is still the level and boot.gd hands over
     # to it the way SLUS_002.55 hands over to GAME.EXE.
@@ -908,7 +952,8 @@ def project(lv, out="out/godot", start=(57, 4)):
                  "labels.gd", "pad.gd", "boot.gd", "opening.gd",
                  "cutscene.gd", "actors.gd", "levelup.gd",
                  "game.gd", "objects.gd", "escript.gd", "items.gd",
-                 "damage.gd", "equip.gd", "objcoll.gd", "scroll.gd"):
+                 "damage.gd", "equip.gd", "objcoll.gd", "scroll.gd",
+                 "doors.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening

@@ -2277,5 +2277,15 @@
   "name": "texture_scroll_add",
   "kind": "code",
   "evidence": "(rect, delay, step, kind): takes a free record of texture_scroll_step's two, stores the four arguments and the rect twice, moves the second copy 0x20 halfwords left, quarters both widths for kind 1 (4-bit pixels), and MoveImages the rect into that stash. game_main calls it once, with the rect at 0x8009c214 -- (1016, 96, 32, 32), the water -- delay 0, step 1, kind 1"
+ },
+ "0x80028e48": {
+  "name": "player_in_range",
+  "kind": "code",
+  "evidence": "(x, y, z, r, own): in_range(&player_pos, x, y, z, r + 0x320, 0x6a4, own) -- the player's radius added and its body as the top. collide_query's flag 0x80; the swinging door asks it before it closes"
+ },
+ "0x8004d838": {
+  "name": "actor_in_range",
+  "kind": "code",
+  "evidence": "collide_query's flag 0x40: walks actor_table for a creature whose +9 is 1 and which is not current_actor, and returns the first one in_range of the point, into 0x801e648c"
  }
 }
