@@ -38,15 +38,12 @@ import sys
 sys.path.insert(0, "tools")
 import collision as coll                                             # noqa: E402
 import gltf                                                           # noqa: E402
-import placement                                                      # noqa: E402
 import rtim                                                           # noqa: E402
 import tim                                                            # noqa: E402
 import tmd                                                            # noqa: E402
 
 W, CELLB = 80, 10
 CELL = 0x800
-# Object types the game places but does not draw. See build_objects_gltf.
-NOT_DRAWN = {299}
 UNIT = 1000.0            # world units per metre
 VOID = 0xF0              # cell[+5] at or above this is solid rock
 
@@ -129,12 +126,23 @@ def shade(normal, llm, lcm, bk):
     return out
 
 
+_grids = {}
+
+
 def grid_of(lv):
-    live = "out/grid_live_lv0.bin"
-    if lv == 0 and os.path.exists(live):
-        return open(live, "rb").read()          # level state included
-    from maps import levels
-    return dict(levels())[lv]
+    """The level's grid as `load_object_placement` leaves it, off the disc.
+
+    `level_load` copies `FDAT.T` entry 3n, and the object loader then stamps
+    every door into it (`tools/objload.py`). This used to be a dump of level
+    0's live grid for level 0 and the bare disc grid for every other level --
+    so every level but 0 was drawn with its doors missing. The loader's grid
+    matches the live one, outside the occupancy count, on every snapshot taken
+    before a door was opened.
+    """
+    if lv not in _grids:
+        import objload
+        _grids[lv] = bytes(objload.Load(lv).grid)
+    return _grids[lv]
 
 
 def build(lv, limit=None):
@@ -356,99 +364,6 @@ def build_collision_gltf(lv, out="out/godot"):
 
 
 SNAP_VRAM = "out/snap/b.vram"
-SNAP_RAM = "out/snap/b.ram"
-OBJECT_TABLE, OBJECT_STRIDE, OBJECT_SLOTS = 0x80191A5C, 0x44, 396
-
-
-def live_scales(lv):
-    """Each placed object's scale, out of the live table in a RAM snapshot.
-
-    The scale is **per object, not per type**, and it is not in the disc record:
-    `+0x2c` of the live record at `object_table` carries it, `0x1000` being 1.0.
-    Across level 0 it reads x1.00 on 271 objects, **x0.00 on 59**, x1.99 on 34
-    and a scatter of values between on the graves — so a good part of what the
-    port drew at the wrong size was drawn at the wrong size, and 59 things it
-    drew are not drawn by the game at all.
-
-    Like the object textures, this is taken from a snapshot because the code
-    that fills it has not been found. It is the game's own state, obtained by
-    looking rather than by understanding, and it only applies to level 0.
-    """
-    if lv != 0 or not os.path.exists(SNAP_RAM):
-        return {}
-    ram = open(SNAP_RAM, "rb").read()
-    out = {}
-    for k in range(OBJECT_SLOTS):
-        off = (OBJECT_TABLE + k * OBJECT_STRIDE) & 0x1FFFFF
-        tid = struct.unpack_from("<H", ram, off + 6)[0]
-        if tid in (0xFFFF, 0xFFFE):
-            continue
-        out[k] = struct.unpack_from("<h", ram, off + 0x2C)[0]
-    return out
-
-
-# The object type table: 332 records of 24 bytes, ending where object_table
-# begins. Byte +0 of a record is the class the renderer dispatches on.
-TYPE_TABLE, TYPE_STRIDE, TYPE_COUNT = 0x8018FB3C, 24, 332
-# render_walk (0x80040ae4) jumps straight to its loop tail for these two, at
-# 0x80040e60 and 0x80040e78. Nothing else in its dispatch skips a record.
-CLASS_NOT_DRAWN = (0xE5, 0xE9)
-
-
-def render_classes(lv):
-    """type id -> the byte the renderer dispatches on, from a RAM snapshot.
-
-    This is what decides which of a pair of objects standing in the same cell
-    is the one you see. Types 158 and 159 are a treasure chest closed and the
-    same chest open: **19 cells across the 28 levels hold both of them and not
-    one cell holds either alone**, so they are two states of one thing, and the
-    class byte is how the game picks -- 158 carries 0xe5, which render_walk
-    skips, and 159 carries 0x07, which it draws. Drawing both, which is what
-    this did before, is a chest open and closed at the same time, and a player
-    reported exactly that.
-
-    Taken from a snapshot, like the scales and the object textures, because
-    what fills the table has not been found: the 24-byte records are not a
-    verbatim run anywhere in GAME.EXE, so something builds them. That also
-    means this carries the *snapshot's* state rather than a new game's, which
-    is the honest limit of it -- in that session both big chests had been
-    opened.
-    """
-    if lv != 0 or not os.path.exists(SNAP_RAM):
-        return {}
-    ram = open(SNAP_RAM, "rb").read()
-    base = TYPE_TABLE & 0x1FFFFF
-    return {t: ram[base + t * TYPE_STRIDE] for t in range(TYPE_COUNT)}
-
-
-def live_rotations(lv):
-    """Each placed object's rotation, all three axes, out of a RAM snapshot.
-
-    The live record carries **three** halfwords at `+0x24`, `+0x26` and
-    `+0x28`, and this file used to turn objects by the middle one alone. Twelve
-    of level 0's objects are tilted -- nine about X, three about Z -- and a
-    player reported the visible half of it: a helmet standing on end in the
-    port where the game has it lying on its side.
-
-    The negated `u16` at +6 of the disc record reproduces the live Y for 336 of
-    347 objects, so the yaw is read. The other two axes are not: bytes 18 to 20
-    of the record scale by 64 into exactly the right angles for all nine tilted
-    objects and into nonsense for the rest, so that field is conditional on
-    something not yet found and is not used here. The triple is taken from the
-    snapshot instead -- borrowed, like the scales and the object textures, and
-    only for level 0.
-    """
-    if lv != 0 or not os.path.exists(SNAP_RAM):
-        return {}
-    ram = open(SNAP_RAM, "rb").read()
-    out = {}
-    for k in range(OBJECT_SLOTS):
-        off = (OBJECT_TABLE + k * OBJECT_STRIDE) & 0x1FFFFF
-        tid = struct.unpack_from("<H", ram, off + 6)[0]
-        if tid in (0xFFFF, 0xFFFE):
-            continue
-        out[k] = struct.unpack_from("<3h", ram, off + 0x24)
-    return out
 
 
 def object_vram(lv):
@@ -676,45 +591,33 @@ def build_objects_gltf(lv, out="out/godot"):
     in the game. Ignoring it is right only on level 0, which is why it survived
     this long.
 
-    Height **is** in the record, at offset 12, signed, and it is measured from
-    the terrain: `y = -128 * cell[+6] + h`. That reproduces the live table for
-    345 of level 0's 347 objects. This file used to put every object on the
-    terrain, which stacked a chest's lid inside its body and left its lock
-    plate lying on the floor -- a player reported exactly that, as chests drawn
-    open and closed at once.
+    **Everything about where an object stands and whether it is drawn comes
+    from `tools/objload.py`**, the transcription of `load_object_placement`:
+    the position with the record's own height (a chest's lid is one body-height
+    up, not on the floor), all three angles, the scale, and the game's rule for
+    drawing -- the opcode, the record's `+0` against the view byte, and a scale
+    of zero. Until it was read, the scale, the angles and the render class came
+    out of a level-0 RAM snapshot, so every other level had none of them.
 
-    **Type 299 is not drawn.** `MO.T[299]` is a box two cells across and two
-    cells tall carrying fourteen primitives — a hundred times coarser than the
-    next coarsest model in the game — and every one of its **76 instances across
-    all 28 levels carries a text index**, which is exactly the number of readable
-    things `tools/readables.py` finds. It is the volume that says "an inscription
-    can be read here", and it stands on the same cell as the object that is
-    actually there: type 253 at level 0 (47,12), type 301 at (49,19), the *Broken
-    Cart*. Drawing it put a stone column over both of them, which is how this was
-    caught — a player looked at the port beside the emulator and said the bull's
-    head and the cart had turned into pillars.
+    That rule is also why type 299 is not drawn: it is class 0x14, whose arm
+    zeroes `+0`. It is the box two cells across that marks where an inscription
+    can be read, and drawing it once put stone columns over the bull's head and
+    the *Broken Cart* -- a player saw it beside the emulator. The doors are not
+    drawn as models either: their arms zero the scale and stamp them into the
+    grid, which draws them.
     """
+    import objload
+    load = objload.Load(lv).first_frame()
     grid = grid_of(lv)
     vram = object_vram(lv)
     look = open("out/tile_look.bin", "rb").read()
     g = gltf.Gltf()
     groups = {}
-    placed = missing = 0
-    scales = live_scales(lv)
-    classes = render_classes(lv)
-    rots = live_rotations(lv)
-    hidden = 0
-    skipped_class = 0
-    for o in placement.objects(lv):
-        if o["type"] in NOT_DRAWN:
-            continue
-        # The renderer's own dispatch: two classes never reach a draw call.
-        if classes.get(o["type"]) in CLASS_NOT_DRAWN:
-            skipped_class += 1
-            continue
-        # x0.00 means the game does not draw it. 59 of level 0's objects.
-        sc = scales.get(o["slot"], 0x1000)
-        if sc == 0:
+    placed = missing = hidden = 0
+    for _k, o in sorted(load.recs.items()):
+        # The game's own rule, read off load_object_placement and render_walk:
+        # the opcode, the record's +0 against the view byte, and the scale.
+        if not load.drawn(o):
             hidden += 1
             continue
         try:
@@ -722,34 +625,25 @@ def build_objects_gltf(lv, out="out/godot"):
         except Exception:
             missing += 1
             continue
-        cx, cz = o["cx"], o["cz"]
+        cx, cz = o["x"] >> 11, o["z"] >> 11
         if not (0 <= cx < W and 0 <= cz < W):
             continue
         c = grid[(cz * W + cx) * CELLB:(cz * W + cx) * CELLB + CELLB]
-        # The record's own height, offset 12, signed: the terrain is only where
-        # an object with h = 0 stands. See tools/placement.py.
-        oy = -128 * c[6] + o.get("h", 0)
         llm, lcm, bk = light_class(look, c[9] & 0x3F, c[7] & 3)
-        # The record stores the rotation the way the loader will *negate* it:
-        # `load_object_placement` does `negu` then masks to 0xfff before writing
-        # the live record, so the disc value is the negative of the angle the
-        # object actually stands at.
-        # All three angles when the snapshot has them, the disc's yaw otherwise.
-        # The order the three are composed in is **not established**; it hardly
-        # shows, because only three of level 0's objects turn about more than
-        # one axis at a time.
-        rx, ry, rz = rots.get(o["slot"], (0, (-o["rot"]) % 4096, 0))
-        m = _rot3(rx, ry, rz)
+        # Position, angles and scale are the live record's, as the loader
+        # makes them: the angles already negated off the disc, the X and Z
+        # ones only for the classes that carry them.
+        m = _rot3(*o["angles"])
         placed += 1
+        sx, sy, sz = (v / 4096.0 for v in o["scale"])
+        ox, oy, oz = o["x"], o["y"], o["z"]
 
-        f = sc / 4096.0
-
-        def place(v, f=f, m=m):
-            x, y, z = (c * f for c in v)
+        def place(v, m=m, sx=sx, sy=sy, sz=sz, ox=ox, oy=oy, oz=oz):
+            x, y, z = v[0] * sx, v[1] * sy, v[2] * sz
             ax = m[0][0] * x + m[0][1] * y + m[0][2] * z
             ay = m[1][0] * x + m[1][1] * y + m[1][2] * z
             az = m[2][0] * x + m[2][1] * y + m[2][2] * z
-            return ((o["x"] + ax) / UNIT, -(oy + ay) / UNIT, -(o["z"] + az) / UNIT)
+            return ((ox + ax) / UNIT, -(oy + ay) / UNIT, -(oz + az) / UNIT)
 
         def spin_normal(n, m=m):
             # The same matrix the vertices go through, so a tilted object is
@@ -778,7 +672,7 @@ def build_objects_gltf(lv, out="out/godot"):
         return None
     path, nbytes = g.write(f"{out}/objects{lv:02d}.gltf", prims, f"objects{lv}")
     print(f"objects: {placed} placed, {missing} without a model, "
-          f"{skipped_class} skipped by their render class, {ntri} triangles, "
+          f"{hidden} the game does not draw, {ntri} triangles, "
           f"{len(prims)} materials -> {path}")
     return path
 

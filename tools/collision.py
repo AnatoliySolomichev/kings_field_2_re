@@ -132,11 +132,13 @@ class Level:
     and 9, which is objects stamping themselves into cells after the load and
     the per-frame state.
 
-    So a dump is preferred when one exists for that level, because it is the
-    floor as the recording saw it, and the disc is used otherwise.
+    Those objects are read now: `load_object_placement` stamps every door
+    into the grid at load (`tools/objload.py`), and the grid it leaves matches
+    the live one outside field 2 -- the occupancy count -- on every snapshot
+    taken before a door was opened. So that is the grid, for every level, and
+    the dump is not needed: the recording reproduces 8075 of 8078 on either.
+    On any level but 0 the bare disc grid had no doors in it at all.
     """
-
-    GRID_ENTRY = 4             # the length word before the grid
 
     def __init__(self, lv, grid=None):
         self.lv = lv
@@ -146,12 +148,8 @@ class Level:
 
     @staticmethod
     def _grid(lv):
-        dump = os.path.join(ROOT, "out", f"grid_live_lv{lv}.bin")
-        if os.path.exists(dump):
-            return open(dump, "rb").read()
-        from tarc import TArc
-        raw = TArc(os.path.join(ROOT, "extract", "CD", "COM", "FDAT.T")).raw(lv * 3)
-        return raw[Level.GRID_ENTRY:Level.GRID_ENTRY + W * W * CELL]
+        import objload
+        return bytes(objload.Load(lv).grid)
 
     def shape(self, sid):
         if sid not in self.cache:

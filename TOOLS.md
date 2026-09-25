@@ -539,6 +539,21 @@ everything on purpose — this level has rooms the game never lets you into. The
 readout names the cell you are in, in the game's own numbering, so anything
 found there can be pointed at in the data.
 
+**`objload.py`** — `load_object_placement`, transcribed: the object table and
+the grid as the game leaves them after loading a level.
+
+```
+python3 tools/objload.py 0          every record: class, opcode, angles, scale, drawn
+python3 tools/objload.py --check    field by field against every snapshot with a level
+```
+
+`level3d.py`, `collision.py` and `gallery.py` take the grid, the angles, the
+scale and whether an object is drawn from it, for every level, where they used
+to borrow a level-0 snapshot for three of those and have no doors in the grid
+of any other level. The check reports angles, scale, position and opcode exact
+wherever play has not moved the object, and the grid exact outside the
+occupancy count on every snapshot taken before a door was opened.
+
 **`gltf.py`** — the glTF writer behind it. OBJ was abandoned because it cannot
 carry vertex colours in a form Godot reads, and the baked lighting is the whole
 point.

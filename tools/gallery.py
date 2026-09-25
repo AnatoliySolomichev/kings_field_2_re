@@ -154,8 +154,9 @@ def world_labels(lv=0, out="out/godot"):
     name rather than by memory: the thing you are looking at in the game has a
     number here.
     """
+    import objload
     import placement
-    scales = level3d.live_scales(lv)
+    load = objload.Load(lv).first_frame()
     grid = level3d.grid_of(lv)
     rows = []
     for o in placement.objects(lv):
@@ -163,10 +164,13 @@ def world_labels(lv=0, out="out/godot"):
         if not (0 <= cx < level3d.W and 0 <= cz < level3d.W):
             continue
         c = grid[(cz * level3d.W + cx) * level3d.CELLB:][:level3d.CELLB]
+        r = load.recs.get(o["slot"])
         rows.append({"slot": o["slot"], "type": o["type"],
                      "x": o["x"] / UNIT, "y": 128 * c[6] / UNIT,
                      "z": -o["z"] / UNIT,
-                     "scale": scales.get(o["slot"], 0x1000),
+                     "scale": r["scale"][0] if r else 0x1000,
+                     "op": r["op"] if r else 0xFF,
+                     "drawn": bool(r and load.drawn(r)),
                      "text": o["text"]})
     with open(f"{out}/objlabels{lv:02d}.json", "w") as f:
         json.dump(rows, f, separators=(",", ":"))

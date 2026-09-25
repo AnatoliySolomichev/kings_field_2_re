@@ -77,6 +77,13 @@ func _make(name: String, path: String, is_gallery: bool) -> Node3D:
 			var extra := ""
 			if s != 0x1000:
 				extra = "  x%.2f" % (float(s) / 4096.0)
+			# The opcode load_object_placement gave it, and whether the game
+			# draws it -- a label over nothing is usually a door, a trigger or
+			# an item something has hidden.
+			if int(row.get("op", 0xff)) != 0xff:
+				extra += "  op%02x" % int(row["op"])
+			if not row.get("drawn", true):
+				extra += "  hidden"
 			# Two objects often share a cell -- a readable marker stands on the
 			# same square as the thing it describes -- and their labels landed on
 			# top of each other, unreadable. Stack them instead.

@@ -85,6 +85,15 @@ the same borrowed-not-understood arrangement as the object textures.
 when it is not, so the triple is a visible/not-visible switch and the 59
 objects at `x0.00` are switched off rather than tiny.
 
+**Superseded: it is a size too, and nothing is borrowed for it any more.**
+`load_object_placement` is read whole (`tools/objload.py`; FORMATS.md section
+16, "read whole"): on flag `0x10` the scale is `p[+0x10] << 5` -- the trees,
+which this note called graves -- and it is zero for the door classes, which the
+grid draws instead. Of the 59 zeroes, 49 are empty slots. The same reading gives
+the three angles and the game's rule for what is drawn, so `tools/level3d.py`
+no longer takes the scale, the angles or the render class from a snapshot, and
+every level has them. Only the object textures are still borrowed.
+
 The same routine also writes a byte into the terrain cell the object stands in,
 and **the first reading of that was wrong and is withdrawn**: it is the layer's
 `+0`, the tile index the *drawing* uses, not the shape at `+3` the collision

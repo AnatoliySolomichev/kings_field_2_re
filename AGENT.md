@@ -128,7 +128,10 @@ the movement, against the watchpoint                   48 of 48, 15 of 15
 the conversations, against what was played             44 of 44
 the equipment tables, against a RAM snapshot           3264/3264, 2112/2112, 16/16
 the conversation hooks, two readings of one table      23 of 23
-the port's markers                                     56 in 13 files, all resolving
+the port's markers                                     60 in 14 files, all resolving
+the object loader, against 13 snapshots                angles 4344/4352, scale and
+                                                       position 4352/4352, opcode
+                                                       4226/4226, grid exact on 7
 ```
 
 and in the Godot self-test:
@@ -214,7 +217,13 @@ transcribed, and none of the six has been seen in a log yet — **that still
 wants a person walking over one of those cells with `emu/bp13.lua` armed.**
 `python3 tools/collision.py walls 0` lists where they are.
 
-**3. Object scale — answered, in the negative, and it opened something better.**
+**3. Object scale — answered, and then the whole loader.** The triple is also a
+size, `p[+0x10] << 5` on flag `0x10`, and `load_object_placement` is transcribed
+in `tools/objload.py`: the angles, the scale, the draw rule and the doors in the
+grid come off the disc for every level, and the snapshot is no longer consulted
+for any of them. What follows is the first answer, kept for how it was reached.
+
+**The first answer, in the negative, which opened something better.**
 The triple at `+0x2c` is not a size. `object_set_present` (`0x80044b40`) writes
 `0x1000` into all three when an object is present and `0` when it is not, so it
 is a **visible / not visible switch**, and it reaches the renderer through
