@@ -38,6 +38,7 @@ import sys
 sys.path.insert(0, "tools")
 import collision as coll                                             # noqa: E402
 import gltf                                                           # noqa: E402
+import lighting                                                       # noqa: E402
 import rtim                                                           # noqa: E402
 import tim                                                            # noqa: E402
 import tmd                                                            # noqa: E402
@@ -214,7 +215,7 @@ def build_gltf(lv, out="out/godot", limit=None):
     grid = grid_of(lv)
     _flags, objs = tmd.load("RTMD", lv)
     vram = object_vram(lv)
-    look = open("out/tile_look.bin", "rb").read()
+    look = lighting.table()
     g = gltf.Gltf()
     groups = {}
     span = range(min(limit, W)) if limit else range(W)
@@ -497,7 +498,7 @@ def build_actors_gltf(lv, out="out/godot"):
     grid = grid_of(lv)
     table = act.table(lv, grid)
     vram = object_vram(lv)
-    look = open("out/tile_look.bin", "rb").read()
+    look = lighting.table()
     g = gltf.Gltf()
     mats, items, rows = {}, [], []
     placed = missing = ntri = 0
@@ -586,7 +587,7 @@ def build_objects_gltf(lv, out="out/godot"):
     load = objload.Load(lv).first_frame()
     grid = grid_of(lv)
     vram = object_vram(lv)
-    look = open("out/tile_look.bin", "rb").read()
+    look = lighting.table()
     g = gltf.Gltf()
     groups = {}
     placed = missing = hidden = 0

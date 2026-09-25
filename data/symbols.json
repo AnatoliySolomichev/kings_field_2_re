@@ -651,7 +651,7 @@
  "0x801aeefc": {
   "name": "tile_look",
   "kind": "data",
-  "evidence": "64 lighting records of 108 bytes indexed by cell[+9]&0x3f: 4 x 20 light-direction matrices chosen by orientation, a 20-byte light-colour matrix at +0x50, RBK/GBK/BBK at +0x64. Zero in GAME.EXE, filled at runtime; snapshot out/tile_look.bin"
+  "evidence": "64 lighting records of 108 bytes indexed by cell[+9]&0x3f: 4 x 20 light-direction matrices chosen by orientation, a 20-byte light-colour matrix at +0x50, RBK/GBK/BBK at +0x64. Zero in GAME.EXE, filled every frame by light_table_reset and light_table_step; tools/lighting.py builds it off the disc, byte for byte what every snapshot holds"
  },
  "0x80035954": {
   "name": "tmd_prim_walk",
@@ -1556,7 +1556,7 @@
  "0x800341e8": {
   "name": "light_table_reset",
   "kind": "code",
-  "evidence": "copies the 0x3f-entry lighting table from 0x80081c8c into tile_look, twice per entry (the near and far copies), at the top of every frame. game_main calls it first in the loop"
+  "evidence": "the first call of every frame: for each of 64 records copies light_table_source[48*i+0x00..0x13] to tile_look[108*i+0x00..] (the light direction matrix) and [0x14..0x2f] to [0x50..0x6b] (the colour matrix, the background colour and two arguments), then sets 0x801aeef8. An earlier note said 'twice per entry, the near and far copies': the two lwl/lwr runs are the two halves of one copy"
  },
  "0x80034180": {
   "name": "render_flags_reset",
@@ -1566,7 +1566,7 @@
  "0x80034300": {
   "name": "light_table_step",
   "kind": "code",
-  "evidence": "when 0x801aeef8 is set, runs 0x80016290 over all 64 lighting entries three times, once per colour, then clears the flag. The interpolation that makes torchlight move"
+  "evidence": "when 0x801aeef8 is set, calls light_matrix_turn three times per tile_look record to write its direction matrix turned by one, two and three quarter turns into +0x14, +0x28 and +0x3c -- the four orientations draw_tile picks by cell[+7] & 3 -- then clears the flag. It was described as the interpolation that moves torchlight; it is a rotation. tools/lighting.py: 89 856 of 89 856 bytes against the snapshots"
  },
  "0x8002b330": {
   "name": "camera_pose",
@@ -2237,5 +2237,10 @@
   "name": "vram_stream_ready",
   "kind": "code",
   "evidence": "three instructions: sets +0x10 of the request to 1, which is the flag res_upload_vram waits for before it sends a stream to the GPU"
+ },
+ "0x80016290": {
+  "name": "light_matrix_turn",
+  "kind": "code",
+  "evidence": "(src, dst, quarters): nine halfwords turned about Y -- each row (a, b, c) becomes (a, b, c), (-c, b, a), (-a, b, -c) or (c, b, -a) for 0 to 3. light_table_step calls it three times per lighting record; tools/lighting.py carries it and rebuilds tile_look exactly"
  }
 }

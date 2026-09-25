@@ -124,6 +124,9 @@ def main(quick=False, only_check=False):
     run(["tools/objcoll.py", "--check"],
         "the object collision, against what was played",
         keep=["recorded touches"])
+    run(["tools/lighting.py", "--check"],
+        "the lighting table, against every snapshot with a level",
+        keep=["over every snapshot"])
     run(["tools/rtim.py", "--check"],
         "the video memory, against every snapshot with a level",
         keep=["over every snapshot"])

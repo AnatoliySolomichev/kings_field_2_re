@@ -1044,11 +1044,20 @@ Nothing in the shape of the data could have told the two apart. Only what the
 code *does* with it could, and that was one instruction away.
 
 The filler is `light_table_reset` (`0x800341e8`), which `game_main` calls **at
-the top of every frame**, not once — an animation table would not need that and
-a lighting table that `light_table_step` interpolates does. It copies 64
-entries, 48 bytes at the source and 108 at the destination; block 5 of
-`FDAT[97]` is 2304 bytes, which is the first 48 of those entries, and the last
-16 come from `GAME.EXE`'s own data past the block.
+the top of every frame**, not once. It copies 64 entries, 48 bytes at the
+source and 108 at the destination; block 5 of `FDAT[97]` is 2304 bytes, which
+is the first 48 of those entries, and the last 16 come from `GAME.EXE`'s own
+data past the block.
+
+**Withdrawn: "a lighting table that `light_table_step` interpolates".** The
+step interpolates nothing. The reset copies a source's first 20 bytes -- the
+light direction matrix -- to the record's `+0x00` and its other 28 to `+0x50`,
+and `light_table_step` fills the 60 bytes between with that matrix turned by
+one, two and three quarter turns about Y (`light_matrix_turn`, `0x80016290`):
+the four orientations `draw_tile` picks by `cell[+7] & 3`. `tools/lighting.py`
+builds the whole table that way, and it is **6912 of 6912 bytes** of what
+every snapshot holds, on level 0 and level 4 alike -- so the port no longer
+reads it out of `out/tile_look.bin`.
 
 **So where the creature animation lives is open again.** `0x8003e34c` really
 does interpolate two records by a fraction — that part of the old reading is
@@ -1439,7 +1448,7 @@ light directions round with it. Computed out over level 0 the way the GTE does
 result runs 0.47 to 1.34 with a median of 0.89 and **never reaches black**,
 because the background term is added after the light. Anything black in a port
 of this level is the port's own doing. The table is zero inside `GAME.EXE` and filled
-at runtime — read it live; a snapshot is `out/tile_look.bin`. Level 0 uses four
+at runtime, and `tools/lighting.py` builds it off the disc exactly. Level 0 uses four
 of the 64: index 0 on 4755 cells, 4 on 97, 3 on 45, 2 on 24.
 
 **`cell[+5]` is a TMD object index — the cell's own little model.** This is
@@ -1606,7 +1615,7 @@ back to `OPEN.EXE`, 3 and 4 both go to `END.EXE` with `overlay_arg` 2 and 3.
 | 10 | `cutscene_step` | `0x80061940` |
 | 11 | `camera_pose` | `0x8002b330` — the eye and the three view angles |
 | 12 | `audio_listener_set` | `0x800156bc` — the same pose, for 3D sound |
-| 13 | `light_table_step` | `0x80034300` — the interpolation that moves torchlight |
+| 13 | `light_table_step` | `0x80034300` — the three turned copies of each light matrix |
 | 14, 15 | the **resource queue** | `res_upload_vram` pushes a texture into VRAM when the request at `0x801c1728` is type `0x40`; `res_upload_spu` hands sound to the SPU at `0xa000` when it is `0x30`. One queue, two kinds of payload |
 | 16 | `render_frame` | `0x800422b8` |
 

@@ -543,6 +543,16 @@ everything on purpose — this level has rooms the game never lets you into. The
 readout names the cell you are in, in the game's own numbering, so anything
 found there can be pointed at in the data.
 
+**`lighting.py`** — the 64 lighting records at `tile_look`, built the way
+`light_table_reset` and `light_table_step` build them: each source's light
+matrix, three quarter-turned copies of it, and its colour matrix.
+`level3d.py` bakes vertex colours from it; it used to read a snapshot,
+`out/tile_look.bin`, which it matches byte for byte.
+
+```
+python3 tools/lighting.py --check   against out/tile_look.bin and every snapshot
+```
+
 **`objload.py`** — `load_object_placement`, transcribed: the object table and
 the grid as the game leaves them after loading a level.
 
