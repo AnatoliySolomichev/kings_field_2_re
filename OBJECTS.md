@@ -92,32 +92,32 @@ reading a row would be reading whatever follows the table.
 
   0x80047cbc  opcode 0x00   -- 12 objects in the game
       347 instructions in 60 blocks
-      calls sub_800445b8, vec_angle, object_sound, facing_test, rot_matrix_y, ApplyMatrixLV, collide_query
+      calls stamp_rect, vec_angle, object_sound, facing_test, rot_matrix_y, ApplyMatrixLV, collide_query
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table, points at object_table, reads player_pos
 
   0x8004814c  opcode 0x01   -- 42 objects in the game
       257 instructions in 41 blocks
-      calls sub_800445b8, vec_angle, object_sound, facing_test, rot_matrix_y, ApplyMatrixLV, collide_query
+      calls stamp_rect, vec_angle, object_sound, facing_test, rot_matrix_y, ApplyMatrixLV, collide_query
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table, reads player_pos, writes player_strafe_speed
 
   0x800475f8  opcode 0x02   -- 128 objects in the game
       221 instructions in 37 blocks
-      calls sub_800445b8, object_sound, collide_query
+      calls stamp_rect, object_sound, collide_query
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
 
   0x800470c4  opcode 0x03   -- 66 objects in the game
       176 instructions in 32 blocks
-      calls object_sound, sub_800443c8, collide_query
+      calls object_sound, stamp_table, collide_query
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
 
   0x80047290  opcode 0x04   -- 1 objects in the game
       177 instructions in 33 blocks
-      calls object_sound, sub_800443c8, collide_query
+      calls object_sound, stamp_table, collide_query
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
 
   0x80047444  opcode 0x05   -- 15 objects in the game
       177 instructions in 33 blocks
-      calls object_sound, sub_800443c8, collide_query
+      calls object_sound, stamp_table, collide_query
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
 
   0x80048790  opcode 0x06   -- 178 objects in the game
@@ -150,6 +150,7 @@ reading a row would be reading whatever follows the table.
 
   0x8004b204  opcodes 0x12, 0x16   -- 10 objects in the game
       9 instructions in 2 blocks
+      reads vblank_count
 
   0x8004847c  opcode 0x17   -- 19 objects in the game
       208 instructions in 36 blocks
@@ -168,7 +169,7 @@ reading a row would be reading whatever follows the table.
 
   0x80047858  opcode 0x1b   -- 23 objects in the game
       348 instructions in 60 blocks
-      calls sub_800445b8, vec_angle, object_sound, facing_test, rot_matrix_y, ApplyMatrixLV, collide_query
+      calls stamp_rect, vec_angle, object_sound, facing_test, rot_matrix_y, ApplyMatrixLV, collide_query
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table, points at object_table, reads player_pos
 
   0x8004b154  opcode 0x31
@@ -195,7 +196,7 @@ reading a row would be reading whatever follows the table.
 
   0x80048ecc  opcode 0x54   -- 7 objects in the game
       129 instructions in 23 blocks
-      calls player_in_rect, sub_800443c8
+      calls player_in_rect, stamp_table
 
   0x80049b40  opcode 0x55   -- 2 objects in the game
       339 instructions in 66 blocks
@@ -207,12 +208,12 @@ reading a row would be reading whatever follows the table.
 
   0x80049574  opcode 0x57
       135 instructions in 21 blocks
-      calls object_sound, sub_800445b8
+      calls object_sound, stamp_rect
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
 
   0x8004ab40  opcode 0x58   -- 4 objects in the game
       132 instructions in 26 blocks
-      calls sub_800445b8, object_sound
+      calls stamp_rect, object_sound
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
 
   0x8004ac90  opcode 0x59
@@ -221,12 +222,12 @@ reading a row would be reading whatever follows the table.
 
   0x800496b8  opcode 0x5a   -- 2 objects in the game
       171 instructions in 37 blocks
-      calls player_in_rect, object_sound, collide_query, sub_800445b8
+      calls player_in_rect, object_sound, collide_query, stamp_rect
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
 
   0x800490b8  opcode 0x5f   -- 20 objects in the game
       111 instructions in 22 blocks
-      calls sub_800445b8
+      calls stamp_rect
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table
 
   0x8004b228  opcode 0x60
@@ -275,17 +276,17 @@ reading a row would be reading whatever follows the table.
 
   0x8004a120  opcode 0xe7
       115 instructions in 19 blocks
-      calls player_in_rect, sub_80046c00, grid_query_area, place_player_on_terrain, res_wait, sub_8003d624
+      calls player_in_rect, sub_80046c00, grid_mark, place_player_on_terrain, res_wait, sub_8003d624
       reads player_pos, writes player_pos, writes player_facing, reads player_facing
 
   0x8004a66c  opcode 0xe8   -- 12 objects in the game
       102 instructions in 16 blocks
-      calls player_in_rect, screen_capture, grid_query_area, place_player_on_terrain
+      calls player_in_rect, screen_capture, grid_mark, place_player_on_terrain
       reads player_pos, writes player_pos, writes player_facing, reads player_facing
 
   0x8004a5b8  opcode 0xea   -- 8 objects in the game
       95 instructions in 17 blocks
-      calls player_in_rect, grid_query_area, sub_80046cb0
+      calls player_in_rect, grid_mark, sub_80046cb0
       writes current_object, points at object_type_table, writes current_object_type, points at object_op_table, reads player_pos
 
   0x8004a2e0  opcode 0xeb   -- 16 objects in the game
@@ -313,151 +314,151 @@ and it is the same one twice.
 
   0x800508b4  opcode 0x00
       171 instructions in 31 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c130 and 2 more
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c130 and 2 more
       reads actor_leader
 
   0x800508f4  opcode 0x01
       191 instructions in 36 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004db3c and 3 more
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004db3c and 3 more
       reads actor_leader
 
   0x80050400  opcode 0x02
       257 instructions in 57 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c130 and 2 more
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c130 and 2 more
       reads actor_leader
 
   0x800505a4  opcode 0x03
       371 instructions in 87 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, actor_retire and 9 more
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, actor_retire and 9 more
       reads actor_leader, reads level_hooks
 
   0x800514f8  opcode 0x04
       190 instructions in 34 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c130 and 4 more
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c130 and 4 more
       reads actor_leader
 
   0x80050b20  opcode 0x05
       275 instructions in 62 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004db3c and 6 more
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004db3c and 6 more
       reads actor_leader, reads player_pos
 
   0x8005205c  opcode 0x06
       313 instructions in 59 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004ea7c, sub_8004c130 and 6 more
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004ea7c, sub_8004c130 and 6 more
       reads actor_leader, points at collision_layers, reads collision_layers, writes collision_layers, reads player_pos
 
   0x80050e70  opcode 0x09
       273 instructions in 56 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c130 and 7 more
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c130 and 7 more
       reads actor_leader, reads player_pos, reads player_y
 
   0x80051054  opcode 0x0a
       287 instructions in 53 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e928, sub_8004c184 and 5 more
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e928, sub_8004c184 and 5 more
       reads actor_leader
 
   0x800517f8  opcode 0x0b
       305 instructions in 59 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c184, sub_8004e31c and 10 more
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c184, sub_8004e31c and 10 more
       reads actor_leader, reads player_pos, reads player_y
 
   0x80050978  opcodes 0x0c, 0x10
       261 instructions in 53 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004db08, sub_8004f008 and 5 more
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004db08, sub_8004f008 and 5 more
       reads actor_leader
 
   0x80050cf4  opcodes 0x0d, 0x11
       245 instructions in 48 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004db08, sub_8004c184 and 4 more
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004db08, sub_8004c184 and 4 more
       reads actor_leader, reads player_pos, reads player_y
 
   0x80051b78  opcode 0x0e
       227 instructions in 49 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c130
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c130
       reads actor_leader
 
   0x80051ca8  opcode 0x0f
       175 instructions in 30 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c184 and 2 more
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c184 and 2 more
       reads actor_leader
 
   0x80051a74  opcode 0x12
       220 instructions in 36 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c184 and 6 more
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c184 and 6 more
       reads actor_leader, reads player_pos, reads player_y
 
   0x80051d1c  opcode 0x13
       205 instructions in 43 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c104 and 2 more
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c104 and 2 more
       reads actor_leader, reads held_item_model
 
   0x80051dd8  opcode 0x14
       192 instructions in 35 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c184 and 2 more
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c184 and 2 more
       reads actor_leader
 
   0x80051ea8  opcode 0x15
       278 instructions in 51 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004db08, sub_8004c130 and 5 more
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004db08, sub_8004c130 and 5 more
       reads actor_leader, reads player_pos, points at collision_layers, reads collision_layers, writes collision_layers
 
   0x80051e80  opcode 0x16
       173 instructions in 33 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c104 and 2 more
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c104 and 2 more
       reads actor_leader
 
   0x80051598  opcode 0x17
       229 instructions in 40 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c130 and 4 more
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c130 and 4 more
       reads actor_leader
 
   0x800516d4  opcode 0x18
       228 instructions in 40 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c130 and 5 more
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c130 and 5 more
       reads actor_leader, reads player_pos
 
   0x800523f0  opcode 0x19
       286 instructions in 53 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c130 and 4 more
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, sub_8004c130 and 4 more
       reads actor_leader
 
   0x800522f8  opcode 0x1a
       220 instructions in 38 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c130
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c130
       reads actor_leader, points at object_table
 
   0x80052620  opcode 0x1b
       258 instructions in 54 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c130 and 7 more
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c104, sub_8004c130 and 7 more
       reads actor_leader
 
   0x80052840  opcode 0x1c
       207 instructions in 35 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c130, sub_8004e31c and 3 more
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c130, sub_8004e31c and 3 more
       reads actor_leader
 
   0x800527d0  opcode 0x1d
       178 instructions in 32 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c130, sub_8004e31c and 1 more
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c130, sub_8004e31c and 1 more
       reads actor_leader
 
   0x80052934  opcode 0x1e
       240 instructions in 37 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c130, sub_8004e31c and 2 more
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c130, sub_8004e31c and 2 more
       reads actor_leader, reads collision_layers
 
   0x80052aac  opcode 0x1f
       225 instructions in 47 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, actor_retire and 1 more
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e6f8, actor_retire and 1 more
       reads actor_leader
 
   0x80051274  opcode 0x84
       311 instructions in 49 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c130, sub_8004db3c and 4 more
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004c130, sub_8004db3c and 4 more
       reads actor_leader, points at player_pos, reads player_pos, reads player_y
 
   0x80052be8  opcode 0xf0
       150 instructions in 25 blocks
-      calls grid_query_area, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e31c
+      calls grid_mark, vec_rotate, sub_8004ede0, collide_query, sub_8004c0b0, actor_move_vertical, sub_8004e31c
       reads actor_leader
 ```

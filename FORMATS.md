@@ -3522,7 +3522,7 @@ none of them is the answer either — but all four are worth having:
 
 | Routine | What it is |
 | --- | --- |
-| `grid_query_area` `0x80033c4c` | world x,z and a radius into a range of cells, indexing the grid as `z*800 + x*10` with 80×80 bounds. 15 callers — this is the terrain and collision lookup |
+| `grid_mark` `0x80033c4c` | world x,z and a radius into a range of cells, indexing the grid as `z*800 + x*10` with 80×80 bounds, adding 4n to each cell's +2 -- the occupancy count. 15 callers. It was named `grid_query_area` and read as "the terrain and collision lookup"; it looks nothing up (section 16, "read whole") |
 | `free_object_resource` `0x80043894` | hands a record's `+0x10` to `heap_free` |
 | `free_resource` `0x80019518` | the same for other pointers, 10 callers |
 | `entity_table_init` `0x80053084` | 29 instructions over `entity_table`, called once |
@@ -3972,7 +3972,7 @@ one under the death rule, so the rules can be tried without combat, and a
 static keeps category-1 deaths when the world is loaded again.
 
 Not ported: the AI, so an awake creature stands at home; the cell marks
-through `grid_query_area`; where followers and object riders stand; the model
+through `grid_mark`; where followers and object riders stand; the model
 110 rule in `actor_tick_driver`; `0x801b25e5`; and the game's `rand` seed. The
 port also uses the disc's category for the two men by the house, so it shows
 the man at (57,3), whom that session held. The one at (62,4) is held by

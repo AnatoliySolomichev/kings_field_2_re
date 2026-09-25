@@ -128,10 +128,14 @@ the movement, against the watchpoint                   48 of 48, 15 of 15
 the conversations, against what was played             44 of 44
 the equipment tables, against a RAM snapshot           3264/3264, 2112/2112, 16/16
 the conversation hooks, two readings of one table      23 of 23
-the port's markers                                     60 in 14 files, all resolving
+the port's markers                                     67 in 16 files, all resolving
 the object loader, against 13 snapshots                angles 4344/4352, scale and
                                                        position 4352/4352, opcode
                                                        4226/4226, grid exact on 7
+the lighting table, against every snapshot             89 856 of 89 856 bytes
+the video memory, against every snapshot               object pages 779 760 of
+                                                       782 320 (the rest: the
+                                                       water's scroll offset)
 ```
 
 and in the Godot self-test:

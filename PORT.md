@@ -29,7 +29,7 @@ that it reproduces it correctly.** `status` says how far that went:
 | --- | --- | --- | --- | --- | --- |
 | boot | 10 | 1 | 0 | 115 | 50 (43%) |
 | open | 293 | 6 | 0 | 20002 | 1066 (5%) |
-| game | 818 | 41 | 5 | 93468 | 12306 (13%) |
+| game | 820 | 47 | 5 | 93512 | 13097 (14%) |
 | end | 167 | 0 | 0 | 9966 | 0 (0%) |
 
 Those percentages are of *all* the code in the image, which includes
@@ -45,9 +45,12 @@ floor, not a score.
 | [`godot/collision.gd:109`](godot/collision.gd#L109) | `func rot_matrix_x` | `game:0x80016598` rot_matrix_x | verified |
 | [`godot/collision.gd:116`](godot/collision.gd#L116) | `func rot_matrix_y` | `game:0x8001660c` rot_matrix_y | verified |
 | [`godot/collision.gd:137`](godot/collision.gd#L137) | `func direction_from_angles` | `game:0x800167cc` direction_from_angles | verified |
+| [`godot/doors.gd:220`](godot/doors.gd#L220) | `var d` | `game:0x80016a2c` facing_test | transcribed |
 | [`godot/collision.gd:188`](godot/collision.gd#L188) | `func vec_angle` | `game:0x80016ab8` vec_angle | transcribed |
 | [`godot/objcoll.gd:74`](godot/objcoll.gd#L74) | `func hits` | `game:0x80016d3c` in_oriented_rect | transcribed |
 | [`godot/actors.gd:253`](godot/actors.gd#L253) | `func _in_range` | `game:0x80016ec8` in_range | transcribed |
+| [`godot/player.gd:67`](godot/player.gd#L67) | `const TICK_HZ` | `game:0x80019614` frame_limit | transcribed |
+| [`godot/doors.gd:157`](godot/doors.gd#L157) | `(the file)` | `game:0x80028e48` player_in_range | transcribed |
 | [`godot/equip.gd:49`](godot/equip.gd#L49) | `func add_armour` | `game:0x800293e4` add_armour_ratings | verified |
 | [`godot/equip.gd:25`](godot/equip.gd#L25) | `const RATINGS` | `game:0x80029500` player_recalc_stats | partial |
 | [`godot/equip.gd:60`](godot/equip.gd#L60) | `func ratings` | `game:0x80029500` player_recalc_stats | partial |
@@ -56,20 +59,23 @@ floor, not a score.
 | [`godot/damage.gd:33`](godot/damage.gd#L33) | `const TYPES` | `game:0x8002ab18` player_take_hit | verified |
 | [`godot/damage.gd:58`](godot/damage.gd#L58) | `var base` | `game:0x8002ab18` player_take_hit | verified |
 | [`godot/game.gd:86`](godot/game.gd#L86) | `const EYE_HEIGHT` | `game:0x8002b330` camera_pose | transcribed |
-| [`godot/player.gd:262`](godot/player.gd#L262) | `func _tick` | `game:0x8002e3f8` player_horizontal | partial |
-| [`godot/player.gd:350`](godot/player.gd#L350) | `func _move` | `game:0x8002ed60` player_vertical | verified |
-| [`godot/player.gd:332`](godot/player.gd#L332) | `func _bob` | `game:0x8002f298` player_bob | transcribed |
-| [`godot/player.gd:304`](godot/player.gd#L304) | `func _turn` | `game:0x8002f5c0` player_look | transcribed |
-| [`godot/player.gd:248`](godot/player.gd#L248) | `func _ramp` | `game:0x8002f9bc` player_walk | verified |
-| [`godot/player.gd:212`](godot/player.gd#L212) | `func _process` | `game:0x80030fcc` player_controller | partial |
+| [`godot/player.gd:268`](godot/player.gd#L268) | `func _tick` | `game:0x8002e3f8` player_horizontal | partial |
+| [`godot/player.gd:356`](godot/player.gd#L356) | `func _move` | `game:0x8002ed60` player_vertical | verified |
+| [`godot/player.gd:338`](godot/player.gd#L338) | `func _bob` | `game:0x8002f298` player_bob | transcribed |
+| [`godot/player.gd:310`](godot/player.gd#L310) | `func _turn` | `game:0x8002f5c0` player_look | transcribed |
+| [`godot/player.gd:254`](godot/player.gd#L254) | `func _ramp` | `game:0x8002f9bc` player_walk | verified |
+| [`godot/player.gd:218`](godot/player.gd#L218) | `func _process` | `game:0x80030fcc` player_controller | partial |
 | [`godot/collision.gd:332`](godot/collision.gd#L332) | `func _layer` | `game:0x800324f0` select_cell_layer | transcribed |
 | [`godot/collision.gd:349`](godot/collision.gd#L349) | `(the file)` | `game:0x8003260c` tile_collision | verified |
 | [`godot/collision.gd:478`](godot/collision.gd#L478) | `func _notch` | `game:0x80032d3c` 0x80032d3c | transcribed |
 | [`godot/collision.gd:494`](godot/collision.gd#L494) | `func surface` | `game:0x80033b10` collide_surface | transcribed |
+| [`godot/scroll.gd:19`](godot/scroll.gd#L19) | `const PAGE` | `game:0x800351fc` texture_scroll_step | transcribed |
+| [`godot/doors.gd:171`](godot/doors.gd#L171) | `func _stamp` | `game:0x800445b8` stamp_rect | transcribed |
 | [`godot/objcoll.gd:26`](godot/objcoll.gd#L26) | `const SCALE_BIT` | `game:0x80045ac8` object_collide | verified |
 | [`godot/objcoll.gd:50`](godot/objcoll.gd#L50) | `(the file)` | `game:0x80045ac8` object_collide | verified |
 | [`godot/objcoll.gd:58`](godot/objcoll.gd#L58) | `var r` | `game:0x80045ac8` object_collide | verified |
 | [`godot/objects.gd:94`](godot/objects.gd#L94) | `var pcx` | `game:0x80046884` player_in_rect | transcribed |
+| [`godot/doors.gd:43`](godot/doors.gd#L43) | `const TICK_HZ` | `game:0x80047010` object_interpreter | partial |
 | [`godot/objects.gd:52`](godot/objects.gd#L52) | `const SLOTS` | `game:0x80047010` object_interpreter | partial |
 | [`godot/objects.gd:105`](godot/objects.gd#L105) | `func tick` | `game:0x80047010` object_interpreter | partial |
 | [`godot/actors.gd:208`](godot/actors.gd#L208) | `func _spawn` | `game:0x8004b868` actor_spawn | transcribed |
@@ -87,6 +93,7 @@ floor, not a score.
 | [`godot/items.gd:41`](godot/items.gd#L41) | `func has_item` | `game:0x8005d7bc` has_item | transcribed |
 | [`godot/items.gd:48`](godot/items.gd#L48) | `func take_item` | `game:0x8005d7f8` take_item | transcribed |
 | [`godot/items.gd:61`](godot/items.gd#L61) | `func give_item` | `game:0x8005d898` give_item | transcribed |
+| [`godot/doors.gd:106`](godot/doors.gd#L106) | `func _interact` | `game:0x8005e2d0` object_interact | partial |
 | [`godot/cutscene.gd:44`](godot/cutscene.gd#L44) | `func _ready` | `game:0x80060d20` str_play | partial |
 | [`godot/collision.gd:160`](godot/collision.gd#L160) | `func arctan_unit` | `game:0x800742ac` arctan_unit | transcribed |
 | [`godot/collision.gd:204`](godot/collision.gd#L204) | `func isqrt` | `game:0x80074508` game_isqrt | transcribed |
@@ -120,7 +127,6 @@ load-bearing whatever its size.
 | 13 | 137 | `0x80026570` | sub_80026570 |
 | 13 | 100 | `0x800261dc` | ui_draw_label |
 | 13 | 82 | `0x80061e00` | sub_80061e00 |
-| 13 | 15 | `0x80016a2c` | facing_test |
 | 12 | 67 | `0x800269c0` | sub_800269c0 |
 | 12 | 40 | `0x80041eec` | announce |
 | 11 | 146 | `0x80033f38` | collide_query |
@@ -138,4 +144,5 @@ load-bearing whatever its size.
 | 9 | 219 | `0x80024f88` | sub_80024f88 |
 | 9 | 93 | `0x800252f4` | sub_800252f4 |
 | 9 | 38 | `0x80027728` | sub_80027728 |
+| 8 | 94 | `0x80027198` | sub_80027198 |
 

@@ -47,7 +47,7 @@
     "evidence": "The same number, unrelated: a terrain cell is at grid + cz*800 + cx*10, so a row of 80 cells of 10 bytes is 800 bytes. Confirmed from the code after first being guessed -- FORMATS.md, 'Two constants confirmed from the code'.",
     "routines": [
      "collide_at_cell",
-     "grid_query_area",
+     "grid_mark",
      "tile_collision",
      "collide_surface"
     ]
@@ -64,7 +64,7 @@
     "evidence": "Ten bytes to a terrain cell, from the same index arithmetic.",
     "routines": [
      "collide_at_cell",
-     "grid_query_area",
+     "grid_mark",
      "tile_collision",
      "collide_surface"
     ]
@@ -77,11 +77,11 @@
    {
     "name": "GRID_SIDE",
     "kind": "read",
-    "where": "game:0x80033c4c grid_query_area",
-    "evidence": "The grid is 80 by 80 and grid_query_area bounds both axes by it.",
+    "where": "game:0x80033c4c grid_mark",
+    "evidence": "The grid is 80 by 80 and grid_mark bounds both axes by it.",
     "routines": [
      "collide_at_cell",
-     "grid_query_area",
+     "grid_mark",
      "tile_collision"
     ]
    }

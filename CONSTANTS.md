@@ -5,8 +5,8 @@ from their entry points by `tools/rdis.py`. Do not edit it: the names and
 the evidence live in `data/constants.json`, and everything else here is
 counted out of the code.
 
-556 distinct numbers over 12251 sites, and
-296 distinct displacements off a register over 15233 sites.
+556 distinct numbers over 12253 sites, and
+296 distinct displacements off a register over 15234 sites.
 
 A number's *role* is read off the instruction and its neighbours:
 
@@ -60,11 +60,11 @@ In `game:object_interpreter`, `open:sub_80029504`, `game:object_give`, `game:sub
 
 ### `0x50` = 80
 
-**GRID_SIDE** -- *read*, from `game:0x80033c4c grid_query_area`  
-The grid is 80 by 80 and grid_query_area bounds both axes by it.
+**GRID_SIDE** -- *read*, from `game:0x80033c4c grid_mark`  
+The grid is 80 by 80 and grid_mark bounds both axes by it.
 
 32 sites: 22 loaded, 8 bound, 1 compared with, 1 argument.
-In `game:effect_spawn`, `game:sub_80024f88`, `game:sub_8001b88c`, `game:apply_damage`, `game:held_item_tick`, `game:player_vertical`, `game:grid_query_area`, `game:sub_800345f4`, `game:draw_terrain`, `game:sub_800445b8`, `open:open_main`, `open:title_menu` and 7 more.
+In `game:effect_spawn`, `game:sub_80024f88`, `game:sub_8001b88c`, `game:apply_damage`, `game:held_item_tick`, `game:player_vertical`, `game:grid_mark`, `game:sub_800345f4`, `game:draw_terrain`, `game:stamp_rect`, `open:open_main`, `open:title_menu` and 7 more.
 
 `python3 tools/consts.py 0x50` for every site.
 
@@ -147,7 +147,7 @@ The radius literal the player's movement passes to the collision: `li $a3, 0x320
 The same number, unrelated: a terrain cell is at grid + cz*800 + cx*10, so a row of 80 cells of 10 bytes is 800 bytes. Confirmed from the code after first being guessed -- FORMATS.md, 'Two constants confirmed from the code'.
 
 51 sites: 33 loaded, 16 multiplier, 1 argument, 1 bound.
-In `game:object_interpreter`, `game:use_item`, `game:player_vertical`, `game:effect_tick`, `game:player_move`, `game:player_controller`, `game:place_player_on_terrain`, `game:player_horizontal`, `game:sub_800445b8`, `game:object_set_present`, `game:load_object_placement`, `game:actor_animation_effects` and 13 more.
+In `game:object_interpreter`, `game:use_item`, `game:player_vertical`, `game:effect_tick`, `game:player_move`, `game:player_controller`, `game:place_player_on_terrain`, `game:player_horizontal`, `game:stamp_rect`, `game:object_set_present`, `game:load_object_placement`, `game:actor_animation_effects` and 13 more.
 
 `python3 tools/consts.py 0x320` for every site.
 
@@ -177,7 +177,7 @@ In `game:cast_spell`, `game:effect_tick`.
 The body height literal in the player's movement, passed to the collision beside the radius.
 
 19 sites: 13 loaded, 6 argument.
-In `game:use_item`, `game:player_horizontal`, `game:player_vertical`, `game:sub_80028e48`, `game:sub_8002b114`, `game:place_player_on_terrain`, `game:sub_8002b8d8`, `game:player_move`, `game:player_controller`, `game:sub_80033d84`, `game:sub_8004d254`, `game:actor_tick`.
+In `game:use_item`, `game:player_horizontal`, `game:player_vertical`, `game:player_in_range`, `game:sub_8002b114`, `game:place_player_on_terrain`, `game:sub_8002b8d8`, `game:player_move`, `game:player_controller`, `game:sub_80033d84`, `game:sub_8004d254`, `game:actor_tick`.
 
 `python3 tools/consts.py 0x6a4` for every site.
 
@@ -186,8 +186,8 @@ In `game:use_item`, `game:player_horizontal`, `game:player_vertical`, `game:sub_
 **CELL** -- *read*, from `game:0x80033b8c grid_cell_at, and everywhere a world coordinate is formed`  
 World X and Z are 2048 units to the grid cell: actor_stand_at_home forms x = cell_x << 11 + fine x. FORMATS.md, 'World X/Z = 2048 x cell'.
 
-226 sites: 99 divisor, 35 multiplier, 31 loaded, 25 mask, 25 bound, 10 argument, 1 compared with.
-In `game:object_interpreter`, `game:actor_tick`, `game:effect_tick`, `game:effect_spawn`, `game:render_walk`, `game:load_object_placement`, `game:sub_8001aa84`, `game:grid_query_area`, `game:draw_cell_walk`, `game:draw_model_plain`, `game:render_frame`, `game:object_set_present` and 70 more.
+227 sites: 100 divisor, 35 multiplier, 31 loaded, 25 mask, 25 bound, 10 argument, 1 compared with.
+In `game:object_interpreter`, `game:actor_tick`, `game:effect_tick`, `game:effect_spawn`, `game:render_walk`, `game:load_object_placement`, `game:sub_8001aa84`, `game:grid_mark`, `game:draw_cell_walk`, `game:draw_model_plain`, `game:render_frame`, `game:object_set_present` and 71 more.
 
 `python3 tools/consts.py 0x800` for every site.
 
@@ -282,7 +282,7 @@ routines is the object record's stride showing up as a field.
 | `+0x4` | 807 | 346 | 288 |
 | `+0x8` | 394 | 283 | 212 |
 | `+0xc` | 326 | 234 | 152 |
-| `+0x10` | 284 | 221 | 142 |
+| `+0x10` | 284 | 222 | 143 |
 | `+0x2` | 312 | 189 | 160 |
 | `+0x6` | 279 | 155 | 139 |
 | `+0x18` | 206 | 127 | 115 |

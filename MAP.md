@@ -19,19 +19,19 @@ handlers and whatever a pointer table reaches have to be.
 | subsystem | routines | instructions | named |
 | --- | --- | --- | --- |
 | player | 213 | 23539 | 61 |
-| objects | 94 | 14706 | 43 |
-| render | 66 | 13981 | 29 |
+| objects | 94 | 14706 | 47 |
+| render | 66 | 13981 | 31 |
 | library | 85 | 7597 | 56 |
 | effects | 31 | 7495 | 3 |
 | actors | 45 | 6706 | 13 |
-| unreached | 58 | 4017 | 3 |
-| level | 36 | 3702 | 11 |
+| unreached | 60 | 4061 | 5 |
+| level | 36 | 3702 | 14 |
 | menu | 44 | 3468 | 7 |
-| boot | 52 | 2438 | 6 |
+| boot | 52 | 2438 | 8 |
 | flags | 40 | 2149 | 2 |
 | items | 20 | 2136 | 9 |
 | resources | 27 | 1119 | 4 |
-| lighting | 3 | 244 | 2 |
+| lighting | 3 | 244 | 3 |
 | sound | 2 | 115 | 2 |
 | camera | 1 | 30 | 1 |
 | render_state | 1 | 26 | 1 |
@@ -44,7 +44,7 @@ the pad, the turn, the walk and the height.
 
 | address | instructions | callers | name | what it touches |
 | --- | --- | --- | --- | --- |
-| `0x80030fcc` | 1353 | 1 | player_controller | calls grid_query_area, PadRead, player_recalc_stats, announce and 26 more; points at player_pos, reads player_pos, reads |
+| `0x80030fcc` | 1353 | 1 | player_controller | calls grid_mark, PadRead, player_recalc_stats, announce and 26 more; points at player_pos, reads player_pos, reads bind_ |
 | `0x8002d2a0` | 787 | 1 | held_item_tick | calls spell_begin, effect_spawn, vec_rotate, actor_spot_taken and 7 more; reads equipped_weapon, reads held_item_record, |
 | `0x8002c30c` | 743 | 2 | player_action | calls effect_spawn, player_recalc_stats, rand, collide_wrapper_actor; points at player_action_table, points at effect_sl |
 | `0x800227ec` | 709 | 1 | ui_status_page | calls ui_draw_label, ui_prim_begin, ui_prim_quad, ui_prim_add; reads player_exp, reads player_level, reads player_hp, re |
@@ -266,8 +266,8 @@ the object interpreter and its 44 handlers.
 
 | address | instructions | callers | name | what it touches |
 | --- | --- | --- | --- | --- |
-| `0x80047010` | 4421 | 1 | object_interpreter | calls player_in_rect, actors_retire_marked, level_load, object_trigger and 19 more; points at object_table, writes curre |
-| `0x80053c84` | 1970 | 10 | effect_spawn | calls effect_alloc, rand, collide_wrapper_actor, vec_length_2d; reads player_state |
+| `0x80047010` | 4421 | 1 | object_interpreter | calls player_in_rect, actors_retire_marked, level_load, object_trigger and 21 more; points at object_table, writes curre |
+| `0x80053c84` | 1970 | 10 | effect_spawn | calls effect_alloc, rand, collide_wrapper_actor, vec_length_2d; reads player_state, reads vblank_count |
 | `0x8003260c` | 1345 | 3 | tile_collision | reads collision_layer_offset, reads collision_cell_ptr, writes collision_surface, writes surface_plane_18 |
 | `0x8004c668` | 529 | 3 | actor_take_hit | calls vec_angle, facing_test, direction_from_angles, game_isqrt and 3 more; points at actor_table, points at entity_tabl |
 | `0x80017c78` | 410 | 4 | object_trigger | calls map_mark_seen, block_zero, level_state_write, level_load and 1 more; points at current_level_block, reads current_ |
@@ -279,16 +279,16 @@ the object interpreter and its 44 handlers.
 | `0x8002a310` | 186 | 1 | award_exp | calls rand, announce, skill_unlock, player_recalc_stats; points at player_exp, reads player_exp, writes player_exp, read |
 | `0x80069dbc` | 169 | 1 | sub_80069dbc |  |
 | `0x8004352c` | 167 | 4 | sub_8004352c | calls model_ptr |
-| `0x800445b8` | 157 | 2 | sub_800445b8 | points at level_grid |
+| `0x800445b8` | 157 | 2 | stamp_rect | points at level_grid |
 | `0x800463bc` | 147 | 1 | sub_800463bc | points at object_table |
-| `0x80033f38` | 146 | 11 | collide_query | calls collide_wrapper_actor, actor_spot_taken, object_collide; writes collision_surface, reads collision_cell_ptr, write |
+| `0x80033f38` | 146 | 11 | collide_query | calls collide_wrapper_actor, actor_spot_taken, object_collide, player_in_range and 1 more; writes collision_surface, rea |
 | `0x80015410` | 145 | 2 | sound_play_3d | calls game_isqrt, vec_angle, game_sin, sound_play; reads player_pos_mirror1 |
 | `0x80046dcc` | 145 | 1 | sub_80046dcc | calls direction_from_angles, vec_scale |
 | `0x80044900` | 144 | 1 | sub_80044900 | points at object_table, points at object_type_table |
 | `0x800533e8` | 143 | 2 | actor_attack_player | calls player_take_hit, vec_angle, facing_test, actor_take_hit; points at actor_table, points at entity_table |
 | `0x8006a6d8` | 142 | 1 | sub_8006a6d8 |  |
-| `0x8004d838` | 125 | 1 | sub_8004d838 | calls in_range; points at actor_table, reads current_actor, points at entity_table |
-| `0x800443c8` | 124 | 2 | sub_800443c8 | calls game_cos, game_sin; points at level_grid |
+| `0x8004d838` | 125 | 1 | actor_in_range | calls in_range; points at actor_table, reads current_actor, points at entity_table |
+| `0x800443c8` | 124 | 2 | stamp_table | calls game_cos, game_sin; points at level_grid |
 | `0x80045ac8` | 109 | 1 | object_collide | calls in_range, in_oriented_rect; points at object_table, reads object_table, reads current_object, points at object_typ |
 | `0x80016d3c` | 99 | 1 | in_oriented_rect | calls game_isqrt, vec_angle, game_cos, game_sin |
 | `0x80074380` | 98 | 5 | sub_80074380 |  |
@@ -312,11 +312,11 @@ the object interpreter and its 44 handlers.
 | `0x80042cac` | 49 | 2 | sub_80042cac |  |
 | `0x80015f18` | 49 | 3 | sub_80015f18 |  |
 | `0x80033b8c` | 48 | 4 | collide_at_cell | calls tile_collision; points at level_grid, writes collision_layer_offset, writes collision_scratch, reads collision_scr |
-| `0x80033c4c` | 47 | 8 | grid_query_area | points at level_grid |
+| `0x80033c4c` | 47 | 8 | grid_mark | points at level_grid |
 | `0x8006ede8` | 45 | 1 | sub_8006ede8 |  |
 | `0x80076da0` | 44 | 16 | game_cos | points at sin_quarter |
 | `0x80046c00` | 44 | 6 | sub_80046c00 | calls res_upload_spu, res_upload_vram, camera_pose, render_frame |
-| `0x8002b760` | 43 | 3 | place_player_on_terrain | calls collide_at_cell, sync_player_pos, clear_movement_state, grid_query_area; reads player_pos, writes player_y, writes |
+| `0x8002b760` | 43 | 3 | place_player_on_terrain | calls collide_at_cell, sync_player_pos, clear_movement_state, grid_mark; reads player_pos, writes player_y, writes spawn |
 | `0x8002a5f8` | 42 | 1 | damage_of_type | reads damage_scale |
 | `0x80076d00` | 40 | 1 | sub_80076d00 | points at sin_quarter |
 | `0x8002a074` | 38 | 1 | sub_8002a074 | calls player_recalc_stats, announce; reads player_stat_36, writes player_stat_36 |
@@ -335,7 +335,7 @@ the object interpreter and its 44 handlers.
 | `0x80019ab4` | 26 | 15 | res_wait | points at res_request, reads res_request |
 | `0x80053c20` | 25 | 1 | sub_80053c20 |  |
 | `0x800175a8` | 22 | 3 | sub_800175a8 |  |
-| `0x80028e48` | 21 | 1 | sub_80028e48 | calls in_range; points at player_pos |
+| `0x80028e48` | 21 | 1 | player_in_range | calls in_range; points at player_pos |
 | `0x80074840` | 20 | 4 | ApplyMatrixLV | uses the GTE (MVMVA) |
 | `0x80016928` | 20 | 11 | vec_scale |  |
 | `0x80016240` | 20 | 2 | sub_80016240 | calls game_sin, game_cos |
@@ -371,7 +371,7 @@ everything drawn.
 | --- | --- | --- | --- | --- |
 | `0x800366a8` | 1361 | 1 | model_prims_flag40 | uses the GTE (NCDS, NCLIP, RTPS) |
 | `0x8003ab04` | 1024 | 1 | draw_tmd_object | uses the GTE (NCDS, NCLIP, RTPS) |
-| `0x80040ae4` | 1020 | 1 | render_walk | calls block_zero, object_flags_for_draw, model_ptr, draw_model_plain and 4 more; reads ot_pointer, points at actor_table |
+| `0x80040ae4` | 1020 | 1 | render_walk | calls block_zero, view_bits_at, model_ptr, draw_model_plain and 5 more; reads ot_pointer, points at actor_table, points  |
 | `0x8003e34c` | 1006 | 1 | draw_model_plain | uses the GTE (MVMVA, RTPS); calls fixed_madd, ScaleMatrix, model_prims_flag40, model_prims and 1 more; reads current_dra |
 | `0x80039d50` | 877 | 1 | tile_prims | uses the GTE (DPCS, NCCS, NCDS, NCLIP, RTPS) |
 | `0x8003f304` | 874 | 1 | draw_model_lit | uses the GTE (MVMVA, RTPS); calls fixed_madd, ScaleMatrix, game_isqrt, model_prims_lit; reads current_draw_slot, points  |
@@ -379,12 +379,12 @@ everything drawn.
 | `0x80038844` | 761 | 1 | model_prims_lit | uses the GTE (NCDS, NCDT, NCLIP) |
 | `0x80035ca4` | 641 | 4 | model_prims | uses the GTE (NCDS, NCDT, NCLIP) |
 | `0x80039428` | 586 | 1 | sub_80039428 | uses the GTE (NCCS, NCCT, NCLIP) |
-| `0x800422b8` | 405 | 9 | render_frame | calls view_pose_set, texture_scroll_step, message_tick, view_matrix_build and 11 more; reads player_hp, reads player_hp_ |
+| `0x800422b8` | 405 | 9 | render_frame | calls view_pose_set, texture_scroll_step, message_tick, view_matrix_build and 12 more; reads player_hp, reads player_hp_ |
 | `0x8003c35c` | 323 | 1 | draw_model_cell_lit | uses the GTE (MVMVA); calls ScaleMatrix, model_prims; points at tile_look, reads ot_pointer, reads current_draw_slot |
-| `0x80034bf4` | 307 | 1 | view_matrix_build | calls game_cos, game_sin, block_copy; reads player_state |
+| `0x80034bf4` | 307 | 1 | view_matrix_build | calls game_cos, game_sin, block_copy; reads player_state, points at view_table |
 | `0x800400ac` | 303 | 1 | sub_800400ac | uses the GTE (MVMVA, RTPS); points at view_matrix, reads view_matrix, points at tile_look, reads ot_pointer |
 | `0x8003df50` | 255 | 1 | draw_held_item | uses the GTE (RTPS); calls model_prims; points at held_item_model, reads held_item_model, reads player_pos, points at ti |
-| `0x8003bfd0` | 227 | 1 | draw_terrain | calls block_copy, draw_tile; reads ot_pointer, reads current_draw_slot, reads player_pos_view, points at level_grid |
+| `0x8003bfd0` | 227 | 1 | draw_terrain | calls block_copy, draw_tile; points at view_table, reads ot_pointer, reads current_draw_slot, reads player_pos_view |
 | `0x800431e8` | 209 | 5 | sub_800431e8 | calls free_object_resource; points at model_table |
 | `0x8003bb04` | 204 | 2 | draw_tile | uses the GTE (MVMVA); calls draw_tmd_object, tile_prims; points at tile_look, points at view_matrix, reads view_matrix,  |
 | `0x80041f9c` | 199 | 1 | message_tick |  |
@@ -399,14 +399,14 @@ everything drawn.
 | `0x800351fc` | 87 | 1 | texture_scroll_step | calls MoveImage |
 | `0x8003d79c` | 84 | 1 | sub_8003d79c |  |
 | `0x8003d64c` | 84 | 1 | sub_8003d64c |  |
-| `0x800357e8` | 77 | 1 | view_pose_set | calls rot_matrix_x; points at player_pos_view, writes player_pos_view, reads player_pos_view, points at view_matrix |
+| `0x800357e8` | 77 | 1 | view_pose_set | calls rot_matrix_x, light_matrix_turn; points at player_pos_view, writes player_pos_view, reads player_pos_view, points  |
 | `0x80074910` | 73 | 4 | ScaleMatrix |  |
 | `0x800409c8` | 71 | 1 | sub_800409c8 | points at model_table |
 | `0x8003d280` | 67 | 1 | overlay_plane_18 | reads depth_under_plane_18 |
 | `0x800408d0` | 62 | 1 | sub_800408d0 |  |
 | `0x80014508` | 61 | 1 | sub_80014508 |  |
 | `0x80041d9c` | 51 | 1 | sub_80041d9c |  |
-| `0x80040708` | 49 | 1 | sub_80040708 |  |
+| `0x80040708` | 49 | 1 | view_bits_around | points at view_table |
 | `0x80042d70` | 49 | 1 | sub_80042d70 |  |
 | `0x8003d568` | 47 | 1 | sub_8003d568 |  |
 | `0x80040830` | 40 | 1 | sub_80040830 | calls entry_extent, read_archive_entry; points at model_table |
@@ -415,10 +415,10 @@ everything drawn.
 | `0x80041e68` | 33 | 1 | sub_80041e68 |  |
 | `0x80042e34` | 31 | 1 | sub_80042e34 |  |
 | `0x80016598` | 29 | 3 | rot_matrix_x | calls game_sin, game_cos |
-| `0x80040694` | 29 | 1 | object_flags_for_draw |  |
+| `0x80040694` | 29 | 1 | view_bits_at | points at view_table |
 | `0x800405e8` | 28 | 3 | model_ptr | points at model_table |
 | `0x80043940` | 28 | 1 | resource_sweep | calls free_object_resource |
-| `0x80019614` | 26 | 1 | sub_80019614 | calls VSync |
+| `0x80019614` | 26 | 1 | frame_limit | calls VSync; points at frame_vblanks, reads frame_vblanks, writes frame_vblanks |
 | `0x800407cc` | 25 | 1 | object_in_view |  |
 | `0x80077ad8` | 25 | 1 | sub_80077ad8 |  |
 | `0x800171b0` | 24 | 3 | sub_800171b0 |  |
@@ -508,7 +508,7 @@ everything drawn.
 | `0x80079aa8` | 23 | 0 | DrawSyncCallback |  |
 | `0x8007a830` | 22 | 2 | SetDrawTPage |  |
 | `0x80064758` | 22 | 1 | sub_80064758 | talks to the CD drive; calls EnterCriticalSection, ExitCriticalSection |
-| `0x80019d48` | 20 | 2 | read_archive_entry | calls read_entry_a |
+| `0x80019d48` | 20 | 2 | read_archive_entry | calls read_entry_a, res_queue |
 | `0x8007855c` | 20 | 2 | PadInit |  |
 | `0x8007b6fc` | 20 | 0 | sub_8007b6fc | talks to the GPU |
 | `0x80043894` | 19 | 4 | free_object_resource | calls heap_free |
@@ -576,7 +576,7 @@ the 199 creature slots.
 
 | address | instructions | callers | name | what it touches |
 | --- | --- | --- | --- | --- |
-| `0x800500a8` | 2925 | 1 | actor_tick | calls grid_query_area, vec_rotate, collide_query, actor_move_vertical and 15 more; reads current_actor, reads current_ac |
+| `0x800500a8` | 2925 | 1 | actor_tick | calls grid_mark, vec_rotate, collide_query, actor_move_vertical and 15 more; reads current_actor, reads current_actor_de |
 | `0x8004f414` | 739 | 1 | actor_animation_effects | calls vec_rotate, fixed_madd, effect_spawn, actor_wake and 4 more; points at player_pos, reads current_actor, points at  |
 | `0x8004b984` | 358 | 1 | actor_behaviour | calls vec_angle, facing_test, rand; reads current_actor, reads player_pos, reads held_item_model, reads player_y |
 | `0x8004dbc8` | 307 | 3 | actor_move_horizontal | calls collide_query, collide_wrapper_actor, game_isqrt, vec_angle and 2 more; reads current_actor, reads collision_layer |
@@ -596,7 +596,7 @@ the 199 creature slots.
 | `0x8001749c` | 67 | 1 | sub_8001749c | calls vec_length_2d, game_cos, game_sin |
 | `0x8004bf1c` | 64 | 2 | sub_8004bf1c | calls actor_behaviour; reads current_actor, reads current_actor_def |
 | `0x8004da2c` | 55 | 1 | actor_select | points at current_actor, writes current_actor, points at entity_table, writes current_actor_def |
-| `0x8004b698` | 54 | 2 | actor_wake | calls actor_copy_kind, rand, grid_query_area |
+| `0x8004b698` | 54 | 2 | actor_wake | calls actor_copy_kind, rand, grid_mark |
 | `0x8004e824` | 50 | 2 | sub_8004e824 | calls actor_move_horizontal; reads current_actor |
 | `0x8004b560` | 49 | 5 | actor_stand_at_home | calls collide_at_cell; reads collision_scratch |
 | `0x8004e27c` | 40 | 1 | sub_8004e27c | reads current_actor |
@@ -624,7 +624,7 @@ the 199 creature slots.
 
 ## unreached
 
-58 routines, 4017 instructions.
+60 routines, 4061 instructions.
 
 | address | instructions | callers | name | what it touches |
 | --- | --- | --- | --- | --- |
@@ -652,6 +652,7 @@ the 199 creature slots.
 | `0x8007adec` | 47 | 1 | sub_8007adec |  |
 | `0x800760b4` | 43 | 1 | sub_800760b4 |  |
 | `0x800673b4` | 41 | 2 | sub_800673b4 |  |
+| `0x80019570` | 41 | 0 | vblank_tick | reads frame_vblanks, points at vblank_count, writes frame_vblanks, reads vblank_count |
 | `0x80079254` | 39 | 1 | sub_80079254 |  |
 | `0x80075ab4` | 37 | 1 | sub_80075ab4 |  |
 | `0x80075618` | 35 | 1 | sub_80075618 |  |
@@ -686,6 +687,7 @@ the 199 creature slots.
 | `0x80079360` | 3 | 1 | sub_80079360 |  |
 | `0x80079530` | 3 | 1 | sub_80079530 |  |
 | `0x800795a0` | 3 | 1 | sub_800795a0 |  |
+| `0x80018c54` | 3 | 0 | vram_stream_ready |  |
 
 ## level
 
@@ -695,8 +697,8 @@ the level's own code, and the fades; the seven-state load.
 
 | address | instructions | callers | name | what it touches |
 | --- | --- | --- | --- | --- |
-| `0x80044d9c` | 843 | 1 | load_object_placement | calls block_copy, block_zero, grid_query_area, player_in_rect and 1 more; points at object_table, points at object_type_ |
-| `0x80018358` | 575 | 9 | level_load | calls read_archive_entry, free_object_resource, grid_query_area, block_copy and 8 more; points at fdat_load_buffer, read |
+| `0x80044d9c` | 843 | 1 | load_object_placement | calls block_copy, block_zero, grid_mark, player_in_rect and 3 more; reads vblank_count, points at object_table, points a |
+| `0x80018358` | 575 | 9 | level_load | calls read_archive_entry, vram_stream, free_object_resource, grid_mark and 9 more; points at fdat_load_buffer, reads pen |
 | `0x8005c864` | 223 | 3 | sub_8005c864 | calls actors_retire_marked, level_load, object_trigger, player_recalc_stats and 1 more; points at script_opcode_table, r |
 | `0x8005f444` | 222 | 1 | apply_level_state | calls level_state_unpack, init_object_record, rand, select_cell_layer; points at actor_table, points at entity_table, po |
 | `0x8006f14c` | 207 | 1 | sub_8006f14c | calls bios_printf |
@@ -709,22 +711,22 @@ the level's own code, and the fades; the seven-state load.
 | `0x80071e2c` | 92 | 1 | sub_80071e2c |  |
 | `0x80015b9c` | 81 | 1 | sub_80015b9c |  |
 | `0x80043a08` | 76 | 1 | level_props_init | calls collide_at_cell, rand; points at level_props, writes level_props |
-| `0x80019bbc` | 66 | 3 | sub_80019bbc | calls file_checksum; reads res_request |
+| `0x80019bbc` | 66 | 3 | res_queue | calls file_checksum; reads res_request |
 | `0x8007197c` | 64 | 1 | sub_8007197c |  |
 | `0x8006a54c` | 55 | 2 | sub_8006a54c |  |
-| `0x80019e48` | 51 | 1 | sub_80019e48 | calls file_checksum, read_entry_a |
+| `0x80019e48` | 51 | 1 | queue_vram_stream | calls file_checksum, read_entry_a, res_queue |
 | `0x8006f488` | 49 | 1 | sub_8006f488 | calls bios_printf |
 | `0x800711a0` | 47 | 1 | sub_800711a0 |  |
 | `0x80015240` | 46 | 3 | sub_80015240 |  |
 | `0x8006d554` | 39 | 2 | sub_8006d554 |  |
 | `0x8004b624` | 29 | 2 | actor_copy_kind | points at entity_table |
 | `0x80053084` | 29 | 1 | entity_table_init | points at entity_table, points at entity_scripts, reads entity_table |
-| `0x80019df0` | 22 | 1 | sub_80019df0 | calls read_entry_a |
+| `0x80019df0` | 22 | 1 | sub_80019df0 | calls read_entry_a, res_queue |
 | `0x80019b1c` | 19 | 3 | file_checksum |  |
 | `0x800677a4` | 17 | 1 | sub_800677a4 |  |
 | `0x800677e8` | 14 | 7 | sub_800677e8 |  |
 | `0x80071a7c` | 14 | 1 | sub_80071a7c |  |
-| `0x80018c60` | 13 | 2 | sub_80018c60 | points at fdat_load_buffer |
+| `0x80018c60` | 13 | 2 | vram_stream | calls queue_vram_stream; points at fdat_load_buffer, points at vram_stream_ready |
 | `0x80071f9c` | 10 | 4 | sub_80071f9c |  |
 | `0x80072ce8` | 9 | 4 | sub_80072ce8 |  |
 | `0x80061bc4` | 8 | 2 | sub_80061bc4 | calls str_play |
@@ -793,16 +795,16 @@ the entry point, before the loop.
 
 | address | instructions | callers | name | what it touches |
 | --- | --- | --- | --- | --- |
-| `0x80014bd4` | 292 | 1 | game_main | calls block_zero, load_data_screen, actor_table_clear, init_level_state and 24 more; points at load_buffer_ptr, points a |
-| `0x80017664` | 194 | 1 | init_level_state | calls archive_open, read_entry_b, block_copy; points at exe_base, points at current_level, writes current_level, writes  |
+| `0x80014bd4` | 292 | 1 | game_main | calls block_zero, timers_init, load_data_screen, actor_table_clear and 26 more; points at load_buffer_ptr, points at pla |
+| `0x80017664` | 194 | 1 | init_level_state | calls archive_open, read_entry_b, vram_stream, block_copy; points at exe_base, points at current_level, writes current_l |
 | `0x80035394` | 167 | 1 | sub_80035394 | uses the GTE; calls VSync, SetDispMask, ResetGraph, SetGraphDebug and 2 more; points at draw_env, points at disp_env, wr |
 | `0x80068b14` | 161 | 1 | sub_80068b14 | calls EnterCriticalSection, ExitCriticalSection |
 | `0x8003c9dc` | 123 | 1 | load_data_screen | calls PutDispEnv, PutDrawEnv, SetDispMask, DrawSync and 1 more; reads load_buffer_ptr |
 | `0x8006ef70` | 119 | 1 | sub_8006ef70 |  |
 | `0x8001509c` | 105 | 1 | sub_8001509c |  |
-| `0x8001a438` | 98 | 1 | sub_8001a438 | calls EnterCriticalSection, ExitCriticalSection; writes res_request |
+| `0x8001a438` | 98 | 1 | timers_init | calls EnterCriticalSection, ExitCriticalSection; points at vblank_tick, writes frame_vblanks, reads frame_vblanks, write |
 | `0x8001796c` | 78 | 1 | enter_current_level | calls level_load; reads current_level_block, writes pending_level, reads current_level, writes current_level_block |
-| `0x800350fc` | 64 | 1 | sub_800350fc | calls MoveImage, DrawSync |
+| `0x800350fc` | 64 | 1 | texture_scroll_add | calls MoveImage, DrawSync |
 | `0x8003c868` | 64 | 1 | sub_8003c868 | reads draw_buffer_index, reads load_buffer_ptr |
 | `0x80063df8` | 62 | 1 | sub_80063df8 | calls CD_cw, CD_sync, CD_read_retry |
 | `0x8007e3c8` | 48 | 1 | sub_8007e3c8 |  |
@@ -968,9 +970,9 @@ the 64 lighting entries, refilled and stepped.
 
 | address | instructions | callers | name | what it touches |
 | --- | --- | --- | --- | --- |
-| `0x80016290` | 137 | 2 | sub_80016290 |  |
+| `0x80016290` | 137 | 2 | light_matrix_turn |  |
 | `0x800341e8` | 70 | 3 | light_table_reset | points at light_table_source, points at tile_look, reads light_table_source, writes tile_look |
-| `0x80034300` | 37 | 3 | light_table_step | points at tile_look |
+| `0x80034300` | 37 | 3 | light_table_step | calls light_matrix_turn; points at tile_look |
 
 ## sound
 
