@@ -136,7 +136,8 @@ the lighting table, against every snapshot             89 856 of 89 856 bytes
 the walking, against the recording (replay rung 2)     118 288 of 118 500 frames;
                                                        447 of the 455 that touch
                                                        an object
-the video memory, against every snapshot               object pages 779 760 of
+the video memory, against every snapshot               2 994 944 of 2 998 544;
+                                                       object pages 779 760 of
                                                        782 320 (the rest: the
                                                        water's scroll offset)
 ```

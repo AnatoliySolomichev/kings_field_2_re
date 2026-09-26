@@ -785,12 +785,30 @@ res_upload_vram    for a request of type 0x40 whose +0x10 the callback has
                    bytes a frame, until a zero size or x = 0xffff
 ```
 
+**And the 0x8000 is a chunk, not a throttle.** The request reads the entry
+sixteen sectors at a time into one buffer (`sub_80018c94` asks for 0x10 while
+more remain), and each frame `res_upload_vram` walks that buffer from its
+start: a header costs 0x10 and needs 0x10 left, a block that fits goes whole,
+and a block that does not goes as many **whole rows** as the budget holds
+(`0x80018d84`: budget / w, halved) -- the bytes left over are never sent. The
+next frame's buffer is the next sixteen sectors, and the block's remaining rows
+are read from its start, so they come from the chunk boundary rather than from
+where the last row ended. Wherever a block's rows do not end on the boundary,
+the rest of that block lands shifted by the bytes skipped. The game's own
+interface shows it plainest: the block for (896, 256) straddles offset
+0x50000 of entry 96 with 45 rows and 112 bytes before it, and from row 45 on
+every snapshot holds that page 56 halfwords along from the disc. Walked this
+way (`rtim.uploads`), entry 96 and `RTIM.T` 0 and 4 never meet a header that is
+not doubled and each ends on its 0xffff; entry 96 cuts nine blocks and level
+0's `RTIM.T` seven, and every one of those had been laid down unshifted.
+
 and `level_load` calls `vram_stream(3, level)` — archive 3 is `RTIM.T` — so a
 level's VRAM is entry 96 from game start with the level's own blocks on top.
 `tools/rtim.py`'s `level_vram` builds exactly that, and against the 12
-snapshots with a level loaded it matches **2 865 923 of 2 998 544** halfwords
-the two streams write, and **776 955 of 782 320** on the object pages. What is
-left is animation and the interface: entry 96 writes seven frames of a water
+snapshots with a level loaded it matches **2 994 944 of 2 998 544** halfwords
+the two streams write -- 2 865 923 before the chunking was read, and on
+level 0 every halfword but the 256 of the scrolling water -- and **779 760 of
+782 320** on the object pages. What is left is animation: entry 96 writes seven frames of a water
 texture into the same 8x32 rect at (1016, 96), and a snapshot holds whichever
 frame was showing -- which is not a frame at all: see below.
 

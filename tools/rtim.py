@@ -31,11 +31,14 @@ stopping at a zero size. `level_load` sends `RTIM.T[lv]` down the same path
 own blocks on top**, which is what `level_vram` builds.
 
 It had been looked for and not found, because the search took whole rows of a
-page and the stream stores a page as 64x64-pixel squares. Against the
-snapshots, the halfwords the two streams write match on 2 868 728 of 2 998 544,
-and on the object pages 779 760 of 782 320 -- every one of the 2 560 left being
-the water, which `texture_scroll_step` scrolls a row a frame (godot/scroll.gd).
-The rest is the interface and whatever the game uploads as it runs.
+page and the stream stores a page as 64x64-pixel squares. The streams go down
+the way `res_upload_vram` sends them, a 0x8000-byte chunk a frame with a block
+cut at a chunk boundary losing the bytes after its last whole row (`uploads`),
+and against the snapshots the halfwords they write match on **2 994 944 of
+2 998 544** -- 2 868 728 when each block went down whole -- and on the object
+pages 779 760 of 782 320, every one of the 2 560 left being the water, which
+`texture_scroll_step` scrolls a row a frame (godot/scroll.gd). On level 0 that
+water is the whole of what differs.
 
 `vram` writes that buffer straight out and it **looks like noise**, correctly:
 four-bit indices shown as sixteen-bit colour cannot look like anything else. The
@@ -82,13 +85,66 @@ def blocks(entry, path=RTIM):
         p += 16 + w * h * 2
 
 
+# res_upload_vram (0x80018cd0) does not see the entry whole. The request reads
+# it sixteen sectors at a time -- sub_80018c94 asks for 0x10 while more remain
+# -- into one buffer, and each frame it walks that buffer from its start with a
+# budget of 0x8000 bytes: a header costs 0x10 and needs 0x10 left; a block
+# that fits goes whole; **a block that does not goes as many whole rows as
+# the budget holds, and the bytes left over are never sent**. The next frame
+# reads the next sixteen sectors and carries on with the block's remaining
+# rows from the buffer's start -- so those rows come from the chunk boundary,
+# not from where the rows before them ended, and when the rows do not end on
+# the boundary everything after that point in the block lands shifted by the
+# bytes skipped. The game's own interface is the one that shows it: the block
+# for (896, 256) straddles 0x50000 in entry 96 with 45 rows and 112 bytes
+# before the boundary, and every row of it from 45 on is 56 halfwords along in
+# every snapshot. The disc's layout agrees with this reading and not with a
+# whole-block one: walked this way, entry 96 and RTIM.T 0 and 4 never meet a
+# header that is not doubled and end on their 0xffff.
+CHUNK = 0x8000
+
+
+def uploads(entry, path=RTIM):
+    """(x, y, w, h, halfwords) as res_upload_vram sends them, chunk by chunk."""
+    d = TArc(path).raw(entry)
+    pos, rect = 0, None
+    while pos < len(d):
+        spent, at = 0, pos
+        while True:
+            budget = CHUNK - spent
+            if rect is not None:
+                x, y, w, h = rect
+                size = w * h * 2
+                if budget < size:                     # 0x80018d54
+                    rows = (budget // w) >> 1
+                    if rows:
+                        yield x, y, w, rows, d[at:at + rows * w * 2]
+                        rect = (x, y + rows, w, h - rows)
+                    break
+                yield x, y, w, h, d[at:at + size]
+                spent += size
+                at += size
+                rect = None
+                continue
+            if budget < 0x10 or at + 16 > len(d):     # 0x80018de4
+                break
+            a = struct.unpack_from("<8H", d, at)
+            if a[:4] != a[4:] or not a[2] or not a[3] or a[0] == 0xFFFF:
+                return
+            spent += 16
+            at += 16
+            rect = a[:4]
+        pos += CHUNK
+
+
 def vram(entry, path=RTIM, buf=None):
     """The 1024x512 framebuffer these blocks build, as u16 per pixel.
 
-    With `buf`, the blocks are laid over it rather than over nothing.
+    With `buf`, the blocks are laid over it rather than over nothing. The
+    blocks go down the way the game sends them (`uploads`).
     """
     buf = bytearray(VW * VH * 2) if buf is None else buf
-    for x, y, w, h, data in blocks(entry, path):
+    for x, y, w, h, data in uploads(entry, path):
         for row in range(h):
             off = ((y + row) * VW + x) * 2
             buf[off:off + w * 2] = data[row * w * 2:(row + 1) * w * 2]
