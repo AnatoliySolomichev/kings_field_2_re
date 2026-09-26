@@ -584,6 +584,15 @@ python3 tools/hud.py              the sprites, then the check
 python3 tools/hud.py --check      520 of 520 fields over 13 snapshots
 ```
 
+**`compass.py`** — the ball in the top-right corner: its records, the model
+(`modelbank.load(0)`, entry 97 block 9), the library's `RotMatrix` with its own
+table, the spring that swings it, and `compass.json` with the page for the
+port.
+
+```
+python3 tools/compass.py --check  the switches, pitches and twin yaws: 65 of 65
+```
+
 **`shots.py`** — the port rendered from where each snapshot's screenshot was
 taken, beside the screenshot.
 

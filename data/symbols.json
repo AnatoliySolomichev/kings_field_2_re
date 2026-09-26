@@ -1656,7 +1656,7 @@
  "0x8003c35c": {
   "name": "draw_model_cell_lit",
   "kind": "code",
-  "evidence": "the third model draw beside draw_model_lit and draw_model_plain: MVMVA, ScaleMatrix and the tile_look lighting, called once from render_frame between the held item and the terrain. What it draws is compass_models (0x80081c20): the compass in the top-right corner"
+  "evidence": "the compass's draw: for each on record of compass_models, RotMatrix of its angles, the class's light direction matrix turned by it (L R) and its colour and background, ScaleMatrix, then every vertex through MVMVA alone -- x and y are screen coordinates, z >> 2 the depth -- and model_prims, which drops faces by NCLIP. tools/compass.py, godot/compass.gd"
  },
  "0x8003bfd0": {
   "name": "draw_terrain",
@@ -2361,7 +2361,7 @@
  "0x80081c20": {
   "name": "compass_models",
   "kind": "data",
-  "evidence": "0x24-byte records, 0xff-terminated, that draw_model_cell_lit draws: +0 on, +2 the lighting class, +4 the model, +8..+0xc a scale, +0x10..+0x14 (290, 32, 50) -- the top-right corner of the 320x240 screen, where the N of the compass stands in every screenshot -- +0x18 the pitch and +0x1a the facing with a drift. render_frame switches them by the bits of 0x801b25de"
+  "evidence": "0x24-byte records, 0xff-terminated, that draw_model_cell_lit draws: +0 on, +2 the lighting class (0x30), +4 the model (0: the ball, FDAT.T entry 97 block 9), +8..+0xc a scale over 4096 (0x40, 0x55), +0x10..+0x14 (290, 32, 50) -- x and y straight onto the 320x240 screen, since the model goes through MVMVA alone -- +0x18 the view pitch and +0x1a the ball's yaw, which render_frame swings after the view yaw on a damped spring. render_frame switches them by the bits of compass_style. tools/compass.py"
  },
  "0x801a9178": {
   "name": "side_ot",
@@ -2407,5 +2407,20 @@
   "name": "compass_style",
   "kind": "data",
   "evidence": "the compass's style: render_frame turns compass_models' records on by its bits; new_character's options set 2"
+ },
+ "0x80076168": {
+  "name": "RotMatrix",
+  "kind": "code",
+  "evidence": "the library's RotMatrix: Rx(a[0]) Ry(a[1]) Rz(a[2]) with the textbook Ry, carrying -sin y and rounding with it, off its own (sin, cos) table at 0x800962e0. view_pose_set, draw_model_cell_lit and draw_held_item use it; transcribed in tools/compass.py and godot/compass.gd"
+ },
+ "0x800962e0": {
+  "name": "rcossin_table",
+  "kind": "data",
+  "evidence": "4096 words, each a (sin, cos) pair of s16 over 4096, RotMatrix's table; not the quarter wave at 0x8009a2e0 -- it differs on 3888 of 4096 angles by a unit or two and repeats 0 at 2047 and 2048"
+ },
+ "0x80016a98": {
+  "name": "angle_diff",
+  "kind": "code",
+  "evidence": "(a, b): (b - a) & 0xfff, less 0x1000 above 0x800 -- the signed turn from a to b. render_frame's compass spring asks it"
  }
 }

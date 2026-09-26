@@ -859,6 +859,7 @@ SCENE = """[gd_scene load_steps={load_steps} format=3]
 [ext_resource type="Script" path="res://doors.gd" id="18"]
 [ext_resource type="Script" path="res://sky.gd" id="19"]
 [ext_resource type="Script" path="res://hud.gd" id="20"]
+[ext_resource type="Script" path="res://compass.gd" id="21"]
 {gallery_res}
 
 [sub_resource type="Environment" id="Env"]
@@ -924,6 +925,13 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
 script = ExtResource("20")
+
+[node name="Compass" type="Control" parent="UI"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+script = ExtResource("21")
 
 [node name="Hud" type="Label" parent="UI"]
 offset_left = 12.0
@@ -1076,7 +1084,7 @@ def project(lv, out="out/godot", start=(57, 4)):
                        for i in range(len(pieces)))
     open(f"{out}/world.tscn", "w").write(
         SCENE.format(lv=lv, px=px, py=py, pz=pz, gallery_res=res,
-                     gallery_nodes=nodes, load_steps=13 + len(pieces)))
+                     gallery_nodes=nodes, load_steps=14 + len(pieces)))
     # The boot chain: the shell, the opening and the pad, which is where the
     # project now starts. world.tscn is still the level and boot.gd hands over
     # to it the way SLUS_002.55 hands over to GAME.EXE.
@@ -1086,7 +1094,7 @@ def project(lv, out="out/godot", start=(57, 4)):
                  "cutscene.gd", "actors.gd", "levelup.gd",
                  "game.gd", "objects.gd", "escript.gd", "items.gd",
                  "damage.gd", "equip.gd", "objcoll.gd", "scroll.gd",
-                 "doors.gd", "sky.gd", "hud.gd"):
+                 "doors.gd", "sky.gd", "hud.gd", "compass.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening
@@ -1139,6 +1147,11 @@ def project(lv, out="out/godot", start=(57, 4)):
         hud.export(out)
     except Exception as e:                       # no disc, no panel
         print(f"panel skipped: {e}")
+    try:
+        import compass
+        compass.export(out)
+    except Exception as e:                       # no disc, no compass
+        print(f"compass skipped: {e}")
     try:
         import modelbank
         modelbank.export(out)

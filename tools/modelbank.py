@@ -43,13 +43,19 @@ TABLE = 0x801A92B0             # model_table
 FIRST = 40                     # the index the bank starts at, and 0x28
 
 
-def block(path=FDAT):
-    """(raw entry, offset of block 10, its length)."""
+# Block 9, just before, is the same shape with one model in it, and it becomes
+# model_table[0]: the compass, a ball 2048 across whose texture carries the N
+# (tools/compass.py). Its bytes stand in every snapshot at 0x80116158.
+BLOCKS = {9: 0, BLOCK: FIRST}  # block -> the model_table index it starts at
+
+
+def block(path=FDAT, which=BLOCK):
+    """(raw entry, offset of block `which` (10 unless asked), its length)."""
     raw = TArc(path).raw(ENTRY)
     o, n = 0, 0
     while o + 4 <= len(raw):
         sz = struct.unpack_from("<I", raw, o)[0]
-        if n == BLOCK:
+        if n == which:
             return raw, o + 4, sz
         if sz == 0:
             break
@@ -58,9 +64,9 @@ def block(path=FDAT):
     return raw, None, 0
 
 
-def models(path=FDAT):
+def models(path=FDAT, which=BLOCK):
     """[(index, offset in the block, size)] for every model in the bank."""
-    raw, at, n = block(path)
+    raw, at, n = block(path, which)
     if at is None:
         return []
     count = struct.unpack_from("<I", raw, at)[0]
@@ -71,7 +77,7 @@ def models(path=FDAT):
         size = struct.unpack_from("<I", raw, at + off)[0]
         if size == 0 or off + size > n:
             break
-        out.append((FIRST + k, off, size))
+        out.append((BLOCKS[which] + k, off, size))
         off += size
     return out
 
@@ -84,8 +90,9 @@ def load(index, path=FDAT):
     here, a dome.
     """
     import tmd
-    raw, at, _n = block(path)
-    for i, off, size in models(path):
+    which = 9 if index < FIRST else BLOCK
+    raw, at, _n = block(path, which)
+    for i, off, size in models(path, which):
         if i != index:
             continue
         data = raw[at + off:at + off + size]

@@ -265,6 +265,18 @@ check: the game's screenshot is black beyond the far wall.
 `draw_model_lit` blends two records' near and far with `fixed_madd`; read that
 before the objects get it.
 
+## 4c. The models are culled, and the port draws them double-sided
+
+`model_prims` (`0x80035ca4`) and `model_prims_lit` (`0x80038844`) both put each
+face through NCLIP and drop it when the result is not positive (`blez` after
+it, `0x80035e2c` and on), and the compass only reads right with that done
+(FORMATS.md, "The compass"). `tools/level3d.py` makes every material
+double-sided on the belief that the PlayStation does not cull -- which holds
+for the tiles if `draw_tile` has no NCLIP, and is worth checking there -- and
+turning triangles to their own normals was tried and made things worse. The
+winding the GTE sees is the screen's, y down; a port of the cull would test
+the same three points after projection.
+
 ## 4b. What the level looks like — read
 
 **Found.** `RTMD.T[level]` is a TMD of 240 objects and `cell[+5]` picks one per
@@ -479,7 +491,17 @@ it would open:
 * **the grid-drawn doors, classes 0x03 to 0x05 (82) and 0x54 (7)** --
   `stamp_table` writes their walls and tiles at load; opening one is their arms
   writing the table's other half (`sel` 1), which means the level geometry has
-  to change at run time too, not only the collision.
+  to change at run time too, not only the collision. **Opcode 3's arm is read**
+  (`0x800470c4`, five on level 0): state 1 counts +0xa up by 0x48 a frame; at 0
+  it stamps table `0x800828fc` open, sounds, and sets the scale to 0x1000 so
+  the door's model shows; at 0xc18 it stamps `0x800828dc` open; past 0xfff it
+  is open (state 2), counts to 0x14, then waits for `collide_query(.., 0x700,
+  0xc80, 0xc0)` to be clear, stamps `0x800828dc` shut and counts back down by
+  0x48, stamping `0x800828fc` shut and zeroing the scale at the bottom. The
+  counter goes to `draw_model_plain` as an animation frame, through
+  `sub_800431e8` -- the model animation system, unread and the next thing
+  this needs, with the tiles changing under a door the port draws as one
+  static mesh.
 * **classes 0x00 (12) and 0x1b (23)**, `find_object` points 0x700 in front of or
   behind them; 11 of the 12 class-0 doors carry lock byte `0x8c`, a key.
 * **keys and messages**: a lock byte other than 0xff, 0xfd or 0xfe is either an

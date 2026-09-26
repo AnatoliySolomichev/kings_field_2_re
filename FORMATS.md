@@ -2047,6 +2047,44 @@ under the rate's blend, scaled with the window's height; HP, MP and the meters
 are the player's, which follow the game's while comparing (`live.txt` fields
 14 to 17).
 
+### The compass: a model drawn flat
+
+The ball with the N in the top-right corner is `model_table[0]` -- `FDAT.T`
+entry 97 block 9, which is block 10's shape with one model in it: 26 vertices
+and 32 faces, 2048 across, the letters W S N E round its equator on page 0x19
+-- drawn by `draw_model_cell_lit` (`0x8003c35c`) from `compass_models`
+(`0x80081c20`), two 0x24-byte records whose +0 `render_frame` sets from the
+bits of `compass_style` (`0x801b25de`, 2 for a new character):
+
+```
++2    class   0x30            +4 model   0
++8    scale   0x40 or 0x55 over 4096, all three axes
++0x10 place   (290, 32, 50)
++0x18 angles  the view pitch, the ball's own yaw, 0
+```
+
+The matrix is the library's `RotMatrix` (`0x80076168`), Rx(pitch) Ry(yaw)
+Rz(0) with the textbook Ry -- not `rot_matrix_y`'s -- off its own table at
+`0x800962e0`, a (sin, cos) pair a word, which differs from the quarter wave
+`game_sin` reads on 3 888 of 4 096 angles by a unit or two (it repeats 0 at
+2047 and 2048). The class's light direction matrix is turned by it, L R, so the
+light stays put on the screen while the ball turns; then the matrix is scaled
+and the model goes through **MVMVA alone**: x and y of R v + place are the
+screen position, z >> 2 the depth -- no perspective. `model_prims` drops a
+face whose NCLIP over its first three points is not positive, and every face
+is semi-transparent (modes 0x36 and 0x3e): the texels with STP mix half and
+half with the wall behind and the letter's do not, which is why the N reads.
+
+The yaw lags. `render_frame` (`0x80042448`) runs a spring each frame, its
+velocity the word at $gp+0xd8: the signed difference to the view yaw
+(`0x80016a98`) is added to the velocity, the velocity loses an eighth --
+`(v + 7) >> 3` or `(v - 7) >> 3` by its sign -- and the yaw moves by
+`v >> 6`, into both records with the view pitch. So the N swings round after a
+turn, overshoots and settles. `tools/compass.py --check` holds the switches,
+the pitch and the twin yaws on 65 of 65 fields over 13 snapshots; a render
+from `a1`'s state with the snapshot's own yaw lays the N where the game's
+screenshot has it. `godot/compass.gd` draws it that way, spring and all.
+
 ### What the camera sees
 
 `0x80035394`, the graphics set-up `game_main` runs once, calls
