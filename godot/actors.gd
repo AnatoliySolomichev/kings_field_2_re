@@ -272,6 +272,20 @@ func _in_range(ax: int, ay: int, az: int, x: int, y: int, z: int, r: int,
 	return -1 if r < dist else dist
 
 
+# The creatures the player can run into: every awake one (the game's +9 is 1),
+# in slot order, as [x, y, z, radius, height, flags] -- flags the entity's
+# +0x34, which the actor carries at +0x28. player.gd asks them as
+# actor_spot_taken does.
+func solid() -> Array:
+	var out := []
+	for k in SLOTS:
+		var a = actors[k]
+		if a != null and a["st"] == ACTIVE:
+			out.append([a["px"], a["py"], a["pz"], a["radius"], a["height"],
+				a["eflags"]])
+	return out
+
+
 func _dist(a: Dictionary, px: int, pz: int, r: int) -> int:
 	return _in_range(a["px"], a["py"], a["pz"], px, NO_Y, pz, r)
 

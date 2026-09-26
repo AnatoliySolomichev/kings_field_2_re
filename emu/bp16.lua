@@ -112,6 +112,30 @@ local VSTATE, VVEL = 0x801b25e8, 0x801b2656
 local PSTATE = 0x801b25e5
 local VBLANKS = 0x801c12e8        -- vblank_count
 local BLOCK = 0x801b2640          -- twelve halfwords, logged raw
+local ACTORS = 0x80185da8         -- actor_table: 200 slots of 0x88
+local NEAR = 0x3000               -- how far from the player an actor is logged
+
+-- The creatures the player can run into this frame: actor_spot_taken asks
+-- every slot whose +9 is 1, and the player moves before actor_tick_driver in
+-- game_main, so the positions here are the ones its collision sees. One
+-- `k:x:y:z:radius:height:flags:b0e:lift` per awake actor within NEAR, for
+-- tools/replay.py to put in the player's way.
+local function awake()
+    local px, pz = s32(PX), s32(PZ)
+    local out = {}
+    for k = 0, 199 do
+        local a = ACTORS + k * 0x88
+        if u8(a + 9) == 1 then
+            local x, z = s32(a + 0x2c), s32(a + 0x34)
+            if math.abs(x - px) < NEAR and math.abs(z - pz) < NEAR then
+                out[#out + 1] = string.format('%d:%d:%d:%d:%d:%d:%x:%d:%d',
+                    k, x, s32(a + 0x30), z, u16(a + 0x1c), u16(a + 0x1e),
+                    s32(a + 0x28) % 0x100000000, u8(a + 0xe), s16(a + 0x26))
+            end
+        end
+    end
+    return table.concat(out, ',')
+end
 
 local clock = os and os.clock or function() return 0 end
 local t0 = clock()
@@ -177,12 +201,12 @@ arm(0x8002fe1c, 'frame', function()
     for i = 0, 11 do raw[#raw + 1] = string.format('%04x', u16(BLOCK + i * 2)) end
     log(string.format(
         'f=%6d t=%9.3f btn=%04x prev=%04x ang=%5d fwd=%6d mag=%6d max=%8d ' ..
-        'pos=%9d %9d %9d vst=%3d vv=%6d pst=%3d lv=%2d ra=%08x blk=%s vb=%d',
+        'pos=%9d %9d %9d vst=%3d vv=%6d pst=%3d lv=%2d ra=%08x blk=%s vb=%d act=%s',
         frame, clock() - t0, u16(BTN), u16(BTNPREV), s16(ANG),
         s16(FWD), s16(MAG), s32(MAX),
         s32(PX), s32(PY), s32(PZ), u8(VSTATE), s16(VVEL), u8(PSTATE),
         u8(0x8018fad9), g and tonumber(g.ra) or 0, table.concat(raw, ','),
-        s32(VBLANKS)))
+        s32(VBLANKS), awake()))
 end)
 
 log('=== bp16 recording; play normally ===')

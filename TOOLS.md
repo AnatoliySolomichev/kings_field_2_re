@@ -623,6 +623,9 @@ and since 2026-09-25 `vb=`, the game's own count of vertical blanks, from which
 the replay reports how many blanks each frame took: four is the game's pace, 15
 a second (`frame_limit`), and more is a frame that overran. With the same count
 in `live.txt`, the port's compare readout shows the game's frame rate live.
+Since 2026-09-26 it also writes `act=`, every awake creature within 0x3000 of
+the player as `slot:x:y:z:radius:height:flags:b0e:lift`, and the replay puts
+them in the player's way (`movement.actor_spot_taken`).
 The replay runs three **rungs**, each releasing one layer of the model, and each
 in two modes. **Locked** resets to the game's own state every frame, so each
 disagreement is its own bug and carries the cell to go and look at. **Free**

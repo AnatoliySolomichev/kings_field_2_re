@@ -59,6 +59,8 @@ const STEP_UP := 0x500               # player_horizontal: the most a step may cl
 const SHRINK := 0x16                 # and how much shorter each retry is
 const AROUND := 0x370                # how far past an object's radius the push-out goes
 const STEEP_PUSH := 0x40             # the least push a taken step gains
+const CREATURE_BIT := 0x10           # collide_query's mask bit for a creature
+const PLAYER_ACTOR_MASK := 4         # 0x8018faa8 while the player moves
 const RECT_TRIES := [0x400, 0x400, 0x3E8, 0x3E8, 0x418, 0x418]   # the turns back
                                      # along a rectangle's axes, one a try
 const PITCH_LIMIT := 0x2bc           # player_look stops the pitch here, either way
@@ -153,6 +155,10 @@ var bob_phase := 0
 var bob := 0
 var acc := 0.0
 var last_surface := KFCollision.NO_SURFACE
+# The creatures in the way this frame, as [x, y, z, radius, height, flags]:
+# actors.gd's awake ones, taken before the step because the game moves the
+# player before actor_tick_driver.
+var creatures: Array = []
 
 
 func _ready() -> void:
@@ -315,6 +321,8 @@ func _tick(dir: Vector3) -> void:
 		sd = (stf_speed * stf_speed) / h
 		if fwd_speed < 0: fd = -fd
 		if stf_speed < 0: sd = -sd
+	var an := get_node_or_null("../Actors")
+	creatures = an.solid() if an and an.has_method("solid") else []
 	# player_walk steps twice, forward along facing + 0x400 and the strafe along
 	# the facing, each through player_horizontal; then the height. Both calls
 	# are made even for a step of nothing (0x8002fda0, 0x8002fdb4): that still
@@ -342,18 +350,20 @@ func _tick(dir: Vector3) -> void:
 #                                axes: the step turned into its frame, one part
 #                                kept, turned back by its angle + 0x400, 0x3e8
 #                                or 0x418; six tries
-#   anything else in the way     go round it: the target moves to the object's
+#   anything else in the way     go round it: the target moves to the thing's
 #                                centre plus its radius plus 0x370, along the
-#                                bearing from the centre; a second thing in the
-#                                way and the player stays
+#                                bearing from the centre -- a creature first,
+#                                an object only when no creature was hit; a
+#                                second thing in the way and the player stays
 #   otherwise, a wall            try it 0x16 shorter at a time, once; then
 #                                slide, the X part dropped, then only the X
 #                                part; a diagonal wall (bit 2) slides along the
 #                                diagonal the rotation of the cell the last
 #                                query looked at gives; else stay
 #
-# Not here: the creatures.
-# @orig game:0x8002e3f8 player_horizontal  status:partial -- all but the creatures; tools/replay.py: 118 288 of 118 500 ground frames
+# The creatures are the awake ones in `creatures`, asked as actor_spot_taken
+# asks for the player (_creature_at).
+# @orig game:0x8002e3f8 player_horizontal  status:transcribed -- tools/replay.py: 118 288 of 118 500 ground frames; the creatures against the Python on made steps
 func _horizontal(angle: int, dist: int) -> void:
 	var s4: int = (coll.game_cos(angle) * dist) >> 12
 	var s2: int = (coll.game_sin(angle) * dist) >> 12
@@ -374,6 +384,9 @@ func _horizontal(angle: int, dist: int) -> void:
 		var q := coll.query_all(tx, gy, tz)
 		last = int(q["at"])
 		var mask: int = int(q["mask"])
+		var who := _creature_at(tx, gy, tz)
+		if who != -1:
+			mask |= CREATURE_BIT
 		var take := mask == 0
 		var blocked := false
 		if not take and mask & ~0x207 == 0:
@@ -416,11 +429,21 @@ func _horizontal(angle: int, dist: int) -> void:
 			pushes += 1
 			if pushes == 2:
 				break
-			var o: Array = coll.objects[oi]
-			var ox: int = o[5]
-			var oz: int = o[7]
+			# collide_target (0x80033d84): the creature when there is one
+			var ox := 0
+			var oz := 0
+			var r := AROUND
+			if who != -1:
+				var c: Array = creatures[who]
+				ox = int(c[0])
+				oz = int(c[2])
+				r += int(c[3])
+			else:
+				var o: Array = coll.objects[oi]
+				ox = int(o[5])
+				oz = int(o[7])
+				r += int(o[10])
 			var bearing := coll.ratan2(s2 - (oz - z), s4 - (ox - x))
-			var r: int = int(o[10]) + AROUND
 			s4 = _trunc12(coll.game_cos(bearing) * r) + ox - x
 			s2 = _trunc12(coll.game_sin(bearing) * r) + oz - z
 			continue
@@ -435,7 +458,7 @@ func _horizontal(angle: int, dist: int) -> void:
 				s0 -= SHRINK
 				var sq := coll.query_all(nx, gy, nz)
 				last = int(sq["at"])
-				if int(sq["mask"]) == 0:
+				if int(sq["mask"]) == 0 and _creature_at(nx, gy, nz) == -1:
 					x = nx
 					z = nz
 					break
@@ -470,6 +493,24 @@ func _horizontal(angle: int, dist: int) -> void:
 		diag = true
 	gx = x
 	gz = z
+
+
+# actor_spot_taken (0x8004d644) as the player asks it: the first creature, in
+# slot order, that is awake -- the list holds only those -- whose flags have no
+# bit in common with 4, the byte player_controller puts at 0x8018faa8 while it
+# moves the player (0x80031004), and that in_range puts within its radius plus
+# the player's, bodies overlapping in height. Level 0's ten of kind 15, flags
+# 0x404, are the ones it lets through.
+# @orig game:0x8004d644 actor_spot_taken  status:transcribed -- the player's side; the follower lift is in tools/movement.py
+func _creature_at(x: int, y: int, z: int) -> int:
+	for i in creatures.size():
+		var c: Array = creatures[i]
+		if int(c[5]) & PLAYER_ACTOR_MASK:
+			continue
+		if coll.in_range(int(c[0]), int(c[1]), int(c[2]), x, y, z,
+				int(c[3]) + coll.radius, int(c[4]), coll.body) != -1:
+			return i
+	return -1
 
 
 # A product over 4096 rounded towards zero, the way player_horizontal's

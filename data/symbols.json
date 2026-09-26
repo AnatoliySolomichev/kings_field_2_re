@@ -1336,7 +1336,7 @@
  "0x8004d644": {
   "name": "actor_spot_taken",
   "kind": "code",
-  "evidence": "(x, y, z, radius, height) -> the first other actor that is up (+9 == 1) and overlaps, radius on radius and height on height, or -1. The activator asks it before every spawn"
+  "evidence": "(x, y, z, radius, height) -> the first other actor that is up (+9 == 1) and overlaps, radius on radius and height on height, or -1. The activator asks it before every spawn. collide_query's bit 0x10 asks it for the player too: then it skips an actor whose +0xe is 3 or whose flags (+0x28) share a bit with actor_skip_mask (4 while the player moves), tests a follower +0x26 higher, and uses in_range with the actor's radius +0x1c plus the asker's and its height +0x1e"
  },
  "0x8005efd4": {
   "name": "level_state_write",
@@ -2367,5 +2367,15 @@
   "name": "side_ot",
   "kind": "data",
   "evidence": "two 8-entry ordering tables, one per buffer, cleared by frame_begin_3d with ClearOTagR(.., 8); render_walk hands the current one to the model drawers at 0x1f80000c, sub_80039428 files a face there when its depth argument is positive, and frame_end_3d links it into the main table at index 0x1ffe -- behind everything the world draws. The sky goes there"
+ },
+ "0x8018faa8": {
+  "name": "actor_skip_mask",
+  "kind": "data",
+  "evidence": "a byte actor_spot_taken ANDs with each actor's flags (+0x28) to skip it: player_controller sets 4 before it moves the player (0x80031004) and 0 after (0x80032104), actor_table_clear zeroes it -- so a creature whose entity flags carry 4 does not stop the player"
+ },
+ "0x801e648c": {
+  "name": "collide_actor",
+  "kind": "data",
+  "evidence": "the actor slot collide_query's bit 0x10 or 0x40 found, or -1; collide_target (0x80033d84) takes it before collide_object, so player_horizontal pushes out round a creature first"
  }
 }

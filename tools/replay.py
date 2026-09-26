@@ -47,8 +47,10 @@ three heaps rather than one total:
   alone can replay;
 * **a wall**: the model turned the step away and the game did not;
 * **the rest**, where the model took the step whole: creatures, which collide
-  with the player (`collide_query` bit 0x10) and knock it back, and whose
-  positions `emu/bp16.lua` does not log.
+  with the player (`collide_query` bit 0x10) and knock it back. `emu/bp16.lua`
+  logs the awake ones near the player as `act=` since 2026-09-26, and a log
+  that has them puts them in the player's way (`movement.actor_spot_taken`);
+  the recording this was measured on is older and has none.
 """
 import collections
 import os
@@ -87,8 +89,10 @@ def load(path="out/lua_bp16.log"):
         if b:
             blk = [movement.s16(int(v, 16)) for v in b.group(1).split(",")]
         v = re.search(r" vb=(\d+)", line)
+        act = re.search(r" act=(\S*)", line)
         rows.append({
             "vb": int(v.group(1)) if v else None,
+            "act": actors_of(act.group(1)) if act else None,
             "f": int(g[0]), "t": float(g[1]),
             "btn": int(g[2], 16), "prev": int(g[3], 16),
             "ang": int(g[4]), "fwd": int(g[5]), "mag": int(g[6]),
@@ -100,6 +104,23 @@ def load(path="out/lua_bp16.log"):
             "prate": blk[7] if len(blk) > 7 else None,       # 0x801b264e
         })
     return rows, binds
+
+
+def actors_of(field):
+    """`act=` from emu/bp16.lua: the awake creatures near the player.
+
+    Each is `slot:x:y:z:radius:height:flags:b0e:lift`, flags in hex, which is
+    what movement.actor_spot_taken asks of an actor.
+    """
+    out = []
+    for item in field.split(","):
+        if not item:
+            continue
+        k, x, y, z, r, h, fl, b0e, lift = item.split(":")
+        out.append({"slot": int(k), "pos": (int(x), int(y), int(z)),
+                    "radius": int(r), "height": int(h), "flags": int(fl, 16),
+                    "b0e": int(b0e), "lift": int(lift)})
+    return out
 
 
 def runs_of(rows):
@@ -117,7 +138,7 @@ def runs_of(rows):
     return out
 
 
-def step_horizontal(lvl, p, ang, fwd_speed, strafe_speed):
+def step_horizontal(lvl, p, ang, fwd_speed, strafe_speed, actors=None):
     """The two calls `0x8002f9bc` makes, in its own order and its own directions.
 
     Forward goes along `facing + 0x400` and the strafe along `facing` — the
@@ -132,8 +153,8 @@ def step_horizontal(lvl, p, ang, fwd_speed, strafe_speed):
     slides down it, and by two pushes a frame.
     """
     fd, sd = movement.step_distances(strafe_speed, fwd_speed)
-    p, _ok = movement.horizontal(lvl, p, (ang + 0x400) & 0xFFF, fd)
-    p, _ok = movement.horizontal(lvl, p, ang & 0xFFF, sd)
+    p, _ok = movement.horizontal(lvl, p, (ang + 0x400) & 0xFFF, fd, actors=actors)
+    p, _ok = movement.horizontal(lvl, p, ang & 0xFFF, sd, actors=actors)
     return p
 
 
@@ -155,7 +176,7 @@ def frame(lvl, r, nxt, rung):
                                       r["btn"] & BIND["back"], r["max"])
             stf = movement.accelerate(r["stf"], r["btn"] & BIND["strafe_pos"],
                                       r["btn"] & BIND["strafe_neg"], r["max"], 2)
-        p = step_horizontal(lvl, p, nxt["ang"], fwd, stf)
+        p = step_horizontal(lvl, p, nxt["ang"], fwd, stf, r.get("act"))
     p, _st, _v = movement.walk_step(lvl, p, 0, 0, r["vst"], r["vv"], r["mag"])
     return p
 
@@ -196,7 +217,8 @@ def check(lvl, run, rung, objs=()):
                     + ((movement.game_cos(b) * sd) >> 12),
                     r["p"][2] + ((movement.game_sin(a) * fd) >> 12)
                     + ((movement.game_sin(b) * sd) >> 12))
-        took = step_horizontal(lvl, r["p"], nxt["ang"], nxt["fwd"], nxt["stf"])
+        took = step_horizontal(lvl, r["p"], nxt["ang"], nxt["fwd"], nxt["stf"],
+                               r.get("act"))
         # The door first: a closed door is a wall in the model's grid, and a
         # frame spent walking through it after it opened is the door's.
         if any(abs(o["x"] - r["p"][0]) < DOOR_REACH
@@ -219,7 +241,7 @@ def check(lvl, run, rung, objs=()):
                                           r["btn"] & BIND["back"], r["max"])
                 stf = movement.accelerate(r["stf"], r["btn"] & BIND["strafe_pos"],
                                           r["btn"] & BIND["strafe_neg"], r["max"], 2)
-            p = step_horizontal(lvl, p, nxt["ang"], fwd, stf)
+            p = step_horizontal(lvl, p, nxt["ang"], fwd, stf, r.get("act"))
         p, state, vel = movement.walk_step(lvl, p, 0, 0, state, vel, r["mag"])
         d = max(abs(a - b) for a, b in zip(p, nxt["p"]))
         if d and first is None:

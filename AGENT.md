@@ -144,7 +144,8 @@ the video memory, against every snapshot               object pages 779 760 of
 and in the Godot self-test:
 
 ```
-movement 690 of 690 · steps 750 of 750 · levels 40 of 40 · angles 400 of 400
+movement 690 of 690 · steps 750 of 750 · creature steps 384 of 384
+levels 40 of 40 · angles 400 of 400
 conversations 43 of 43, and 25 of 25 steps the emulator recorded
 damage 6 of 6 · equipment 16 of 16 · directions 400 of 400
 ```

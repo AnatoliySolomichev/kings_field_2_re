@@ -1824,7 +1824,29 @@ replay; 12 the model turned away at a wall; 60 the model took whole and the
 game did not, which is creatures -- they collide with the player through bit
 `0x10` and knock it back, and the log does not hold where they were. The
 self-test holds `godot/player.gd` to the Python on 750 steps, 200 of them into
-an object and 100 pushed by a ramp. Still out: the creatures.
+an object and 100 pushed by a ramp.
+
+**And the creatures.** Bit `0x10` of the player's query is `actor_spot_taken`
+(`0x8004d644`): the first of the 200 actor slots whose `+9` is 1 -- awake, and
+drawn -- whose `+0xe` is not 3, that is not `current_actor`, and whose flags
+word at `+0x28` has no bit in common with the byte at `0x8018faa8`, within
+`in_range` of the point: its `+0x2c` position, its radius `+0x1c` plus the
+asker's, its height `+0x1e` against the asker's. The flags are the entity's
+`+0x34`, copied by `actor_copy_kind` (`0x8004b67c`); the byte is 4 while
+`player_controller` moves the player (`0x80031004`, cleared at `0x80032104`)
+and 0 otherwise, so **a creature whose flags carry 4 lets the player through**
+-- on level 0 the ten of kind 15, flags `0x404`, radius 0 -- and none of the
+others does. A follower (flag `0x10`) is tested `+0x26` higher and skipped when
+its `+0x22` equals `0x8018fac0`. The answer lands at `0x801e648c`, and
+`collide_target` prefers it to the object: the push-out goes round the
+creature's centre at its radius + `0x370`.
+
+`game_main` runs `object_interpreter`, then `player_controller`, then
+`actor_tick_driver`, so the player collides with the creatures where the last
+frame left them -- which is where `emu/bp16.lua` now logs them (`act=`), at the
+start of the controller. No recording has them yet; `godot/player.gd` asks
+`actors.gd`'s awake ones, and the self-test holds it to the Python on 384 steps
+made into level 0's creatures from eight sides each, all of them turned.
 
 ### How long a frame lasts: four vertical blanks
 

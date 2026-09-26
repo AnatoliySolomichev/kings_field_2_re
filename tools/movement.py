@@ -522,14 +522,60 @@ def object_collide(objs, x, y, z, r=R, own=BODY):
     return None
 
 
-def query_all(lvl, x, y, z, extra=None):
-    """`collide_query` with the player's 0x31, objects included.
+# Creatures, collide_query's bit 0x10: actor_spot_taken (0x8004d644) walks the
+# 200 actor slots for the first whose byte +9 is 1 -- awake and drawn -- whose
+# +0xe is not 3, that is not current_actor, and whose flags word at +0x28 (the
+# entity's +0x34, actor_copy_kind at 0x8004b67c) has no bit in common with the
+# byte at 0x8018faa8. player_controller sets that byte to 4 before it moves the
+# player (0x80031004) and to 0 after (0x80032104), so **a creature whose flags
+# carry 4 does not stop the player** -- level 0's ten of kind 15, flags 0x404,
+# radius 0 -- and every other creature does. The test is in_range on the
+# actor's +0x2c position, its radius +0x1c plus the asker's, its height +0x1e
+# and the asker's own; a follower (flag 0x10) stands +0x26 higher and is
+# skipped when its +0x22 matches 0x8018fac0, which is not modelled -- no level
+# the recordings cover places one.
+PLAYER_ACTOR_MASK = 4
+FOLLOWER = 0x10
 
-    Returns (mask, nearest surface, the object hit or None). Creatures, bit
-    0x10, are not here: their positions are not in the recording. `extra`
-    gets the ceiling and the push tile_collision leaves, keyed by address.
+
+def actor_spot_taken(actors, x, y, z, r=R, own=BODY, mask=PLAYER_ACTOR_MASK):
+    """The first creature (x, y, z) runs into, or None.
+
+    `actors` are the awake ones, in slot order, as dicts with `pos`, `radius`,
+    `height`, `flags` and, when known, `b0e` (+0xe) and `lift` (+0x26).
+    """
+    for a in actors or ():
+        if a.get("b0e") == 3 or a["flags"] & mask:
+            continue
+        ax, ay, az = a["pos"]
+        if a["flags"] & FOLLOWER:
+            ay += a.get("lift", 0)
+        if in_range((ax, ay, az), x, y, z, a["radius"] + r, a["height"], own) != -1:
+            return a
+    return None
+
+
+def query_all(lvl, x, y, z, extra=None, actors=None):
+    """`collide_query` with the player's 0x31: tiles, creatures and objects.
+
+    Returns (mask, nearest surface, the object hit or None); the creature hit,
+    if any, goes to `extra[0x801e648c]` the way the game leaves it there, with
+    the ceiling and the push tile_collision leaves, all keyed by address.
+    `actors` are the awake creatures; a recording that does not log them
+    leaves them out.
+
+    Both of the things are asked only where the cell has an occupancy count,
+    and here that matters for the objects alone: a creature marks every cell
+    within its radius + 0x800 of itself as it moves (grid_mark from
+    actor_wake, actor_activate and actor_tick), and a point it stops is within
+    its radius + 0x320, so the cell under that point is always one it marked.
     """
     mask, cur = query(lvl, x, y, z, extra=extra)
+    a = actor_spot_taken(actors, x, y, z) if actors else None
+    if extra is not None:
+        extra[0x801E648C] = a
+    if a is not None:
+        mask |= 0x10
     cx, cz = x >> 11, z >> 11
     if not (0 <= cx < 80 and 0 <= cz < 80) or not lvl.cell(cx, cz)[2] & 0xFC:
         return mask, cur, None
@@ -544,7 +590,7 @@ STEEP_PUSH = 0x40      # the least push player_horizontal adds (0x8002e4e4)
 RECT_TRIES = (0x400, 0x400, 0x3E8, 0x3E8, 0x418, 0x418)
 
 
-def horizontal(lvl, p, angle, dist, state=0, objects=True):
+def horizontal(lvl, p, angle, dist, state=0, objects=True, actors=None):
     """`player_horizontal` (`0x8002e3f8`): a step of `dist` along `angle`.
 
     X takes the cosine and Z the sine, shifted right by 12, and the step is
@@ -565,10 +611,11 @@ def horizontal(lvl, p, angle, dist, state=0, objects=True):
       corner that stops the square slide gets a slightly skewed one. Six tries;
       the seventh falls through to the push-out;
     * **anything else in the way** -- a round object, or a creature -- is gone
-      round: the target moves to the object's centre plus its radius plus
+      round: the target moves to the thing's centre plus its radius plus
       `0x370`, along the bearing from the centre to where the step was going,
-      each part rounded towards zero. If the second target runs into a thing as
-      well, the player stays where it is;
+      each part rounded towards zero. `collide_target` takes the creature when
+      there is one, and the object only when there is not. If the second target
+      runs into a thing as well, the player stays where it is;
     * otherwise, a wall: the same step is **tried shorter**, `0x16` at a time,
       once, and the longest clear one is taken;
     * then it **slides**: first with the X part dropped, then with only the X
@@ -583,7 +630,8 @@ def horizontal(lvl, p, angle, dist, state=0, objects=True):
     `push` along `-angle - 0x400` and is asked about again. The step up needs
     the ceiling more than a body (`0x6a4`) above the surface as well.
 
-    Not here: the creatures. `objects=False` leaves the objects out as well.
+    `actors` are the awake creatures (see `actor_spot_taken`); without them
+    the creatures are not asked. `objects=False` leaves the objects out.
 
     The caller (`0x8002f9bc`) makes this call twice a frame: once at `angle`
     with the forward distance and once at `angle + 0x400` with the strafe.
@@ -601,7 +649,7 @@ def horizontal(lvl, p, angle, dist, state=0, objects=True):
         tx, tz = x + s4, z + s2
         last = (tx, tz)                 # where 0x801e6468 will point
         if objects:
-            mask, cur, obj = query_all(lvl, tx, y, tz, extra=ex)
+            mask, cur, obj = query_all(lvl, tx, y, tz, extra=ex, actors=actors)
         else:
             (mask, cur), obj = query(lvl, tx, y, tz, extra=ex), None
         take = mask == 0
@@ -641,9 +689,14 @@ def horizontal(lvl, p, angle, dist, state=0, objects=True):
             pushes += 1
             if pushes == 2:
                 break
-            ox, _oy, oz = obj["pos"]
+            who = ex.get(0x801E648C)
+            if who is not None:                  # collide_target: the creature first
+                ox, _oy, oz = who["pos"]
+                r = who["radius"] + AROUND
+            else:
+                ox, _oy, oz = obj["pos"]
+                r = obj["push"] + AROUND
             b = ratan2(s2 - (oz - z), s4 - (ox - x))
-            r = obj["push"] + AROUND
             s4 = trunc(game_cos(b) * r, 4096) + ox - x
             s2 = trunc(game_sin(b) * r, 4096) + oz - z
             continue
@@ -655,7 +708,8 @@ def horizontal(lvl, p, angle, dist, state=0, objects=True):
                 nx = x + ((vx + 0xFFF if vx < 0 else vx) >> 12)
                 nz = z + ((vz + 0xFFF if vz < 0 else vz) >> 12)
                 s0 -= SHRINK
-                q = query_all(lvl, nx, y, nz)[0] if objects else query(lvl, nx, y, nz)[0]
+                q = (query_all(lvl, nx, y, nz, actors=actors)[0] if objects
+                     else query(lvl, nx, y, nz)[0])
                 last = (nx, nz)
                 if q == 0:
                     x, z = nx, nz

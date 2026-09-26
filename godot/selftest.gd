@@ -120,6 +120,36 @@ func _steps(doc: Dictionary) -> bool:
 	return bad == 0
 
 
+# Steps into the creatures, made by tools/gdcoll.py (creaturecheck) with every
+# creature of level 0 awake: player.gd's _horizontal against the Python.
+func _creature_steps(doc: Dictionary) -> bool:
+	var cases: Array = doc.get("creature_steps", [])
+	if cases.is_empty():
+		print("creature steps: none in movecheck00.json")
+		return true
+	var pl = load("res://player.gd").new()
+	pl.coll = coll
+	pl.creatures = doc.get("creatures", [])
+	var bad := 0
+	var first := ""
+	for c in cases:
+		pl.gx = int(c[0])
+		pl.gy = int(c[1])
+		pl.gz = int(c[2])
+		pl._horizontal(int(c[3]), int(c[4]))
+		if pl.gx != int(c[5]) or pl.gz != int(c[6]):
+			bad += 1
+			if first == "":
+				first = "%s: godot %d,%d python %d,%d" % [str(c), pl.gx, pl.gz,
+					int(c[5]), int(c[6])]
+	pl.free()
+	print("creature steps: %d of %d steps into a creature land where tools/movement.py puts them"
+		% [cases.size() - bad, cases.size()])
+	if bad > 0:
+		print("  first difference: " + first)
+	return bad == 0
+
+
 func _init() -> void:
 	coll = KFCollision.new()
 	if not coll.load_from("res://coll00.json"):
@@ -165,6 +195,9 @@ func _init() -> void:
 		quit(1)
 		return
 	if not _steps(doc):
+		quit(1)
+		return
+	if not _creature_steps(doc):
 		quit(1)
 		return
 	if not _levels():

@@ -129,7 +129,9 @@ def movecheck(lv, lvl, out="out/godot"):
             frames.append([p[0], p[1], p[2], state, vel])
         runs.append({"name": name, "start": list(p0), "d": [dx, dz],
                      "frames": frames})
-    doc = {"level": lv, "runs": runs, "steps": stepcheck(lvl)}
+    crs, crsteps = creaturecheck(lv, lvl)
+    doc = {"level": lv, "runs": runs, "steps": stepcheck(lvl),
+           "creatures": crs, "creature_steps": crsteps}
     path = f"{out}/movecheck{lv:02d}.json"
     with open(path, "w") as f:
         json.dump(doc, f, separators=(",", ":"))
@@ -138,6 +140,43 @@ def movecheck(lv, lvl, out="out/godot"):
     anglecheck(out)
     dircheck(out)
     return path
+
+
+def creaturecheck(lv, lvl, ring=150):
+    """Steps into the level's creatures, for selftest.gd, as if all were awake.
+
+    No recording has logged where the creatures stood until now, so these are
+    made rather than recorded: from eight points just outside each creature's
+    reach -- its radius, the player's 0x320 and `ring` more -- a full walking
+    step (201) straight at it, through `movement.horizontal` with every
+    creature of the level in the way. The GDScript copy must land on the same
+    spot. Returns (the creatures as [x, y, z, radius, height, flags], the
+    cases).
+    """
+    try:
+        import actors
+        rows = [r for r in actors.table(lv) if r]
+    except Exception:
+        return [], []
+    them = [{"slot": r["slot"], "pos": (r["x"], r["y"], r["z"]),
+             "radius": r["radius"], "height": r["height"], "flags": r["eflags"]}
+            for r in rows]
+    cases = []
+    for a in them:
+        if a["flags"] & movement.PLAYER_ACTOR_MASK or not a["radius"]:
+            continue
+        x0, y0, z0 = a["pos"]
+        for k in range(8):
+            ang = k << 9
+            d = a["radius"] + movement.R + ring
+            p = (x0 + ((movement.game_cos(ang) * d) >> 12), y0,
+                 z0 + ((movement.game_sin(ang) * d) >> 12))
+            to = (ang + 0x800) & 0xFFF
+            q, _ok = movement.horizontal(lvl, p, to, 201, actors=them)
+            cases.append([p[0], p[1], p[2], to, 201, q[0], q[2]])
+    crs = [[a["pos"][0], a["pos"][1], a["pos"][2], a["radius"], a["height"],
+            a["flags"]] for a in them]
+    return crs, cases
 
 
 def stepcheck(lvl, n=400):
