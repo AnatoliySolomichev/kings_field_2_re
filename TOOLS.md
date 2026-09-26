@@ -574,6 +574,16 @@ everything, and shows it while the zone the player stands in says so
 (FORMATS.md, "The sky"). `shots.py inv1` is the check: the red clouds over
 level 0's horizon, where they are in the game's screenshot.
 
+**`hud.py`** — the panel in the top-left corner: GAME.EXE's sprite table at
+`0x800819b4`, `render_frame`'s arithmetic for the digits and the meters, and
+the page's pictures for the port (`hud.json`, `hud/`). The check reads the
+table back out of each snapshot's RAM, where the game rewrites it every frame.
+
+```
+python3 tools/hud.py              the sprites, then the check
+python3 tools/hud.py --check      520 of 520 fields over 13 snapshots
+```
+
 **`shots.py`** — the port rendered from where each snapshot's screenshot was
 taken, beside the screenshot.
 

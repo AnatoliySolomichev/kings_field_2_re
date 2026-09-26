@@ -2377,5 +2377,35 @@
   "name": "collide_actor",
   "kind": "data",
   "evidence": "the actor slot collide_query's bit 0x10 or 0x40 found, or -1; collide_target (0x80033d84) takes it before collide_object, so player_horizontal pushes out round a creature first"
+ },
+ "0x800819b4": {
+  "name": "hud_sprites",
+  "kind": "data",
+  "evidence": "thirty 0x14-byte sprite records ended by 0xff: +0 on, +1 blend, +2 u, +3 v, +4 w, +5 h, +6 x, +8 y, +0xe clut, +0x10 tpage, +0x12 ordering-table depth. The panel in the top-left corner; render_frame switches them by hud_style and writes HP, MP and the meters in every frame, which tools/hud.py reproduces on 520 of 520 fields of the snapshots' live table"
+ },
+ "0x80041ad4": {
+  "name": "hud_sprite",
+  "kind": "code",
+  "evidence": "(record, blend, rgb): one hud_sprites record as a semi-transparent SPRT (code 0x64) and a DR_TPAGE for its rate, both at the head of the record's ordering-table entry"
+ },
+ "0x80041e68": {
+  "name": "hud_draw",
+  "kind": "code",
+  "evidence": "render_frame's call between the compass and the terrain: walks hud_sprites to the 0xff and hands every record whose +0 is set to hud_sprite, coloured by the brightness at 0x801b25e1"
+ },
+ "0x80030568": {
+  "name": "render_frame_bare",
+  "kind": "code",
+  "evidence": "saves hud_style and compass_style, sets both to 0, calls render_frame, puts them back: a frame without the panel or the compass, for the menus, script_interpreter and object_interact"
+ },
+ "0x801b25dd": {
+  "name": "hud_style",
+  "kind": "data",
+  "evidence": "the panel's style: render_frame turns hud_sprites 0-12 on for bit 0 and 15-29 for bit 1; new_character's options (0x8002b64c) set 2, the options screen (0x8001f004) and save_restore write it"
+ },
+ "0x801b25de": {
+  "name": "compass_style",
+  "kind": "data",
+  "evidence": "the compass's style: render_frame turns compass_models' records on by its bits; new_character's options set 2"
  }
 }

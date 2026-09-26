@@ -155,6 +155,14 @@ var bob_phase := 0
 var bob := 0
 var acc := 0.0
 var last_surface := KFCollision.NO_SURFACE
+# What the panel shows (hud.gd): HP 0x801b24fc, MP 0x801b2500, and the weapon
+# and magic meters 0x801b2502 and 0x801b2506, full at 5000. A new character has
+# 50 and 30 and every snapshot at rest holds both meters at 5000; nothing in
+# the port spends them yet, and while comparing they follow the game's.
+var hp := 50
+var mp := 30
+var weapon_meter := 5000
+var magic_meter := 5000
 # The creatures in the way this frame, as [x, y, z, radius, height, flags]:
 # actors.gd's awake ones, taken before the step because the game moves the
 # player before actor_tick_driver.

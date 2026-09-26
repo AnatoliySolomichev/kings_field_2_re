@@ -130,6 +130,9 @@ def main(quick=False, only_check=False):
     run(["tools/rtim.py", "--check"],
         "the video memory, against every snapshot with a level",
         keep=["over every snapshot"])
+    run(["tools/hud.py", "--check"],
+        "the panel's sprite table, against every snapshot's RAM",
+        keep=["fields of the live sprite table"])
     run(["tools/objload.py", "--check"],
         "the object loader, against every snapshot with a level",
         keep=["over every snapshot"])

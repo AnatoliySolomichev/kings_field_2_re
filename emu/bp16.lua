@@ -189,10 +189,12 @@ arm(0x8002fe1c, 'frame', function()
 
     local live = io.open(LIVE_TMP, 'w')
     if live then
-        live:write(string.format('%d %d %d %d %d %d %d %d %d %d %d %d %d\n',
+        -- 14-17: HP, MP and the weapon and magic meters, for the port's panel
+        live:write(string.format('%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d\n',
             frame, s32(PX), s32(PY), s32(PZ), s16(ANG), u8(VSTATE), s16(VVEL),
             s16(FWD), s16(STRAFE), u16(BTN), u8(0x8018fad9), s16(PITCH),
-            s32(VBLANKS)))
+            s32(VBLANKS), u16(0x801b24fc), u16(0x801b2500), u16(0x801b2502),
+            u16(0x801b2506)))
         live:close()
         os.rename(LIVE_TMP, LIVE)
     end

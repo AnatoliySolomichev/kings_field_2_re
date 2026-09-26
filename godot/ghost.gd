@@ -216,6 +216,10 @@ func _read() -> Dictionary:
 		"btn": int(parts[9]), "lv": int(parts[10]),
 		"pitch": int(parts[11]) if parts.size() > 11 else 0,
 		"vb": int(parts[12]) if parts.size() > 12 else -1,
+		"hp": int(parts[13]) if parts.size() > 16 else -1,
+		"mp": int(parts[14]) if parts.size() > 16 else -1,
+		"wm": int(parts[15]) if parts.size() > 16 else -1,
+		"mm": int(parts[16]) if parts.size() > 16 else -1,
 	}
 
 
@@ -247,6 +251,13 @@ func _process(_dt: float) -> void:
 			f0 = int(cur["f"])
 		elif int(cur["vb"]) > vb0:
 			game_fps = 60.0 * float(int(cur["f"]) - f0) / float(int(cur["vb"]) - vb0)
+
+	# The panel's numbers, when the recorder sends them.
+	if int(cur["hp"]) >= 0:
+		player.hp = int(cur["hp"])
+		player.mp = int(cur["mp"])
+		player.weapon_meter = int(cur["wm"])
+		player.magic_meter = int(cur["mm"])
 
 	# Where the game's player is, in Godot's axes.
 	var gp: Vector3i = cur["p"]

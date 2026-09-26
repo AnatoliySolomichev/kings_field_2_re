@@ -1997,6 +1997,56 @@ are `draw_model_cell_lit`'s, two 0x24-byte entries switched by the bits of
 translation (290, 32, 50) -- the top-right corner of a 320x240 screen, where
 the "N" of the compass stands in every screenshot.
 
+### The panel: HP, MP and the two meters
+
+The box in the top-left corner is thirty sprites in a table of GAME.EXE,
+`hud_sprites` at `0x800819b4`, 0x14 bytes each and ended by 0xff:
+
+```
++0    on       rewritten by render_frame every frame
++1    abr      SetDrawTPage(tpage | (abr & 3) << 5) unless 0xff: 3 adds a
+               quarter, 0 and 4 mix half and half
++2,3  u, v     +4,5 w, h      +6,8 x, y on the 320x240 screen (s16)
++0xe  clut     +0x10 tpage (0x1e, the 4-bit page at 896, 256)
++0x12 depth    the ordering-table index, 24 to 40 -- in front of the world
+```
+
+`hud_draw` (`0x80041e68`), which `render_frame` calls between the compass and
+the terrain, hands every record whose +0 is set to `hud_sprite` (`0x80041ad4`):
+a SPRT, semi-transparent, coloured by the brightness byte `0x801b25e1` three
+times, with a DR_TPAGE for the rate, both put at the head of the record's
+ordering-table entry -- so the larger depth draws first and, within one, the
+later record. `render_frame` switches the table by `hud_style` (`0x801b25dd`)
+-- records 0 to 12 on its bit 0, 15 to 29 on its bit 1, 13 and 14 never -- and
+writes the numbers in:
+
+```
+style 2   the default: new_character's options (0x8002b64c) set it and the
+          compass's, 0x801b25de, to 2
+  17-19   u = 12 * digit + 128 of HP % 1000 (0x801b24fc): hundreds, tens, ones
+  22-24   the same of MP (0x801b2500)
+  25, 26  w = weapon_meter * 64 / 5000, magic_meter * 64 / 5000
+          (0x801b2502, 0x801b2506: the red and blue lines, full at 5000)
+style 1
+  4, 6    w = 48 * HP / HP max, 48 * MP / MP max (0x801b24fa, 0x801b24fe)
+  5, 7    w = meter * 48 / 5000
+```
+
+The division by 5000 is a multiply-high by `0x68db8bad` and a shift of 11.
+`render_frame_bare` (`0x80030568`), which the menus, the conversations and
+`object_interact` call, zeroes both styles, draws a frame and puts them back:
+that is why the item menu's screenshot has no panel.
+
+Because the game rewrites the live table every frame, a snapshot's RAM holds
+its own answer: `tools/hud.py --check` reproduces **520 of 520** fields over the
+13 snapshots, two of them drawn bare. The page itself comes from entry 96 --
+cut at a chunk boundary, which is how it was found that the stream loses a cut
+block's tail ("The 0x8000 is a chunk"). `godot/hud.gd` draws the panel from
+`hud.json`: each sprite as its solid texels and, over them, its STP texels
+under the rate's blend, scaled with the window's height; HP, MP and the meters
+are the player's, which follow the game's while comparing (`live.txt` fields
+14 to 17).
+
 ### What the camera sees
 
 `0x80035394`, the graphics set-up `game_main` runs once, calls

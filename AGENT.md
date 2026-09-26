@@ -133,6 +133,7 @@ the object loader, against 13 snapshots                angles 4344/4352, scale a
                                                        position 4352/4352, opcode
                                                        4226/4226, grid exact on 7
 the lighting table, against every snapshot             89 856 of 89 856 bytes
+the panel's sprite table, against every snapshot       520 of 520 fields
 the walking, against the recording (replay rung 2)     118 288 of 118 500 frames;
                                                        447 of the 455 that touch
                                                        an object
