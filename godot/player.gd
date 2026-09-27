@@ -85,6 +85,7 @@ const V_ACCEL_RISE := 0xA            # 0x8002eebc, state 0x20
 const V_RECOIL := 0x12C              # 0x8002f0ac, state 0x50
 const V_LAND_SLACK := 0x64           # 0x8002ee2c
 const V_SQUASH := 0x200              # 0x8002efec
+const FALL_HURTS := 0x1E0            # 0x8002ef74
 const V_LAUNCH := -0x96              # 0x8002f1ac
 
 # The head bob, 0x8002f298. The phase accumulates the walking speed every frame
@@ -160,9 +161,26 @@ var last_surface := KFCollision.NO_SURFACE
 # 50 and 30 and every snapshot at rest holds both meters at 5000; nothing in
 # the port spends them yet, and while comparing they follow the game's.
 var hp := 50
+var hp_max := 50
 var mp := 30
 var weapon_meter := 5000
 var magic_meter := 5000
+# What a blow leaves behind (tools/knock.py): player_state (0x801b25e5) 0x10
+# while knocked back and 0x12 while stunned; the push (player_velocity,
+# 0x801b266c); the tilt the view gets (0x801b2618, pitch yaw roll) and its
+# velocity (0x801b2674); the landing's crouch (0x801b2654) and the view's nod
+# while falling (0x801b2628); the flash's length (0x801b265a).
+var pstate := 0
+var push := [0, 0, 0]
+var tilt := [0, 0, 0]
+var tilt_vel := [0, 0, 0]
+var crouch := 0
+var dip := 0
+var flash := 0
+# The fresh character's defence and stat, which damagecheck.json carries --
+# the port does not follow the character's stats yet.
+var defence: Array = [13, 6, 4, 0, 0, 0, 0, 0]
+var stat := 20
 # The creatures in the way this frame, as [x, y, z, radius, height, flags]:
 # actors.gd's awake ones, taken before the step because the game moves the
 # player before actor_tick_driver.
@@ -172,6 +190,11 @@ var creatures: Array = []
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	have_coll = coll.load_from("res://coll%02d.json" % _level())
+	if FileAccess.file_exists("res://damagecheck.json"):
+		var dc = JSON.parse_string(FileAccess.get_file_as_string("res://damagecheck.json"))
+		if typeof(dc) == TYPE_DICTIONARY:
+			defence = Array(dc.get("defence", defence)).slice(0, KFDamage.TYPES)
+			stat = int(dc.get("stat", stat))
 	gx = int(position.x * UNIT)
 	gy = int(-position.y * UNIT)
 	gz = int(-position.z * UNIT)
@@ -262,7 +285,8 @@ func _process(dt: float) -> void:
 	look_acc = minf(look_acc + dt, 0.25)
 	while look_acc >= 1.0 / TICK_HZ:
 		look_acc -= 1.0 / TICK_HZ
-		_look()
+		if pstate != 0x12:                # the stun's arm calls no player_look
+			_look()
 
 	if flying:
 		if Input.is_key_pressed(KEY_PAGEDOWN): dir -= Vector3.UP
@@ -304,6 +328,18 @@ func _ramp(speed: int, pos: bool, neg: bool, cap: int, decay := 3) -> int:
 
 # @orig game:0x8002e3f8 player_horizontal  status:partial -- the step; the slide along a refused wall is missing
 func _tick(dir: Vector3) -> void:
+	var an := get_node_or_null("../Actors")
+	creatures = an.solid() if an and an.has_method("solid") else []
+	if flash > 0:
+		flash -= 1
+	# 0x80031c14, state 0x12 -- a stun: the tilt spring and nothing else, no
+	# turn, no walk, no height, until the view has settled.
+	if pstate == 0x12:
+		_tilt()
+		if tilt == [0, 0, 0]:
+			_knock_end()
+		_view()
+		return
 	var cap := SPEED_MAX_RUN if Input.is_key_pressed(KEY_SHIFT) else SPEED_MAX
 	# The controller's own order, off its call list: player_turn (the button
 	# edges), player_look (the turn and the pitch), player_walk (the speeds),
@@ -329,16 +365,210 @@ func _tick(dir: Vector3) -> void:
 		sd = (stf_speed * stf_speed) / h
 		if fwd_speed < 0: fd = -fd
 		if stf_speed < 0: sd = -sd
-	var an := get_node_or_null("../Actors")
-	creatures = an.solid() if an and an.has_method("solid") else []
 	# player_walk steps twice, forward along facing + 0x400 and the strafe along
 	# the facing, each through player_horizontal; then the height. Both calls
 	# are made even for a step of nothing (0x8002fda0, 0x8002fdb4): that still
 	# takes a steep ramp's push, so standing on one slides you down it.
 	_horizontal((facing + 0x400) & 0xFFF, fd)
 	_horizontal(facing & 0xFFF, sd)
+	# 0x80031b98, state 0x10 -- knocked back: after the walk, the push with its
+	# Y held at 1, the tilt spring, and the end once all three tilts are 0.
+	if pstate == 0x10:
+		push[1] = 1
+		_push()
+		_tilt()
+		if tilt == [0, 0, 0]:
+			_knock_end()
 	_move(0, 0)
 	_bob(coll.isqrt(fd * fd + sd * sd))
+	_view()
+
+
+# 0x8002ef80: a landing at 0x1e0 or faster hurts, t^3 / 118000 with t the
+# velocity squared over 0x1000 -- the multiply by 0x8e2e0727 and the shift by
+# 16 at 0x8002ef9c are a division by exactly 118000. 0x1e0 costs 1 HP, 0x300 25.
+# @orig game:0x8002ef80  status:transcribed -- read, not yet seen in a recording
+static func fall_damage(v: int) -> int:
+	var t := (v * v) >> 12
+	var c := t * t * t
+	c = (c & 0xFFFFFFFF) - (0x100000000 if c & 0x80000000 else 0)
+	var hi := (c * (0x8E2E0727 - 0x100000000)) >> 32
+	return ((hi + c) >> 16) - (c >> 31)
+
+
+# A creature's blow, from actors.gd: actor_blow (0x8004d254) found the player in
+# reach and arc and hands player_take_hit (0x8002ab18) slash, blow and stab
+# from the record's +0x12, +0x14 and +0x16, the effect +0x11, and its own point
+# raised by +0xf << 5. The seven effects the low nibble picks (poison and its
+# kin) are not here.
+# @orig game:0x8002ab18 player_take_hit  status:partial -- the damage and apply_damage; not the effects, nor the armour and rings that cut the attack
+func take_blow(a: Dictionary, rec: Array) -> void:
+	var attacks := [_u16(rec, 0x12), _u16(rec, 0x14), _u16(rec, 0x16)]
+	var dmg := int(KFDamage.hit(attacks, defence, stat)["damage"])
+	var at := Vector3i(int(a["px"]), int(a["py"]) - (int(rec[0xF]) << 5),
+		int(a["pz"]))
+	_apply_damage(dmg, true, at, int(rec[0x11]))
+
+
+static func _u16(rec: Array, o: int) -> int:
+	return int(rec[o]) | (int(rec[o + 1]) << 8)
+
+
+# apply_damage (0x8002a6f4), tools/knock.py's: the HP; with an attacker, a push
+# away from its point raised 0x352 -- the share of the HP the hit took, a
+# quarter of (dmg << 12) / hp_max held to 0x3b6, at least 0x50 and at most
+# 0x1c2 (x5 up to 0x258 for effect bit 0x40), its Y held to +-0xc8 -- and a
+# shake of isqrt(share << 2) held to 0x10..0x2a, one of eight by the bearing
+# against the view's yaw, into player_knock; effect bit 0x80 makes it a stun.
+# Without an attacker (a fall) the HP and the flash alone.
+# @orig game:0x8002a6f4 apply_damage  status:transcribed -- tools/knock.py: 55 of 55 knock-back frames, the push's Y from the creature
+func _apply_damage(dmg: int, has_at: bool, at: Vector3i, effect: int) -> void:
+	if pstate == 0x11 or dmg == 0:
+		return
+	var left := maxi(hp - dmg, 0)
+	var share := mini(coll._idiv(dmg << 12, hp_max), 0x3B6)
+	hp = left
+	var s1 := share >> 2
+	var pv := [0, 0, 0]
+	var yaw := 0
+	if has_at:
+		var dx := gx - at.x
+		var dz := gz - at.z
+		yaw = coll.vec_angle(dx, dz)
+		var pitch_to := (-coll.vec_angle(gy - (at.y + 0x352), _len2d(dx, dz))) & 0xFFF
+		s1 = maxi(s1, 0x50)
+		s1 = mini(s1 * 5, 0x258) if effect & 0x40 else mini(s1, 0x1C2)
+		var d := coll.direction_from_angles(pitch_to, yaw)
+		for i in 3:
+			pv[i] = coll._s16((int(d[i]) * s1) >> 12)
+		pv[1] = clampi(pv[1], -0xC8, 0xC8)
+	flash = maxi((0x514 - (share >> 1)) >> 2, 0x46)
+	if left == 0 or not has_at:
+		return                      # a death (player_throw) is not here yet
+	var sh := clampi(coll.isqrt(share << 2), 0x10, 0x2A)
+	if effect & 0x40:
+		sh <<= 1
+	if effect & 0x80:               # player_knock_hard (0x800309c8)
+		if pstate == 7 or pstate == 8 or pstate == 9:
+			return
+		pstate = 0x12
+		push = pv
+		tilt_vel = [0, 0, -sh if randi() % 0x8000 < 0x4001 else sh]
+		return
+	var i := (((yaw - coll._s16(facing + int(tilt[1]))) + 0x100) >> 9) & 7
+	var way: Array = SHAKES[i]
+	if pstate == 7 or pstate == 8 or pstate == 9:
+		return
+	pstate = 0x10                   # player_knock (0x80030908)
+	push = pv
+	tilt_vel = [int(way[0]) * sh, 0, int(way[1]) * sh]
+	vstate = 0x40
+	vvel = int(pv[1])
+
+
+const SHAKES := [[-1, 0], [-1, 1], [0, 1], [1, 1], [1, 0], [1, -1], [0, -1],
+	[-1, -1]]
+
+
+# vec_length_2d (0x80016c08): the length to eight, through the game's root.
+func _len2d(a: int, b: int) -> int:
+	return coll.isqrt((a >> 3) * (a >> 3) + (b >> 3) * (b >> 3)) << 3
+
+
+# player_move (0x8002f320), only ever run while thrown: the push whole if the
+# way is clear; else at the same height, the push 0x20 shorter after; else up a
+# step of at most 0x100 if nothing but floor and wall (0x205) is in the way,
+# 0x38 shorter; else not at all. A push shorter than what it loses stops.
+# @orig game:0x8002f320 player_move  status:transcribed -- tools/knock.py: 55 of 55 frames of the recorded knock-backs
+func _push() -> void:
+	var nx: int = gx + int(push[0])
+	var ny: int = gy + int(push[1])
+	var nz: int = gz + int(push[2])
+	var q := _query31(nx, ny, nz)
+	if int(q["mask"]) != 0:
+		ny = gy
+		q = _query31(nx, ny, nz)
+		var cut := 0x20
+		var mask: int = q["mask"]
+		if mask == 0:
+			push[1] = 1
+		elif (mask & ~0x205) != 0 or int(q["floor"]) + 0x100 < gy:
+			return
+		else:
+			ny = int(q["floor"])
+			cut = 0x38
+		var ln := _len2d(int(push[0]), int(push[2]))
+		if not cut < ln:
+			push[0] = 0
+			push[2] = 0
+			return
+		push[0] = coll._idiv(int(push[0]) * (ln - cut), ln)
+		push[2] = coll._idiv(int(push[2]) * (ln - cut), ln)
+	gx = nx
+	gy = ny
+	gz = nz
+	push[1] = coll._s16(int(push[1]) + 0x20)
+
+
+# collide_query with the player's 0x31: tiles, objects and the creatures.
+func _query31(x: int, y: int, z: int) -> Dictionary:
+	var q := coll.query_all(x, y, z)
+	if _creature_at(x, y, z) != -1:
+		q["mask"] = int(q["mask"]) | CREATURE_BIT
+	return q
+
+
+# 0x8003047c: each tilt driven back to 0 by the spring at 0x80016168 -- within
+# 4 of it and no faster than 8, snap; else 8 towards it and 4 of friction.
+# @orig game:0x8003047c player_tilt_spring  status:transcribed -- a shake of 0x2a lasts 28 frames, both recorded knock-backs
+func _tilt() -> void:
+	for i in 3:
+		tilt_vel[i] = coll._s16(_spring(coll._s16(int(tilt[i])), int(tilt_vel[i])))
+	for i in 3:
+		tilt[i] = coll._s16(int(tilt[i]) + int(tilt_vel[i]))
+
+
+# @orig game:0x80016168 spring_to  status:transcribed -- target 0, 8 and 4 as 0x8003047c calls it
+static func _spring(cur: int, vel: int) -> int:
+	var d := (0 - cur) & 0xFFF
+	if (d <= 4 or d >= 0x1000 - 4) and vel >= -8 and vel <= 8:
+		return -cur
+	if cur != 0:
+		vel += -8 if (cur & 0xFFF) < 0x801 else 8
+	if vel > 0:
+		return vel - 4
+	if vel < 0:
+		return vel + 4
+	return vel
+
+
+# 0x8003078c: back to state 0 with both speeds and every view offset at 0.
+# @orig game:0x8003078c player_state_reset  status:transcribed
+func _knock_end() -> void:
+	pstate = 0
+	fwd_speed = 0
+	stf_speed = 0
+	tilt = [0, 0, 0]
+	dip = 0
+
+
+# The view, as camera_pose (0x8002b330) hands it to RotMatrix: the eye bob and
+# crouch below 0x640 (Y grows down), pitch + tilt.x + the nod, yaw + tilt.y,
+# roll = tilt.z, as Rx(pitch) Ry(yaw) Rz(roll) from the world to the eye. The
+# player node carries the facing, so the camera takes what is left of it.
+func _view() -> void:
+	var cam := get_node_or_null("Camera")
+	if cam == null:
+		return
+	cam.position.y = (EYE_UNITS - float(bob) - float(crouch)) / UNIT
+	var k := TAU / 4096.0
+	var p := float(_signed(pitch + int(tilt[0]) + dip)) * k
+	var y := float(_signed(int(tilt[1]))) * k
+	var r := float(_signed(int(tilt[2]))) * k
+	var f := float(facing) * k
+	var world := Basis(Vector3.BACK, r) * Basis(Vector3.UP, f + y) \
+		* Basis(Vector3.RIGHT, -p)
+	cam.basis = Basis(Vector3.UP, f).inverse() * world
 
 
 # player_horizontal (0x8002e3f8): a step of `dist` along `angle`, and what the
@@ -371,7 +601,7 @@ func _tick(dir: Vector3) -> void:
 #
 # The creatures are the awake ones in `creatures`, asked as actor_spot_taken
 # asks for the player (_creature_at).
-# @orig game:0x8002e3f8 player_horizontal  status:transcribed -- tools/replay.py: 118 288 of 118 500 ground frames; the creatures against the Python on made steps
+# @orig game:0x8002e3f8 player_horizontal  status:transcribed -- tools/replay.py: 119 588 of 119 793 ground frames; the creatures against the Python on made steps
 func _horizontal(angle: int, dist: int) -> void:
 	var s4: int = (coll.game_cos(angle) * dist) >> 12
 	var s2: int = (coll.game_sin(angle) * dist) >> 12
@@ -607,9 +837,7 @@ func _look() -> void:
 
 # The camera follows the pitch the way ghost.gd has it: negated, 0x1000 a turn.
 func _aim() -> void:
-	var cam := get_node_or_null("Camera")
-	if cam:
-		cam.rotation.x = -float(_signed(pitch)) * TAU / 4096.0
+	_view()
 
 
 static func _signed(a: int) -> int:
@@ -630,9 +858,6 @@ func _bob(mag: int) -> void:
 	if v < 0:
 		v = -v
 	bob = v - (v >> 2)
-	var cam := get_node_or_null("Camera")
-	if cam:
-		cam.position.y = (EYE_UNITS + float(bob)) / UNIT
 
 
 # player_vertical (0x8002ed60). The horizontal is the caller's; this is the
@@ -673,21 +898,34 @@ func _move(dx: int, dz: int) -> void:
 		last_surface = int(q40["floor"])
 		if int(q40["mask"]) == 0:
 			gy = fy
-			vvel += V_ACCEL_LONG
+			vvel = coll._s16(vvel + V_ACCEL_LONG)
+			dip = vvel >> 1                           # 0x8002ef30, the view nods
 			return
 		if vvel < 0:
 			vvel = 0                                  # into a ceiling: stopped
 			return
+		if vvel >= FALL_HURTS:                        # 0x8002efc0
+			_apply_damage(fall_damage(vvel), false, Vector3i.ZERO, 0)
 		gy = last_surface if vvel < V_SQUASH else last_surface - (vvel >> 1)
-		vstate = 0x50
-		return
+		crouch = 1                                    # 0x8002f058
+		vstate = 0x50                                 # and into 0x50 now
 
-	# 0x50 is the landing recoil and owns no height: after its bookkeeping at
-	# 0x8002f068 it falls straight through into state 0's code, below.
+	# 0x50 is the landing recoil and owns no height (0x8002f068): the crouch
+	# takes a quarter of the velocity while it is positive, the velocity loses
+	# 0x12c, the nod gains 0xa while the velocity is positive and loses 0x1e
+	# after, and both spent ends it. Then state 0's code, below -- the landing
+	# frame too: tools/knock.py, 2 of 2 recorded landings.
 	if vstate == 0x50:
-		vvel -= V_RECOIL
-		if vvel <= 0:
+		if crouch > 0:
+			crouch = coll._s16(crouch + (vvel >> 2))
+		vvel = coll._s16(vvel - V_RECOIL)
+		if dip > 0:
+			dip = coll._s16(dip + (0xA if vvel > 0 else -0x1E))
+		if crouch <= 0 and dip <= 0:
 			vstate = 0
+			vvel = 0
+			crouch = 0
+			dip = 0
 
 	var surf := coll.surface(gx, gy, gz)              # 0x8002f120, grounded
 	last_surface = surf

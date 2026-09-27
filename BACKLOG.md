@@ -373,8 +373,8 @@ What is left of movement:
    `0x40`, and `player_horizontal` adds that push to any step it takes; the
    ceiling (`0x801e6478`) gates the step up. Both are in `tools/collision.py`,
    `tools/movement.py` and the port (FORMATS.md, "The ceiling, the push"), and
-   rung 2 stands at 118 288 of 118 500; 12 frames are still turned away at a
-   wall where the game went on.
+   rung 2 stands at 119 588 of 119 793 (the log has grown); 12 frames are
+   still turned away at a wall where the game went on.
 2. **The turn rate**, `0x8002fe1c`. The per-frame increment lives at
    `0x801b264c` and was seen ramping 0, 8, 16, 24, 32; the routine is unread, so
    the replay takes the facing from the game rather than deriving it.
@@ -387,7 +387,10 @@ What is left of movement:
    logged creature on 76 frames, 76 of them exact. Not modelled: `+0xe == 3`
    (the port has no such state) and the follower's `+0x22` test. What moves
    the creatures -- the emulator's walk away and stand elsewhere, the port's
-   stay home -- is the AI, and a blow's knock-back is in there too.
+   stay home -- is the AI, now in the port (godot/ai.gd). A blow's knock-back
+   is done too: tools/knock.py, 55 of 55 recorded frames, and player.gd's
+   state 0x10 and 0x12. Left: the seven effects of a hit's +0x11 (poison and
+   its kin), the armour and rings that cut an attack, and a death.
 4. **The door shoves the player — found.** The X writes `emu/bp15.lua` caught
    at `0x800482e4` are the swinging door (opcode 1, `0x8004814c`): while it
    opens and the player is in its sweep it adds (0, 0, -0x4c) turned by its

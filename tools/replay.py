@@ -90,6 +90,7 @@ def load(path="out/lua_bp16.log"):
         b = re.search(r"blk=(\S+)", line)
         if b:
             blk = [movement.s16(int(v, 16)) for v in b.group(1).split(",")]
+        pv = re.search(r" pv=(-?\d+),(-?\d+),(-?\d+)", line)
         v = re.search(r" vb=(\d+)", line)
         act = re.search(r" act=(\S*)", line)
         rows.append({
@@ -104,6 +105,7 @@ def load(path="out/lua_bp16.log"):
             "lv": int(g[14]), "ra": g[15],
             "stf": blk[3] if len(blk) > 3 else 0,
             "prate": blk[7] if len(blk) > 7 else None,       # 0x801b264e
+            "pv": tuple(int(x) for x in pv.groups()) if pv else None,
         })
     return rows, binds
 
@@ -228,8 +230,21 @@ def check(lvl, run, rung, objs=()):
     """Locked and free, over one continuous run. Returns a line of numbers."""
     locked = bad = walled = objected = 0
     cells = collections.Counter()
+    # A run in player state 0x10 is a knock-back: tools/knock.py's frame, the
+    # push carried from its onset -- predicted from the creature that struck,
+    # or the logged velocity -- else taken from the run's first step.
+    kv = None
+    if rung >= 2 and run[0]["pst"] == 0x10:
+        import knock
+        kv = knock.onset(run[0], run[0]["lv"])
     for r, nxt in zip(run, run[1:]):
-        got = frame(lvl, r, nxt, rung)
+        if rung >= 2 and r["pst"] == 0x10:
+            import knock
+            if kv is None:
+                kv = (nxt["p"][0] - r["p"][0], 1, nxt["p"][2] - r["p"][2])
+            got, kv = knock.frame(lvl, r, nxt, kv)
+        else:
+            got = frame(lvl, r, nxt, rung)
         if rung == 2 and touches_creature(lvl, r, nxt):
             TOUCH[got == nxt["p"]] += 1
         if got == nxt["p"]:
@@ -404,7 +419,8 @@ def report(path="out/lua_bp16.log"):
             print(f"     of the {tb} that differ, {to} are within reach of a "
                   f"swinging door, {tw} the model turned away at a wall"
                   + ("" if rest <= 0 else f" and {rest} it took whole "
-                     "(a creature's blow, or a creature the log did not hold)"))
+                     "(a creature the log did not hold: sessions before "
+                     "bp16 logged act=)"))
         if rung == 2 and TOUCH:
             print(f"     {TOUCH[True]} of {TOUCH[True] + TOUCH[False]} frames that "
                   f"run into a logged creature come out exact")

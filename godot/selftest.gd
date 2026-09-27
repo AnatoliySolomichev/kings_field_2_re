@@ -14,80 +14,48 @@ extends SceneTree
 # `python3 tools/movement.py bp15`: 48 of 48 of the height stores the game made
 # in a recorded walk are the ones this model reaches for.
 
-const V_START := 0x28
-const V_ACCEL_SHORT := 0x50
-const V_ACCEL_LONG := 0x28
-const V_ACCEL_RISE := 0xA
-const V_RECOIL := 0x12C
-const V_LAND_SLACK := 0x64
-const V_SQUASH := 0x200
-const V_LAUNCH := -0x96
-
 var coll: KFCollision
 
 
-# player_vertical (0x8002ed60), the same transcription player.gd carries.
-# Returns [x, y, z, state, velocity].
-func _step(p: Array, dx: int, dz: int, state: int, vel: int) -> Array:
-	var x: int = p[0] + dx
-	var y: int = p[1]
-	var z: int = p[2] + dz
-
-	if state == 0x20:
-		var s20 := coll.surface(x, y, z)
-		var ry := y + vel
-		if not (s20 < ry and vel < 0):
-			if s20 < y:
-				ry = s20
-			state = 0
-		return [x, ry, z, state, vel + V_ACCEL_RISE]
-
-	if state == 0x10:
-		var s10 := coll.surface(x, y, z)
-		var ny := y + vel
-		if s10 + V_LAND_SLACK < ny:
-			return [x, s10, z, 0, vel + V_ACCEL_SHORT]
-		return [x, ny, z, state, vel + V_ACCEL_SHORT]
-
-	if state == 0x40:
-		var fy := y + vel
-		var q40 := coll.query(x, fy, z)
-		if int(q40["mask"]) == 0:
-			return [x, fy, z, state, vel + V_ACCEL_LONG]
-		if vel < 0:
-			return [x, y, z, state, 0]
-		var f: int = int(q40["floor"])
-		return [x, (f if vel < V_SQUASH else f - (vel >> 1)), z, 0x50, vel]
-
-	if state == 0x50:
-		vel -= V_RECOIL
-		state = 0 if vel <= 0 else 0x50
-
-	var surf := coll.surface(x, y, z)
-	if surf == KFCollision.NO_SURFACE:
-		return [x, y, z, state, vel]
-	var d := surf - y
-	if d < 0:
-		if d < -0x400:
-			return [x, y, z, 0x20, V_LAUNCH]
-		if d < -0x200:
-			return [x, y - 0x200, z, state, vel]
-		if d < -0x100:
-			return [x, y - 0x100, z, state, vel]
-		if d < -0x80:
-			return [x, y - 0x80, z, state, vel]
-		return [x, surf, z, state, vel]
-	if d == 0:
-		return [x, y, z, state, vel]
-	if int(coll.query(x, y + 1, z)["mask"]) != 0:
-		return [x, y, z, state, vel]
-	if d < 0x81:
-		return [x, surf, z, state, vel]
-	if d < 0x101:
-		return [x, y + 0x80, z, state, vel]
-	if d < 0x201:
-		return [x, y + 0x100, z, state, vel]
-	return [x, y, z, (0x10 if d < 0x401 else 0x40), V_START]
+# player_vertical (0x8002ed60), run by player.gd's own _move over the frames
+# tools/gdcoll.py made with tools/movement.py: the position, the state, the
+# velocity, and the landing's crouch and nod, frame after frame.
+func _vertical(doc: Dictionary) -> bool:
+	var pl = load("res://player.gd").new()
+	pl.coll = coll
+	var total := 0
+	var bad := 0
+	var first := ""
+	for run in doc["runs"]:
+		pl.gx = int(run["start"][0])
+		pl.gy = int(run["start"][1])
+		pl.gz = int(run["start"][2])
+		pl.vstate = 0
+		pl.vvel = 0
+		pl.crouch = 0
+		pl.dip = 0
+		var dx: int = int(run["d"][0])
+		var dz: int = int(run["d"][1])
+		for i in range(run["frames"].size()):
+			pl._move(dx, dz)
+			var got := [pl.gx, pl.gy, pl.gz, pl.vstate, pl.vvel, pl.crouch, pl.dip]
+			var want: Array = run["frames"][i]
+			total += 1
+			var same := true
+			for j in got.size():
+				if j < want.size() and got[j] != int(want[j]):
+					same = false
+			if not same:
+				bad += 1
+				if first == "":
+					first = "%s frame %d: godot %s, python %s" % [
+						run["name"], i, str(got), str(want)]
+	pl.free()
+	print("movement: %d of %d frames match tools/movement.py exactly" % [
+		total - bad, total])
+	if bad > 0:
+		print("  first difference: " + first)
+	return bad == 0
 
 
 # player_horizontal, run by player.gd itself over steps tools/gdcoll.py took out
@@ -227,33 +195,7 @@ func _init() -> void:
 		quit(1)
 		return
 	var doc = JSON.parse_string(f.get_as_text())
-	var total := 0
-	var bad := 0
-	var first := ""
-	for run in doc["runs"]:
-		var p: Array = [int(run["start"][0]), int(run["start"][1]), int(run["start"][2])]
-		var state := 0
-		var vel := 0
-		var dx: int = int(run["d"][0])
-		var dz: int = int(run["d"][1])
-		for i in range(run["frames"].size()):
-			var got := _step(p, dx, dz, state, vel)
-			var want: Array = run["frames"][i]
-			total += 1
-			if got[0] != int(want[0]) or got[1] != int(want[1]) \
-					or got[2] != int(want[2]) or got[3] != int(want[3]) \
-					or got[4] != int(want[4]):
-				bad += 1
-				if first == "":
-					first = "%s frame %d: godot %s, python %s" % [
-						run["name"], i, str(got), str(want)]
-			p = [got[0], got[1], got[2]]
-			state = got[3]
-			vel = got[4]
-	print("movement: %d of %d frames match tools/movement.py exactly" % [
-		total - bad, total])
-	if bad > 0:
-		print("  first difference: " + first)
+	if not _vertical(doc):
 		quit(1)
 		return
 	if not _steps(doc):
@@ -277,6 +219,9 @@ func _init() -> void:
 	if not _damage():
 		quit(1)
 		return
+	if not _knock():
+		quit(1)
+		return
 	if not _equip():
 		quit(1)
 		return
@@ -287,6 +232,86 @@ func _init() -> void:
 		quit(1)
 		return
 	quit(0)
+
+
+# A blow's aftermath, player.gd against tools/knock.py: apply_damage over a
+# spread of hits, the tilt spring for every shake, fall damage, and
+# player_move from every position of the recorded knock-backs.
+func _knock() -> bool:
+	if not FileAccess.file_exists("res://knockcheck.json"):
+		print("knock-back: no cases to check against")
+		return true
+	var d = JSON.parse_string(FileAccess.get_file_as_string("res://knockcheck.json"))
+	var pl = load("res://player.gd").new()
+	pl.coll = coll
+	var bad := 0
+	var first := ""
+	var n := 0
+	for h in d["hits"]:
+		n += 1
+		pl.hp = int(h[0])
+		pl.hp_max = int(h[1])
+		pl.gx = int(h[3])
+		pl.gy = int(h[4])
+		pl.gz = int(h[5])
+		pl.facing = int(h[10])
+		pl.pstate = 0
+		pl.push = [0, 0, 0]
+		pl.tilt = [0, 0, 0]
+		pl.tilt_vel = [0, 0, 0]
+		pl.flash = 0
+		pl._apply_damage(int(h[2]), true, Vector3i(int(h[6]), int(h[7]), int(h[8])), int(h[9]))
+		var got := [pl.hp, pl.pstate, pl.push[0], pl.push[1], pl.push[2],
+			pl.tilt_vel[0], pl.tilt_vel[2], pl.flash]
+		var want := []
+		for i in range(11, 19):
+			want.append(int(h[i]))
+		if got != want:
+			bad += 1
+			if first == "":
+				first = "hit %s: godot %s" % [str(h), str(got)]
+	for sp in d["springs"]:
+		n += 1
+		pl.tilt = [0, 0, 0]
+		pl.tilt_vel = [int(sp[0]), 0, 0]
+		var frames := 0
+		while true:
+			frames += 1
+			pl._tilt()
+			if pl.tilt == [0, 0, 0] or frames > 200:
+				break
+		if frames != int(sp[1]):
+			bad += 1
+			if first == "":
+				first = "shake %d: godot %d frames, python %d" % [int(sp[0]), frames, int(sp[1])]
+	for fl in d["falls"]:
+		n += 1
+		if pl.fall_damage(int(fl[0])) != int(fl[1]):
+			bad += 1
+			if first == "":
+				first = "fall %d: godot %d, python %d" % [int(fl[0]), pl.fall_damage(int(fl[0])), int(fl[1])]
+	pl.creatures = []
+	for m in d["moves"]:
+		n += 1
+		pl.gx = int(m[0])
+		pl.gy = int(m[1])
+		pl.gz = int(m[2])
+		pl.push = [int(m[3]), 1, int(m[4])]
+		pl._push()
+		var got := [pl.gx, pl.gy, pl.gz, pl.push[0], pl.push[1], pl.push[2]]
+		var want := []
+		for i in range(5, 11):
+			want.append(int(m[i]))
+		if got != want:
+			bad += 1
+			if first == "":
+				first = "move %s: godot %s" % [str(m), str(got)]
+	pl.free()
+	print("knock-back: %d of %d cases match tools/knock.py (%d hits, %d shakes, %d falls, %d pushes)" % [
+		n - bad, n, d["hits"].size(), d["springs"].size(), d["falls"].size(), d["moves"].size()])
+	if bad > 0:
+		print("  first difference: " + first)
+	return bad == 0
 
 
 # The hits emu/bp20.lua recorded, through the port's copy of the formula. What

@@ -1867,9 +1867,9 @@ start of the controller. **Checked on a recording**: the first session with
 creature on 76 frames, and all 76 come out exact, going round it with the
 creature's radius. `godot/player.gd` asks `actors.gd`'s awake ones, and the
 self-test holds it to the Python on 384 steps made into level 0's creatures
-from eight sides each. The same session's six frames that differ are one
-knock-back, a push of 224, 193, 162, 131, 100 and 66 in one direction with no
-creature in reach -- a blow, which is the creatures' own code.
+from eight sides each. The same session's six frames that differ were one
+knock-back, a push of 224, 193, 162, 131, 100 and 66 in one direction -- a
+blow, and all of it is reproduced now ("A blow knocks the player back").
 
 ### How long a frame lasts: four vertical blanks
 
@@ -2892,10 +2892,19 @@ never checked, because nothing in this repository had ever recorded a creature
 hitting the player. A session with `emu/bp20.lua` armed did, and the formula
 comes out exactly.
 
-It is given **nine attack values, one per damage type** — slash, blow, stab,
-dark, holy, fire, earth, wind, water, the same nine the player's block carries
-as ratings — in `a0`..`a3` and `arg4`..`arg8`. Each goes through
-`damage_of_type` (`0x8002a5f8`) against the matching defence:
+It is given **eight attack values and an effect**: slash, blow and stab in
+`a0`..`a2`, five magic types in `arg4`..`arg8`, and in `a3` not an attack at
+all. Each of the eight goes through `damage_of_type` (`0x8002a5f8`) against the
+matching one of the eight defence halves at `0x801b254a`..`0x801b2558` — eight
+calls, not nine. `a3`'s low nibble picks one of seven effects off a table at
+`0x800117a8` (`0x801b2560` with a stat recalculation, `0x801b2564`, a
+percentage roll against `0x801b255a` — the ninth defence half is that
+resistance, not a damage type — for `0x801b255c`, `0x801b2568`,
+`turn_slow_timer`, a cure, an MP drain), and the whole of it goes on to
+`apply_damage`, whose bits 0x40 and 0x80 change the push (below, "A blow knocks
+the player back"). An earlier reading counted `a3` as a ninth, "dark" attack;
+every hit that settles the formula carries 0 there, so nothing below changed.
+Each attack goes through:
 
 ```
 A = attack * 16
@@ -2911,13 +2920,13 @@ does something, and a strong enough one grows faster than a defence can hold
 it — which is why armour in this game feels like it slows the bleeding rather
 than stopping it.
 
-The nine are summed and scaled twice, and both scales are read off the call
+The eight are summed and scaled twice, and both scales are read off the call
 site at `0x8004d358` rather than guessed — `0x1000` into `sp+0x24`, `0xa` into
-`sp+0x28`, and `sp+0x10` through `sp+0x20`, the other five damage types, all
-zero:
+`sp+0x28`, and `sp+0x10` through `sp+0x20`, the five magic types, all zero,
+with `rec+0x11` in `a3`:
 
 ```
-base = sum of the nine
+base = sum of the eight
 s1   = (0x1000 * base + 0x8000) >> 16      = base / 16, rounded
 dmg  = (0xa * s1) / 10                     = s1
 player_hp -= dmg                            apply_damage, 0x8002a6f4
@@ -2928,9 +2937,12 @@ character with `(slash 0, blow 40, stab 30)` three separate times and the log
 shows 50 → 36 → 22 → 8, fourteen each time. Against that character's own
 defence — slash 13, blow 6, stab 4, out of `out/snap/b.ram` — the model gives
 143 for the blow, 79 for the stab, 222 for the sum and **14** for the damage.
-`tools/damage.py` reproduces **6 of 6** recorded hits exactly, and the seventh —
-the one that killed the player — comes out at 59 against 33 HP. `godot/damage.gd`
-is the same formula and `selftest.gd` holds the two together on the same six.
+`tools/damage.py` reproduces **6 of 6** recorded hits exactly. The seventh, the
+one that killed the player, logged `(10, 10, 70)` with effect `0x40`: 30 from
+those three against 33 HP, so the five magic attacks that session's bp20 did
+not log were not all zero — it logs them now (`m=`), with the call site (`ra=`).
+`godot/damage.gd` is the same formula and `selftest.gd` holds the two together
+on the same six.
 
 ### The 191 opcodes that share a target are not doing nothing
 
@@ -4446,13 +4458,65 @@ record speeds of 24 and 16. `fixed_madd` (`0x80017158`) is a linear
 interpolation, `a + ((b - a) * t >> 12)`, not the multiply-accumulate an
 earlier note took it for.
 
-**A blow knocks the player back.** `apply_damage` (`0x8002a6f4`) turns the
-damage into a push away from the attacker -- `min(damage * 4096 / HP max,
-0x3b6) >> 2`, at least 0x50, at most 0x1c2 -- and `0x80030908` puts the player
-in state 0x10 with it as `player_velocity`; the controller's arm for 0x10
-walks as usual and then runs `player_move`, which spends the push against the
-ground. That is the recording's six unexplained frames: a push falling by
-about 0x20 a frame. `emu/bp16.lua` logs `player_velocity` now as `pv=`.
+**A blow knocks the player back** (`tools/knock.py`). `actor_blow` hands
+`player_take_hit` the record's slash, blow and stab (+0x12, +0x14, +0x16), its
+effect (+0x11) and its own point raised by `+0xf << 5`; after the HP,
+`apply_damage` (`0x8002a6f4`):
+
+```
+share = min((dmg << 12) / hp_max, 0x3b6)          the hit as a part of the HP
+push  = direction from the point, its Y + 0x352, to the player  (sub_80016c90:
+        yaw vec_angle(dx, dz), pitch -vec_angle(dy, vec_length_2d) & 0xfff)
+        * max(share >> 2, 0x50), at most 0x1c2 -- x5 up to 0x258 for effect 0x40
+        -- its Y held to +-0xc8
+flash = max((0x514 - share / 2) >> 2, 0x46) frames at 0x801b265a, 0xdac at 0x801b2658
+HP 0: player_throw(push). No attacker (a fall): the flash alone.
+shake = isqrt(share << 2) held to 0x10..0x2a, doubled for 0x40
+effect 0x80: (0, +-shake) and player_knock_hard -- state 0x12, a stun
+else one of eight by ((yaw - view yaw) + 0x100) >> 9 as (pitch, roll):
+        (-s,0) (-s,s) (0,s) (s,s) (s,0) (s,-s) (0,-s) (-s,-s)
+        and player_knock (0x80030908): state 0x10, the push into
+        player_velocity, the shake into the tilt velocity 0x801b2674,
+        vertical state 0x40 with the push's Y
+```
+
+In state 0x10 the controller (`0x80031b98`) still turns, looks and walks, then
+sets the push's Y to 1 and runs `player_move` (`0x8002f320`): the push whole if
+the way is clear; else at the same height, clear, and the push 0x20 shorter for
+the next frame; else a step up of at most 0x100 if nothing but `0x205` is in
+the way, 0x38 shorter; else nowhere, the push kept. `0x8003047c` drives each of
+three tilts (`0x801b2618`, pitch yaw roll) back to 0 with the spring at
+`0x80016168` -- within 4 and no faster than 8, snap; else 8 towards it and 4 of
+friction -- and when all three are 0, `0x8003078c` ends it: state 0, both
+walking speeds 0, the view offsets 0. **The shake decides how long a knock-back
+lasts**: 0x10 settles in 4 frames, 0x20 in 16, 0x2a in 28. State 0x12 runs the
+spring alone. The view adds the tilts (`0x80032028`): pitch `0x801b2608` =
+`player_pitch + tilt.x + 0x801b2620 + 0x801b2628`, yaw + `tilt.y`, roll
+`0x801b260c` = `0x801b2614 + tilt.z + ...`, which `camera_pose` hands to
+`RotMatrix`.
+
+**Checked against the recording**: both knock-backs in `emu/bp16.lua`'s log
+last 28 frames in state 0x10 -- a shake of 0x2a, which any hit of 12 or more on
+50 HP reaches. The push is **predicted from the creature**: kind 0's strike
+(lift 0x20) at its logged position gives (224, 22, -74), and 22 is the Y the
+game put into `player_vvel`; carried through the walk, `player_move` and
+`player_vertical`, **55 of 55** frames of the two land where the game put the
+player -- one pinned against a wall for fourteen frames and then let go on the
+same frame as in the game. The last frame of each needs the end's order: the
+walk ran before `0x8003078c` zeroed the speeds. `emu/bp16.lua` logs
+`player_velocity` as `pv=` from now on.
+
+**Landing, and falling hard.** A fall (state 0x40) that lands does not wait a
+frame: `crouch` (`0x801b2654`) = 1, state 0x50, and on into 0x50's code at once
+(`0x8002f068`) -- the crouch takes a quarter of the velocity while positive,
+the velocity loses 0x12c, the nod at `0x801b2628` (half the velocity on each
+falling frame, added to the view's pitch) gains 0xa or loses 0x1e, and both
+spent ends it -- then into state 0's. The recording shows it: 15 -> -285 with a
+crouch of 4, 22 -> -278 and 6, state 0 the frame after, 2 of 2. A landing at
+0x1e0 or faster first costs `t^3 / 118000` HP, `t = v^2 >> 12` (the multiply by
+`0x8e2e0727` at `0x8002ef9c` is that division): 1 at 0x1e0, 25 at 0x300, 142 at
+0x400. The eye is `player_y + bob + crouch - 0x640` (`camera_pose`), so the bob
+and the crouch both lower it -- the port had the bob raising it.
 
 ### What a death does, and what is remembered
 

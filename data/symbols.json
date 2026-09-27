@@ -711,7 +711,7 @@
  "0x8002f320": {
   "name": "player_move",
   "kind": "code",
-  "evidence": "moves the player when thrown: candidate = pos + velocity, collision at 0x31, commit or one of two retries; gravity +0x20 a frame, a step up of at most 0x100, a slide of 0x20 or 0x38. NOT ordinary walking -- emu/bp14.lua caught it running 69 times in a session, every one in player_state 0x10 or 0x11, while the player walked eight hundred frames without it. tools/movement.py reproduces all 69 exactly"
+  "evidence": "moves the player when thrown: candidate = pos + velocity, collision at 0x31, commit or one of two retries; gravity +0x20 a frame, a step up of at most 0x100, a slide of 0x20 or 0x38. NOT ordinary walking -- emu/bp14.lua caught it running 69 times in a session, every one in player_state 0x10 or 0x11, while the player walked eight hundred frames without it. tools/movement.py reproduces all 69 exactly; tools/knock.py: 55 of 55 frames of the recorded knock-backs, the push shortened 0x20 a frame on the ground by vec_length_2d"
  },
  "0x80030fcc": {
   "name": "player_controller",
@@ -821,17 +821,17 @@
  "0x801b2654": {
   "name": "player_crouch",
   "kind": "data",
-  "evidence": "s16, spent down by state 0x50 of player_vertical after a landing; the state ends when this and player_bob are both non-positive"
+  "evidence": "s16, 1 on a landing and then + velocity/4 while positive in state 0x50, which ends when this and view_nod are both spent; camera_pose adds it to the eye's Y. The recording: 4 after a landing at 15, 6 at 22"
  },
  "0x801b2628": {
-  "name": "player_bob",
+  "name": "view_nod",
   "kind": "data",
-  "evidence": "s16 the camera dip: half the velocity on every state 0x40 frame, then wound down by state 0x50"
+  "evidence": "s16 added to the view's pitch: half the velocity on every state 0x40 frame, then +0xa while the landing's velocity is positive and -0x1e after; state 0x50 ends when this and player_crouch are both spent. Was named player_bob, which is 0x801b2650"
  },
  "0x8002ecbc": {
   "name": "player_vertical_pre",
   "kind": "code",
-  "evidence": "called first by each moving state of player_vertical; reads player Y. Not read"
+  "evidence": "called first by each moving state of player_vertical: at 0x190 or faster with the surface more than 0x5000 below, player_throw(0) and 0x801b25ed = 1 -- a fall too deep to live"
  },
  "0x8002f9bc": {
   "name": "player_walk",
@@ -1751,7 +1751,7 @@
  "0x8002ab18": {
   "name": "player_take_hit",
   "kind": "code",
-  "evidence": "(slash, blow, stab, dark, holy, fire, earth, wind, water, scale, percent, kind) -- nine attack values, one per damage type, the same nine tools/player.py reads. Each goes through damage_of_type against the matching defence rating; the nine are summed, scaled by arg9 as (arg9*sum + 0x8000) >> 16 and by arg10 as (arg10*that)/10, and handed to apply_damage. Both scales are 0x1000 and 0xa at the call site 0x8004d358. Checked: 6 of 6 hits in out/lua_bp20.log reproduced exactly by tools/damage.py, and the seventh -- the kill -- comes out at 59 against 33 HP"
+  "evidence": "(slash, blow, stab, effect, m1..m5, scale, percent, point) -- eight attack values through damage_of_type against the eight defence halves at 0x801b254a, and in a3 an effect: its low nibble one of seven arms at 0x800117a8, all of it apply_damage's third argument. The two scales are 0x1000 and 0xa at 0x8004d358. 6 of 6 hits in out/lua_bp20.log (tools/damage.py)"
  },
  "0x8002a5f8": {
   "name": "damage_of_type",
@@ -1761,7 +1761,7 @@
  "0x8002a6f4": {
   "name": "apply_damage",
   "kind": "code",
-  "evidence": "subtracts the damage from player_hp and clamps; the only place the player's HP goes down in combat"
+  "evidence": "(point, dmg, effect): the HP, and with an attacker a push away from its point raised 0x352 -- max(share >> 2, 0x50) up to 0x1c2 (x5 up to 0x258 for effect 0x40), its Y held to +-0xc8 -- a flash, and a shake isqrt(share << 2) in 0x10..0x2a into player_knock, or player_knock_hard for effect 0x80. tools/knock.py: 55 of 55 recorded knock-back frames"
  },
  "0x801b2524": {
   "name": "player_stat_effective",
@@ -2521,6 +2521,61 @@
  "0x800309c8": {
   "name": "player_knock_hard",
   "kind": "code",
-  "evidence": "the same as player_knock with state 0x12; apply_damage's other knock-back"
+  "evidence": "(push, shake, frames): unless the player is in state 7, 8 or 9, state 0x12 with the push as player_velocity and the shake as the tilt velocity, the flash; not the vertical state. apply_damage's stun, for effect bit 0x80; the controller's arm 0x12 (0x80031c14) runs player_tilt_spring alone"
+ },
+ "0x80016c90": {
+  "name": "vec_to_angles",
+  "kind": "code",
+  "evidence": "(dx, dy, dz, out): out+2 = vec_angle(dx, dz), out+0 = -vec_angle(dy, vec_length_2d(dx, dz)) & 0xfff, out+4 = 0 -- the (pitch, yaw) of a vector, as direction_from_angles takes them back. apply_damage's bearing from the attacker; tools/knock.py angles"
+ },
+ "0x8003047c": {
+  "name": "player_tilt_spring",
+  "kind": "code",
+  "evidence": "each of the three view tilts at 0x801b2618 driven to 0 by spring_to with 8 and 4, its velocity at 0x801b2674; states 0x10 and 0x12 end when all three are 0. A shake of 0x2a settles in 28 frames, both recorded knock-backs (tools/knock.py)"
+ },
+ "0x80016168": {
+  "name": "spring_to",
+  "kind": "code",
+  "evidence": "(target, cur, vel, accel, friction): within accel/2 of the target and |vel| <= accel, the velocity that lands on it; else accel towards it (angle_past), then friction off; returns the velocity. tools/knock.py spring"
+ },
+ "0x8003078c": {
+  "name": "player_state_reset",
+  "kind": "code",
+  "evidence": "state 0, player_speed and the strafe speed 0, the three tilts, 0x801b2620..0x2624 and 0x801b2628..0x262c 0 -- the end of a knock-back; the recording shows the strafe speed at 0 the frame after"
+ },
+ "0x80016a68": {
+  "name": "angle_past",
+  "kind": "code",
+  "evidence": "(a, b): ((a - b) & 0xfff) < 0x801 -- a is at or ahead of b within half a turn"
+ },
+ "0x8002ed1c": {
+  "name": "landing_sound",
+  "kind": "code",
+  "evidence": "(velocity): at 0x140 or faster, sound 7 at (min(v - 0x140, 0x380) >> 3) + 0x20; player_vertical's landing"
+ },
+ "0x801b2618": {
+  "name": "view_tilt",
+  "kind": "data",
+  "evidence": "three s16, pitch yaw roll, added to the view's angles at 0x80032028; player_tilt_spring drives them back to 0 after a blow shook them"
+ },
+ "0x801b2674": {
+  "name": "view_tilt_vel",
+  "kind": "data",
+  "evidence": "three s16, the tilts' velocities; player_knock puts apply_damage's shake here, one of eight by the bearing against the view"
+ },
+ "0x801b2608": {
+  "name": "view_angles",
+  "kind": "data",
+  "evidence": "three s16 formed at 0x80032028: player_pitch + view_tilt.x + 0x801b2620 + view_nod; player_facing + view_tilt.y + 0x801b2622 + 0x801b262a; 0x801b2614 + view_tilt.z + 0x801b2624 + 0x801b262c. camera_pose hands them to RotMatrix as Rx Ry Rz"
+ },
+ "0x801b2658": {
+  "name": "flash_colour",
+  "kind": "data",
+  "evidence": "0xdac, written by apply_damage and both knocks beside flash_frames"
+ },
+ "0x801b265a": {
+  "name": "flash_frames",
+  "kind": "data",
+  "evidence": "max((0x514 - share/2) >> 2, 0x46), share = min((dmg << 12) / hp_max, 0x3b6); apply_damage"
  }
 }

@@ -772,7 +772,7 @@ def accelerate(speed, forward, back, cap, decay=3):
     return 0
 
 
-def walk_step(lvl, p, dx, dz, state=0, vel=0, momentum=0):
+def walk_step(lvl, p, dx, dz, state=0, vel=0, momentum=0, cam=None):
     """One frame of `player_vertical` (`0x8002ed60`), every state it has.
 
     **This, not `player_move`, is how the player moves.** Two recordings settled
@@ -794,7 +794,7 @@ def walk_step(lvl, p, dx, dz, state=0, vel=0, momentum=0):
     | `0x10` | the surface is 0x201..0x400 below | `y += v` until `surface + 0x64 < y` | `+0x50` |
     | `0x20` | the surface is more than 0x400 above | `y += v` until it meets the surface | `+0x0a` from `-0x96` |
     | `0x40` | the surface is more than 0x400 below | `y += v` while the *collision* is clear | `+0x28` from `0x28` |
-    | `0x50` | landing out of `0x40` | none: it falls straight through into state 0 | `-0x12c`, for the camera |
+    | `0x50` | landing out of `0x40`, the same frame | none: it falls straight through into state 0 | `-0x12c`; ends when the crouch and the dip are both spent |
 
     `0x10` and `0x40` are both falls and the shorter one accelerates twice as
     fast. Both were checked against the game frame by frame; see `verify15`.
@@ -820,21 +820,39 @@ def walk_step(lvl, p, dx, dz, state=0, vel=0, momentum=0):
             return (x, surf, z), 0, s16(vel + 0x50)
         return (x, ny, z), state, s16(vel + 0x50)
 
+    if cam is None:
+        cam = {"crouch": 1, "dip": 0}
     if state == 0x40:                               # 0x8002eec8, a real fall
         ny = y + vel
         mask, surf = query(lvl, x, ny, z)           # the mask, not the surface
         if mask == 0:
-            return (x, ny, z), state, s16(vel + 0x28)
+            vel = s16(vel + 0x28)
+            cam["dip"] = vel >> 1                   # 0x8002ef30, the view nods
+            return (x, ny, z), state, vel
         if vel < 0:
             return (x, y, z), state, 0              # into a ceiling: stopped
-        landed = surf if vel < 0x200 else surf - (vel >> 1)
-        return (x, landed, z), 0x50, vel
+        # 0x8002efc0: a landing at 0x1e0 or more hurts (fall_damage), and
+        # then the landing itself: onto the surface, or squashed below it
+        y = surf if vel < 0x200 else surf - (vel >> 1)
+        cam["crouch"] = 1                           # 0x8002f058
+        state = 0x50                                # and on into 0x50, now
 
-    # state 0x50 is the landing recoil and owns no height of its own: after its
-    # bookkeeping at 0x8002f068 it falls straight through into state 0's code.
+    # state 0x50 is the landing recoil and owns no height of its own
+    # (0x8002f068): the crouch takes a quarter of the velocity while it is
+    # positive, the velocity loses 0x12c, the dip gains 0xa while the velocity
+    # is still positive and loses 0x1e after; both at or under zero ends it.
+    # Then it falls straight through into state 0's code -- the landing frame
+    # too, which is why the recording shows 0x50 with the velocity already
+    # 0x12c down on the frame after a landing, and state 0 the frame after.
     if state == 0x50:
+        if cam["crouch"] > 0:
+            cam["crouch"] = s16(cam["crouch"] + (vel >> 2))
         vel = s16(vel - 0x12C)
-        state = 0 if vel <= 0 else 0x50
+        if cam["dip"] > 0:
+            cam["dip"] = s16(cam["dip"] + (0xA if vel > 0 else -0x1E))
+        if cam["crouch"] <= 0 and cam["dip"] <= 0:
+            state, vel = 0, 0
+            cam["crouch"] = cam["dip"] = 0
 
     surf = surface(lvl, x, y, z)                    # 0x8002f120, grounded
     if surf >= collision.FAR:

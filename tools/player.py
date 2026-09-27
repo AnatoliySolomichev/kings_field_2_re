@@ -61,6 +61,9 @@ FIELDS = [
     (0x4e, "u16", "unknown_4e"),        # 10 -> 11
     (0x54, "u32", "gold"),              # 0x8002b518 writes it
 ]
+# Nine halves each side, but player_take_hit reads only the first eight of the
+# defence as damage types (0x801b254a..0x801b2558); the ninth, 0x801b255a, is
+# the percentage one of its effects is resisted by (tools/damage.py).
 DAMAGE = ["slash", "blow", "stab", "dark", "holy", "fire", "earth", "wind", "water"]
 OFFENSE = 0x58               # 9 x u16
 DEFENSE = 0x6A               # 9 x u16

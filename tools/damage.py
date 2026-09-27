@@ -9,10 +9,16 @@
 checked, because nothing had ever recorded a creature hitting the player. A
 session with `emu/bp20.lua` armed did, and the formula comes out exactly.
 
-**Nine attack values, one per damage type** -- slash, blow, stab, dark, holy,
-fire, earth, wind, water, the same nine `tools/player.py` reads out of the
-player's block -- arrive as `a0`..`a3` and `arg4`..`arg8`. Each goes through
-`damage_of_type` (`0x8002a5f8`) against the matching defence rating:
+**Eight attack values and an effect.** `a0`..`a2` are slash, blow and stab,
+`arg4`..`arg8` the five magic types, and each goes through `damage_of_type`
+(`0x8002a5f8`) against the matching one of the eight defence halves at
+`0x801b254a`..`0x801b2558` -- eight calls, not nine. **`a3` is not an attack**:
+its low nibble picks one of seven effects (poison and its kin, `0x801b2560`..
+`0x801b2568`, `turn_slow_timer`, a cure, an MP drain), the one at `0x801b255a`
+resisted by a percentage roll, and the whole of it goes on to `apply_damage`,
+where 0x40 makes the push heavier and 0x80 turns it into a stun
+(`tools/knock.py`). An earlier reading counted it as a ninth, "dark" attack;
+the six hits below all carry 0 there, so they came out the same either way.
 
 ```
 A = attack * 16                                    the attack, in sixteenths
@@ -28,10 +34,10 @@ outright, and a quadratic term that never quite vanishes. **The floor is the
 point** -- an attack always does *something*, and a strong enough one grows
 faster than the defence can hold it.
 
-Then the nine are summed and scaled twice:
+Then the eight are summed and scaled twice:
 
 ```
-base = sum of the nine
+base = sum of the eight
 s1   = (arg9 * base + 0x8000) >> 16      arg9 = 0x1000, so base / 16, rounded
 dmg  = (arg10 * s1) / 10                 arg10 = 10, so unchanged
 player_hp -= dmg                          0x8002a6f4
@@ -39,7 +45,7 @@ player_hp -= dmg                          0x8002a6f4
 
 Both scales were read off a call site (`0x8004d358`), not guessed: `0x1000`
 into `sp+0x24` and `0xa` into `sp+0x28`, with `sp+0x10` through `sp+0x20` --
-the other five damage types -- all zero.
+the five magic types -- all zero, and `rec+0x11` in `a3`.
 
 **Checked against the game.** In the recorded session a creature hit a fresh
 character with `(slash 0, blow 40, stab 30)` three separate times and the log
@@ -79,7 +85,7 @@ def of_type(attack, defence, stat, k=0x1000):
 def hit(attacks, defence, stat, k=0x1000, arg9=ARG9, arg10=ARG10):
     """The whole of `player_take_hit`'s arithmetic. Returns `(sum, damage)`."""
     base = sum(of_type(attacks[i], defence[i], stat, k)
-               for i in range(len(attacks)))
+               for i in range(min(len(attacks), TYPES)))
     s1 = (arg9 * base + 0x8000) >> 16
     return base, (arg10 * s1) // 10
 
@@ -94,16 +100,22 @@ def from_snapshot(path=SNAP):
 IN = re.compile(r"HURT in\s+a0=(-?\d+) a1=(-?\d+) a2=(-?\d+) a3=(-?\d+) "
                 r"hp=(\d+)")
 OUT = re.compile(r"HURT out hp=(\d+)")
+MAGIC = re.compile(r" m=(-?\d+(?:,-?\d+){4})")
+TYPES = 8
 
 
 def pairs(path=LOG):
-    """`[(attacks, hp_before, hp_after)]` out of a bp20 log."""
+    """`[(attacks, hp_before, hp_after)]` out of a bp20 log: the eight attacks
+    -- the magic five as bp20 now logs them (m=), zero before it did -- and
+    the effect a3 as a ninth element, which `hit` does not count."""
     out, pend = [], None
     for line in open(path):
         m = IN.search(line)
         if m:
-            pend = ([int(m.group(i)) for i in (1, 2, 3, 4)] + [0] * 5,
-                    int(m.group(5)))
+            g = [int(m.group(i)) for i in (1, 2, 3, 4)]
+            mm = MAGIC.search(line)
+            magic = [int(x) for x in mm.group(1).split(",")] if mm else [0] * 5
+            pend = (g[:3] + magic + [g[3]], int(m.group(5)))
             continue
         m = OUT.search(line)
         if m and pend is not None:
@@ -137,9 +149,11 @@ def check(out=sys.stdout):
     killed = [(a, b) for a, b, c in got if c == 0 and b > 0]
     for attacks, before in killed:
         base, dmg = hit(attacks, defence, stat, k)
-        print(f"  and the kill: {attacks[:4]} on {before} HP, "
-              f"the model says {dmg}" + ("  (enough)" if dmg >= before
-                                         else "  -- NOT enough"), file=out)
+        print(f"  and the kill: {attacks[:3]}, effect {attacks[8]:#x}, on "
+              f"{before} HP: the model says {dmg} from the attacks logged"
+              + ("  (enough)" if dmg >= before else
+                 " -- short, so the magic five it did not log were not all "
+                 "zero; bp20 now logs them"), file=out)
     return ok, seen
 
 

@@ -16,7 +16,8 @@
 --         and on what. The tail is skipped or this would be 396 lines a frame.
 --
 --   HURT  `0x8002ab18` on the way in and on the way out, with the player's HP
---         either side and the four arguments. The damage roll is 383
+--         either side, the four register arguments, the five magic attacks
+--         off the stack (m=) and the return address. The damage roll is 383
 --         instructions of `rand` and a seven-arm switch and nobody has seen it
 --         run.
 --
@@ -167,8 +168,14 @@ arm(0x8002ab18, 'hurt', function()
     bump('hurt')
     local g = cpu()
     if g == nil then return end
-    log(string.format('HURT in  a0=%d a1=%d a2=%d a3=%d hp=%d %s',
-        reg(g, 4), reg(g, 5), reg(g, 6), reg(g, 7), u16(PLAYER_HP), where()))
+    -- a0..a2 slash, blow, stab; a3 the effect, not an attack; the five magic
+    -- types are the stack words at sp+0x10..0x20 (tools/damage.py), and ra
+    -- says which of the nine call sites struck
+    local sp = reg(g, 29)
+    log(string.format('HURT in  a0=%d a1=%d a2=%d a3=%d hp=%d %s m=%d,%d,%d,%d,%d ra=%08x',
+        reg(g, 4), reg(g, 5), reg(g, 6), reg(g, 7), u16(PLAYER_HP), where(),
+        u16(sp + 0x10), u16(sp + 0x14), u16(sp + 0x18), u16(sp + 0x1c),
+        u16(sp + 0x20), reg(g, 31)))
 end)
 arm(0x8002b110, 'hurtout', function()
     bump('hurtout')

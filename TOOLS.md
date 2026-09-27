@@ -413,15 +413,29 @@ python3 tools/damage.py 0 40 30      one attack, by type
 python3 tools/damage.py --sites      who calls it
 ```
 
-Nine attack values, one per damage type, each against the matching defence:
+Eight attack values -- slash, blow, stab and five magic -- each against the
+matching defence (`a3` is an effect, not a ninth attack):
 `A = attack * 16`, `D = ((stat * 0x1000) >> 8) + defence * 16`, and the answer
 is `(max(0, A - D) + A*A/(2*D)) / 5`. **A hit gets through two ways at once** —
 the part that beats the defence, and a quadratic term that never quite
-vanishes — so an attack always does something. The nine are summed, halved
+vanishes — so an attack always does something. The eight are summed, halved
 sixteen times over and handed to `apply_damage`.
 
-**6 of 6** hits in the recorded session reproduced exactly; the seventh is the
-one that killed the player, and the model says 59 against 33 HP.
+**6 of 6** hits in the recorded session reproduced exactly; the seventh, the
+one that killed the player, needed magic the log did not carry.
+
+**`knock.py`** — what a blow does to the player after the HP, and the recording.
+
+```
+python3 tools/knock.py              the check, with the frames that differ
+python3 tools/knock.py 14 50        the push, shake and length of 14 on 50 HP
+```
+
+`apply_damage`'s push and shake, `player_move` (the mover while thrown), the
+tilt spring that decides how long the player stays in state 0x10, and fall
+damage (`t^3 / 118000`). Against `emu/bp16.lua`: **2 of 2** knock-backs last
+the 28 frames a shake of 0x2a gives, **2 of 2** landings, **55 of 55** frames
+land where the game put the player, the push predicted from the creature.
 
 **`player.py`** — the player's stat block, from a snapshot or from the emulator.
 
@@ -673,12 +687,14 @@ three — the turn rate is in `0x8002fe1c` and is not transcribed, and putting a
 unread layer under a checked one would spoil the point of the ladder.
 
 `player_horizontal` is in whole -- the objects, a steep ramp's push, the
-ceiling -- and rung 2 stands at 118 288 of 118 500. The output counts what is
-left in three heaps rather than one total: a **swinging door** near the player
-(its shove and its restamped grid are not in a recording of the player alone),
-a step the model **turned away at a wall** where the game did not, and a
-**clear step** the model took whole and the game did not -- creatures, whose
-positions the log does not hold.
+ceiling -- and rung 2 stands at 119 588 of 119 793. A run in player state 0x10
+is a knock-back and goes through `tools/knock.py`'s frame, the push predicted
+from the creature that struck. The output counts what is left in three heaps
+rather than one total: a **swinging door** near the player (its shove and its
+restamped grid are not in a recording of the player alone), a step the model
+**turned away at a wall** where the game did not, and a **clear step** the
+model took whole and the game did not -- creatures in the sessions from before
+bp16 logged where they stood.
 
 ### Watching the two side by side
 

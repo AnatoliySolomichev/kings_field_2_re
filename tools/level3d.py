@@ -1123,6 +1123,11 @@ def project(lv, out="out/godot", start=(57, 4)):
     except Exception as e:                       # no log, no recorded hits
         print(f"damage cases skipped: {e}")
     try:
+        import knock
+        knock.export(out)
+    except Exception as e:
+        print(f"knock-back cases skipped: {e}")
+    try:
         import escript
         escript.export(out)
     except Exception as e:                       # no disc, no scripts
@@ -1240,7 +1245,7 @@ def verify(out="out/godot"):
         if line.startswith(("loaded:", "movement:", "steps:", "creature steps:",
                             "creature run:",
                             "levels:", "angles:",
-                            "scripts:", "damage:", "FAIL", "  first",
+                            "scripts:", "damage:", "knock-back:", "FAIL", "  first",
                             "  level case", "  angle (", "  script level",
                             "  hit ")):
             print("   " + line.strip())

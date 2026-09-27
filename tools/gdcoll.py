@@ -123,10 +123,13 @@ def movecheck(lv, lvl, out="out/godot"):
                                   ("south", 0, 78, 0, 150)):
         p0 = (start[0], start[1] - drop, start[2])
         p, state, vel = p0, 0, 0
+        cam = {"crouch": 0, "dip": 0}
         frames = []
         for _ in range(n):
-            p, state, vel = movement.walk_step(lvl, p, dx, dz, state, vel)
-            frames.append([p[0], p[1], p[2], state, vel])
+            p, state, vel = movement.walk_step(lvl, p, dx, dz, state, vel,
+                                               cam=cam)
+            frames.append([p[0], p[1], p[2], state, vel, cam["crouch"],
+                           cam["dip"]])
         runs.append({"name": name, "start": list(p0), "d": [dx, dz],
                      "frames": frames})
     crs, crsteps = creaturecheck(lv, lvl)
