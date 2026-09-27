@@ -599,8 +599,10 @@ def tick(a, kind, lvl, player, others, rand):
 
 
 def _dist(a, player):
+    """vec_length_2d (0x80016c08), through the game's own root."""
     import movement
-    return movement.vlen(player[0] - a["x"], player[2] - a["z"])
+    dx, dz = (player[0] - a["x"]) >> 3, (player[2] - a["z"]) >> 3
+    return movement.game_isqrt(dx * dx + dz * dz) << 3
 
 
 def finish(a, kind, player, rand):
@@ -771,6 +773,67 @@ def check_log(out=sys.stdout, path=None):
     print(f"  {ok} of {ok + bad} runs of one behaviour last a whole number of "
           f"animation cycles; " + ", ".join(walk), file=out)
     return bad == 0
+
+
+def bios_rand(seed=1):
+    """rand() as the BIOS does it (A0:2F), from a seed: what actors.gd uses."""
+    state = [seed]
+
+    def rand():
+        state[0] = (state[0] * 0x41C64E6D + 0x3039) & 0xFFFFFFFF
+        return (state[0] >> 16) & 0x7FFF
+    return rand
+
+
+def run(lv=0, slot=20, frames=480, seed=1):
+    """One creature woken at home and stepped with the player on a set path,
+    for godot/selftest.gd to repeat: the start, the path, and every frame's
+    position, yaw and opcode."""
+    import json
+    import movement
+    lvl = movement.level(lv)
+    rows = json.load(open(os.path.join(ROOT, "godot", "actors.json")))["levels"][str(lv)]
+    home = [r for r in rows if r and r["slot"] == slot][0]
+    kind = kind_of(lv, home["kind"])
+    a = new_actor(home["x"], home["y"], home["z"], home["yaw"], kind,
+                  flags=home["eflags"])
+    rand = bios_rand(seed)
+    path, out = [], []
+    for f in range(frames):
+        # the player stands off, then walks in, then steps back
+        t = min(f, 360)
+        p = (home["x"] + 9000 - t * 18, home["y"], home["z"] + 3000 - t * 6)
+        path.append(list(p))
+        if f & 3 == 0:
+            pick(a, kind, _dist(a, p), p, rand)
+        tick(a, kind, lvl, p, [a], rand)
+        out.append([a["x"], a["y"], a["z"], a["yaw"] & 0xFFFF, a["op"]])
+    return {"level": lv, "slot": slot, "kind": home["kind"], "seed": seed,
+            "start": [home["x"], home["y"], home["z"], home["yaw"], home["eflags"]],
+            "path": path, "frames": out}
+
+
+def export(out_dir, lv):
+    """aiNN.json for godot/ai.gd: each used kind's fields and behaviours."""
+    import json
+    blob = entity_blob(lv)
+    doc = {"_note": "entity_table as entity_table_init leaves it: a kind's "
+                    "accel (+3), turn accel (+4), fall (+5), radius (+0x12), "
+                    "height (+0x14) and behaviour records, raw; tools/ai.py",
+           "kinds": {}}
+    for kd in kinds(lv, blob):
+        k = kd["kind"]
+        kf = kind_of(lv, k, blob)
+        doc["kinds"][str(k)] = {
+            "accel": kf["accel"], "turn_accel": kf["turn_accel"],
+            "fall": kf["fall"], "radius": kf["radius"], "height": kf["height"],
+            "behaviours": [list(b["raw"]) for b in kf["behaviours"]]}
+    if lv == 0:
+        doc["run"] = run(lv)
+    path = os.path.join(out_dir, f"ai{lv:02d}.json")
+    with open(path, "w") as f:
+        json.dump(doc, f, separators=(",", ":"))
+    return path
 
 
 def main():

@@ -4513,8 +4513,14 @@ the game would draw. V shows every actor instead. X kills the nearest awake
 one under the death rule, so the rules can be tried without combat, and a
 static keeps category-1 deaths when the world is loaded again.
 
-Not ported: the AI, so an awake creature stands at home; the cell marks
-through `grid_mark`; where followers and object riders stand; the model
+**The AI is ported** for the opcodes level 0's monsters use -- 0, 1, 4, 5 and
+6 (`godot/ai.gd`, run from `actors.gd`'s pass: activation, then choosing on
+the awake count's frame, then the tick), so they rise out of the ground, close
+in, strike, back off and wander as in the emulator; the self-test holds
+`ai.gd` to `tools/ai.py` on 480 of 480 frames of one creature with the same
+seed. A blow's reach and arc are tested; what it does to the player is the
+next thing. Not ported: the hit and death arms (2, 3), the level's own
+opcodes, followers and riders; the cell marks through `grid_mark`; where followers and object riders stand; the model
 110 rule in `actor_tick_driver`; `0x801b25e5`; and the game's `rand` seed. The
 port also uses the disc's category for the two men by the house, so it shows
 the man at (57,3), whom that session held. The one at (62,4) is held by

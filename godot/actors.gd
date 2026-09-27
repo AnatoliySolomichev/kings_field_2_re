@@ -23,9 +23,9 @@ extends Node
 # the first pass after a level loads: the load sets 0x801b24f2 and game_main
 # clears it after one pass.
 #
-# Not here: what an awake creature *does* -- the AI in actor_tick -- so an
-# actor stands at home. F10 kills the nearest awake one, to try the rules on --
-# not X, which is the emulator's CROSS and the port's too.
+# What an awake creature then does -- actor_tick's behaviours -- is ai.gd, run
+# from _pass. F10 kills the nearest awake one, to try the rules on -- not X,
+# which is the emulator's CROSS and the port's too.
 
 const TICK_HZ := 15.0          # the game's frame, four blanks: see player.gd
 const SLOTS := 200
@@ -54,6 +54,8 @@ var shown := -1
 var last := PackedStringArray()
 var player: Node3D
 var coll: KFCollision          # for the game's square root
+var ai: KFCreatureAI           # what an awake creature does (ai.gd)
+var kinds := {}                # kind -> its fields and behaviours, aiNN.json
 
 
 func _ready() -> void:
@@ -88,6 +90,25 @@ func _ready() -> void:
 	else:
 		coll = KFCollision.new()
 		coll.load_from("res://coll%02d.json" % level)
+	ai = KFCreatureAI.new()
+	ai.coll = coll
+	ai.rand = Callable(self, "_rand")
+	var af := FileAccess.open("res://ai%02d.json" % level, FileAccess.READ)
+	if af:
+		var ad = JSON.parse_string(af.get_as_text())
+		if typeof(ad) == TYPE_DICTIONARY:
+			for key in ad["kinds"]:
+				var kd: Dictionary = ad["kinds"][key]
+				var recs := []
+				for r in kd["behaviours"]:
+					var raw := []
+					for v in r:
+						raw.append(int(v))
+					recs.append(raw)
+				kd["behaviours"] = recs
+				for field in ["accel", "turn_accel", "fall", "radius", "height"]:
+					kd[field] = int(kd[field])
+				kinds[int(key)] = kd
 	if saved.has(level):
 		for pair in saved[level]:
 			if actors[pair[0]] != null:
@@ -126,17 +147,72 @@ func _unhandled_input(e: InputEvent) -> void:
 			refresh()
 
 
-# actor_tick_driver: one game frame
-# @orig game:0x80052e5c actor_tick_driver  status:transcribed -- the loop over the 199 slots
+# actor_tick_driver: one game frame. Each slot is looked at for waking on its
+# own frame in four; then an awake one chooses on the frames where the count of
+# awake ones ticked so far this frame agrees with the frame in its low two bits
+# (0x8018fac8 against 0x8018facc), and is ticked (ai.gd) -- the player has
+# already moved, since game_main runs player_controller first.
+# @orig game:0x80052e5c actor_tick_driver  status:transcribed -- the loop over the 199 slots, activation, choosing and the tick
 func _pass(px: int, pz: int) -> void:
+	var p := Vector3i(px, int(player.get("gy")), pz) if player else Vector3i(px, 0, pz)
+	var awake := []
+	for k in SLOTS:
+		var a = actors[k]
+		if a != null and a["st"] == ACTIVE:
+			awake.append(a)
+	var n := 0
 	for k in SLOTS:
 		var a = actors[k]
 		if a == null or a["cat"] == FREE:
 			continue
 		if (frame & 3) == (k & 3) or spawn_anywhere:
 			_activate(k, px, pz)
+			if a["st"] == ACTIVE and not awake.has(a):
+				awake.append(a)
+		if a["st"] != ACTIVE or not kinds.has(int(a["kind"])) or not a.has("phase"):
+			continue
+		var kind: Dictionary = kinds[int(a["kind"])]
+		if (frame & 3) == (n & 3):
+			ai.pick(a, kind, p)
+		var blow := ai.tick(a, kind, p, awake)
+		if not blow.is_empty():
+			_blow(a, blow)
+		n += 1
+		_place(k)
 	frame += 1
 	spawn_anywhere = false
+
+
+# Where the creature's node stands and faces: its position and its yaw +0x42.
+func _place(k: int) -> void:
+	if not nodes.has(k):
+		return
+	var a: Dictionary = actors[k]
+	var nd: Node3D = nodes[k]
+	nd.position = Vector3(float(a["px"]) / 1000.0, float(-int(a["py"])) / 1000.0,
+		float(-int(a["pz"])) / 1000.0)
+	nd.basis = Basis(Vector3.UP, float(a["ry"]) * TAU / 4096.0)
+
+
+# A blow opcode 4 struck: the player within its reach of the creature raised by
+# its lift, not nearer than 0, and inside its arc of the yaw (0x8004d254). What
+# it does to the player is damage.gd's and player.gd's.
+# @orig game:0x8004d254 actor_blow  status:transcribed -- the reach and the arc; the damage is the caller's
+func _blow(a: Dictionary, blow: Dictionary) -> void:
+	if player == null:
+		return
+	var gx: int = player.get("gx")
+	var gy: int = player.get("gy")
+	var gz: int = player.get("gz")
+	var d := _in_range(int(a["px"]), int(a["py"]) - int(blow["lift"]), int(a["pz"]),
+		gx, gy, gz, int(blow["reach"]), 0, 0x6A4)
+	if d == -1:
+		return
+	var brg := coll.vec_angle(gx - int(a["px"]), gz - int(a["pz"]))
+	if not KFCreatureAI.facing_test(KFCreatureAI.s16(a["ry"]), KFCreatureAI.s16(brg), int(blow["arc"])):
+		return
+	if player.has_method("take_blow"):
+		player.call("take_blow", a, blow["rec"])
 
 
 # 0x8004c1f0
@@ -214,6 +290,10 @@ func _spawn(k: int) -> void:
 	_state(k, ACTIVE, "woken")
 	if (a["flags"] & 1) == 0:
 		a["ry"] = _rand() >> 3
+	# actor_wake's AI bytes, and actor_activate's entrance (ai.gd)
+	if kinds.has(int(a["kind"])):
+		KFCreatureAI.wake(a, kinds[int(a["kind"])])
+	_place(k)
 
 
 # 0x8004d644: another creature that is up and overlaps this one's place

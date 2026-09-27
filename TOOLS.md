@@ -590,8 +590,13 @@ the machine that picks and runs them.
 
 ```
 python3 tools/ai.py 0             a level's kinds and their behaviours' opcodes
-python3 tools/ai.py --check       168 896 of 168 896 bytes, 69 of 69 actors
+python3 tools/ai.py --check       168 896 of 168 896 bytes, 69 of 69 actors,
+                                  31 of 31 behaviour runs against bp16
 ```
+
+`ai.py` also carries the machine itself -- `pick`, `tick`, the moves -- and
+`export` writes `aiNN.json` for `godot/ai.gd`, with a run of one creature
+(`run`) that the self-test repeats frame for frame.
 
 **`compass.py`** — the ball in the top-right corner: its records, the model
 (`modelbank.load(0)`, entry 97 block 9), the library's `RotMatrix` with its own

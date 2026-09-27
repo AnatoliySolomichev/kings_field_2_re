@@ -150,6 +150,68 @@ func _creature_steps(doc: Dictionary) -> bool:
 	return bad == 0
 
 
+# One creature stepped by ai.gd against tools/ai.py's run: the same start, the
+# same player path, the same BIOS rand from the same seed -- every frame's
+# position, yaw and opcode.
+var _seed := 1
+
+
+func _lcg() -> int:
+	_seed = (_seed * 0x41C64E6D + 0x3039) & 0xFFFFFFFF
+	return (_seed >> 16) & 0x7FFF
+
+
+func _ai_run() -> bool:
+	var f := FileAccess.open("res://ai00.json", FileAccess.READ)
+	if f == null:
+		print("creature run: no ai00.json")
+		return true
+	var d = JSON.parse_string(f.get_as_text())
+	if typeof(d) != TYPE_DICTIONARY or not d.has("run"):
+		print("creature run: none in ai00.json")
+		return true
+	var run: Dictionary = d["run"]
+	var kd: Dictionary = d["kinds"][str(int(run["kind"]))]
+	var recs := []
+	for r in kd["behaviours"]:
+		var raw := []
+		for v in r:
+			raw.append(int(v))
+		recs.append(raw)
+	var kind := {"accel": int(kd["accel"]), "turn_accel": int(kd["turn_accel"]),
+		"fall": int(kd["fall"]), "radius": int(kd["radius"]),
+		"height": int(kd["height"]), "behaviours": recs}
+	var st: Array = run["start"]
+	var a := {"px": int(st[0]), "py": int(st[1]), "pz": int(st[2]), "ry": int(st[3]),
+		"eflags": int(st[4])}
+	var brain := KFCreatureAI.new()
+	brain.coll = coll
+	_seed = int(run["seed"])
+	brain.rand = Callable(self, "_lcg")
+	KFCreatureAI.wake(a, kind)
+	a["ry"] = int(st[3])
+	var bad := 0
+	var first := ""
+	var frames: Array = run["frames"]
+	for i in frames.size():
+		var q: Array = run["path"][i]
+		var p := Vector3i(int(q[0]), int(q[1]), int(q[2]))
+		if (i & 3) == 0:
+			brain.pick(a, kind, p)
+		brain.tick(a, kind, p, [a])
+		var want: Array = frames[i]
+		var got := [int(a["px"]), int(a["py"]), int(a["pz"]), int(a["ry"]) & 0xFFFF, int(a["op"])]
+		if got != [int(want[0]), int(want[1]), int(want[2]), int(want[3]), int(want[4])]:
+			bad += 1
+			if first == "":
+				first = "frame %d: godot %s python %s" % [i, str(got), str(want)]
+	print("creature run: %d of %d frames of a level-0 creature where tools/ai.py puts it"
+		% [frames.size() - bad, frames.size()])
+	if bad > 0:
+		print("  first difference: " + first)
+	return bad == 0
+
+
 func _init() -> void:
 	coll = KFCollision.new()
 	if not coll.load_from("res://coll00.json"):
@@ -198,6 +260,9 @@ func _init() -> void:
 		quit(1)
 		return
 	if not _creature_steps(doc):
+		quit(1)
+		return
+	if not _ai_run():
 		quit(1)
 		return
 	if not _levels():

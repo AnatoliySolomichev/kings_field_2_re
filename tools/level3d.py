@@ -1094,7 +1094,7 @@ def project(lv, out="out/godot", start=(57, 4)):
                  "cutscene.gd", "actors.gd", "levelup.gd",
                  "game.gd", "objects.gd", "escript.gd", "items.gd",
                  "damage.gd", "equip.gd", "objcoll.gd", "scroll.gd",
-                 "doors.gd", "sky.gd", "hud.gd", "compass.gd"):
+                 "doors.gd", "sky.gd", "hud.gd", "compass.gd", "ai.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening
@@ -1152,6 +1152,11 @@ def project(lv, out="out/godot", start=(57, 4)):
         compass.export(out)
     except Exception as e:                       # no disc, no compass
         print(f"compass skipped: {e}")
+    try:
+        import ai
+        ai.export(out, lv)
+    except Exception as e:                       # no disc, no behaviours
+        print(f"creature behaviours skipped: {e}")
     try:
         import modelbank
         modelbank.export(out)
@@ -1233,6 +1238,7 @@ def verify(out="out/godot"):
                        capture_output=True, text=True, timeout=900)
     for line in (r.stdout + r.stderr).splitlines():
         if line.startswith(("loaded:", "movement:", "steps:", "creature steps:",
+                            "creature run:",
                             "levels:", "angles:",
                             "scripts:", "damage:", "FAIL", "  first",
                             "  level case", "  angle (", "  script level",
