@@ -211,12 +211,15 @@ arm(0x8002fe1c, 'frame', function()
     for i = 0, 11 do raw[#raw + 1] = string.format('%04x', u16(BLOCK + i * 2)) end
     log(string.format(
         'f=%6d t=%9.3f btn=%04x prev=%04x ang=%5d fwd=%6d mag=%6d max=%8d ' ..
-        'pos=%9d %9d %9d vst=%3d vv=%6d pst=%3d lv=%2d ra=%08x blk=%s vb=%d act=%s',
+        'pos=%9d %9d %9d vst=%3d vv=%6d pst=%3d lv=%2d ra=%08x blk=%s vb=%d act=%s ' ..
+        'pv=%d,%d,%d',
         frame, clock() - t0, u16(BTN), u16(BTNPREV), s16(ANG),
         s16(FWD), s16(MAG), s32(MAX),
         s32(PX), s32(PY), s32(PZ), u8(VSTATE), s16(VVEL), u8(PSTATE),
         u8(0x8018fad9), g and tonumber(g.ra) or 0, table.concat(raw, ','),
-        s32(VBLANKS), awake()))
+        s32(VBLANKS), awake(),
+        -- player_velocity, the knock-back player_move spends in state 0x10
+        s16(0x801b266c), s16(0x801b266e), s16(0x801b2670)))
 end)
 
 log('=== bp16 recording; play normally ===')

@@ -100,6 +100,582 @@ def kinds(lv, blob=None):
     return out
 
 
+# ---------------------------------------------------------------------------
+# The machine: a creature as a dict of the actor fields actor_tick uses.
+#
+#   x y z      +0x2c +0x30 +0x34       yaw   +0x42     turn  +0x58
+#   vx vz      +0x50 +0x54             vy    +0x52     vst   +0xd
+#   rec        +0x60 (a behaviour record, or None)     op    +0xe
+#   phase      +0xf   0 new, 0xf0 running, 0xff done   prev  +0x10
+#   anim       +0xc   clock +0x18   step +0x66         aim   +0x64
+#   sub        +0x70  (a behaviour's own state)        n72   +0x72
+#   flee, cut  +0x70, +0x71 in opcode 5                 radius +0x1c, height +0x1e
+#
+# `kind` is the entity record's fields: 'accel' +3, 'turn_accel' +4, 'fall' +5,
+# 'radius' +0x12, 'height' +0x14, and the behaviour list.
+
+def s16(v):
+    v &= 0xFFFF
+    return v - 0x10000 if v >= 0x8000 else v
+
+
+def u16f(raw, off):
+    return struct.unpack_from("<H", raw, off)[0] if off + 2 <= len(raw) else 0
+
+
+def s16f(raw, off):
+    return struct.unpack_from("<h", raw, off)[0] if off + 2 <= len(raw) else 0
+
+
+def rand_score(x, rand):
+    """0x800170c0: ((rand() + rand()) * x) >> 15 -- 0 to 2x, most often x."""
+    return ((rand() + rand()) * x) >> 15
+
+
+def facing_test(a, b, tol):
+    """0x80016a2c: a within tol of b either way, 0x1000 to the turn."""
+    d = (a - b) & 0xFFF
+    return d <= tol or d >= 0x1000 - tol
+
+
+def clock(a, rate):
+    """actor_clock (0x8004db3c): +0x18 += rate, 0..0xfff; |rate| at +0x66."""
+    rate = s16(rate)
+    a["step"] = abs(rate)
+    t = s16(a["clock"] + rate)
+    a["clock"] = 0xFFF if t >= 0x1000 else (0 if t < 0 else t)
+
+
+def clock_loop(a, rate):
+    """0x8004db08: the same, wrapping at 0x1000 instead of stopping."""
+    rate = s16(rate)
+    a["step"] = abs(rate)
+    a["clock"] = (a["clock"] + rate) & 0xFFF
+
+
+def clock_passed(a, t):
+    """actor_clock_passed (0x8004db98): t crossed in this frame's step."""
+    return t < a["clock"] and not t < a["clock"] - a["step"]
+
+
+def start_anim(a, anim):
+    """actor_start_anim (0x8004c130), without the 0x80199148 case."""
+    if anim != 0xFF:
+        a["anim"], a["clock"] = anim, 0
+
+
+def switch(a, rec):
+    """actor_switch (0x8004b94c)."""
+    a["prev"] = a["op"]
+    if rec is None:
+        a["rec"], a["op"], a["phase"] = None, 0xFF, 0xFF
+    else:
+        a["rec"], a["op"], a["phase"] = rec, rec["op"], 0
+
+
+def score(a, rec, dist, player, rand):
+    """actor_behaviour (0x8004b984) for the opcodes level 0's kinds use."""
+    op, raw, cur = rec["op"], rec["raw"], rec is a["rec"]
+    base = raw[3] if cur else raw[2]
+    if op == 0:                                   # 0x8004b9e8: idle when far
+        return rand_score(base, rand) if u16f(raw, 0xC) < dist else 0
+    if op == 1:                                   # 0x8004ba34: wander at middling range
+        if not u16f(raw, 0x10) < dist or u16f(raw, 0x12) < dist:
+            return 0
+        return rand_score(base, rand)
+    if op == 5:                                   # 0x8004baa8: close in
+        if cur:
+            return 0 if u16f(raw, 0x12) < dist else rand_score(raw[3], rand)
+        sc = 0 if u16f(raw, 0x10) < dist else rand_score(raw[2], rand)
+        if a["op"] in (4, 0x12, 0x17, 0x18, 0x84):
+            sc <<= 1
+        return sc
+    if op == 4:                                   # 0x8004bbd8: strike
+        if a["flags"] & 0x100 or u16f(raw, 0x1A) < dist:
+            return 0
+        if not overlap_y(a["y"], a["height"], player[1] + 0xC8, 0x834):
+            return 0
+        brg = s16(vec_angle(player[0] - a["x"], player[2] - a["z"]))
+        if not facing_test(s16(a["yaw"]), brg, raw[0x10] << 4):
+            return 0
+        if cur:
+            return rand_score(raw[3], rand)
+        sc, near = raw[2], raw[0xE] << 6
+        if not dist < (near + u16f(raw, 0x1A)) >> 1:
+            sc -= sc // 3
+        elif not dist < near:
+            sc -= sc // 6
+        return rand_score(sc, rand)
+    if op in (2, 3):                              # a hit and a death: forced
+        return 0
+    if op == 0x70:
+        return -1
+    if op < 0x80:                                 # 0x8004be94 and on
+        return rand_score(base, rand)
+    return -2                                     # the level's own code: not here
+
+
+def pick(a, kind, dist, player, rand):
+    """actor_pick (0x8004bf1c): the best score above -2, switched to if new."""
+    if a["phase"] in (0xF0, 0):
+        return
+    best, best_rec = -2, None
+    for rec in kind["behaviours"]:
+        sc = score(a, rec, dist, player, rand)
+        if best < sc:
+            best, best_rec = sc, rec
+    if best_rec is not None and (best_rec is not a["rec"] or a["phase"] == 0xFF):
+        switch(a, best_rec)
+
+
+def entrance(kind):
+    """0x8004c068 from actor_activate: 0x15, else 6, else 0x1a, or None."""
+    for op in (0x15, 6, 0x1A):
+        for rec in kind["behaviours"]:
+            if rec["op"] == op:
+                return rec
+    return None
+
+
+def overlap_y(y, top, y2, top2):
+    """0x80016d0c (as far as opcode 4 needs it): two bodies share height."""
+    return not (y - top > y2 or y2 - top2 > y)
+
+
+def vec_angle(u, v):
+    import movement
+    return movement.vec_angle(u, v)
+
+
+# -- moving -------------------------------------------------------------------
+
+def facing_dir(yaw):
+    """0x80016240: (-sin, cos) of the yaw, 4096 to one."""
+    import movement
+    return -movement.game_sin(s16(yaw)), movement.game_cos(s16(yaw))
+
+
+def scale11(k, v):
+    """0x800168f0: each part times k, >> 11."""
+    return (s16(k) * v[0]) >> 11, (s16(k) * v[1]) >> 11
+
+
+def approach(cur, target, step):
+    """0x80015fdc: cur towards target by |step|, not past it."""
+    if step > 0:
+        if cur < target:
+            return min(cur + step, target)
+        if target < cur:
+            return max(cur - step, target)
+        return cur
+    if target < cur:
+        return max(cur + step, target)
+    if cur < target:
+        return min(cur - step, target)
+    return cur
+
+
+def turn(a, target, most, accel):
+    """0x8004e928: the turn rate +0x58 towards +-most by accel, the yaw by it,
+    and onto the target if it was crossed."""
+    import movement
+    target = s16(target)
+    yaw = s16(a["yaw"])
+    if ((yaw - target) & 0xFFF) == 0:
+        a["turn"] = 0
+        return
+    if ((target - yaw) & 0xFFF) < 0x801:
+        r = s16(a["turn"] + accel)
+        a["turn"] = s16(most) if s16(most) < r else r
+    else:
+        r = s16(a["turn"] - accel)
+        a["turn"] = -s16(most) if r < -s16(most) else r
+    old = yaw
+    a["yaw"] = s16(old + a["turn"])
+
+    def gt(p, q):
+        return s16(((p + 0x800) & 0xFFF) - ((q + 0x800) & 0xFFF)) > 0
+    if a["turn"] > 0:
+        if gt(target, old) and not gt(target, a["yaw"]):
+            a["yaw"] = target
+    else:
+        if gt(old, target) and not gt(a["yaw"], target):
+            a["yaw"] = target
+
+
+def drive(a, lvl, yaw, speed, accel, flags, others=(), player=None):
+    """0x8004e824: the velocity towards speed along yaw, by accel an axis."""
+    d = facing_dir(yaw)
+    tx, tz = scale11(speed, d)
+    ax, az = scale11(accel, d)
+    a["vx"] = s16(approach(a["vx"], tx, ax))
+    a["vz"] = s16(approach(a["vz"], tz, az))
+    return move_horizontal(a, lvl, flags, others, player)
+
+
+def walk_to(a, lvl, angle, speed, most, accel, turn_accel, flags, others=(),
+            player=None):
+    """0x8004ea7c: turn towards angle, then drive along the yaw."""
+    turn(a, angle, most, turn_accel)
+    return drive(a, lvl, a["yaw"], speed, accel, flags, others, player)
+
+
+def brake(a, lvl, decel, flags, others=(), player=None):
+    """0x8004e6f8: the velocity shrinks by 2 * decel along itself."""
+    import movement
+    if a["vst"] != 0:
+        return move_horizontal(a, lvl, flags, others, player)
+    n = movement.game_isqrt(a["vx"] * a["vx"] + a["vz"] * a["vz"])
+    if n == 0:
+        return 0
+    sx = movement.trunc((a["vx"] * decel) << 1, n)
+    sz = movement.trunc((a["vz"] * decel) << 1, n)
+    a["vx"] = s16(approach(a["vx"], 0, sx))
+    a["vz"] = s16(approach(a["vz"], 0, sz))
+    return move_horizontal(a, lvl, flags, others, player)
+
+
+def _clear(a, lvl, x, z, others, player):
+    """collide_query for an actor: the tiles at its own radius and height,
+    then the other creatures (0x10) and the player (0x80). Returns the mask
+    and the thing hit, if any, as (x, z, radius)."""
+    import movement
+    mask, cur = movement.query(lvl, x, a["y"], z, radius=a["radius"],
+                               body=a["height"])
+    thing = None
+    for o in others:
+        if o is a or o.get("st", 1) != 1:
+            continue
+        if movement.in_range((o["x"], o["y"], o["z"]), x, a["y"], z,
+                             o["radius"] + a["radius"], o["height"],
+                             a["height"]) != -1:
+            mask |= 0x10
+            thing = (o["x"], o["z"], o["radius"])
+            break
+    if player is not None and thing is None:
+        if movement.in_range(player, x, a["y"], z, 0x320 + a["radius"], 0x6A4,
+                             a["height"]) != -1:
+            mask |= 0x80
+            thing = (player[0], player[2], 0x320)
+    return mask, cur, thing
+
+
+def move_horizontal(a, lvl, flags, others=(), player=None):
+    """actor_move_horizontal (0x8004dbc8): one step of the velocity.
+
+    Clear (or a step up of at most 0x320 over a wall, with no flag 0x10 and
+    the actor's 0x4000 clear) it goes through the ledge test when the actor
+    is grounded and flag 0x24 asks: the lowest floor under the target and
+    under the points one diameter ahead of the actor on each axis, and a floor
+    more than 0x44c below the feet sets 0x100 and, with flag 4, refuses the
+    step as a wall does. A creature, the player or an object in the way is
+    gone round: a quarter turn off the bearing to it, on the side the step
+    leans, at half the step's length, twice at most. A wall: the X part is
+    dropped (with flag 1 the Z part takes the whole length), then once more
+    -- the Z part only without flag 1, which is the same step again, or the
+    X part alone at full length with it -- and then it stops; a diagonal wall
+    slides along its diagonal first. Flag 8 writes the step back into the
+    velocity. Returns every mask met, with 0x100 for a ledge.
+    """
+    import movement
+    sx, sz = s16(a["vx"]), s16(a["vz"])
+    if sx == 0 and sz == 0:
+        return 0
+    s7, s6 = sx, sz
+    seen = things = diag = second = 0
+
+    def full():
+        return movement.game_isqrt(s7 * s7 + s6 * s6)
+    for _ in range(16):
+        tx, tz = a["x"] + sx, a["z"] + sz
+        mask, cur, thing = _clear(a, lvl, tx, tz, others, player)
+        take = mask == 0
+        slide = False
+        if not take:                                        # .L11
+            seen |= mask
+            if flags & 3 == 0:
+                break
+            if mask & 0xB0:
+                things += 1
+                if things == 2:
+                    break
+                ox, oz, _r = thing
+                b = vec_angle(ox - a["x"], oz - a["z"])
+                step_dir = s16(vec_angle(sx, sz))
+                side = b + 0x400 if ((step_dir - s16(b)) & 0xFFF) < 0x801 else b - 0x400
+                side &= 0xFFF
+                n = movement.game_isqrt(sx * sx + sz * sz)
+                sx = (-movement.game_sin(side) * n) >> 13
+                sz = (movement.game_cos(side) * n) >> 13
+                continue
+            if not flags & 0x10:                            # .L13
+                if a["flags"] & 0x4000:
+                    slide = True
+                elif mask & ~0x205 == 0:
+                    if cur + 0x320 < a["y"]:
+                        slide = True
+                    else:
+                        take = True                         # a step up, via .L3
+            if not take and not slide:                      # .L14
+                if mask & 1:
+                    slide = True
+                elif mask & 2:                              # .L22
+                    if diag:
+                        slide = True
+                    else:
+                        cx, cz = tx >> 11, tz >> 11
+                        c = lvl.cell(cx, cz) if 0 <= cx < 80 and 0 <= cz < 80 else bytes(10)
+                        if c[2] & 3 in (0, 2):
+                            sx = sz = (s7 + s6) >> 1
+                        else:
+                            sx = (s7 - s6) >> 1
+                            sz = -sx
+                        diag = 1
+                        continue
+                else:
+                    break
+        if take:                                            # .L3
+            if a["vst"] == 0 and flags & 0x24:
+                lowest = cur
+                az = (a["radius"] << 1) * (1 if sz > 0 else -1) if sz else 0
+                ax = (a["radius"] << 1) * (1 if sx > 0 else -1) if sx else 0
+                for px, pz in ((a["x"], a["z"] + az), (a["x"] + ax, a["z"])):
+                    _m, c2 = movement.query(lvl, px, a["y"], pz, radius=a["radius"],
+                                            body=a["height"])
+                    lowest = max(lowest, c2)
+                if a["y"] < lowest - 0x44C:
+                    seen |= 0x100
+                    if flags & 4:
+                        slide = True
+                        take = False
+            if take:                                        # .L10
+                a["x"], a["z"] = tx, tz
+                break
+        if slide:                                           # .L15
+            if second:
+                sx = sz = 0
+                break
+            if sx != 0:
+                sx = 0
+                if flags & 1:
+                    n = full()
+                    sz = n if s6 > 0 else -n
+                else:
+                    sz = s6
+                continue
+            if sz != 0:
+                sz = 0
+                if flags & 1:
+                    n = full()
+                    sx = n if s7 > 0 else -n
+                else:
+                    sz = s6
+                second = 1
+                continue
+            break
+    if flags & 8:
+        a["vx"], a["vz"] = s16(sx), s16(sz)
+    return seen
+
+
+def move_vertical(a, lvl, kind):
+    """actor_move_vertical (0x8004e330), states 0, 0x10 and 0x20.
+
+    0 grounded: a floor above the feet starts a rise at -0x64 (0x20), one
+    below a fall (0x10). 0x20 rises by the velocity, which gains 5 a frame,
+    until the feet are on the floor. 0x10 falls by the velocity, which gains
+    the kind's +5, onto the floor its query meets. Entity flag 0x400 stands
+    it on the floor's base instead; the ballistic 0x30 is not here.
+    """
+    import movement
+    _m, surf = movement.query(lvl, a["x"], a["y"], a["z"], radius=a["radius"],
+                              body=a["height"], ymid=a["y"] - 0x500)
+    st = a["vst"]
+    if st == 0:
+        d = surf - a["y"]
+        if d < 0:
+            a["vst"], a["vy"] = 0x20, -0x64
+        elif d > 0:
+            a["vst"], a["vy"] = 0x10, 0
+    elif st == 0x20:
+        a["y"] += a["vy"]
+        a["vy"] = s16(a["vy"] + 5)
+        if not (surf < a["y"] and a["vy"] < 0):
+            a["y"], a["vst"] = surf, 0
+    elif st == 0x10:
+        ny = a["y"] + a["vy"]
+        mask, cur = movement.query(lvl, a["x"], ny, a["z"], radius=a["radius"],
+                                   body=a["height"])
+        if mask == 0:
+            a["y"] = ny
+            a["vy"] = s16(a["vy"] + kind["fall"])
+        elif mask & 4:
+            a["y"], a["vy"], a["vst"] = cur, 0, 0
+        else:
+            a["vst"] = 0
+
+
+def tick(a, kind, lvl, player, others, rand):
+    """One frame of actor_tick (0x800500a8) for opcodes 0, 1, 4, 5 and 6.
+
+    `player` is (x, y, z); `rand` the BIOS rand, 0..0x7fff. Returns what a
+    blow struck this frame (opcode 4 at its record's +0x18), or None.
+    """
+    rec = a["rec"]
+    blow = None
+    if rec is None:
+        return None
+    raw = rec["raw"]
+    op = a["op"]
+    dist = _dist(a, player)
+    if op == 0:                                         # 0x800508b4
+        if a["phase"] == 0:
+            a["phase"] = 0xF0
+            start_anim(a, raw[1])
+        clock(a, s16f(raw, 8))
+        brake(a, lvl, kind["accel"], 0xA, others, player)
+        _finish_if_done(a, kind, player, rand)
+    elif op == 1:                                       # 0x800508f4
+        if a["phase"] == 0:
+            a["phase"] = 0xF0
+            start_anim(a, raw[1])
+            a["aim"] = rand() >> 3
+        else:
+            hit = walk_to(a, lvl, s16(a["aim"]), u16f(raw, 0xC), u16f(raw, 0xE),
+                          kind["accel"], kind["turn_accel"], 5, others, player)
+            if hit or (rand() >> 5) < raw[0x14]:
+                a["aim"] = rand() >> 3
+        clock(a, s16f(raw, 8))
+        _finish_if_done(a, kind, player, rand)
+    elif op == 5:                                       # 0x80050b20
+        if a["phase"] == 0:
+            a["phase"] = 0xF0
+            start_anim(a, raw[1])
+            a["flee"] = 1 if a["prev"] in (4, 0x12, 0x17, 0x18) else 0
+            a["cut"] = 0
+        if rand() < 0x1770:
+            if not dist < u16f(raw, 0x16):
+                a["flee"] = 0
+            elif not u16f(raw, 0x14) < dist:
+                a["flee"] = 1
+        brg = s16(vec_angle(player[0] - a["x"], player[2] - a["z"]))
+        a["aim"] = brg
+        fl = 0x21 if a["cut"] else 5
+        if not a["flee"]:
+            got = walk_to(a, lvl, brg, u16f(raw, 0xC), u16f(raw, 0xE),
+                          kind["accel"], kind["turn_accel"], fl, others, player)
+        else:
+            got = drive(a, lvl, s16(brg + 0x800), u16f(raw, 0xC), kind["accel"],
+                        fl, others, player)
+        toggle = False
+        if got & 0x100:                                  # a ledge ahead
+            if not a["cut"]:
+                if rand() < u16f(raw, 0x18):
+                    a["cut"] = 1
+                else:
+                    toggle = True
+        else:
+            a["cut"] = 0
+            toggle = bool(got)
+        if toggle:
+            a["flee"] = 0 if a["flee"] else 1
+        clock(a, s16f(raw, 8))
+        _finish_if_done(a, kind, player, rand)
+    elif op == 4:                                       # 0x800514f8
+        if a["phase"] == 0:
+            a["phase"] = 0xF0
+            start_anim(a, raw[1])
+        clock(a, s16f(raw, 8))
+        if clock_passed(a, u16f(raw, 0x18)):
+            blow = {"reach": raw[0xE] << 6, "lift": raw[0xF] << 5,
+                    "arc": raw[0x10] << 4, "rec": rec}
+        if a["clock"] >= 0xFFF:
+            finish(a, kind, player, rand)
+        brake(a, lvl, raw[0xD], 0xA, others, player)
+    elif op == 6:                                       # 0x8005205c
+        _burrowed(a, kind, raw, lvl, player, others, rand, dist)
+    move_vertical(a, lvl, kind)
+    return blow
+
+
+def _dist(a, player):
+    import movement
+    return movement.vlen(player[0] - a["x"], player[2] - a["z"])
+
+
+def finish(a, kind, player, rand):
+    """actor_finish (0x8004c104): done, and choose again at once."""
+    a["phase"] = 0xFF
+    pick(a, kind, _dist(a, player), player, rand)
+
+
+def _finish_if_done(a, kind, player, rand):
+    if a["clock"] >= 0xFFF:                             # .L173
+        finish(a, kind, player, rand)
+
+
+def _burrowed(a, kind, raw, lvl, player, others, rand, dist):
+    """Opcode 6: under the ground until the player comes near, then up."""
+    if a["phase"] == 0:
+        a["phase"] = 0xF0
+        a["sub"] = 0
+        start_anim(a, raw[1])
+        a["radius"], a["height"] = u16f(raw, 0x16), u16f(raw, 0x18)
+        if u16f(raw, 0xE):
+            a["aim"] = rand() >> 3
+    sub = a["sub"]
+    if sub == 0:
+        clock_loop(a, s16f(raw, 8))
+        if dist < u16f(raw, 0xC) and not a["clock"] < 0xFFF - u16f(raw, 8):
+            a["sub"], a["clock"] = 2, 0
+            start_anim(a, raw[0x1A])
+        hit = walk_to(a, lvl, s16(a["aim"]), u16f(raw, 0xE), u16f(raw, 0x10),
+                      kind["accel"], kind["turn_accel"], 5, others, player)
+        if hit or (rand() >> 5) < raw[0x1C]:
+            a["aim"] = rand() >> 3
+    elif sub == 2:
+        clock(a, s16f(raw, 8))
+        a["radius"] = lerp(u16f(raw, 0x16), kind["radius"], a["clock"])
+        a["height"] = lerp(u16f(raw, 0x18), kind["height"], a["clock"])
+        if not a["clock"] < 0xFFF:
+            a["radius"], a["height"] = kind["radius"], kind["height"]
+            a["sub"], a["n72"] = 3, u16f(raw, 0x12)
+    elif sub == 3:
+        drive(a, lvl, a["yaw"], u16f(raw, 0xE), 0xFF, 5, others, player)
+        a["n72"] = s16(a["n72"] - 1)
+        if a["n72"] == -1:
+            finish(a, kind, player, rand)
+        clock(a, raw[0x1B])
+
+
+def lerp(a, b, t):
+    """fixed_madd (0x80017158): a + ((b - a) * t >> 12)."""
+    return a + (((b - a) * t) >> 12)
+
+
+def kind_of(lv, k, blob=None):
+    """The fields of kind k the machine reads, with its behaviours."""
+    blob = blob or entity_blob(lv)
+    e = blob[k * ENTITY:(k + 1) * ENTITY]
+    kd = [x for x in kinds(lv, blob) if x["kind"] == k][0]
+    return {"accel": e[3], "turn_accel": e[4], "fall": e[5],
+            "radius": u16f(e, 0x12), "height": u16f(e, 0x14),
+            "behaviours": kd["behaviours"]}
+
+
+def new_actor(x, y, z, yaw, kind, flags=0):
+    """What actor_wake leaves, with the entrance behaviour switched in."""
+    a = {"x": x, "y": y, "z": z, "yaw": yaw, "turn": 0, "vx": 0, "vz": 0,
+         "vy": 0, "vst": 0, "rec": None, "op": 0, "phase": 0xFF, "prev": 0,
+         "anim": 0, "clock": 0, "step": 0, "aim": 0, "sub": 0, "n72": 0,
+         "flee": 0, "cut": 0, "radius": kind["radius"],
+         "height": kind["height"], "flags": flags, "st": 1}
+    rec = entrance(kind)
+    if rec is not None:
+        switch(a, rec)
+    return a
+
+
 def check(out=sys.stdout):
     """The relocated table byte for byte, and every awake actor's behaviour."""
     same = total = awake = ok = snaps = 0
@@ -139,10 +715,68 @@ def check(out=sys.stdout):
     return ok == awake and snaps > 0
 
 
+def check_log(out=sys.stdout, path=None):
+    """What bp16's act= can hold the machine to without its hidden state.
+
+    * **how long a behaviour runs**: to the end of its animation clock,
+      ceil(0x1000 / rate) frames, and then actor_finish chooses again -- so
+      every run of one opcode fully seen in the log is a whole number of
+      cycles;
+    * **how fast a creature walks**: drive's target is the record's speed
+      (+0xc) times the unit facing >> 11, twice the speed, which a creature
+      holds once it is up to it -- the most common step in the log.
+    """
+    import collections
+    import math
+    import replay
+    rows, _ = replay.load(path) if path else replay.load()
+    rows = [r for r in rows if r.get("act") is not None]
+    if not rows:
+        print("  no bp16 frames with act= to check the machine against", file=out)
+        return True
+    ks = kinds(rows[0]["lv"])
+    rate, speed = {}, {}
+    for kd in ks:
+        for b in kd["behaviours"]:
+            rate.setdefault(b["op"], s16f(b["raw"], 8))
+            if b["op"] in (1, 5):
+                speed.setdefault(b["op"], u16f(b["raw"], 0xC))
+    per = collections.defaultdict(list)
+    for r in rows:
+        for a in r["act"]:
+            per[a["slot"]].append((r["f"], a["b0e"], a["pos"]))
+    ok = bad = 0
+    steps = collections.defaultdict(collections.Counter)
+    for seq in per.values():
+        start = None
+        for (f0, op0, p0), (f1, op1, p1) in zip(seq, seq[1:]):
+            if f1 != f0 + 1:
+                start = None
+                continue
+            if op0 == op1:
+                steps[op0][round(math.hypot(p1[0] - p0[0], p1[2] - p0[2]))] += 1
+            if op1 != op0:
+                if start is not None and rate.get(op0):
+                    cyc = -(-0x1000 // rate[op0])
+                    if (f1 - start) % cyc == 0:
+                        ok += 1
+                    else:
+                        bad += 1
+                start = f1
+    walk = []
+    for op in (5, 1):
+        if steps.get(op) and op in speed:
+            walk.append(f"opcode {op} at {steps[op].most_common(1)[0][0]} a frame "
+                        f"for a speed of {speed[op]}")
+    print(f"  {ok} of {ok + bad} runs of one behaviour last a whole number of "
+          f"animation cycles; " + ", ".join(walk), file=out)
+    return bad == 0
+
+
 def main():
     a = sys.argv[1] if len(sys.argv) > 1 else "0"
     if a == "--check":
-        sys.exit(0 if check() else 1)
+        sys.exit(0 if (check() and check_log()) else 1)
     lv = int(a)
     for kd in kinds(lv):
         print(f"kind {kd['kind']:2d} model {kd['model']:3d}: " + ", ".join(

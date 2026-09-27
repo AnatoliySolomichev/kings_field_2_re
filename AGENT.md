@@ -138,6 +138,8 @@ the compass's records, against every snapshot          65 of 65 fields
 the swinging door, against the bp24 recording          226 of 226 steps
 the creatures' behaviour tables, against snapshots     168 896 of 168 896 bytes,
                                                        69 of 69 awake actors
+the creatures' machine, against the bp16 act= log      31 of 31 behaviour runs;
+                                                       steps 48 and 32 a frame
 the walking, against the recording (replay rung 2)     118 288 of 118 500 frames;
                                                        447 of the 455 that touch
                                                        an object

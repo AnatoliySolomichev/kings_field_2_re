@@ -2011,7 +2011,7 @@
  "0x80017158": {
   "name": "fixed_madd",
   "kind": "code",
-  "evidence": "six instructions, twelve callers: $a0 + (($a1 * $a2) >> 12) -- a multiply-accumulate in the 1.12 fixed point the whole engine uses"
+  "evidence": "six instructions, twelve callers: $a0 + ((($a1 - $a0) * $a2) >> 12) -- a linear interpolation from a0 to a1 by a2 over 4096 (subu, mult, sra 12, addu; an earlier note here read it as a multiply-accumulate and missed the subu). Opcode 6 grows a creature's radius and height with it as it comes out of the ground"
  },
  "0x80019ab4": {
   "name": "res_wait",
@@ -2462,5 +2462,65 @@
   "name": "actor_step_sound",
   "kind": "code",
   "evidence": "plays the running behaviour's sound, record +4 plus 0xf0, at the actor's position"
+ },
+ "0x8004c068": {
+  "name": "kind_behaviour_with_op",
+  "kind": "code",
+  "evidence": "(kind, op): the first of the kind's behaviours with that opcode, or 0. actor_activate asks it for 0x15, then 6, then 0x1a, and switches the one it finds straight in -- a creature's entrance"
+ },
+ "0x8004e928": {
+  "name": "actor_turn",
+  "kind": "code",
+  "evidence": "(actor, aim, most, accel): the turn rate +0x58 towards +-most by accel, the yaw +0x42 by it, and onto the aim if it passed it"
+ },
+ "0x8004e824": {
+  "name": "actor_drive",
+  "kind": "code",
+  "evidence": "(yaw, speed, accel, flags): the velocity +0x50/+0x54 towards (-sin, cos)(yaw) * speed >> 11 by accel along the same line, per axis through 0x80015fdc, then actor_move_horizontal"
+ },
+ "0x8004ea7c": {
+  "name": "actor_walk_to",
+  "kind": "code",
+  "evidence": "(aim, speed, most, accel, turn_accel, flags): actor_turn towards aim, then actor_drive along the yaw"
+ },
+ "0x8004e6f8": {
+  "name": "actor_brake",
+  "kind": "code",
+  "evidence": "(decel, flags): unless airborne, the velocity shrinks by 2 * decel along itself, then actor_move_horizontal"
+ },
+ "0x80015fdc": {
+  "name": "approach",
+  "kind": "code",
+  "evidence": "(cur, target, step): cur moved towards target by |step|, not past it"
+ },
+ "0x80016240": {
+  "name": "facing_vector",
+  "kind": "code",
+  "evidence": "(yaw, out): (-sin yaw, cos yaw), 4096 to one"
+ },
+ "0x800168f0": {
+  "name": "vec2_scale11",
+  "kind": "code",
+  "evidence": "(k, v): each part of v times k >> 11"
+ },
+ "0x800170c0": {
+  "name": "rand_score",
+  "kind": "code",
+  "evidence": "(x): ((rand() + rand()) * x) >> 15 -- 0 to 2x, most often x; actor_behaviour's scores"
+ },
+ "0x8004d254": {
+  "name": "actor_blow",
+  "kind": "code",
+  "evidence": "(near, reach, lift, arc, damage...): the player within reach << 6 of the creature raised lift << 5, not nearer than near << 6, and inside arc << 4 of its yaw takes player_take_hit with the attacker's position -- opcode 4's strike"
+ },
+ "0x80030908": {
+  "name": "player_knock",
+  "kind": "code",
+  "evidence": "(push, shake, frames): unless the player is in state 7, 8 or 9, state 0x10 with push as player_velocity, the view shake beside it, the vertical state 0x40; apply_damage's knock-back"
+ },
+ "0x800309c8": {
+  "name": "player_knock_hard",
+  "kind": "code",
+  "evidence": "the same as player_knock with state 0x12; apply_damage's other knock-back"
  }
 }

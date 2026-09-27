@@ -4394,6 +4394,66 @@ run one of their kind's behaviours with its opcode at +0xe (`tools/ai.py`).
 `emu/bp16.lua` now logs each awake creature's phase, clock, yaw, velocity,
 behaviour and flags, for stepping one frame at a time against the game.
 
+**Which one first.** `actor_wake` leaves +0xe 0, the phase 0xff and +0x60 0;
+`actor_activate` then looks through the kind for opcode 0x15, 6 or 0x1a
+(`0x8004c068`) and switches it straight in -- the entrance -- and only a kind
+with none of them is scored. Level 0's monsters come in on **opcode 6**.
+
+**The scores** (`actor_behaviour`, `R(x) = ((rand() + rand()) * x) >> 15`, 0 to
+2x): opcode 0 R(+2) when the player is farther than +0xc (10240 on level 0);
+1 between +0x10 and +0x12 (10240 to 30720); 5 nearer than +0x10 (15000) --
+doubled straight after a strike -- and, while running, until +0x12 (20000);
+4 within +0x1a (3300), the bodies sharing height and the player within
+(+0x10) << 4 of the yaw, less a sixth or a third with distance; 6, 2 and 3
+nothing; 0x70 -1. The running behaviour scores on its +3. A behaviour runs to
+the end of its animation clock -- phase 0xf0 is not interrupted -- and
+`actor_finish` chooses again at once.
+
+**What they do** (`actor_tick`'s arms, `tools/ai.py tick`):
+
+```
+0    idle     the velocity brakes by twice the kind's +3 along itself
+1    wander   walk towards a random aim, a new one on a knock or a roll of +0x14
+5    close in walk at the player -- or, flag +0x70, back straight away from it
+              without turning: the ones that back off. The flag comes from
+              the distance against +0x14 and +0x16 on a roll of 0x1770 in
+              0x8000, after a strike, and flips when the step is blocked;
+              at a ledge a roll of +0x18 lets it walk over
+4    strike   brake; at clock +0x18 the blow (0x8004d254): the player within
+              +0xe << 6 of the creature raised +0xf << 5, inside +0x10 << 4
+              of its yaw, takes player_take_hit with the record's damage
+6    burrow   radius and height from the record; crawl at +0xe on a looping
+              clock until the player is within +0xc (16384) at the loop's end,
+              then rise over a cycle -- radius and height from the record's
+              to the kind's by fixed_madd -- and walk two frames more
+```
+
+**How they move.** A velocity at +0x50/+0x54 eases towards the record's speed
+along the yaw -- `(-sin, cos) * speed >> 11`, so twice the speed -- by the
+kind's +3 along the same line (`0x80015fdc`, per axis); the yaw turns by a rate
++0x58 that gains the kind's +4 a frame up to the record's limit, and lands on
+the aim if it passes it (`0x8004e928`). `actor_move_horizontal` then steps: a
+ledge more than 0x44c down is refused, a step of at most 0x320 up is taken, a
+creature or the player is gone round a quarter turn off at half the step, and
+a wall is slid along. `actor_move_vertical` rises onto a floor at -0x64 gaining
+5, and falls at the kind's +5.
+
+**Checked against the recording**: every run of one behaviour fully seen in
+the log lasts a whole number of its animation cycles -- **31 of 31**, 26 frames
+for rate 0xa0, 32 for 0x80, 16 for the strike's 0x100 -- and the commonest
+step of a creature closing in is **48** a frame, of one wandering **32**, for
+record speeds of 24 and 16. `fixed_madd` (`0x80017158`) is a linear
+interpolation, `a + ((b - a) * t >> 12)`, not the multiply-accumulate an
+earlier note took it for.
+
+**A blow knocks the player back.** `apply_damage` (`0x8002a6f4`) turns the
+damage into a push away from the attacker -- `min(damage * 4096 / HP max,
+0x3b6) >> 2`, at least 0x50, at most 0x1c2 -- and `0x80030908` puts the player
+in state 0x10 with it as `player_velocity`; the controller's arm for 0x10
+walks as usual and then runs `player_move`, which spends the push against the
+ground. That is the recording's six unexplained frames: a push falling by
+about 0x20 a frame. `emu/bp16.lua` logs `player_velocity` now as `pv=`.
+
 ### What a death does, and what is remembered
 
 The death branch of `actor_tick`, at `0x80052b7c`, also goes by category:
