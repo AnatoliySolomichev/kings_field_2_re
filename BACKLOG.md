@@ -383,10 +383,11 @@ What is left of movement:
    `player_horizontal` slides along a rectangle or pushes out round anything
    else, the creature first (FORMATS.md, "Objects in the way"). 447 of the 455
    recorded frames that touch an object come out exact. The creatures have
-   only made steps behind them: `emu/bp16.lua` logs them as `act=` now, and
-   the 60 frames the recording could not explain are what a new recording near
-   creatures would settle. Not modelled: `+0xe == 3` (the port has no such
-   state) and the follower's `+0x22` test.
+   a recording behind them too: the first `bp16` session with `act=` ran into a
+   logged creature on 76 frames, 76 of them exact. Not modelled: `+0xe == 3`
+   (the port has no such state) and the follower's `+0x22` test. What moves
+   the creatures -- the emulator's walk away and stand elsewhere, the port's
+   stay home -- is the AI, and a blow's knock-back is in there too.
 4. **The door shoves the player — found.** The X writes `emu/bp15.lua` caught
    at `0x800482e4` are the swinging door (opcode 1, `0x8004814c`): while it
    opens and the player is in its sweep it adds (0, 0, -0x4c) turned by its

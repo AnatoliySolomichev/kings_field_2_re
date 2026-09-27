@@ -1862,9 +1862,14 @@ creature's centre at its radius + `0x370`.
 `game_main` runs `object_interpreter`, then `player_controller`, then
 `actor_tick_driver`, so the player collides with the creatures where the last
 frame left them -- which is where `emu/bp16.lua` now logs them (`act=`), at the
-start of the controller. No recording has them yet; `godot/player.gd` asks
-`actors.gd`'s awake ones, and the self-test holds it to the Python on 384 steps
-made into level 0's creatures from eight sides each, all of them turned.
+start of the controller. **Checked on a recording**: the first session with
+`act=` -- 1 293 frames of level 0 among its creatures -- ran into a logged
+creature on 76 frames, and all 76 come out exact, going round it with the
+creature's radius. `godot/player.gd` asks `actors.gd`'s awake ones, and the
+self-test holds it to the Python on 384 steps made into level 0's creatures
+from eight sides each. The same session's six frames that differ are one
+knock-back, a push of 224, 193, 162, 131, 100 and 66 in one direction with no
+creature in reach -- a blow, which is the creatures' own code.
 
 ### How long a frame lasts: four vertical blanks
 

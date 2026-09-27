@@ -46,11 +46,13 @@ three heaps rather than one total:
   restamps the grid when it has -- neither of which a recording of the player
   alone can replay;
 * **a wall**: the model turned the step away and the game did not;
-* **the rest**, where the model took the step whole: creatures, which collide
-  with the player (`collide_query` bit 0x10) and knock it back. `emu/bp16.lua`
-  logs the awake ones near the player as `act=` since 2026-09-26, and a log
-  that has them puts them in the player's way (`movement.actor_spot_taken`);
-  the recording this was measured on is older and has none.
+* **the rest**, where the model took the step whole: a creature the log did
+  not hold -- `emu/bp16.lua` logs the awake ones near the player as `act=`
+  since 2026-09-26 -- or a creature's blow, which knocks the player back
+  through the creature's own code. In the first session with `act=`, 76 of 76
+  frames that ran into a logged creature came out exact, and the six that did
+  not are one knock-back: a push of 224, 193, 162, 131, 100 and 66 in one
+  direction, falling about 31 a frame, with creature 33 two thousand away.
 """
 import collections
 import os
@@ -197,12 +199,33 @@ def doors(lv):
     return [r for r in objload.Load(lv).recs.values() if r["op"] == 1]
 
 
+def touches_creature(lvl, r, nxt):
+    """Does either of the frame's two steps run into a logged creature?"""
+    if not r.get("act"):
+        return False
+    fd, sd = movement.step_distances(nxt["stf"], nxt["fwd"])
+    p = r["p"]
+    for ang, dist in (((nxt["ang"] + 0x400) & 0xFFF, fd), (nxt["ang"] & 0xFFF, sd)):
+        tx = p[0] + ((movement.game_cos(ang) * dist) >> 12)
+        tz = p[2] + ((movement.game_sin(ang) * dist) >> 12)
+        ex = {}
+        movement.query_all(lvl, tx, p[1], tz, extra=ex, actors=r["act"])
+        if ex.get(0x801E648C) is not None:
+            return True
+    return False
+
+
+TOUCH = collections.Counter()      # (rung, exact?) over the frames that touch one
+
+
 def check(lvl, run, rung, objs=()):
     """Locked and free, over one continuous run. Returns a line of numbers."""
     locked = bad = walled = objected = 0
     cells = collections.Counter()
     for r, nxt in zip(run, run[1:]):
         got = frame(lvl, r, nxt, rung)
+        if rung == 2 and touches_creature(lvl, r, nxt):
+            TOUCH[got == nxt["p"]] += 1
         if got == nxt["p"]:
             locked += 1
             continue
@@ -375,7 +398,10 @@ def report(path="out/lua_bp16.log"):
             print(f"     of the {tb} that differ, {to} are within reach of a "
                   f"swinging door, {tw} the model turned away at a wall"
                   + ("" if rest <= 0 else f" and {rest} it took whole "
-                     "(creatures, which the log does not hold)"))
+                     "(a creature's blow, or a creature the log did not hold)"))
+        if rung == 2 and TOUCH:
+            print(f"     {TOUCH[True]} of {TOUCH[True] + TOUCH[False]} frames that "
+                  f"run into a logged creature come out exact")
             for (cx, cz), n in cells.most_common(3):
                 print(f"     cell ({cx},{cz}) {n}x")
 
