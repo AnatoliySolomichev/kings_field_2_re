@@ -584,6 +584,15 @@ python3 tools/hud.py              the sprites, then the check
 python3 tools/hud.py --check      520 of 520 fields over 13 snapshots
 ```
 
+**`ai.py`** — what a creature does: the kinds' behaviour lists as
+`entity_table_init` relocates them, the behaviour records, and (as it grows)
+the machine that picks and runs them.
+
+```
+python3 tools/ai.py 0             a level's kinds and their behaviours' opcodes
+python3 tools/ai.py --check       168 896 of 168 896 bytes, 69 of 69 actors
+```
+
 **`compass.py`** — the ball in the top-right corner: its records, the model
 (`modelbank.load(0)`, entry 97 block 9), the library's `RotMatrix` with its own
 table, the spring that swings it, and `compass.json` with the page for the

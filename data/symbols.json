@@ -417,7 +417,7 @@
  "0x8018daa8": {
   "name": "entity_scripts",
   "kind": "data",
-  "evidence": "entity_table + 0x12c0, the base entity_table_init adds to each of a record's sixteen block offsets"
+  "evidence": "the kinds' behaviour records, right after the forty entity records; a kind's +0x38 lists up to 16 of them, relocated from offsets by entity_table_init. tools/ai.py"
  },
  "0x8005ea64": {
   "name": "reset_story_flags",
@@ -2422,5 +2422,45 @@
   "name": "angle_diff",
   "kind": "code",
   "evidence": "(a, b): (b - a) & 0xfff, less 0x1000 above 0x800 -- the signed turn from a to b. render_frame's compass spring asks it"
+ },
+ "0x8004c01c": {
+  "name": "actor_choose",
+  "kind": "code",
+  "evidence": "measures the distance from the current actor to the player (vec_length_2d) and hands it to actor_pick; actor_tick_driver runs it for each slot one frame in four, and actor_finish when a behaviour ends"
+ },
+ "0x8004bf1c": {
+  "name": "actor_pick",
+  "kind": "code",
+  "evidence": "(distance): unless the phase +0xf is 0 or 0xf0, scores each of the kind's up to 16 behaviours (entity +0x38) with actor_behaviour, keeps the best above -2, and switches to it through actor_switch if it is another or the running one is done (+0xf 0xff)"
+ },
+ "0x8004b94c": {
+  "name": "actor_switch",
+  "kind": "code",
+  "evidence": "(actor, record): +0x10 = +0xe, then +0x60 = record, +0xe = its opcode, +0xf = 0; with no record +0x60 = 0 and +0xe, +0xf = 0xff"
+ },
+ "0x8004db3c": {
+  "name": "actor_clock",
+  "kind": "code",
+  "evidence": "(actor, rate): the animation clock +0x18 += rate, clamped to 0..0xfff, |rate| kept at +0x66"
+ },
+ "0x8004db98": {
+  "name": "actor_clock_passed",
+  "kind": "code",
+  "evidence": "(actor, t): whether this frame's clock step crossed t: t < +0x18 and t >= +0x18 - +0x66"
+ },
+ "0x8004c130": {
+  "name": "actor_start_anim",
+  "kind": "code",
+  "evidence": "(anim): the current actor's +0xc = anim (plus 2 in one case of 0x80199150/0x80199148), its clock +0x18 = 0; 0xff does nothing"
+ },
+ "0x8004c104": {
+  "name": "actor_finish",
+  "kind": "code",
+  "evidence": "the running behaviour is done: +0xf = 0xff, then actor_choose"
+ },
+ "0x80050010": {
+  "name": "actor_step_sound",
+  "kind": "code",
+  "evidence": "plays the running behaviour's sound, record +4 plus 0xf0, at the actor's position"
  }
 }

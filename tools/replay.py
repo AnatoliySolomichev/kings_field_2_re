@@ -118,10 +118,16 @@ def actors_of(field):
     for item in field.split(","):
         if not item:
             continue
-        k, x, y, z, r, h, fl, b0e, lift = item.split(":")
-        out.append({"slot": int(k), "pos": (int(x), int(y), int(z)),
-                    "radius": int(r), "height": int(h), "flags": int(fl, 16),
-                    "b0e": int(b0e), "lift": int(lift)})
+        f = item.split(":")
+        k, x, y, z, r, h, fl, b0e, lift = f[:9]
+        a = {"slot": int(k), "pos": (int(x), int(y), int(z)),
+             "radius": int(r), "height": int(h), "flags": int(fl, 16),
+             "b0e": int(b0e), "lift": int(lift)}
+        if len(f) >= 17:                     # the fields bp16 adds since 2026-09-28
+            a.update({"phase": int(f[9]), "clock": int(f[10]), "yaw": int(f[11]),
+                      "vel": (int(f[12]), int(f[13])), "beh": int(f[14], 16),
+                      "flee": int(f[15]), "turn": int(f[16])})
+        out.append(a)
     return out
 
 

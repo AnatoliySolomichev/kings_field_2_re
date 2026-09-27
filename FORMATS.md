@@ -4355,6 +4355,45 @@ creature's yaw comes from `+0x20`" holds only when bit 0 of its flags is set:
 otherwise `actor_wake` writes `rand() >> 3` over it, so most of level 0's
 monsters face a new random direction every time they wake.
 
+### What an awake creature does: its kind's behaviours
+
+`FDAT.T` entry `3n + 1`'s link 0 is `block_copy`'d to `entity_table`: forty
+120-byte records -- a creature's **kind** -- and after them, at
+`entity_scripts` (`0x8018daa8`), the kinds' **behaviour records**. A kind lists
+up to sixteen at +0x38, on the disc as offsets into that area with 0xffffffff
+for none; `entity_table_init` (`0x80053084`) walks the kinds to the first whose
++0 is 0xff and makes each offset an address, each 0xffffffff a 0. Level 0 uses
+16 kinds; its two monster kinds, models 50 and 51, list the same seven
+behaviours, opcodes 6, 0, 5, 1, 4, 2, 3, and the townspeople 0x70, 0, 2, 3.
+
+A behaviour record opens with its opcode -- which arm of `actor_tick` runs it
+-- then the animation it starts (+1), a base score (+2), a sound (+4), the
+rate of its animation clock (+8) and the opcode's own parameters. An awake
+actor holds the running one at +0x60, its opcode at +0xe and a phase at +0xf:
+0 just switched in, 0xf0 running, 0xff done. `actor_choose` (`0x8004c01c`),
+run for each slot one frame in four by `actor_tick_driver` and again when a
+behaviour ends (`actor_finish`, `0x8004c104`), measures the distance to the
+player and hands it to `actor_pick` (`0x8004bf1c`), which -- unless the phase
+is 0 or 0xf0 -- scores every behaviour of the kind through `actor_behaviour`
+(`0x8004b984`, a 133-arm switch on the opcode), keeps the best above -2, and
+switches to it through `actor_switch` (`0x8004b94c`) if it is another, or the
+running one is done: +0x10 = the old opcode, +0x60 = the record, +0xe its
+opcode, +0xf = 0. The animation clock is +0x18, 0 to 0xfff: `actor_clock`
+(`0x8004db3c`) adds the rate and keeps its size at +0x66, `actor_clock_passed`
+(`0x8004db98`) says whether a time was crossed this frame, and
+`actor_start_anim` (`0x8004c130`) sets the animation at +0xc and the clock to 0.
+
+Moving is a velocity at +0x50 and +0x54 eased towards a target, a turn of the
+yaw at +0x42, and `actor_move_horizontal`; opcode 5 walks towards the player or
+away by a flag at +0x70, which it sets from the distance against the
+record's +0x14 and +0x16 -- the monsters that back off in the emulator.
+
+**Checked**: rebuilt from the disc, the kinds and their behaviour area match
+**168 896 of 168 896** bytes over 13 snapshots, and **69 of 69** awake actors
+run one of their kind's behaviours with its opcode at +0xe (`tools/ai.py`).
+`emu/bp16.lua` now logs each awake creature's phase, clock, yaw, velocity,
+behaviour and flags, for stepping one frame at a time against the game.
+
 ### What a death does, and what is remembered
 
 The death branch of `actor_tick`, at `0x80052b7c`, also goes by category:
