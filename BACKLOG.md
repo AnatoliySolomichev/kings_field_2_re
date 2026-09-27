@@ -506,8 +506,10 @@ it would open:
   behind them; 11 of the 12 class-0 doors carry lock byte `0x8c`, a key.
 * **keys and messages**: a lock byte other than 0xff, 0xfd or 0xfe is either an
   item `use_item` takes or an `announce` code, and neither is in the port.
-* **a frame-by-frame check**: `emu/bp24.lua` logs the door arm's state, counter
-  and yaw and the doorway's shapes; nothing has been recorded with it yet.
+* **a frame-by-frame check -- done**: `emu/bp24.lua` recorded two cycles of the
+  door at (41,10) and `tools/doors.py` reproduces 226 of 226 steps. What it
+  cannot see is the shove, which moves the player in the same frame the player
+  moves itself; a `bp16` session opening a door would hold that.
 
 Reported from play: some walls hide lift-up doors that open when pressed. Doors
 in general are objects (see item 2), and the object record carries an

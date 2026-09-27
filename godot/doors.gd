@@ -31,8 +31,10 @@ extends Node
 # Two snapshots bear it out: door1 holds the door of slot 114 closed after a full
 # cycle -- state 0, counter 0x14d, the doorway's shape 46 -- and door2 the same
 # door open -- state 2, counter 0x121, yaw a quarter turn on, shape 64 in both
-# cells of the doorway. No recording has followed a door frame by frame yet;
-# emu/bp24.lua is the one to run.
+# cells of the doorway. And a recording follows it frame by frame: emu/bp24.lua
+# caught two full cycles of that door, once waiting at 0x12c while the player
+# stood in the doorway, and tools/doors.py -- the same arm in Python -- steps
+# 226 of 226 of its frames to the game's state, counter, yaw and doorway.
 #
 # "Anything stands in the doorway" is collide_query(point, door y, 0x5dc, the
 # door's height, 0xc0): the cell's occupancy count must be non-zero -- the door
@@ -41,7 +43,7 @@ extends Node
 # in_range(player, point, 0x5dc + 0x320, 0x6a4, the door's height). Only the
 # player is asked here: the port's creatures stand at home. And a stamp here
 # changes the collision, not the drawn tile.
-# @orig game:0x80047010 object_interpreter  status:partial -- opcode 1's arm at 0x8004814c: the swing, the stamps and the wait, against two snapshots' end states
+# @orig game:0x80047010 object_interpreter  status:partial -- opcode 1's arm at 0x8004814c: the swing, the stamps and the wait, 226 of 226 recorded steps (tools/doors.py)
 
 const TICK_HZ := 15.0              # frame_limit; see player.gd
 const OPENING := 0x20

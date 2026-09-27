@@ -2469,8 +2469,17 @@ and nine frames into the wait. The port, started from door1's player position
 and facing, opens exactly that door, reaches shape 64 at counter `0x18` and
 yaw `0x400` at `0x1f`, and -- once the player walks clear -- comes back to
 state 0, counter `0x14d` and shape 46. Every field it keeps agrees with both
-snapshots. No recording has followed a door frame by frame; `emu/bp24.lua` is
-the instrument for it.
+snapshots. **And a recording**: `emu/bp24.lua` stops at the arm's head each
+frame, and caught two full cycles of that door -- the first waiting at `0x12c`
+for 41 frames while the player stood in the doorway, the second walking clear.
+`tools/doors.py`, the arm in Python, replays it locked: from each logged door
+and the player position the arm saw (`object_interpreter` runs before
+`player_controller`), one step, against the next line -- **226 of 226** steps
+give the game's state, counter, yaw and the two doorway shapes, the wait
+included. The two openings are `object_interact` on USE, not the arm. The
+record's `+0xe` the log carries is the arm's other write: while the door is
+drawn (+3 bit 0x80) it holds -0x30 or 0xf0 by which side of the door the player
+is on, and `render_walk` hands it to `draw_model_plain`.
 
 ### What makes an object solid — found
 

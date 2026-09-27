@@ -135,6 +135,7 @@ the object loader, against 13 snapshots                angles 4344/4352, scale a
 the lighting table, against every snapshot             89 856 of 89 856 bytes
 the panel's sprite table, against every snapshot       520 of 520 fields
 the compass's records, against every snapshot          65 of 65 fields
+the swinging door, against the bp24 recording          226 of 226 steps
 the walking, against the recording (replay rung 2)     118 288 of 118 500 frames;
                                                        447 of the 455 that touch
                                                        an object
@@ -331,12 +332,12 @@ with an `f1` guard or an `f9` taken, and one whose header `+0x12` is not
 What would also help, and needs no new script: `bp20.lua` again with the five
 damage types it does not print added to the `HURT in` line.
 
-**8. Swinging doors -- in the port, and one session from checked.**
-`godot/doors.gd` runs opcode 1's arm (FORMATS.md, "A door that swings") and
-agrees with the door1 and door2 snapshots' end states. Ask for a session with
-`emu/bp24.lua`: open the door at (41,10) on level 0, once standing in the
-doorway until it gives up waiting, once walking clear; then compare its
-per-frame log with the port. The other door classes are BACKLOG.md item 5c.
+**8. Swinging doors -- in the port, and checked.** `godot/doors.gd` runs
+opcode 1's arm (FORMATS.md, "A door that swings"), and `tools/doors.py`, the
+same arm in Python, steps 226 of 226 frames of the `emu/bp24.lua` recording --
+two cycles of the door at (41,10), one of them waiting on a player in the
+doorway -- to the game's state, counter, yaw and doorway shapes. The other
+door classes are BACKLOG.md item 5c.
 
 **9. Everything else in BACKLOG.md**, which is ordered roughly by what it
 unblocks.

@@ -133,6 +133,9 @@ def main(quick=False, only_check=False):
     run(["tools/hud.py", "--check"],
         "the panel's sprite table, against every snapshot's RAM",
         keep=["fields of the live sprite table"])
+    run(["tools/doors.py", "--check"],
+        "the swinging door, against what was played",
+        keep=["steps of a moving door"])
     run(["tools/compass.py", "--check"],
         "the compass's records, against every snapshot's RAM",
         keep=["switches, pitches"])
