@@ -453,12 +453,14 @@ does to a creature.
 ```
 python3 tools/weapon.py             every weapon's swing, and the check
 python3 tools/weapon.py 0 0         weapon 0 against level 0's kind 0
+python3 tools/weapon.py --log       the bp25 recording, frame by frame
 ```
 
 `held_item_tick`'s clock and meter, the probe `vec_rotate` walks, the damage
 `actor_take_hit` makes (`((sum * strength / 5000) + 0x80) >> 4`), the flinch,
-the death and the push. Checked: **69 of 69** awake creatures carry their
-kind's HP; the swing waits on `emu/bp25.lua`.
+the death and the push, and the USE button's drain. Checked: **69 of 69**
+awake creatures carry their kind's HP; against `emu/bp25.lua` **817 of 817**
+weapon frames and **11 of 11** blows (`--log` for the detail).
 
 **`player.py`** — the player's stat block, from a snapshot or from the emulator.
 

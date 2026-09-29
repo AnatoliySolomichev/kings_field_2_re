@@ -147,6 +147,8 @@ the walking, against the recording (replay rung 2)     124 891 of 125 116 frames
 the knock-back, against the bp16 recording             83 of 83 frames, 3 of 3
                                                        lengths and landings
 the creatures' HP, against 13 snapshots                69 of 69
+the player's weapon, against the bp25 recording        817 of 817 frames,
+                                                       11 of 11 blows
 the creatures' fences, against the bp16 act= log       5006 of 5006 positions
 the creatures' animation, against the actor caches     11 of 11
 the video memory, against every snapshot               2 994 944 of 2 998 544;

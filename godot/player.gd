@@ -198,6 +198,12 @@ var strong_hits := 0
 var death_frames := 0
 var fade := 0
 var inventory = null
+# The USE button held (player_turn, 0x8003002c): both meters drain, and
+# damage_scale (0x801b24f8), the K the stat's share of the defence is scaled
+# by in damage_of_type, falls; the magic meter's pause is 0x801b24f4.
+var damage_k := 0x1000
+var magic_pause := 0
+var use_prev := false
 # The creatures in the way this frame, as [x, y, z, radius, height, flags]:
 # actors.gd's awake ones, taken before the step because the game moves the
 # player before actor_tick_driver.
@@ -379,6 +385,7 @@ func _tick(dir: Vector3) -> void:
 		attack_latch = false
 		_weapon()
 		return
+	_use()
 	# player_turn (0x80030424): a swing begins on the attack button's edge
 	# when the pause after the last blow is over (0x8002c040).
 	if attack_latch and int(wstate["pause"]) == 0 and not KFWeapon.records.is_empty():
@@ -427,6 +434,43 @@ func _tick(dir: Vector3) -> void:
 	_bob(coll.isqrt(fd * fd + sd * sd))
 	_view()
 	_weapon()
+
+
+# player_turn's middle (0x80030010): the USE button held this frame and the
+# last takes 500 from each meter and sets each pause to 1 -- 60 when a meter
+# empties -- and lowers damage_scale by 0x80 to 0x400; otherwise the magic
+# meter's pause counts down, or it refills by meter_gain(the five working
+# skills' average, 0) a frame, and damage_scale climbs back by 0x80 to 0x1000.
+# tools/weapon.py use_held: with the swing, 817 of 817 frames of bp25.
+# @orig game:0x80030010  status:transcribed -- a label inside player_turn; the rings (0x4d, 0x4f) and a spell's rate are not here
+func _use() -> void:
+	var now := KFPad.held(KFPad.USE)
+	if now and use_prev:
+		wstate["pause"] = 1
+		var m := coll._s16(int(wstate["meter"]) - 0x1F4)
+		if m <= 0:
+			wstate["meter"] = 0
+			wstate["pause"] = 0x3C
+		else:
+			wstate["meter"] = m
+		magic_pause = 1
+		var mm := coll._s16(magic_meter - 0x1F4)
+		if mm <= 0:
+			magic_meter = 0
+			magic_pause = 0x3C
+		else:
+			magic_meter = mm
+		damage_k = maxi(damage_k - 0x80, 0x400)
+		weapon_meter = int(wstate["meter"])
+	else:
+		if magic_pause > 0:
+			magic_pause -= 1
+		else:
+			var g: Array = character.get("grow", [0, 0, 0, 0, 10])
+			var avg := (int(g[0]) + int(g[1]) + int(g[2]) + int(g[3]) + int(g[4])) / 5
+			magic_meter = mini(magic_meter + KFWeapon.gain(avg, 0), 5000)
+		damage_k = mini(damage_k + 0x80, 0x1000)
+	use_prev = now
 
 
 # held_item_tick (0x8002d2a0), last in the controller (0x80032150): the swing,
@@ -498,7 +542,7 @@ static func fall_damage(v: int) -> int:
 # @orig game:0x8002ab18 player_take_hit  status:partial -- the damage and apply_damage; not the effects, nor the armour and rings that cut the attack
 func take_blow(a: Dictionary, rec: Array) -> void:
 	var attacks := [_u16(rec, 0x12), _u16(rec, 0x14), _u16(rec, 0x16)]
-	var dmg := int(KFDamage.hit(attacks, defence, stat)["damage"])
+	var dmg := int(KFDamage.hit(attacks, defence, stat, damage_k)["damage"])
 	var at := Vector3i(int(a["px"]), int(a["py"]) - (int(rec[0xF]) << 5),
 		int(a["pz"]))
 	_apply_damage(dmg, true, at, int(rec[0x11]))
@@ -688,7 +732,9 @@ func _dying() -> void:
 		inventory.take_item(REVIVE_ITEM)
 		respawn = [REVIVE_POS.x, REVIVE_POS.y, REVIVE_POS.z, REVIVE_FACING]
 	else:
-		respawn = []                # a new character, where a new game starts
+		# a new character (0x8002b468), where it puts a new game: bp25's session
+		# began at (0x1f000, -0x3c00, 0x4000) too
+		respawn = [0x1F000, -0x3C00, 0x4000, 0]
 		var an := get_node_or_null("../Actors")
 		if an:
 			an.saved.clear()        # the story flags and the levels' records

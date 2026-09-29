@@ -98,4 +98,6 @@ static func fresh() -> Dictionary:
 	var r: Dictionary = levels[0] if not levels.is_empty() else {}
 	return {"exp": 0, "exp_next": int(r.get("next", 50)), "level": 1,
 		"hp_max": int(r.get("hp", 50)), "mp_max": int(r.get("mp", 30)),
-		"stat36": int(r.get("gain", 20)), "grow": [10, 10, 10, 10, 10]}
+		# new_character (0x8002b468): the five from the table's +6, which is
+		# zero, and 10 more on the fifth -- [0, 0, 0, 0, 10] in every snapshot
+		"stat36": int(r.get("gain", 20)), "grow": [0, 0, 0, 0, 10]}

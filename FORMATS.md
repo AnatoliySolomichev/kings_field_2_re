@@ -4638,9 +4638,23 @@ point 0x3e8 above the feet: `isqrt(isqrt(dmg << 11)) << 10`, over the weight,
 the creature goes into vertical state 0x10 -- a hop, which the shared tail's
 `brake(accel << 1, 0xa)` carries while it is off the ground.
 
-**Not recorded yet**: `emu/bp25.lua` logs the swing, every `actor_take_hit`
-with its arguments and the creature before and after, and `award_exp`. The
-self-test holds `weapon.gd` to the Python on 2336 cases.
+**Checked against the recording** `emu/bp25.lua` made -- swings at the air and
+at creatures from the front and the side: **817 of 817** frames of the weapon
+come out of the frame before (the clock, the meter, the pause, the hit and
+sound times, the strength); **11 of 11** blows leave the HP, the flinch or not
+(kind 1's opcode-2 record: 65 or more, always), the push and the vertical
+state the model gives, at strengths from 214 to 5000 -- 10, 13, 28, 53 and 67
+of damage; the probe from where the player stood reaches the creature on all
+11; both kills give 11 experience. Two frames first came out wrong and named
+the missing piece: **the USE button held** (`player_turn`, `0x80030010`) --
+both meters 500 down a frame, their pauses 1 (60 when one empties), and
+`damage_scale` (`0x801b24f8`, the K by which `damage_of_type` scales the
+stat's share of the defence) 0x80 down to 0x400; let go, the magic meter
+refills after its pause by `meter_gain(the five working skills' average, 0)`
+and K climbs back to 0x1000. A new character's skills are [0, 0, 0, 0, 10]
+(`new_character`: the table's +6, zero, and 10 more on the fifth), as every
+snapshot has them. The self-test holds `weapon.gd` to the Python on 2336
+cases.
 
 ### The player's death
 

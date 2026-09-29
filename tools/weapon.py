@@ -77,11 +77,27 @@ hop, which `actor_move_vertical` lands.
 sub-state at +0x70 -- 0 sets the tint, 1 until the clock passes 0x7ff, 2
 until 0xfff, 3 `actor_finish`.
 
+## The USE button held
+
+`player_turn` (`0x80030010`): held this frame and the last, both meters lose
+500 and their pauses (`0x801b24f3`, `0x801b24f4`) go to 1 -- 60 when a meter
+empties -- and `damage_scale` (`0x801b24f8`, the K by which `damage_of_type`
+scales the stat's share of the defence) falls by 0x80 to 0x400. Otherwise the
+magic meter refills after its pause by `meter_gain(the five working skills'
+average, 0)` and K climbs back by 0x80 to 0x1000. A press alone is
+`object_interact`, in `0x800305d8`.
+
 ## Checked
 
-What a snapshot can say: **66 of 66** awake creatures in 14 snapshots carry
-their kind's +0x1a as their HP, which is `actor_copy_kind`'s field. The swing
-itself has no recording yet -- `emu/bp25.lua` makes one.
+**69 of 69** awake creatures in 13 snapshots carry their kind's +0x1a as
+their HP, which is `actor_copy_kind`'s field. And against `emu/bp25.lua`'s
+recording -- a player swinging at the air and at creatures from the front and
+the side: **817 of 817** frames of the weapon (clock, meter, pause, hit and
+sound times, strength) from the frame before, the USE button's drain
+included; **11 of 11** blows land with the HP, the flinch or not, and the
+push and vertical state the model gives, from strengths of 214 to 5000; the
+probe reaches the creature from where the player stood on all 11; and both
+kills give the kind's experience.
 """
 import os
 import struct
@@ -432,6 +448,173 @@ def check(out=sys.stdout):
     return ok == n
 
 
+ATTACK_BIT = 0x0080          # SQUARE: bind_attack in the session's scheme
+USE_BIT = 0x0040             # CROSS: its bind_use
+DRAIN = 0x1F4                # 0x8003006c: 0xfe0c added, a frame
+SPENT = 0x3C                 # the pause when it empties
+K_FULL, K_LOW, K_STEP = 0x1000, 0x400, 0x80
+
+
+def use_held(w, ring_b=0xFF):
+    """player_turn with the USE button held this frame and the last
+    (0x8003002c): the weapon meter and the magic meter each 500 down, their
+    pauses (0x801b24f3, 0x801b24f4) 1 -- 60 when one empties, but for the
+    rings 0x4d and 0x4f -- and damage_scale (0x801b24f8, the K in
+    damage_of_type) 0x80 down to 0x400. Let go, K climbs back 0x80 a frame to
+    0x1000 (0x80030264)."""
+    empty = 0 if ring_b in (0x4D, 0x4F) else SPENT
+    w["pause"] = 1
+    m = s16(w["meter"] - DRAIN)
+    if m <= 0:
+        w["meter"], w["pause"] = 0, (1 if ring_b in (0x4D, 0x4F) else SPENT)
+    else:
+        w["meter"] = m
+    if "magic" in w:
+        w["mpause"] = 1
+        m = s16(w["magic"] - DRAIN)
+        w["magic"], w["mpause"] = ((0, empty) if m <= 0 else (m, 1))
+    w["k"] = max(s16(w.get("k", K_FULL) - K_STEP), K_LOW)
+
+
+def use_released(w):
+    w["k"] = min(w.get("k", K_FULL) + K_STEP, K_FULL)
+SWING_LINE = None
+
+
+def load_log(path=None):
+    """out/lua_bp25.log: [('SWING', dict)], ('HIT', dict, out), ('EXP', n)."""
+    import re
+    path = path or os.path.join(ROOT, "out", "lua_bp25.log")
+    if not os.path.exists(path):
+        return []
+    rows = []
+    for line in open(path):
+        tag = line.split(" ", 1)[0]
+        kv = dict(re.findall(r"(\w+)=(\S+)", line))
+        if tag == "SWING":
+            rows.append(("SWING", {k: (int(v, 16) if k == "btn" else
+                                       [int(x) for x in v.split(",")] if "," in v
+                                       else int(v)) for k, v in kv.items()}))
+        elif tag == "HIT":
+            d = {}
+            for k, v in kv.items():
+                if k == "flags":
+                    d[k] = int(v, 16)
+                elif k == "point":
+                    d[k] = None if v == "none" else [int(x) for x in v.split(",")]
+                elif "," in v:
+                    d[k] = [int(x) for x in v.split(",")]
+                else:
+                    d[k] = int(v)
+            rows.append(("HIT", d))
+        elif tag == "HITOUT":
+            rows.append(("HITOUT", {k: ([int(x) for x in v.split(",")] if "," in v
+                                        else int(v)) for k, v in kv.items()}))
+        elif tag == "EXP":
+            rows.append(("EXP", int(kv["a0"])))
+    return rows
+
+
+def check_log(out=sys.stdout, verbose=False):
+    """emu/bp25.lua's recording: the swing frame by frame, and every blow."""
+    import ai
+    rows = load_log()
+    if not rows:
+        print("  no out/lua_bp25.log: ./emu/run.sh debug bp25.lua, and fight",
+              file=out)
+        return True
+    recs = records()
+    # the swing, locked: each frame from the one before
+    sw = [r[1] for r in rows if r[0] == "SWING"]
+    ok = n = 0
+    for a, b in zip(sw, sw[1:]):
+        if b["vb"] - a["vb"] != 4 or a["wpn"] != b["wpn"]:
+            continue
+        rec = recs[a["wpn"]]
+        w = {"clock": a["clock"], "meter": a["meter"], "pause": a["pause"],
+             "hit": a["hit"], "sound": a["snd"], "strength": a["str"]}
+        if w["clock"] == -1:
+            refill(w, rec, 20, bool(a["btn"] & ATTACK_BIT))
+        else:
+            swing(w, rec)
+        if b["btn"] & USE_BIT and a["btn"] & USE_BIT:
+            use_held(w)
+        if (b["btn"] & ATTACK_BIT and not a["btn"] & ATTACK_BIT
+                and w["pause"] == 0):
+            start(w, rec)
+        n += 1
+        got = (w["clock"], w["meter"], w["pause"], w["hit"], w["sound"],
+               w["strength"])
+        want = (b["clock"], b["meter"], b["pause"], b["hit"], b["snd"], b["str"])
+        if got == want:
+            ok += 1
+        elif verbose:
+            print(f"  vb {a['vb']}: model {got}, game {want}", file=out)
+    print(f"  {ok} of {n} frames of the weapon -- clock, meter, pause, hit and "
+          f"sound times, strength -- from the frame before", file=out)
+    good = ok == n
+    # the blows: the damage, the flinch, the push, the experience, the reach
+    blob = ai.entity_blob(0)
+    kinds = {k["kind"]: k for k in ai.kinds(0)}
+    by_vb = {r["vb"]: r for r in sw}
+    dm = fl = pu = ex = tg = hits = kills = 0
+    exps = [r[1] for r in rows if r[0] == "EXP"]
+    ei = 0
+    for i, r in enumerate(rows):
+        if r[0] != "HIT":
+            continue
+        h = r[1]
+        after = next((x[1] for x in rows[i + 1:i + 4] if x[0] == "HITOUT"), None)
+        if after is None:
+            continue
+        hits += 1
+        e = blob[h["kind"] * 120:(h["kind"] + 1) * 120]
+        dfn = [u16(e, 0x20 + 2 * j) for j in range(8)]
+        dmg = creature_damage(h["stat"], h["att"], dfn, h["str"])
+        kd = kinds[h["kind"]]
+        a = {"op": h["op"], "sub": h["sub"], "clock": 0, "hp": h["hp"],
+             "x": h["pos"][0], "y": h["pos"][1], "z": h["pos"][2],
+             "height": u16(e, 0x14), "vx": 0, "vy": 0, "vz": 0, "vst": 0,
+             "rec": None, "phase": 0, "prev": 0}
+        kind = dict(ai.kind_of(0, h["kind"]), behaviours=kd["behaviours"])
+        exp, _strong = take_hit(a, kind, dmg, h["str"], h["point"],
+                                lambda: 0)
+        dm += a["hp"] == after["hp"]
+        fl += a["op"] == after["op"]
+        pu += (a["vx"], a["vy"], a["vz"]) == tuple(after["vel"]) and \
+            a["vst"] == after["vst"]
+        if a["hp"] == 0:
+            kills += 1
+            ex += ei < len(exps) and exps[ei] == exp
+            ei += 1
+        # the reach: the probe from where the player stood that frame
+        p = by_vb.get(h["vb"])
+        if p is not None:
+            one = [{"pos": tuple(h["pos"]), "radius": u16(e, 0x12),
+                    "height": u16(e, 0x14), "flags": 0, "b0e": h["op"],
+                    "yaw": h["yaw"], "kind": h["kind"]}]
+            got = target(p["pos"], p["pitch"], p["facing"], p["view"], one,
+                         {h["kind"]: (s16f(e, 0x16), s16f(e, 0x18))},
+                         u16(recs[p["wpn"]], 0x1A))
+            tg += got is not None
+        elif verbose:
+            print(f"  hit at vb {h['vb']}: no swing line", file=out)
+        if verbose and (a["hp"] != after["hp"] or a["op"] != after["op"]):
+            print(f"  hit vb {h['vb']}: model hp {a['hp']} op {a['op']}, game "
+                  f"{after['hp']} {after['op']}", file=out)
+    print(f"  {hits} blows landed: the HP after {dm} of {hits}, the opcode after "
+          f"(a flinch or not) {fl} of {hits}, the push and vertical state "
+          f"{pu} of {hits}, the probe reaching the creature from where the "
+          f"player stood {tg} of {hits}; {ex} of {kills} kills gave the "
+          f"kind's experience", file=out)
+    good &= dm == fl == pu == tg == hits and ex == kills
+    return good
+
+
+def s16f(raw, o):
+    return struct.unpack_from("<h", raw, o)[0]
+
+
 def table(out=sys.stdout):
     import equip
     names = equip.item_names()
@@ -449,7 +632,9 @@ def table(out=sys.stdout):
 if __name__ == "__main__":
     a = sys.argv[1:]
     if a and a[0] == "--check":
-        sys.exit(0 if check() else 1)
+        sys.exit(0 if (check() and check_log()) else 1)
+    if a and a[0] == "--log":
+        sys.exit(0 if check_log(verbose=True) else 1)
     if len(a) == 2:
         import ai
         w = records()[int(a[0])]
