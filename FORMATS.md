@@ -4642,6 +4642,26 @@ the creature goes into vertical state 0x10 -- a hop, which the shared tail's
 with its arguments and the creature before and after, and `award_exp`. The
 self-test holds `weapon.gd` to the Python on 2336 cases.
 
+### The player's death
+
+`apply_damage` that leaves no HP calls `player_throw` (`0x80030a6c`) with the
+blow's push: player state 0x11, the push as the velocity, the view's pitch
+tilt still, the count at `0x801b261e` from 0. The controller's arm for 0x11
+(`0x80031c54`) runs no turn, walk or height: the HP held at 0, the pitch tilt
+sprung to -0x400 by `spring_to` with 8 and 4 and moved by half again of its
+velocity -- the player ends on their back, looking up -- the head bob
+(`0x801b2650`) sinking the eye 0x1f4 a frame to 0x5dc, 100 above the feet,
+and the throw through `player_move` with its own gravity. From frame 0x20
+the screen fades over 0x20 frames (`0x8003d624`); at 0x41 every effect slot
+is cleared and `has_item(107)` decides: the crystal is taken and the player
+put back on level 0 at (0x1c800, -0x3a80, 0xc000) facing 0x2d5 with the HP
+and MP full (`0x8002b3a8`), or a new character is made (`new_character`) and
+the story flags cleared; `level_state_writer(0, 0, 0)` loads level 0 either
+way. **bp20's recording shows the order**: the killing hit's `HURT out hp=0`,
+then `has_item(107)`, then the level load's states. The port does all of it
+(`godot/player.gd` `_dying`) but the crystal's branch, since it keeps no
+inventory for the player yet.
+
 ### What a death does, and what is remembered
 
 The death branch of `actor_tick`, at `0x80052b7c`, also goes by category:

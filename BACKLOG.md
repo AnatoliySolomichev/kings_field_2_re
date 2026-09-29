@@ -399,6 +399,8 @@ What is left of movement:
    bodies** too: the vertex poses of tools/anim.py, 11 of 11 creature caches
    in the snapshots; godot/anim.gd. Left: the hit tint (+0x13, +0x14, +0x16)
    and the fade of the dying.
+   **The player dies** as the game has it (state 0x11, the fade, a new
+   character at the start); the crystal's revival waits on an inventory.
    **The player hits back too** (tools/weapon.py, godot/weapon.gd): the swing,
    the probe, the damage, the flinch, the dying and the push -- read, not yet
    recorded; `emu/bp25.lua` records it. Left: the bows (0x1b, 0x1c), the

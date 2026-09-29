@@ -1426,7 +1426,7 @@
  "0x80030a6c": {
   "name": "player_throw",
   "kind": "code",
-  "evidence": "sets player_state to 0x11, plays sound 0x6e through 0x8001576c(6, 0x6e) and, given a pointer, copies six bytes into player_velocity. sync_player_pos calls it when the eye goes under one of the three surface planes; player_vertical_pre and player_move also call it"
+  "evidence": "sets player_state to 0x11, plays sound 0x6e and, given a pointer, copies six bytes into player_velocity; the view's pitch tilt velocity and death_frames to 0. apply_damage calls it on a killing blow with its push; sync_player_pos when the eye goes under a surface plane; player_vertical_pre and player_move on a fall of 0x5000. The port's _throw"
  },
  "0x801b2638": {
   "name": "depth_under_plane_18",
@@ -2677,5 +2677,20 @@
   "name": "anim_scratch",
   "kind": "data",
   "evidence": "the blended vertices of the last animated model drawn; 3 snapshots hold the last creature's exactly (tools/anim.py)"
+ },
+ "0x8002b3a8": {
+  "name": "player_restore",
+  "kind": "code",
+  "evidence": "every effect and flag halfword at 0x801b255c..0x801b2578 to 0, the HP and MP to their maxima, 0x80028e9c; the crystal's revival (0x80031d60)"
+ },
+ "0x801b261e": {
+  "name": "death_frames",
+  "kind": "data",
+  "evidence": "player_throw zeroes it and state 0x11 counts it: the fade from 0x20, the revival or a new character at 0x41"
+ },
+ "0x8003d624": {
+  "name": "screen_fade",
+  "kind": "code",
+  "evidence": "(mode, r, g, b): the death's fade, 0x82 with 0..0xff over frames 0x20..0x40 of state 0x11"
  }
 }

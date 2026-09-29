@@ -192,6 +192,12 @@ var wstate := {"clock": -1, "meter": 5000, "pause": 0, "hit": 5000,
 var attack_latch := false
 var character := {}
 var strong_hits := 0
+# Dying (player state 0x11): the frames counted at 0x801b261e, and the fade
+# 0x8003d624 darkens the screen with; the inventory, when the port keeps one,
+# for the crystal (item 107) that revives.
+var death_frames := 0
+var fade := 0
+var inventory = null
 # The creatures in the way this frame, as [x, y, z, radius, height, flags]:
 # actors.gd's awake ones, taken before the step because the game moves the
 # player before actor_tick_driver.
@@ -212,6 +218,16 @@ func _ready() -> void:
 	gy = int(-position.y * UNIT)
 	gz = int(-position.z * UNIT)
 	facing = int(rotation.y / TAU * 4096.0) & 0xFFF
+	if respawn is Array:
+		flying = false              # back on foot after a death
+		if respawn.size() == 4:     # the crystal's spot (0x80031d60)
+			gx = int(respawn[0])
+			gy = int(respawn[1])
+			gz = int(respawn[2])
+			facing = int(respawn[3])
+			rotation.y = float(facing) * TAU / 4096.0
+			_to_godot()
+	respawn = null
 	_refresh()
 
 
@@ -349,6 +365,10 @@ func _tick(dir: Vector3) -> void:
 	creatures = an.solid() if an and an.has_method("solid") else []
 	if flash > 0:
 		flash -= 1
+	if pstate == 0x11:
+		_dying()
+		_view()
+		return
 	# 0x80031c14, state 0x12 -- a stun: the tilt spring and nothing else, no
 	# turn, no walk, no height, until the view has settled.
 	if pstate == 0x12:
@@ -517,8 +537,11 @@ func _apply_damage(dmg: int, has_at: bool, at: Vector3i, effect: int) -> void:
 			pv[i] = coll._s16((int(d[i]) * s1) >> 12)
 		pv[1] = clampi(pv[1], -0xC8, 0xC8)
 	flash = maxi((0x514 - (share >> 1)) >> 2, 0x46)
-	if left == 0 or not has_at:
-		return                      # a death (player_throw) is not here yet
+	if left == 0:
+		_throw(pv)                  # 0x8002a8b0: thrown by the blow that killed
+		return
+	if not has_at:
+		return
 	var sh := clampi(coll.isqrt(share << 2), 0x10, 0x2A)
 	if effect & 0x40:
 		sh <<= 1
@@ -604,16 +627,93 @@ func _tilt() -> void:
 
 # @orig game:0x80016168 spring_to  status:transcribed -- target 0, 8 and 4 as 0x8003047c calls it
 static func _spring(cur: int, vel: int) -> int:
-	var d := (0 - cur) & 0xFFF
-	if (d <= 4 or d >= 0x1000 - 4) and vel >= -8 and vel <= 8:
-		return -cur
-	if cur != 0:
-		vel += -8 if (cur & 0xFFF) < 0x801 else 8
+	return _spring_to(0, cur, vel, 8, 4)
+
+
+# spring_to (0x80016168): within accel/2 of the target and no faster than
+# accel, the velocity that lands on it; else accel towards it, friction off.
+static func _spring_to(target: int, cur: int, vel: int, accel: int, friction: int) -> int:
+	var d := (target - cur) & 0xFFF
+	var tol := accel >> 1
+	if (d <= tol or d >= 0x1000 - tol) and vel >= -accel and vel <= accel:
+		return target - cur
+	if cur != target:
+		vel += -accel if ((cur - target) & 0xFFF) < 0x801 else accel
 	if vel > 0:
-		return vel - 4
+		return vel - friction
 	if vel < 0:
-		return vel + 4
+		return vel + friction
 	return vel
+
+
+# player_throw (0x80030a6c): state 0x11, the push that killed as the velocity,
+# the view's pitch tilt still, the count from 0.
+# @orig game:0x80030a6c player_throw  status:transcribed -- not the sound
+func _throw(pv) -> void:
+	if pstate == 0x11:
+		return
+	pstate = 0x11
+	if pv != null:
+		push = [int(pv[0]), int(pv[1]), int(pv[2])]
+	tilt_vel[0] = 0
+	tilt_vel[1] = 0
+	death_frames = 0
+
+
+# The controller's arm for state 0x11 (0x80031c54): no turn, no walk, no
+# height -- the HP held at 0, the view's pitch springing to -0x400 (8, 4, and
+# half again of the velocity each frame), the head bob sinking the eye by 0x1f4
+# a frame to 0x5dc, the throw through player_move with its own gravity. From
+# frame 0x20 the screen fades out over 0x20 frames (0x8003d624), and at 0x41:
+# with item 107 the crystal revives -- a fixed spot on level 0, the item taken,
+# HP and MP full (0x8002b3a8) -- else a new character (0x8002b468) and the
+# story flags cleared, and level 0 loaded either way (level_state_writer).
+# @orig game:0x80031c54  status:transcribed -- a label inside player_controller; the revive needs an inventory the port does not keep
+func _dying() -> void:
+	hp = 0
+	tilt_vel[0] = coll._s16(_spring_to(-0x400, coll._s16(int(tilt[0])), int(tilt_vel[0]), 8, 4))
+	tilt[0] = coll._s16(int(tilt[0]) + ((3 * int(tilt_vel[0])) >> 1))
+	if bob < 0x5DC:
+		bob += 0x1F4
+	_push()
+	death_frames += 1
+	if death_frames < 0x20:
+		return
+	if death_frames < 0x41:
+		fade = (0xFF * ((death_frames - 0x20) << 7)) >> 12
+		_fade()
+		return
+	var revive: bool = inventory != null and inventory.has_item(REVIVE_ITEM)
+	if revive:
+		inventory.take_item(REVIVE_ITEM)
+		respawn = [REVIVE_POS.x, REVIVE_POS.y, REVIVE_POS.z, REVIVE_FACING]
+	else:
+		respawn = []                # a new character, where a new game starts
+		var an := get_node_or_null("../Actors")
+		if an:
+			an.saved.clear()        # the story flags and the levels' records
+	fade = 0
+	get_tree().reload_current_scene()
+
+
+# Where _ready puts the player after a death reloads the level: the crystal's
+# spot, or [] for a new game's start.
+static var respawn = null
+
+
+func _fade() -> void:
+	var layer := get_node_or_null("DeathFade")
+	if layer == null:
+		layer = CanvasLayer.new()
+		layer.name = "DeathFade"
+		layer.layer = 10
+		var r := ColorRect.new()
+		r.name = "Black"
+		r.set_anchors_preset(Control.PRESET_FULL_RECT)
+		r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		layer.add_child(r)
+		add_child(layer)
+	(layer.get_node("Black") as ColorRect).color = Color(0, 0, 0, float(fade) / 255.0)
 
 
 # 0x8003078c: back to state 0 with both speeds and every view offset at 0.

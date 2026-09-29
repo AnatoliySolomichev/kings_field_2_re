@@ -158,8 +158,9 @@ def apply_damage(hp, hp_max, dmg, player=None, attacker=None, kind=0,
         push = tuple(push)
     n = max((FLASH_BASE - (s2 >> 1)) >> 2, FLASH_MIN)
     out = {"hp": left, "flash": (FLASH, n), "push": push}
-    if left == 0:
-        out["thrown"] = True
+    if left == 0:                        # player_throw (0x80030a6c): state
+        out["thrown"] = True             # 0x11 with the push as the velocity
+        out["state"], out["shake"] = 0x11, (0, 0)
         return out
     if attacker is None:
         return out
