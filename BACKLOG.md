@@ -393,6 +393,10 @@ What is left of movement:
    is done too: tools/knock.py, 83 of 83 recorded frames, and player.gd's
    state 0x10 and 0x12. Left: the seven effects of a hit's +0x11 (poison and
    its kin), the armour and rings that cut an attack, and a death.
+   **The creatures keep to their ground and face forward** now: the fence
+   bit (a layer's byte +4 & 0x40) is a wall to their 0x93 and not to the
+   player's 0x31, and they are drawn at yaw + 0x800. Their animation is not
+   in the port yet -- the models slide.
    **The player hits back too** (tools/weapon.py, godot/weapon.gd): the swing,
    the probe, the damage, the flinch, the dying and the push -- read, not yet
    recorded; `emu/bp25.lua` records it. Left: the bows (0x1b, 0x1c), the

@@ -118,6 +118,41 @@ func _creature_steps(doc: Dictionary) -> bool:
 	return bad == 0
 
 
+# The creatures' fence (collide_query's flag 2) on points around every fenced
+# cell of level 0: whether the layer is fenced, and the creature query's mask
+# and surface, against tools/ai.py.
+func _fences(doc: Dictionary) -> bool:
+	var cases: Array = doc.get("fences", [])
+	if cases.is_empty():
+		print("fences: none in movecheck00.json")
+		return true
+	var keep_r := coll.radius
+	var keep_b := coll.body
+	coll.radius = 1000
+	coll.body = 1625
+	var bad := 0
+	var first := ""
+	for c in cases:
+		var q := coll.query(int(c[0]), int(c[1]), int(c[2]))
+		var f := coll.fenced(q)
+		var mask := int(q["mask"])
+		var cur := int(q["floor"])
+		if f:
+			mask |= 1
+			cur = KFCollision.FENCED_SURFACE
+		if int(f) != int(c[3]) or mask != int(c[4]) or cur != int(c[5]):
+			bad += 1
+			if first == "":
+				first = "%s: godot %d %d %d" % [str(c), int(f), mask, cur]
+	coll.radius = keep_r
+	coll.body = keep_b
+	print("fences: %d of %d points around the creatures' fences match tools/ai.py"
+		% [cases.size() - bad, cases.size()])
+	if bad > 0:
+		print("  first difference: " + first)
+	return bad == 0
+
+
 # One creature stepped by ai.gd against tools/ai.py's run: the same start, the
 # same player path, the same BIOS rand from the same seed -- every frame's
 # position, yaw and opcode.
@@ -202,6 +237,9 @@ func _init() -> void:
 		quit(1)
 		return
 	if not _creature_steps(doc):
+		quit(1)
+		return
+	if not _fences(doc):
 		quit(1)
 		return
 	if not _ai_run():

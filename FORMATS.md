@@ -4521,6 +4521,35 @@ crouch of 4, 22 -> -278 and 6, state 0 the frame after, 2 of 2. A landing at
 0x400. The eye is `player_y + bob + crouch - 0x640` (`camera_pose`), so the bob
 and the crouch both lower it -- the port had the bob raising it.
 
+### Where a creature may go, and which way it is drawn
+
+**The fences.** `collide_query` (`0x80033f38`) has a flag the player never
+passes: with bit 2 set, after the tile collision it looks at the layer
+`tile_collision` read -- `collision_cell_layer`, `0x801e6468` -- and if that
+layer's byte +4 has 0x40 it writes `0xfffe7960` over the surface and adds 1,
+a wall, to the mask (`0x80033f94`). The player asks with 0x31; the creatures
+with `collision_layers` (`0x8018faac`), which is 0x93 in eleven snapshots and
+3 in two -- bit 2 either way -- from `actor_move_horizontal` and both of
+`actor_move_vertical`'s queries. So those layers are walls to the creatures
+alone: the invisible bounds that keep each in its own ground. Level 0 has the
+bit on 977 of its 6400 cells, always on the second layer (byte 9); **5006 of
+5006** distinct creature positions `emu/bp16.lua` logged stand in cells with
+no fence at all. `tools/ai.py` (`fenced`, `creature_query`) and `godot/ai.gd`
+have it; `coll00.json` carries a fence byte per cell, and the self-test holds
+the port to the Python on 600 points around them. The surface query
+(`collide_surface`) and the ledge test (`collide_wrapper_actor`) do not look.
+
+**The turn it is drawn with.** `render_walk` (`0x80040c94`) hands
+`draw_model_plain` the creature's +0x40, **+0x42 + 0x800** and +0x44, and
+`draw_model_plain` builds `Ry Rx Rz` with the game's own `rot_matrix_y` (cos,
+-sin / sin, cos) at `0x800166f4`. With that Y matrix a model's (0, 0, -1) goes
+to (-sin yaw, cos yaw) under yaw + 0x800 -- the way `facing_vector` walks it --
+so a model's front is its -z and the half turn is what faces it forward.
+Flipping Y and Z into Godot's axes turns `Ry(a)` into a turn of `a` about up,
+so the port draws a creature at yaw + 0x800; it had left the half turn out and
+every creature walked and struck backwards. A kind with flag 0x20 (+0x28) is
+drawn with no turn (`0x80040c34`).
+
 ### The player's blow
 
 `tools/weapon.py`, and `godot/weapon.gd` for the port. `player_turn` starts a

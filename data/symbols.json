@@ -731,7 +731,7 @@
  "0x80033f38": {
   "name": "collide_query",
   "kind": "code",
-  "evidence": "(x, y, z, radius, height, flags): flag 1 is the tile collision through collide_wrapper_actor, 2 the water check, 0x10 objects through 0x8004d644, 0x20 and 0x40 two more passes. The player passes 0x31, monsters 0x93 or 3"
+  "evidence": "(x, y, z, radius, height, flags): 1 the tile collision through collide_wrapper_actor; 2 the fence -- the layer tile_collision read (0x801e6468) with 0x40 at its byte +4 is a wall, the surface 0xfffe7960 (0x80033f94); 0x10 creatures (actor_spot_taken), 0x40 actor_in_range, 0x20 objects, 0x80 the player. The player passes 0x31, the creatures collision_layers, 0x93. tools/ai.py fenced: 5006 of 5006 logged creature positions clear of a fence"
  },
  "0x800324f0": {
   "name": "select_cell_layer",
@@ -746,7 +746,7 @@
  "0x8018faac": {
   "name": "collision_layers",
   "kind": "data",
-  "evidence": "the sixth argument collide_query reads: which passes to run. Set to 3 or 0x93 per actor at 0x800500f8 by actor[+0x28] & 4; the player passes 0x31 as a literal"
+  "evidence": "collide_query's flags for the creatures, 0x93 in eleven snapshots and 3 in two: tiles, the fence (2: a layer whose byte +4 has 0x40 is a wall), actors and the player. Read by actor_move_horizontal, actor_move_vertical and actor_tick"
  },
  "0x8018fab4": {
   "name": "current_actor",
@@ -946,7 +946,7 @@
  "0x80040ae4": {
   "name": "render_walk",
   "kind": "code",
-  "evidence": "two loops, not one. The first steps the ACTOR table at 0x80185da8 by 0x88 for 200 slots and draws a creature only when its +9 is 1; its model number is the mesh byte at +1 plus 0x80. The second steps object_table by 0x44 for 396 slots, skips a u16 type id of 0xff, clears bit 0x80 of +3 every frame and dispatches on the class byte at +4 -- 0xe9 and 0xe5 are skipped, 0x1f, 0xf0 and 0xf2 each have their own path. The old name here was object_walk, which described only the second half. For everything else the draw test is view_bits_at(position) & record +0, or type flag +3 bit 8 to draw regardless: every visible cell's view byte carries 2, which a placed record's +0 is, so an arm that zeroes +0 -- classes 0x0b, 0x14, 0x15, 0x1f, 0x59, 0x5f, 0xe0 to 0xe4, 0xe6, 0xe7 and 0xea, and whatever opcode 9 names -- hides the object"
+  "evidence": "two loops, not one. The first steps the ACTOR table at 0x80185da8 by 0x88 for 200 slots and draws a creature only when its +9 is 1; its model number is the mesh byte at +1 plus 0x80. The second steps object_table by 0x44 for 396 slots, skips a u16 type id of 0xff, clears bit 0x80 of +3 every frame and dispatches on the class byte at +4 -- 0xe9 and 0xe5 are skipped, 0x1f, 0xf0 and 0xf2 each have their own path. The old name here was object_walk, which described only the second half. For everything else the draw test is view_bits_at(position) & record +0, or type flag +3 bit 8 to draw regardless: every visible cell's view byte carries 2, which a placed record's +0 is, so an arm that zeroes +0 -- classes 0x0b, 0x14, 0x15, 0x1f, 0x59, 0x5f, 0xe0 to 0xe4, 0xe6, 0xe7 and 0xea, and whatever opcode 9 names -- hides the object. A creature is drawn by draw_model_plain with its angles +0x40, +0x42 + 0x800, +0x44 (0x80040c94) -- its model's front is -z -- or none at all for flag 0x20 (+0x28)"
  },
  "_note_object_model": {
   "name": "object type -> model",

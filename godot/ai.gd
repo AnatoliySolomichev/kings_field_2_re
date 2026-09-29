@@ -270,6 +270,9 @@ func _query(a: Dictionary, x: int, z: int, others: Array, player: Vector3i) -> D
 	var q := coll.query(x, int(a["py"]), z)
 	coll.radius = keep_r
 	coll.body = keep_b
+	if coll.fenced(q):                  # 0x80033f94: flag 2 of the creatures' 0x93
+		q["mask"] = int(q["mask"]) | 1
+		q["floor"] = KFCollision.FENCED_SURFACE
 	q["thing"] = null
 	for o in others:
 		if o == a:
@@ -440,6 +443,9 @@ func move_vertical(a: Dictionary, kind: Dictionary) -> void:
 		0x10:
 			var ny: int = int(a["py"]) + int(a["vy"])
 			var q := coll.query(int(a["px"]), ny, int(a["pz"]))
+			if coll.fenced(q):          # 0x8004e488 asks collide_query too
+				q["mask"] = int(q["mask"]) | 1
+				q["floor"] = KFCollision.FENCED_SURFACE
 			if int(q["mask"]) == 0:
 				a["py"] = ny
 				a["vy"] = s16(int(a["vy"]) + int(kind["fall"]))

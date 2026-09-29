@@ -335,13 +335,43 @@ def brake(a, lvl, decel, flags, others=(), player=None):
     return move_horizontal(a, lvl, flags, others, player)
 
 
+FENCE = 0x40            # a layer's byte +4: no creature may stand on it
+FENCED_SURFACE = -100000  # 0xfffe7960, what collide_query writes over the floor
+CREATURE_LAYERS = 0x93  # collision_layers (0x8018faac) in play: 3 in two snapshots
+
+
+def fenced(lvl, x, y, z, body):
+    """collide_query's flag 2 (0x80033f94): the layer tile_collision looked at
+    -- collision_cell_layer, 0x801e6468 -- has 0x40 at its byte +4. The
+    player's 0x31 never asks; the creatures' 0x93 does, so these are walls to
+    them alone: the fences that keep a level's creatures in their own ground.
+    5006 of 5006 creature positions bp16 logged stand clear of them."""
+    import collision
+    import movement
+    if not (0 <= x <= movement.GRID_MAX and 0 <= z <= movement.GRID_MAX):
+        return False
+    c = lvl.cell(x >> 11, z >> 11)
+    ymid = y - (((body << 4) & 0xFFFFFFFF) >> 5)
+    return bool(c[collision.layer_of(c, ymid) + 4] & FENCE)
+
+
+def creature_query(lvl, a, x, y, z):
+    """collide_query for a creature, as far as the tiles go: its radius and
+    height, and the fence."""
+    import movement
+    mask, cur = movement.query(lvl, x, y, z, radius=a["radius"],
+                               body=a["height"])
+    if CREATURE_LAYERS & 2 and fenced(lvl, x, y, z, a["height"]):
+        mask, cur = mask | 1, FENCED_SURFACE
+    return mask, cur
+
+
 def _clear(a, lvl, x, z, others, player):
     """collide_query for an actor: the tiles at its own radius and height,
-    then the other creatures (0x10) and the player (0x80). Returns the mask
-    and the thing hit, if any, as (x, z, radius)."""
+    the fence, then the other creatures (0x10) and the player (0x80). Returns
+    the mask and the thing hit, if any, as (x, z, radius)."""
     import movement
-    mask, cur = movement.query(lvl, x, a["y"], z, radius=a["radius"],
-                               body=a["height"])
+    mask, cur = creature_query(lvl, a, x, a["y"], z)
     thing = None
     for o in others:
         if o is a or o.get("st", 1) != 1:
@@ -504,8 +534,7 @@ def move_vertical(a, lvl, kind):
             a["y"], a["vst"] = surf, 0
     elif st == 0x10:
         ny = a["y"] + a["vy"]
-        mask, cur = movement.query(lvl, a["x"], ny, a["z"], radius=a["radius"],
-                                   body=a["height"])
+        mask, cur = creature_query(lvl, a, a["x"], ny, a["z"])   # 0x8004e488
         if mask == 0:
             a["y"] = ny
             a["vy"] = s16(a["vy"] + kind["fall"])

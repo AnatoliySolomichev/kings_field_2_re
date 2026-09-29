@@ -1249,6 +1249,7 @@ def verify(out="out/godot"):
                        capture_output=True, text=True, timeout=900)
     for line in (r.stdout + r.stderr).splitlines():
         if line.startswith(("loaded:", "movement:", "steps:", "creature steps:",
+                            "fences:",
                             "creature run:",
                             "levels:", "angles:",
                             "scripts:", "damage:", "knock-back:", "weapon:", "FAIL", "  first",

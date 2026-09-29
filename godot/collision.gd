@@ -40,6 +40,10 @@ const NO_CEILING := -100000
 const STEEP := 0x40
 
 var cells := PackedInt32Array()
+# Per cell, the layers whose byte +4 carries 0x40: bit 0 layer 0, bit 1 the
+# other. collide_query's flag 2 (0x80033f94) makes them walls to the creatures,
+# whose flags are 0x93, and not to the player's 0x31.
+var fence := PackedByteArray()
 var shapes := {}
 var radius := 800
 var body := 1700
@@ -61,6 +65,8 @@ func load_from(path: String) -> bool:
 		push_error("collision data is not JSON: " + path)
 		return false
 	cells = PackedInt32Array(d["cells"])
+	if d.has("fence"):
+		fence = PackedByteArray(d["fence"])
 	shapes = d["shapes"]
 	radius = int(d["radius"])
 	body = int(d["body"])
@@ -655,6 +661,20 @@ func query_all(x: int, y: int, z: int) -> Dictionary:
 		q["mask"] = int(q["mask"]) | OBJECT_BIT
 		q["object"] = i
 	return q
+
+
+# collide_query's flag 2 on the answer of query(): the layer it looked at
+# ("at", what 0x801e6468 holds) is fenced -- a wall, with the surface written
+# over as 0xfffe7960.
+# @orig game:0x80033f94  status:verified -- a label inside collide_query; 5006 of 5006 logged creature positions stand clear of a fence, tools/ai.py
+func fenced(q: Dictionary) -> bool:
+	var at := int(q["at"])
+	if at < 0 or fence.is_empty():
+		return false
+	return (fence[at / 6] & (1 if at % 6 == 0 else 2)) != 0
+
+
+const FENCED_SURFACE := -100000
 
 
 func blocked(x: int, y: int, z: int) -> bool:

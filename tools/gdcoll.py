@@ -45,6 +45,7 @@ def export(lv, out="out/godot"):
     lvl = coll.Level(lv)
     used = set()
     cells = []
+    fence = []
     for cz in range(W):
         for cx in range(W):
             c = lvl.cell(cx, cz)
@@ -53,6 +54,9 @@ def export(lv, out="out/godot"):
                 if sid != 255:
                     used.add(sid)
                 cells += [sid, c[layer + 2] & 3, c[layer + 1]]
+            # collide_query's flag 2: byte +4 of a layer with 0x40 is a wall to
+            # the creatures (tools/ai.py fenced); bit 0 layer 0, bit 1 layer 5
+            fence.append((1 if c[4] & 0x40 else 0) | (2 if c[9] & 0x40 else 0))
 
     shapes = {}
     tail, offs = tiles.table(lv)
@@ -68,7 +72,7 @@ def export(lv, out="out/godot"):
     doc = {
         "level": lv, "w": W, "cell": 0x800, "unit": 1000,
         "radius": PLAYER_RADIUS, "body": PLAYER_BODY,
-        "cells": cells, "shapes": shapes,
+        "cells": cells, "shapes": shapes, "fence": fence,
         # The game's own square root table. It is here because the walking step
         # is speed^2 / isqrt(speed^2) and this root is a unit short on a perfect
         # square, so a port using an exact one walks at the wrong speed.
@@ -134,7 +138,8 @@ def movecheck(lv, lvl, out="out/godot"):
                      "frames": frames})
     crs, crsteps = creaturecheck(lv, lvl)
     doc = {"level": lv, "runs": runs, "steps": stepcheck(lvl),
-           "creatures": crs, "creature_steps": crsteps}
+           "creatures": crs, "creature_steps": crsteps,
+           "fences": fencecheck(lv, lvl)}
     path = f"{out}/movecheck{lv:02d}.json"
     with open(path, "w") as f:
         json.dump(doc, f, separators=(",", ":"))
@@ -143,6 +148,32 @@ def movecheck(lv, lvl, out="out/godot"):
     anglecheck(out)
     dircheck(out)
     return path
+
+
+def fencecheck(lv, lvl, n=600):
+    """Points on and around the fenced cells, with tools/ai.py's answer and
+    the creature query's mask, for selftest.gd: every fenced cell's centre at
+    both layers' heights, and a spread either side of its edges."""
+    import ai
+    kind = {"radius": 1000, "height": 1625}
+    out = []
+    for cz in range(W):
+        for cx in range(W):
+            c = lvl.cell(cx, cz)
+            if not (c[4] | c[9]) & 0x40:
+                continue
+            for h in (c[1], c[6]):
+                for dx, dz in ((0x400, 0x400), (-40, 0x400), (0x840, 0x400),
+                               (0x400, -40)):
+                    x, z = (cx << 11) + dx, (cz << 11) + dz
+                    y = -128 * h
+                    a = dict(kind, x=x, y=y, z=z)
+                    mask, cur = ai.creature_query(lvl, a, x, y, z)
+                    out.append([x, y, z, int(ai.fenced(lvl, x, y, z, 1625)),
+                                mask, cur])
+                    if len(out) >= n:
+                        return out
+    return out
 
 
 def creaturecheck(lv, lvl, ring=150):

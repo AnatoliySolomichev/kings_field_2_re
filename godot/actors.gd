@@ -201,7 +201,20 @@ func _place(k: int) -> void:
 	var nd: Node3D = nodes[k]
 	nd.position = Vector3(float(a["px"]) / 1000.0, float(-int(a["py"])) / 1000.0,
 		float(-int(a["pz"])) / 1000.0)
-	nd.basis = Basis(Vector3.UP, float(a["ry"]) * TAU / 4096.0)
+	nd.basis = _draw_basis(a)
+
+
+# How render_walk (0x80040c94) turns a creature to draw it: its angles +0x40,
+# +0x42 + 0x800, +0x44 into draw_model_plain, which builds Ry Rx Rz with the
+# game's own rot_matrix_y (cos, -sin / sin, cos) at 0x800166f4 -- so a model's
+# front is its -z, and the half turn faces it the way it walks. Flip Y and Z
+# into Godot's axes and that is a turn of yaw + 0x800 about up. A kind with
+# flag 0x20 (+0x28) is drawn with no turn at all (0x80040c34).
+# @orig game:0x80040c94  status:transcribed -- a label inside render_walk
+func _draw_basis(a: Dictionary) -> Basis:
+	if int(a.get("eflags", 0)) & 0x20:
+		return Basis()
+	return Basis(Vector3.UP, float((int(a["ry"]) + 0x800) & 0xFFF) * TAU / 4096.0)
 
 
 # A blow opcode 4 struck: the player within its reach of the creature raised by
@@ -543,9 +556,7 @@ func refresh() -> void:
 		var a: Dictionary = actors[k]
 		var n: Node3D = nodes[k]
 		n.visible = show_all or (a["st"] == ACTIVE and a["cat"] != FREE)
-		# rot_matrix_y (0x8001660c) is cos, -sin / sin, cos: with y and z
-		# flipped into Godot's axes, a turn of +ry about up.
-		n.basis = Basis(Vector3.UP, float(a["ry"]) * TAU / 4096.0)
+		n.basis = _draw_basis(a)
 	shown = changes
 	var g := get_node_or_null("../Ghost")
 	if g and not g.get("compare"):
