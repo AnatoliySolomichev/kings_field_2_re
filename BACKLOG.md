@@ -404,7 +404,11 @@ What is left of movement:
    **The machine against the recording**: `tools/ai.py --locked`, 8539 of
    8933 creature frames; the volley (0x19) scored and ticked. Left: the
    effects a volley launches -- the effect system, `effect_tick` -- and a
-   bp16 session with the hidden fields to lock every frame.
+   bp16 session with the hidden fields to lock every frame. `emu/bp26.lua`
+   records the effects: every live slot a frame, every `effect_spawn`, every
+   hit on the player with its caller. Level 0's kind-3 creatures (model 57,
+   cells (40,29), (26,27), (27,25), (15,20)...) cast effect 0x81/0x26 at the
+   player through `actor_animation_effects` arm 0x26.
    **The player hits back too** (tools/weapon.py, godot/weapon.gd): the swing,
    the probe, the damage, the flinch, the dying and the push -- read, not yet
    recorded; `emu/bp25.lua` records it. Left: the bows (0x1b, 0x1c), the
