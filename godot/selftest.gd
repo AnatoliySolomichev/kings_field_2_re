@@ -173,7 +173,13 @@ func _ai_run() -> bool:
 	if typeof(d) != TYPE_DICTIONARY or not d.has("run"):
 		print("creature run: none in ai00.json")
 		return true
-	var run: Dictionary = d["run"]
+	var ok := true
+	for run in d.get("runs", [d["run"]]):
+		ok = _one_run(d, run) and ok
+	return ok
+
+
+func _one_run(d: Dictionary, run: Dictionary) -> bool:
 	var kd: Dictionary = d["kinds"][str(int(run["kind"]))]
 	var recs := []
 	for r in kd["behaviours"]:
@@ -208,8 +214,8 @@ func _ai_run() -> bool:
 			bad += 1
 			if first == "":
 				first = "frame %d: godot %s python %s" % [i, str(got), str(want)]
-	print("creature run: %d of %d frames of a level-0 creature where tools/ai.py puts it"
-		% [frames.size() - bad, frames.size()])
+	print("creature run: %d of %d frames of level 0's slot %d (kind %d) where tools/ai.py puts it"
+		% [frames.size() - bad, frames.size(), int(run["slot"]), int(run["kind"])])
 	if bad > 0:
 		print("  first difference: " + first)
 	return bad == 0

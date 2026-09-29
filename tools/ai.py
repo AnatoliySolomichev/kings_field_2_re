@@ -206,6 +206,19 @@ def score(a, rec, dist, player, rand):
         elif not dist < near:
             sc -= sc // 6
         return rand_score(sc, rand)
+    if op == 0x19:                                # 0x8004bcdc: at range, facing
+        if a["flags"] & 0x100:
+            # flag 0x100 (+0x28) holds it back; a record whose +0xc is 0x27
+            # lifts it while the player is free to move (0x801b2568 is 0)
+            if raw[0xC] == 0x27:
+                a["flags"] &= ~0x100
+            return 0
+        if u16f(raw, 0x16) < dist or dist < u16f(raw, 0x14):
+            return 0
+        brg = s16(vec_angle(player[0] - a["x"], player[2] - a["z"]))
+        if not facing_test(s16(a["yaw"]), brg, raw[0xD] << 4):
+            return 0
+        return rand_score(base, rand)
     if op in (2, 3):                              # a hit and a death: forced
         return 0
     if op == 0x70:
@@ -623,6 +636,24 @@ def tick(a, kind, lvl, player, others, rand):
         brake(a, lvl, raw[0xD], 0xA, others, player)
     elif op == 6:                                       # 0x8005205c
         _burrowed(a, kind, raw, lvl, player, others, rand, dist)
+    elif op == 0x19:                                    # 0x800523f0, a volley
+        # the clock, and the fire times at +0x70 (+0xe, then +0x12 apart,
+        # back to 0 past +0x10) that run the record's list from +0x1a through
+        # actor_animation_effects -- the effects themselves are not here
+        if a["phase"] == 0:
+            a["phase"] = 0xF0
+            start_anim(a, raw[1])
+            a["sub"], a["n72"] = u16f(raw, 0xE), 0
+            if raw[7] == 1:
+                a["vst"] = 0x10
+        clock(a, s16f(raw, 8))
+        if clock_passed(a, a["sub"]):
+            a["sub"] = (a["sub"] + u16f(raw, 0x12)) & 0xFFFF
+            if u16f(raw, 0x10) < s16(a["sub"]):
+                a["sub"] = 0
+        if a["clock"] >= 0xFFF:
+            finish(a, kind, player, rand)
+        brake(a, lvl, kind["accel"], 0xA, others, player)    # 0x80052610
     elif op == 2:                                       # 0x80050400, a flinch
         if a["phase"] == 0:
             a["phase"], a["sub"] = 0xF0, 0
@@ -842,6 +873,152 @@ def check_log(out=sys.stdout, path=None):
     return bad == 0
 
 
+class NeedsRand(Exception):
+    """A step that called rand(), which a recording cannot replay."""
+
+
+def _no_rand():
+    raise NeedsRand()
+
+
+def check_locked(out=sys.stdout, path=None, verbose=False):
+    """bp16's act= with the hidden fields (2026-09-28 on): each creature
+    stepped once from what the log says it was, against the next frame.
+
+    Only frames that keep the behaviour (the same record at +0x60) and run it
+    (phase 0xf0) -- a switch is a choice, and a choice is rand(). The turn
+    rate (+0x58) is not logged: it is taken from the yaw's last step, which
+    is the rate unless that step snapped onto a target. A step that calls
+    rand() is counted apart. Compared: the position, the yaw, the velocity,
+    the clock."""
+    import collections
+    import movement
+    import replay
+    rows, _ = replay.load(path) if path else replay.load()
+    rows = [r for r in rows if r.get("act") and "phase" in r["act"][0]]
+    if not rows:
+        print("  no bp16 frames with the full act= to lock the machine to",
+              file=out)
+        return True
+    lv = rows[0]["lv"]
+    lvl = movement.level(lv)
+    kinds_by = {}
+    blob = entity_blob(lv)
+    for kd in kinds(lv, blob):
+        kinds_by[kd["kind"]] = kind_of(lv, kd["kind"], blob)
+    table = __import__("actors").table(lv)
+    kind_of_slot = {a["slot"]: a["kind"] for a in table if a}
+    by_addr = {}
+    for k, kd in kinds_by.items():
+        for rec in kd["behaviours"]:
+            by_addr[rec["addr"]] = rec
+    res = collections.defaultdict(lambda: [0, 0, 0])   # op -> ok, bad, rand
+    firsts = []
+    prev_yaw = {}
+    hidden = {}             # slot -> what the log does not hold, from our step
+    last_turn = {}          # slot -> the yaw's last step that was not 0
+    for r0, r1 in zip(rows, rows[1:]):
+        if r1["f"] != r0["f"] + 1:
+            prev_yaw = {}
+            hidden = {}
+            continue
+        after = {a["slot"]: a for a in r1["act"]}
+        others = [{"x": a["pos"][0], "y": a["pos"][1], "z": a["pos"][2],
+                   "radius": a["radius"], "height": a["height"], "st": 1,
+                   "slot": a["slot"]} for a in r0["act"]]
+        for a0 in r0["act"]:
+            k = a0["slot"]
+            a1 = after.get(k)
+            py = prev_yaw.get(k)
+            prev_yaw[k] = a0["yaw"]
+            if py is not None and s16(a0["yaw"] - py):
+                last_turn[k] = s16(a0["yaw"] - py)
+            if a1 is None or a0["beh"] != a1["beh"] or a0["phase"] != 0xF0 \
+                    or a1["phase"] != 0xF0 or a0["beh"] not in by_addr:
+                last_turn.pop(k, None)
+                hidden.pop(k, None)
+                continue
+            rec = by_addr[a0["beh"]]
+            kind = kinds_by[kind_of_slot[k]]
+            a = {"x": a0["pos"][0], "y": a0["pos"][1], "z": a0["pos"][2],
+                 "yaw": a0["yaw"], "turn": last_turn.get(k, 0),
+                 "vx": a0["vel"][0], "vz": a0["vel"][1], "vy": 0, "vst": 0,
+                 "rec": rec, "op": rec["op"], "phase": a0["phase"], "prev": 0,
+                 "anim": rec["anim"], "clock": a0["clock"],
+                 "step": abs(s16f(rec["raw"], 8)), "aim": 0, "sub": a0["flee"],
+                 "n72": 0, "flee": a0["flee"], "cut": a0["turn"],
+                 "radius": a0["radius"], "height": a0["height"],
+                 "flags": a0["flags"], "st": 1}
+            h = hidden.pop(k, None)
+            if "rate" in a0:
+                # bp16 since 2026-09-29 logs them all: nothing to guess
+                a.update({"turn": a0["rate"], "aim": a0["aim"],
+                          "vst": a0["vst"], "vy": a0["vy"], "sub": a0["sub"],
+                          "n72": a0["n72"]})
+            elif h is not None:
+                # the vertical state and speed, the turn rate and the aim, as
+                # our own step of the frame before left them
+                a.update(h)
+            me = [o for o in others if o["slot"] != k]
+            want = (a1["pos"][0], a1["pos"][2], a1["yaw"] & 0xFFF, a1["vel"][0],
+                    a1["vel"][1], a1["clock"])
+            # rand(): the first try with none; a step that calls it is tried
+            # with every call at 0 and at 0x7fff -- both sides of any one test
+            tries, calls = [None], 0
+            matched, last = False, None
+            while tries:
+                pick_ = tries.pop(0)
+                b = dict(a)
+                seq = []
+
+                def rnd(pick_=pick_, seq=seq):
+                    if pick_ is None:
+                        seq.append(0)
+                        raise NeedsRand()
+                    i = len(seq)
+                    seq.append(0)
+                    return 0x7FFF if (pick_ >> i) & 1 else 0
+                try:
+                    tick(b, kind, lvl, r1["p"], me, rnd)
+                except NeedsRand:
+                    calls = 1
+                    tries = list(range(1 << 1))
+                    continue
+                if pick_ is not None and len(seq) > calls and calls < 4:
+                    calls = len(seq)
+                    tries = list(range(1 << calls))
+                    continue
+                last = b
+                got = (b["x"], b["z"], s16(b["yaw"]) & 0xFFF, b["vx"], b["vz"],
+                       b["clock"])
+                if got == want:
+                    matched = True
+                    break
+            if last is not None:
+                # +0x70 is in the log; these are not. The turn rate too, when
+                # our step came out right; else the yaw's last step
+                keep = ("vst", "vy", "aim", "n72") + (("turn",) if matched else ())
+                hidden[k] = {kk: last[kk] for kk in keep}
+            if matched:
+                res[rec["op"]][0] += 1
+                if calls:
+                    res[rec["op"]][2] += 1
+            else:
+                res[rec["op"]][1] += 1
+                if verbose and len(firsts) < 12:
+                    firsts.append(f"  f={r0['f']} slot {k} op {rec['op']}: "
+                                  f"model {got}, game {want}")
+    for line in firsts:
+        print(line, file=out)
+    tot_ok = sum(v[0] for v in res.values())
+    tot = sum(v[0] + v[1] for v in res.values())
+    print(f"  {tot_ok} of {tot} creature frames stepped from the log land where "
+          f"the game put them -- " + ", ".join(
+              f"opcode {op}: {v[0]} of {v[0] + v[1]}" + (f" ({v[2]} of them with rand)" if v[2] else "")
+              for op, v in sorted(res.items())), file=out)
+    return tot_ok == tot
+
+
 def bios_rand(seed=1):
     """rand() as the BIOS does it (A0:2F), from a seed: what actors.gd uses."""
     state = [seed]
@@ -900,6 +1077,8 @@ def export(out_dir, lv):
             "behaviours": [list(b["raw"]) for b in kf["behaviours"]]}
     if lv == 0:
         doc["run"] = run(lv)
+        # and a kind-3 creature, whose volley (opcode 0x19) the first never uses
+        doc["runs"] = [doc["run"], run(lv, 40)]
     path = os.path.join(out_dir, f"ai{lv:02d}.json")
     with open(path, "w") as f:
         json.dump(doc, f, separators=(",", ":"))
@@ -908,8 +1087,12 @@ def export(out_dir, lv):
 
 def main():
     a = sys.argv[1] if len(sys.argv) > 1 else "0"
+    if a == "--locked":
+        sys.exit(0 if check_locked(verbose=True) else 1)
     if a == "--check":
-        sys.exit(0 if (check() and check_log()) else 1)
+        ok = check() and check_log()
+        check_locked()           # a report: the log still hides some fields
+        sys.exit(0 if ok else 1)
     lv = int(a)
     for kd in kinds(lv):
         print(f"kind {kd['kind']:2d} model {kd['model']:3d}: " + ", ".join(

@@ -142,6 +142,19 @@ func score(a: Dictionary, rec: Array, dist: int, player: Vector3i) -> int:
 			elif not dist < near:
 				sc4 -= sc4 / 6
 			return rand_score(sc4)
+		0x19:
+			# 0x8004bcdc: at range and facing; flag 0x100 holds it back, and a
+			# record whose +0xc is 0x27 lifts that
+			if int(a["eflags"]) & 0x100:
+				if int(rec[0xC]) == 0x27:
+					a["eflags"] = int(a["eflags"]) & ~0x100
+				return 0
+			if u16f(rec, 0x16) < dist or dist < u16f(rec, 0x14):
+				return 0
+			var b19 := s16(coll.vec_angle(player.x - int(a["px"]), player.z - int(a["pz"])))
+			if not facing_test(s16(a["ry"]), b19, int(rec[0xD]) << 4):
+				return 0
+			return rand_score(base)
 		2, 3:
 			return 0
 		0x70:
@@ -536,6 +549,23 @@ func tick(a: Dictionary, kind: Dictionary, player: Vector3i, others: Array) -> D
 			brake(a, int(raw[0xD]), 0xA, others, player)
 		6:
 			_burrowed(a, kind, raw, player, others, dist)
+		0x19:                           # 0x800523f0, a volley
+			if int(a["phase"]) == 0:
+				a["phase"] = 0xF0
+				start_anim(a, int(raw[1]))
+				a["sub"] = u16f(raw, 0xE)
+				a["n72"] = 0
+				if int(raw[7]) == 1:
+					a["vst"] = 0x10
+			clock(a, s16f(raw, 8))
+			if clock_passed(a, int(a["sub"])):
+				a["sub"] = (int(a["sub"]) + u16f(raw, 0x12)) & 0xFFFF
+				if u16f(raw, 0x10) < s16(int(a["sub"])):
+					a["sub"] = 0
+				# the effects the record's list at +0x1a launches are not here
+			if int(a["clock"]) >= 0xFFF:
+				finish(a, kind, player)
+			brake(a, int(kind["accel"]), 0xA, others, player)
 		2:                              # 0x80050400, a flinch
 			if int(a["phase"]) == 0:
 				a["phase"] = 0xF0

@@ -4521,6 +4521,35 @@ crouch of 4, 22 -> -278 and 6, state 0 the frame after, 2 of 2. A landing at
 0x400. The eye is `player_y + bob + crouch - 0x640` (`camera_pose`), so the bob
 and the crouch both lower it -- the port had the bob raising it.
 
+### The creatures, frame by frame against the recording
+
+`python3 tools/ai.py --locked` takes every creature bp16 logged with the full
+`act=` (4932 frames of the newest session), steps it once from what the log
+says it was -- position, yaw, velocity, phase, clock, the running record, +0x70
+and +0x71 -- and compares the next frame's position, yaw, velocity and clock.
+Only frames that keep their behaviour: a switch is a choice, and a choice is
+`rand()`. A step that calls `rand()` is tried with every call at 0 and at
+0x7fff, both sides of any one test. What the log did not hold is carried from
+our own step of the frame before (the vertical state and speed, the aim, +0x72)
+or, for the turn rate, taken from the yaw's last step that was not zero --
+opcode 5 turns every other frame, as +0x70 toggles. **8539 of 8933** frames
+land exactly: idle 3953 of 3967, strike 40 of 42, close-in 3995 of 4026,
+burrow 258 of 298, the volley 42 of 42, wander 251 of 558 (its aim, +0x64,
+was not logged). bp16 logs the rest from now on -- +0x58, +0x64, +0xd, +0x52,
++0x70, +0x72, +0x1a, +0xc -- and the check uses them when they are there.
+
+**The volley, opcode 0x19** (`0x800523f0`), which level 0's kinds 2 and 3 use
+and most kinds on the next levels: the clock; fire times at +0x70 from the
+record's +0xe, +0x12 apart and back to 0 past +0x10, each running the list at
++0x1a -- `0x8000` restart, `0x8001 n` repeat, `0x8002 n` skip, `0x8003`/`0x8004`
+with arguments -- through `actor_animation_effects`; `actor_finish` at 0xfff;
+`brake(kind +3, 0xa)`. It is scored (`0x8004bcdc`) when the player is between
++0x14 and +0x16 away and within `+0xd << 4` of its yaw, unless flag 0x100 holds
+it back -- a record whose +0xc is 0x27 lifts that. The port had taken it for
+the default arm and had no tick for it, so a creature that chose it stood
+still for good; both are in now. The effects it launches are the effect
+system's (`effect_tick`, 4584 instructions) and are not.
+
 ### Where a creature may go, and which way it is drawn
 
 **The fences.** `collide_query` (`0x80033f38`) has a flag the player never

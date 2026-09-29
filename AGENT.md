@@ -138,8 +138,8 @@ the compass's records, against every snapshot          65 of 65 fields
 the swinging door, against the bp24 recording          226 of 226 steps
 the creatures' behaviour tables, against snapshots     168 896 of 168 896 bytes,
                                                        69 of 69 awake actors
-the creatures' machine, against the bp16 act= log      31 of 31 behaviour runs;
-                                                       steps 48 and 32 a frame
+the creatures' machine, against the bp16 act= log      103 of 103 behaviour runs;
+                                                       8539 of 8933 frames locked
 the walking, against the recording (replay rung 2)     124 891 of 125 116 frames;
                                                        447 of the 455 that touch
                                                        an object, 76 of 76 a
@@ -161,7 +161,7 @@ and in the Godot self-test:
 
 ```
 movement 690 of 690 · steps 750 of 750 · creature steps 384 of 384
-creature run 480 of 480
+creature runs 480 of 480 twice
 levels 40 of 40 · angles 400 of 400
 conversations 43 of 43, and 25 of 25 steps the emulator recorded
 damage 6 of 6 · knock-back 2484 of 2484 · weapon 2336 of 2336

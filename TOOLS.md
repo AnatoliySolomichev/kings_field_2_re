@@ -630,7 +630,9 @@ the machine that picks and runs them.
 ```
 python3 tools/ai.py 0             a level's kinds and their behaviours' opcodes
 python3 tools/ai.py --check       168 896 of 168 896 bytes, 69 of 69 actors,
-                                  31 of 31 behaviour runs against bp16
+                                  103 of 103 behaviour runs against bp16
+python3 tools/ai.py --locked      every creature frame stepped from bp16's
+                                  log: 8539 of 8933 land exactly
 ```
 
 `ai.py` also carries the machine itself -- `pick`, `tick`, the moves -- and

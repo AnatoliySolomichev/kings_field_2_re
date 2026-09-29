@@ -2702,5 +2702,10 @@
   "name": "working_skills",
   "kind": "data",
   "evidence": "the five skills player_recalc_stats copies (and halves under a curse); their average is the magic meter's refill, meter_gain(avg, 0) a frame. [0, 0, 0, 0, 10] for a new character"
+ },
+ "0x80052400": {
+  "name": "actor_volley",
+  "kind": "label",
+  "evidence": "actor_tick's arm for opcode 0x19 (0x800523f0): the clock, fire times at +0x70 from rec+0xe, rec+0x12 apart, back to 0 past rec+0x10, each running the list at rec+0x1a (0x8000 restart, 0x8001 repeat, 0x8002 skip, 0x8003/0x8004 with arguments) through actor_animation_effects; actor_finish at 0xfff; brake(kind+3, 0xa). tools/ai.py: 42 of 42 logged frames"
  }
 }

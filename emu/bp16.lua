@@ -123,7 +123,10 @@ local NEAR = 0x3000               -- how far from the player an actor is logged
 -- more, for tools/ai.py to step the creature itself: the phase +0xf, the
 -- animation clock +0x18, the yaw +0x42, the velocity +0x50 and +0x54, the
 -- running behaviour's address +0x60 (hex), and the approach and turn flags
--- +0x70 and +0x71.
+-- +0x70 and +0x71. And since 2026-09-29 what tools/ai.py --locked had to
+-- guess: the turn rate +0x58, the aim +0x64, the vertical state +0xd and
+-- velocity +0x52, the whole halfwords +0x70 and +0x72, the HP +0x1a and the
+-- animation +0xc.
 local function awake()
     local px, pz = s32(PX), s32(PZ)
     local out = {}
@@ -133,12 +136,14 @@ local function awake()
             local x, z = s32(a + 0x2c), s32(a + 0x34)
             if math.abs(x - px) < NEAR and math.abs(z - pz) < NEAR then
                 out[#out + 1] = string.format(
-                    '%d:%d:%d:%d:%d:%d:%x:%d:%d:%d:%d:%d:%d:%d:%x:%d:%d',
+                    '%d:%d:%d:%d:%d:%d:%x:%d:%d:%d:%d:%d:%d:%d:%x:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d',
                     k, x, s32(a + 0x30), z, u16(a + 0x1c), u16(a + 0x1e),
                     s32(a + 0x28) % 0x100000000, u8(a + 0xe), s16(a + 0x26),
                     u8(a + 0xf), u16(a + 0x18), s16(a + 0x42), s16(a + 0x50),
                     s16(a + 0x54), s32(a + 0x60) % 0x100000000, u8(a + 0x70),
-                    u8(a + 0x71))
+                    u8(a + 0x71), s16(a + 0x58), s16(a + 0x64), u8(a + 0xd),
+                    s16(a + 0x52), s16(a + 0x70), s16(a + 0x72), u16(a + 0x1a),
+                    u8(a + 0xc))
             end
         end
     end

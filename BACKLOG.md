@@ -401,6 +401,10 @@ What is left of movement:
    and the fade of the dying.
    **The player dies** as the game has it (state 0x11, the fade, a new
    character at the start); the crystal's revival waits on an inventory.
+   **The machine against the recording**: `tools/ai.py --locked`, 8539 of
+   8933 creature frames; the volley (0x19) scored and ticked. Left: the
+   effects a volley launches -- the effect system, `effect_tick` -- and a
+   bp16 session with the hidden fields to lock every frame.
    **The player hits back too** (tools/weapon.py, godot/weapon.gd): the swing,
    the probe, the damage, the flinch, the dying and the push -- read, not yet
    recorded; `emu/bp25.lua` records it. Left: the bows (0x1b, 0x1c), the

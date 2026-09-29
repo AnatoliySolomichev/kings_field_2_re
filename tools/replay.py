@@ -129,6 +129,10 @@ def actors_of(field):
             a.update({"phase": int(f[9]), "clock": int(f[10]), "yaw": int(f[11]),
                       "vel": (int(f[12]), int(f[13])), "beh": int(f[14], 16),
                       "flee": int(f[15]), "turn": int(f[16])})
+        if len(f) >= 25:                     # and since 2026-09-29, the hidden
+            a.update({"rate": int(f[17]), "aim": int(f[18]), "vst": int(f[19]),
+                      "vy": int(f[20]), "sub": int(f[21]), "n72": int(f[22]),
+                      "hp": int(f[23]), "anim": int(f[24])})
         out.append(a)
     return out
 
