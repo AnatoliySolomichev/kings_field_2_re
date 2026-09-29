@@ -272,6 +272,9 @@ func _init() -> void:
 	if not _anim():
 		quit(1)
 		return
+	if not _spores():
+		quit(1)
+		return
 	if not _equip():
 		quit(1)
 		return
@@ -465,6 +468,54 @@ func _anim() -> bool:
 	return bad == 0
 
 
+# The spores bp26 recorded, effects.gd against tools/effects.py: each from its
+# first frame with the player where the log has them -- life, height, scale,
+# growth, strike and where it goes.
+func _spores() -> bool:
+	if not FileAccess.file_exists("res://effectcheck.json"):
+		print("spores: no cases to check against")
+		return true
+	var d = JSON.parse_string(FileAccess.get_file_as_string("res://effectcheck.json"))
+	var fx = load("res://effects.gd").new()
+	fx.coll = coll
+	var n := 0
+	var bad := 0
+	var first := ""
+	for run in d["runs"]:
+		var st: Dictionary = run["start"]
+		var e := {"f0": 0x81, "kind": 0x26, "pct": int(st["pct"]), "grace": int(st["grace"]),
+			"half": int(st["half"]), "life": int(st["life"]), "x": int(st["x"]),
+			"y": int(st["y"]), "z": int(st["z"]),
+			"scale": [int(st["scale"][0]), int(st["scale"][1]), int(st["scale"][2])],
+			"vel": [int(st["vel"][0]), int(st["vel"][1]), int(st["vel"][2])],
+			"count": int(st["count"]), "node": null}
+		for i in run["frames"].size():
+			var q: Array = run["path"][i]
+			var alive: bool = fx._tick(e, Vector3i(int(q[0]), int(q[1]), int(q[2])))
+			var want: Array = run["frames"][i]
+			var sc: Array = e["scale"]
+			var got := [int(e["life"]), int(e["y"]), int(sc[0]), int(sc[1]), int(sc[2]),
+				int(e["count"]), int(e.get("hit", -1)), 0 if alive else 1]
+			n += 1
+			var w := []
+			for v in want:
+				w.append(int(v))
+			if not alive and int(want[7]) == 1:
+				continue          # gone in both: what is left of it does not matter
+			if got != w:
+				bad += 1
+				if first == "":
+					first = "frame %d: godot %s python %s" % [i, str(got), str(w)]
+				break
+			if not alive:
+				break
+	fx.free()
+	print("spores: %d of %d frames of bp26's spores match tools/effects.py" % [n - bad, n])
+	if bad > 0:
+		print("  first difference: " + first)
+	return bad == 0
+
+
 # The hits emu/bp20.lua recorded, through the port's copy of the formula. What
 # is compared is the damage, against what the log's own HP either side says.
 func _damage() -> bool:
@@ -488,7 +539,8 @@ func _damage() -> bool:
 		if before == 0 or after == 0:
 			continue                       # already dead, or the kill clamps
 		seen += 1
-		var got := KFDamage.hit(Array(h["attacks"]), defence, stat, k)
+		var got := KFDamage.hit(Array(h["attacks"]), defence, stat, k,
+			int(h.get("scale", KFDamage.ARG9)), int(h.get("pct", KFDamage.ARG10)))
 		if int(got["damage"]) != before - after:
 			bad_d += 1
 			if bad_d == 1:

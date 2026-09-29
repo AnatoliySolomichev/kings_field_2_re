@@ -202,6 +202,11 @@ var inventory = null
 # damage_scale (0x801b24f8), the K the stat's share of the defence is scaled
 # by in damage_of_type, falls; the magic meter's pause is 0x801b24f4.
 var damage_k := 0x1000
+# Poison (0x801b255c): frames left; player_take_hit's effect 3 sets it to
+# 0x384 unless the roll against the resistance (0x801b255a, the ninth defence
+# half -- 0 for a new character) goes the player's way.
+var poison := 0
+var resist := 0
 var magic_pause := 0
 var use_prev := false
 # The creatures in the way this frame, as [x, y, z, radius, height, flags]:
@@ -367,6 +372,44 @@ func _ramp(speed: int, pos: bool, neg: bool, cap: int, decay := 3) -> int:
 
 # @orig game:0x8002e3f8 player_horizontal  status:partial -- the step; the slide along a refused wall is missing
 func _tick(dir: Vector3) -> void:
+	_frame(dir)
+	_poison()
+
+
+# The end of player_controller (0x80031e78), whatever the state: the poison
+# counts down, and on every multiple of 30 -- 0x384 is one -- the screen
+# flashes and one HP goes (hp_add, 0x8002a6a0; at 0 the player is thrown).
+# So a spore that keeps striking, setting it back to 0x384 each frame, takes
+# one HP a frame: 31 of 32 such frames in bp26, the other a roll resisted.
+# @orig game:0x80031e78  status:verified -- a label inside player_controller; tools/effects.py against bp26
+func _poison() -> void:
+	if poison == 0:
+		return
+	if poison % 30 == 0:
+		flash = 0x3C
+		hp = maxi(hp - 1, 0)
+		if hp == 0:
+			_throw(null)
+	poison -= 1
+
+
+# An effect's strike (effect_strike 0x80053850 -> effect_hurt_player
+# 0x8002b114 -> player_take_hit 0x8002ab18): the eight attacks and the effect
+# of its spell_table record, the scale its distance gave and its percentage.
+# The effect's low nibble picks player_take_hit's arm -- 3, the poison, is the
+# only one here: (100 * rand()) >> 15 against the resistance. Then the damage,
+# which is 0 for a spore, and apply_damage from its point.
+# @orig game:0x8002ab18 player_take_hit  status:partial -- the poison of the effects' seven; tools/effects.py
+func take_effect(attacks: Array, effect: int, scale: int, pct: int, point: Vector3i) -> void:
+	if (effect & 0xF) == 3:
+		var roll := (100 * (randi() & 0x7FFF)) >> 15
+		if resist < roll:
+			poison = 0x384
+	var dmg := int(KFDamage.hit(attacks, defence, stat, damage_k, scale, pct)["damage"])
+	_apply_damage(dmg, true, point, effect)
+
+
+func _frame(dir: Vector3) -> void:
 	var an := get_node_or_null("../Actors")
 	creatures = an.solid() if an and an.has_method("solid") else []
 	if flash > 0:

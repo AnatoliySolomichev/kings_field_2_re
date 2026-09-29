@@ -409,7 +409,9 @@ What is left of movement:
    hit on the player with its caller. Level 0's kind-3 creatures (model 57,
    cells (40,29), (26,27), (27,25), (15,20)...) cast effect 0x81/0x26 at the
    player through `actor_animation_effects` arm 0x26: spores that poison
-   (FORMATS.md, "The spores") -- read; port after the recording.
+   (FORMATS.md, "The spores") -- checked against bp26 and in the port. Left:
+   the other 129 arms of actor_animation_effects and of effect_tick, and the
+   lighting class an effect is drawn with.
    **The player hits back too** (tools/weapon.py, godot/weapon.gd): the swing,
    the probe, the damage, the flinch, the dying and the push -- read, not yet
    recorded; `emu/bp25.lua` records it. Left: the bows (0x1b, 0x1c), the

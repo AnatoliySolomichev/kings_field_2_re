@@ -447,6 +447,16 @@ python3 tools/anim.py --check       against every snapshot's actor caches
 **11 of 11** awake creatures' caches hold the segment and start vertices it
 builds; 3 snapshots' last drawn creature is its blend exactly.
 
+**`effects.py`** — the effects a creature's volley throws: the spores so far.
+
+```
+python3 tools/effects.py            against emu/bp26.lua, with what differs
+```
+
+The spore's life frame by frame, its strike on the player and the poison.
+Against bp26: **118 of 118** frames, **118 of 118** strikes, 31 of 32 poison
+frames (the other resisted).
+
 **`weapon.py`** — the player's weapon: the swing, what it reaches, what a hit
 does to a creature.
 

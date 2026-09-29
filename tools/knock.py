@@ -351,17 +351,34 @@ def check(out=sys.stdout, verbose=False):
     lvl = movement.level(0)
     good = True
     want = settle((SHAKE_MAX, 0))
-    lengths = [sum(1 for r in e if r["pst"] == 0x10) for e in eps]
+    # a knock-back hit again before it settles -- vertical state 0x40 anew --
+    # starts the push and the shake over, so only the single ones say how long
+    # one shake lasts
+    def hits(e):
+        return sum(1 for a, b in zip(e, e[1:]) if b["vst"] == 0x40 and a["vst"] != 0x40
+                   and b["pst"] == 0x10)
+    single = [e for e in eps if hits(e) == 1]
+    lengths = [sum(1 for r in e if r["pst"] == 0x10) for e in single]
     ok_len = sum(1 for n in lengths if n == want)
-    print(f"  {len(eps)} knock-backs, {lengths} frames in state 0x10; the "
-          f"spring settles a shake of {SHAKE_MAX:#x} in {want}: "
-          f"{ok_len} of {len(eps)}", file=out)
-    good &= ok_len == len(eps)
+    print(f"  {len(eps)} knock-backs ({len(eps) - len(single)} hit again before "
+          f"they settled); the single ones last {sorted(set(lengths))} frames in "
+          f"state 0x10, and the spring settles a shake of {SHAKE_MAX:#x} in "
+          f"{want}: {ok_len} of {len(single)}", file=out)
+    good &= ok_len == len(single)
+    import replay
+    try:
+        doors_ = replay.doors(0)
+    except Exception:
+        doors_ = []
+
+    def at_door(r):
+        return any(abs(o["x"] - r["p"][0]) < replay.DOOR_REACH
+                   and abs(o["z"] - r["p"][2]) < replay.DOOR_REACH for o in doors_)
     # the landing: state 0x40 with the push's Y, into 0x50 in the same frame
     land_ok = land_n = 0
     for e in eps:
         a, b, c = e[1], e[2], e[3]
-        if a["vst"] != 0x40:
+        if a["vst"] != 0x40 or at_door(a):
             continue
         land_n += 1
         cam = {"crouch": 0, "dip": 0}
@@ -382,24 +399,30 @@ def check(out=sys.stdout, verbose=False):
     # predicted from the creature where the log names it, else taken from the
     # first frame's step
     recs = strike_records(0)
-    steps_ok = steps = vel_ok = vels = 0
+    steps_ok = steps = vel_ok = vels = near_door = 0
     for e in eps:
-        att, rec = _attacker(e[1], recs)
-        v = None
-        if att is not None:
-            v = apply_damage(50, 50, 14, e[1]["p"], att, rec[0x11],
-                             e[1]["ang"])["push"]
+        v = onset(e[1])             # the logged velocity, else the creature's
         for i, (r, nxt) in enumerate(zip(e[1:], e[2:])):
             if r["pst"] != 0x10:
                 break
+            if i and r["vst"] == 0x40 and e[i]["vst"] != 0x40:
+                v = onset(r)          # hit again: player_knock starts it over
             first = v is None
             if first:
                 v = (nxt["p"][0] - r["p"][0], 1, nxt["p"][2] - r["p"][2])
             p = frame(lvl, r, nxt, v)
             p, v = p
-            if nxt.get("pv") and nxt["pst"] == 0x10:
+            if at_door(r):
+                near_door += 1       # the door's shove and its restamped
+                continue             # cells are not in a recording of the player
+            if nxt.get("pv") and nxt["pst"] == 0x10 and not (
+                    nxt["vst"] == 0x40 and r["vst"] != 0x40):
+                # (a new hit's push comes from the creature's tick, after ours)
                 vels += 1                 # bp16's pv=, from 2026-09-28 on
                 vel_ok += tuple(v) == nxt["pv"]
+                if tuple(v) != nxt["pv"] and verbose:
+                    print(f"  f={r['f']}: velocity {tuple(v)}, logged {nxt['pv']}",
+                          file=out)
             if first:
                 continue
             steps += 1
@@ -409,29 +432,49 @@ def check(out=sys.stdout, verbose=False):
                 print(f"  f={r['f']}: model {p}, game {nxt['p']}", file=out)
     print(f"  {steps_ok} of {steps} frames of a knock-back land where the game "
           f"put the player -- the walk, player_move and player_vertical, the "
-          f"push carried across the whole episode", file=out)
+          f"push carried across the whole episode; {near_door} more within "
+          f"reach of a swinging door, set apart as the replay sets them",
+          file=out)
     good &= steps_ok == steps
     if vels:
         print(f"  {vel_ok} of {vels} frames leave player_velocity what the "
               f"game logged (pv=)", file=out)
         good &= vel_ok == vels
-    # the push predicted from the creature, where the log names it
+    # the push predicted from the creature, where the log names it: against
+    # a fresh character (14 on 50) the Y it gives; where bp16 logged the
+    # velocity itself, the direction -- some strength 0x50..0x258 along the
+    # angles from the creature must give the logged vector exactly (the log
+    # does not hold the HP that decides the strength)
     pred_ok = pred_n = 0
     for e in eps:
-        r1 = e[1]
-        att, rec = _attacker(r1, recs)
-        if att is None:
-            continue
-        pred_n += 1
-        # the damage off the record against a fresh character: 14 on 50
-        hit = apply_damage(50, 50, 14, r1["p"], att, rec[0x11], r1["ang"])
-        if hit["push"][1] == r1["vv"]:
-            pred_ok += 1
-        elif verbose:
-            print(f"  f={r1['f']}: push {hit['push']}, the game's Y {r1['vv']}",
-                  file=out)
+        for i, r1 in enumerate(e):
+            if not (r1["pst"] == 0x10 and r1["vst"] == 0x40
+                    and (i == 0 or e[i - 1]["vst"] != 0x40)):
+                continue
+            att, rec = _attacker(r1, recs)
+            if att is None:
+                continue
+            pred_n += 1
+            if r1.get("pv"):
+                pitch, yaw = angles(r1["p"][0] - att[0],
+                                    r1["p"][1] - (att[1] + RAISE),
+                                    r1["p"][2] - att[2])
+                d = movement.direction_from_angles(pitch, yaw)
+                good_one = any(
+                    (s16((d[0] * k) >> 12),
+                     max(-PUSH_Y, min(PUSH_Y, s16((d[1] * k) >> 12))),
+                     s16((d[2] * k) >> 12)) == tuple(r1["pv"])
+                    for k in range(PUSH_MIN, PUSH_CAP_HEAVY + 1))
+            else:
+                hit = apply_damage(50, 50, 14, r1["p"], att, rec[0x11], r1["ang"])
+                good_one = hit["push"][1] == r1["vv"]
+            pred_ok += good_one
+            if not good_one and verbose:
+                print(f"  f={r1['f']}: the push from the creature does not give "
+                      f"the logged {r1.get('pv') or r1['vv']}", file=out)
     print(f"  {pred_ok} of {pred_n} pushes predicted from the creature's "
-          f"logged position: the Y the game put into player_vvel", file=out)
+          f"logged position (the logged velocity's direction, or the Y a fresh "
+          f"character takes)", file=out)
     good &= pred_ok == pred_n
     return good
 

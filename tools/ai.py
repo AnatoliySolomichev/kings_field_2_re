@@ -651,6 +651,8 @@ def tick(a, kind, lvl, player, others, rand):
             a["sub"] = (a["sub"] + u16f(raw, 0x12)) & 0xFFFF
             if u16f(raw, 0x10) < s16(a["sub"]):
                 a["sub"] = 0
+            import effects
+            a["fired"], a["n72"] = effects.volley(raw, a["n72"])
         if a["clock"] >= 0xFFF:
             finish(a, kind, player, rand)
         brake(a, lvl, kind["accel"], 0xA, others, player)    # 0x80052610
@@ -733,7 +735,11 @@ def _burrowed(a, kind, raw, lvl, player, others, rand, dist):
             a["radius"], a["height"] = kind["radius"], kind["height"]
             a["sub"], a["n72"] = 3, u16f(raw, 0x12)
     elif sub == 3:
-        drive(a, lvl, a["yaw"], u16f(raw, 0xE), 0xFF, 5, others, player)
+        # 0x80052284: walk_to the aim with no turn of its own (most 0, turn
+        # accel 0) -- a rate it already has still turns it while the aim is
+        # behind -- and the objects bit out of collision_layers meanwhile
+        walk_to(a, lvl, s16(a["aim"]), u16f(raw, 0xE), 0, 0xFF, 0, 5, others,
+                player)
         a["n72"] = s16(a["n72"] - 1)
         if a["n72"] == -1:
             finish(a, kind, player, rand)
@@ -760,7 +766,10 @@ def kind_of(lv, k, blob=None):
             "weight": e[2], "arc_face": s16f(e, 0x16), "arc_back": s16f(e, 0x18),
             "hp": u16f(e, 0x1A), "exp": s16f(e, 0x1E),
             "defence": [u16f(e, 0x20 + 2 * i) for i in range(8)],
-            "gold": u16f(e, 0x30)}
+            "gold": u16f(e, 0x30),
+            # +0x32: the scale actor_copy_kind puts at +0x48..+0x4c, which
+            # render_walk hands draw_model_plain's ScaleMatrix
+            "scale": u16f(e, 0x32)}
 
 
 def new_actor(x, y, z, yaw, kind, flags=0):
@@ -838,16 +847,21 @@ def check_log(out=sys.stdout, path=None):
     rate, speed = {}, {}
     for kd in ks:
         for b in kd["behaviours"]:
-            rate.setdefault(b["op"], s16f(b["raw"], 8))
+            # each kind its own rates: kinds 4 and 5 run opcode 5 at 0x100
+            rate.setdefault((kd["kind"], b["op"]), s16f(b["raw"], 8))
             if b["op"] in (1, 5):
                 speed.setdefault(b["op"], u16f(b["raw"], 0xC))
+    table = __import__("actors").table(rows[0]["lv"])
+    kind_at = {a["slot"]: a["kind"] for a in table if a}
     per = collections.defaultdict(list)
     for r in rows:
         for a in r["act"]:
             per[a["slot"]].append((r["f"], a["b0e"], a["pos"]))
+    per = {k: v for k, v in per.items()}
     ok = bad = 0
+    odd = []
     steps = collections.defaultdict(collections.Counter)
-    for seq in per.values():
+    for slot, seq in per.items():
         start = None
         for (f0, op0, p0), (f1, op1, p1) in zip(seq, seq[1:]):
             if f1 != f0 + 1:
@@ -856,12 +870,16 @@ def check_log(out=sys.stdout, path=None):
             if op0 == op1:
                 steps[op0][round(math.hypot(p1[0] - p0[0], p1[2] - p0[2]))] += 1
             if op1 != op0:
-                if start is not None and rate.get(op0):
-                    cyc = -(-0x1000 // rate[op0])
+                # a hit forces opcode 2 or 3 in mid-cycle (actor_take_hit):
+                # those runs end when the blow lands, not with the clock
+                r_ = rate.get((kind_at.get(slot), op0))
+                if start is not None and r_ and op1 not in (2, 3):
+                    cyc = -(-0x1000 // r_)
                     if (f1 - start) % cyc == 0:
                         ok += 1
                     else:
                         bad += 1
+                        odd.append((op0, op1, f1 - start, cyc))
                 start = f1
     walk = []
     for op in (5, 1):
@@ -914,6 +932,12 @@ def check_locked(out=sys.stdout, path=None, verbose=False):
             by_addr[rec["addr"]] = rec
     res = collections.defaultdict(lambda: [0, 0, 0])   # op -> ok, bad, rand
     firsts = []
+    full, full_miss = [0, 0], []      # frames with every field logged
+    try:
+        doors_ = replay.doors(lv)
+    except Exception:
+        doors_ = []
+    shoved = 0
     prev_yaw = {}
     hidden = {}             # slot -> what the log does not hold, from our step
     last_turn = {}          # slot -> the yaw's last step that was not 0
@@ -959,7 +983,22 @@ def check_locked(out=sys.stdout, path=None, verbose=False):
                 # the vertical state and speed, the turn rate and the aim, as
                 # our own step of the frame before left them
                 a.update(h)
-            me = [o for o in others if o["slot"] != k]
+            # actor_tick_driver walks the slots in order: the lower ones have
+            # moved already this frame, the higher ones not yet
+            me = []
+            for o in others:
+                if o["slot"] == k:
+                    continue
+                if o["slot"] < k and o["slot"] in after:
+                    q = after[o["slot"]]
+                    o = dict(o, x=q["pos"][0], y=q["pos"][1], z=q["pos"][2])
+                me.append(o)
+            if any(abs(o["x"] - r1["p"][0]) < replay.DOOR_REACH
+                   and abs(o["z"] - r1["p"][2]) < replay.DOOR_REACH for o in doors_):
+                # the player by a swinging door: its shove (object_interpreter,
+                # before the next log line) moves them after the creature looked
+                shoved += 1
+                continue
             want = (a1["pos"][0], a1["pos"][2], a1["yaw"] & 0xFFF, a1["vel"][0],
                     a1["vel"][1], a1["clock"])
             # rand(): the first try with none; a step that calls it is tried
@@ -999,6 +1038,13 @@ def check_locked(out=sys.stdout, path=None, verbose=False):
                 # our step came out right; else the yaw's last step
                 keep = ("vst", "vy", "aim", "n72") + (("turn",) if matched else ())
                 hidden[k] = {kk: last[kk] for kk in keep}
+            if "rate" in a0:
+                full[0] += matched
+                full[1] += 1
+                if not matched and verbose and len(full_miss) < 12:
+                    full_miss.append(f"  f={r0['f']} slot {k} op {rec['op']}: model "
+                                     f"{(last or a)['x'], (last or a)['z'], s16((last or a)['yaw']) & 0xFFF, (last or a)['vx'], (last or a)['vz'], (last or a)['clock']}, "
+                                     f"game {want}")
             if matched:
                 res[rec["op"]][0] += 1
                 if calls:
@@ -1008,8 +1054,14 @@ def check_locked(out=sys.stdout, path=None, verbose=False):
                 if verbose and len(firsts) < 12:
                     firsts.append(f"  f={r0['f']} slot {k} op {rec['op']}: "
                                   f"model {got}, game {want}")
-    for line in firsts:
+    for line in (full_miss or firsts):
         print(line, file=out)
+    if full[1]:
+        print(f"  with every field logged (bp16 since 2026-09-29): {full[0]} of "
+              f"{full[1]} creature frames exact", file=out)
+    if shoved:
+        print(f"  ({shoved} frames with the player by a swinging door set apart: "
+              f"its shove moves them after the creature looked)", file=out)
     tot_ok = sum(v[0] for v in res.values())
     tot = sum(v[0] + v[1] for v in res.values())
     print(f"  {tot_ok} of {tot} creature frames stepped from the log land where "
@@ -1073,7 +1125,7 @@ def export(out_dir, lv):
             "fall": kf["fall"], "radius": kf["radius"], "height": kf["height"],
             "weight": kf["weight"], "arc_face": kf["arc_face"],
             "arc_back": kf["arc_back"], "hp": kf["hp"], "exp": kf["exp"],
-            "defence": kf["defence"], "gold": kf["gold"],
+            "defence": kf["defence"], "gold": kf["gold"], "scale": kf["scale"],
             "behaviours": [list(b["raw"]) for b in kf["behaviours"]]}
     if lv == 0:
         doc["run"] = run(lv)

@@ -138,14 +138,17 @@ the compass's records, against every snapshot          65 of 65 fields
 the swinging door, against the bp24 recording          226 of 226 steps
 the creatures' behaviour tables, against snapshots     168 896 of 168 896 bytes,
                                                        69 of 69 awake actors
-the creatures' machine, against the bp16 act= log      103 of 103 behaviour runs;
-                                                       8539 of 8933 frames locked
+the creatures' machine, against the bp16 act= log      181 of 181 behaviour runs;
+                                                       3939 of 3942 frames with
+                                                       every field logged
+the spores, against the bp26 recording                 118 of 118 frames,
+                                                       118 of 118 strikes
 the walking, against the recording (replay rung 2)     124 891 of 125 116 frames;
                                                        447 of the 455 that touch
                                                        an object, 76 of 76 a
                                                        creature
-the knock-back, against the bp16 recording             83 of 83 frames, 3 of 3
-                                                       lengths and landings
+the knock-back, against the bp16 recording             171 of 171 frames, 7 of 7
+                                                       lengths, 6 of 6 landings
 the creatures' HP, against 13 snapshots                69 of 69
 the player's weapon, against the bp25 recording        817 of 817 frames,
                                                        11 of 11 blows
@@ -165,7 +168,7 @@ creature runs 480 of 480 twice
 levels 40 of 40 · angles 400 of 400
 conversations 43 of 43, and 25 of 25 steps the emulator recorded
 damage 6 of 6 · knock-back 2484 of 2484 · weapon 2336 of 2336
-fences 600 of 600 · animation 288 of 288
+fences 600 of 600 · animation 288 of 288 · spores 120 of 120
 equipment 16 of 16
 directions 400 of 400
 ```

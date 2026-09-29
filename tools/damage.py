@@ -99,6 +99,9 @@ def from_snapshot(path=SNAP):
 
 IN = re.compile(r"HURT in\s+a0=(-?\d+) a1=(-?\d+) a2=(-?\d+) a3=(-?\d+) "
                 r"hp=(\d+)")
+RA = re.compile(r" ra=([0-9a-f]{8})")
+SCALE = re.compile(r" scale=(\d+) pct=(\d+)")
+EFFECT_CALL = 0x8002B2FC     # effect_hurt_player: the scale is its distance's
 OUT = re.compile(r"HURT out hp=(\d+)")
 MAGIC = re.compile(r" m=(-?\d+(?:,-?\d+){4})")
 TYPES = 8
@@ -115,11 +118,15 @@ def pairs(path=LOG):
             g = [int(m.group(i)) for i in (1, 2, 3, 4)]
             mm = MAGIC.search(line)
             magic = [int(x) for x in mm.group(1).split(",")] if mm else [0] * 5
-            pend = (g[:3] + magic + [g[3]], int(m.group(5)))
+            r = RA.search(line)
+            sc = SCALE.search(line)
+            pend = (g[:3] + magic + [g[3]], int(m.group(5)),
+                    int(r.group(1), 16) if r else None,
+                    (int(sc.group(1)), int(sc.group(2))) if sc else None)
             continue
         m = OUT.search(line)
         if m and pend is not None:
-            out.append((pend[0], pend[1], int(m.group(1))))
+            out.append((pend[0], pend[1], int(m.group(1)), pend[2], pend[3]))
             pend = None
     return out
 
@@ -131,14 +138,23 @@ def check(out=sys.stdout):
         return 0, 0
     defence, stat, k = from_snapshot()
     got = pairs()
-    ok = seen = 0
-    for attacks, before, after in got:
+    ok = seen = eff_ok = eff = 0
+    for attacks, before, after, ra, sc in got:
         if before == 0:
             continue          # already dead: there is nothing to take off
         if after == 0:
             continue          # the kill: the damage is clamped, so it only
                               # says "at least this much" -- reported below
-        base, dmg = hit(attacks, defence, stat, k)
+        if ra == EFFECT_CALL and sc is None:
+            # an effect's strike: the scale is what its distance gave, which
+            # this log did not hold -- between the rim's 0x400 and 0x1000
+            eff += 1
+            lo = hit(attacks, defence, stat, k, 0x400)[1]
+            hi = hit(attacks, defence, stat, k, 0x1000)[1]
+            eff_ok += lo <= before - after <= hi
+            continue
+        base, dmg = hit(attacks, defence, stat, k,
+                        *(sc if sc else (ARG9, ARG10)))
         seen += 1
         if before - after == dmg:
             ok += 1
@@ -146,7 +162,10 @@ def check(out=sys.stdout):
             print(f"  {attacks[:4]}: {before} -> {after} is {before - after}, "
                   f"the model says {dmg} (sum {base})", file=out)
     print(f"{ok} of {seen} recorded hits reproduced exactly", file=out)
-    killed = [(a, b) for a, b, c in got if c == 0 and b > 0]
+    if eff:
+        print(f"  and {eff_ok} of {eff} effects' strikes, whose scale the log "
+              f"did not hold, within what the rim and the centre give", file=out)
+    killed = [(a, b) for a, b, c, _r, _s in got if c == 0 and b > 0]
     for attacks, before in killed:
         base, dmg = hit(attacks, defence, stat, k)
         print(f"  and the kill: {attacks[:3]}, effect {attacks[8]:#x}, on "
@@ -164,10 +183,14 @@ def export(out_dir):
         return None
     defence, stat, k = from_snapshot()
     rows = []
-    for attacks, before, after in pairs():
-        base, dmg = hit(attacks, defence, stat, k)
+    for attacks, before, after, ra, sc in pairs():
+        if ra == EFFECT_CALL and sc is None:
+            continue          # an effect's strike at a scale the log lacks
+        base, dmg = hit(attacks, defence, stat, k,
+                        *(sc if sc else (ARG9, ARG10)))
         rows.append({"attacks": attacks, "before": before, "after": after,
-                     "sum": base, "damage": dmg})
+                     "sum": base, "damage": dmg,
+                     "scale": sc[0] if sc else ARG9, "pct": sc[1] if sc else ARG10})
     path = os.path.join(out_dir, "damagecheck.json")
     with open(path, "w") as fh:
         json.dump({"_note": "hits recorded by emu/bp20.lua, with what "

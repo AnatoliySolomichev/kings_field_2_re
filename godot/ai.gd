@@ -562,7 +562,7 @@ func tick(a: Dictionary, kind: Dictionary, player: Vector3i, others: Array) -> D
 				a["sub"] = (int(a["sub"]) + u16f(raw, 0x12)) & 0xFFFF
 				if u16f(raw, 0x10) < s16(int(a["sub"])):
 					a["sub"] = 0
-				# the effects the record's list at +0x1a launches are not here
+				a["fired"] = volley(raw, a)     # actors.gd launches them
 			if int(a["clock"]) >= 0xFFF:
 				finish(a, kind, player)
 			brake(a, int(kind["accel"]), 0xA, others, player)
@@ -638,11 +638,45 @@ func _burrowed(a: Dictionary, kind: Dictionary, raw: Array, player: Vector3i,
 				a["sub"] = 3
 				a["n72"] = u16f(raw, 0x12)
 		3:
-			drive(a, int(a["ry"]), u16f(raw, 0xE), 0xFF, 5, others, player)
+			# 0x80052284: walk_to the aim, most 0 and turn accel 0 -- a rate it
+			# has still turns it while the aim is behind
+			walk_to(a, s16(int(a["aim"])), u16f(raw, 0xE), 0, 0xFF, 0, 5, others, player)
 			a["n72"] = s16(int(a["n72"]) - 1)
 			if int(a["n72"]) == -1:
 				finish(a, kind, player)
 			clock(a, int(raw[0x1B]))
+
+
+# The list at a volley record's +0x1a from +0x72 (0x80052484): the entries to
+# fire -- a vertex of the creature's model each, for level 0's records; 0x8000
+# goes back to the start, 0x8001 n sets how many, 0x8003 n skips n, and the
+# three-argument 0x8002 and 0x8004 are passed on as [code, a, b, c].
+# @orig game:0x80052484  status:transcribed -- a label inside actor_tick; tools/effects.py volley
+static func volley(raw: Array, a: Dictionary) -> Array:
+	var fired := []
+	var left := 1
+	var i := int(a.get("n72", 0))
+	var guard := 0
+	while left > 0 and guard < 64:
+		guard += 1
+		var e := u16f(raw, 0x1A + 2 * i)
+		i += 1
+		if e == 0x8000:
+			i = 0
+		elif e == 0x8001:
+			left = u16f(raw, 0x1A + 2 * i)
+			i += 1
+		elif e == 0x8003:
+			i += 1 + u16f(raw, 0x1A + 2 * i)
+		elif e == 0x8002 or e == 0x8004:
+			fired.append([e, s16f(raw, 0x1A + 2 * i), s16f(raw, 0x1C + 2 * i), s16f(raw, 0x1E + 2 * i)])
+			i += 3
+			left -= 1
+		else:
+			fired.append([e])
+			left -= 1
+	a["n72"] = i
+	return fired
 
 
 # What actor_wake leaves, with the entrance behaviour switched in.

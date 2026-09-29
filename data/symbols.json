@@ -2721,7 +2721,7 @@
  "0x8002b114": {
   "name": "effect_hurt_player",
   "kind": "code",
-  "evidence": "(point, near, radius, mode, edge, slash, blow, stab, effect, m1..m5, scale, pct): the player within radius of the point (mode 0x8000: 0x80016fb4 with 0x320 and 0x6a4), the damage scaled down to edge/0x1000 at the rim, into player_take_hit"
+  "evidence": "(point, near, radius, mode, edge, slash, blow, stab, effect, m1..m5, scale, pct): the player within radius of the point (mode 0x8000: 0x80016fb4 with 0x320 and 0x6a4), the damage scaled down to edge/0x1000 at the rim, into player_take_hit. tools/effects.py: 118 of 118 strikes of bp26, hit or miss and the scale"
  },
  "0x80053850": {
   "name": "effect_strike",
@@ -2731,7 +2731,7 @@
  "0x80053310": {
   "name": "effect_collide",
   "kind": "code",
-  "evidence": "after the grace count +0xb, collide_query at the effect with flags by +0 & 7: 1 0xa1, 2 0x31, 3 0xb1, 4 1"
+  "evidence": "after the grace count +0xb, collide_query at the effect's point with its y plus half the height (the point is the middle), flags by +0 & 7: 1 0xa1, 2 0x31, 3 0xb1, 4 1. A spore freed on the floor, bp26"
  },
  "0x800566d4": {
   "name": "effect_move",
@@ -2746,7 +2746,7 @@
  "0x8004ede0": {
   "name": "actor_vertex_point",
   "kind": "code",
-  "evidence": "(actor, vertex, out): that vertex of the actor's animated model, turned by its angles with the yaw + 0x800 -- where a volley's effect starts"
+  "evidence": "(actor, vertex, out): that vertex of the actor's animated model, turned by its angles with the yaw + 0x800 -- where a volley's effect starts. Slot 40's spore in bp26 starts at the point it gives, to the unit"
  },
  "0x8004f1d0": {
   "name": "effect_aim",

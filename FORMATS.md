@@ -4495,8 +4495,9 @@ spring alone. The view adds the tilts (`0x80032028`): pitch `0x801b2608` =
 `0x801b260c` = `0x801b2614 + tilt.z + ...`, which `camera_pose` hands to
 `RotMatrix`.
 
-**Checked against the recording**: all three knock-backs in `emu/bp16.lua`'s
-log last 28 frames in state 0x10 -- a shake of 0x2a, which any hit of 12 or more on
+**Checked against the recording**: every knock-back in `emu/bp16.lua`'s log
+that is hit once lasts 28 frames in state 0x10 -- 7 of 7; one hit again before
+it settles starts the push and the shake over (`player_knock` again), 2 of 9 -- -- a shake of 0x2a, which any hit of 12 or more on
 50 HP reaches. The push is **predicted from the creature**: kind 0's strike
 (lift 0x20) at its logged position gives (224, 22, -74), and 22 is the Y the
 game put into `player_vvel`; carried through the walk, `player_move` and
@@ -4537,6 +4538,13 @@ land exactly: idle 3953 of 3967, strike 40 of 42, close-in 3995 of 4026,
 burrow 258 of 298, the volley 42 of 42, wander 251 of 558 (its aim, +0x64,
 was not logged). bp16 logs the rest from now on -- +0x58, +0x64, +0xd, +0x52,
 +0x70, +0x72, +0x1a, +0xc -- and the check uses them when they are there.
+**With every field logged, 3939 of 3942 frames are exact**, the flinch (225)
+and the dying (336) included. What that session taught: opcode 6's last
+sub-state is `walk_to` the aim with no turn of its own (most 0, turn accel 0,
+`0x80052284`) -- a rate it already has still turns it -- not a drive; lower
+slots have moved already when a higher one looks at them; and a player by a
+swinging door is shoved (`object_interpreter`) after the creatures looked, so
+those frames are set apart as the replay sets them.
 
 **The volley, opcode 0x19** (`0x800523f0`), which level 0's kinds 2 and 3 use
 and most kinds on the next levels: the clock; fire times at +0x70 from the
@@ -4550,10 +4558,19 @@ the default arm and had no tick for it, so a creature that chose it stood
 still for good; both are in now. The effects it launches are the effect
 system's (`effect_tick`, 4584 instructions) and are not.
 
-### The spores (read, not yet recorded or ported)
+### The spores
 
-What level 0's kind-3 creatures (model 57) throw, read off the listing and
-waiting on `emu/bp26.lua` before it is ported:
+What level 0's kind-3 creatures (model 57) throw -- `tools/effects.py`,
+`godot/effects.gd` -- **checked against `emu/bp26.lua`'s recording**: 118 of 118
+frames of the spores from the frame before (life, height, scale, growth, the
+one freed on the floor), 118 of 118 strikes on the player hit or miss as the
+model says with the scale it hands on, and on 31 of 32 frames that follow a
+strike the player has lost 1 HP (the other: the roll resisted). Slot 40's
+spore starts at the point bp26 logged, to the unit: its animated vertex 45
+at clock 1080, turned by its yaw 0xc00 + 0x800. The collision asks at the
+point's y **plus half the height** -- the point is the middle. The port draws
+the spore with resident model 0x40, lit by the level's class 0 (the class the
+effect draw uses is not read yet).
 
 * **Launch.** The volley's list entry (0x2d) goes to `actor_animation_effects`
   as a vertex number: `0x8004ede0` takes that vertex of the creature's
@@ -4581,6 +4598,14 @@ waiting on `emu/bp26.lua` before it is ported:
   0x384 (0x2a3 with ring 0x4a, a quarter with 0x53). The controller counts it
   down (`0x80031e78`): every 30th frame a flash (0x960, 60 frames) and
   `0x8002a6a0(-1)`, one HP -- thirty in all, and a throw if it is the last.
+  0x384 is itself a multiple of 30, so a spore that strikes every frame,
+  setting it back each time, **takes 1 HP every frame** -- which is what the
+  recording shows: 50 down to 40 in ten frames.
+
+**The creatures are drawn at their kind's scale.** `render_walk` hands
+`draw_model_plain` the actor's +0x48, which `actor_copy_kind` fills from the
+kind's +0x32: 0x1400 for level 0's kinds 0, 1 and 2, the commonest monsters, a
+quarter larger than the port had them; 0x1800 and 0x1c00 for kinds 15 and 14.
 
 ### Where a creature may go, and which way it is drawn
 

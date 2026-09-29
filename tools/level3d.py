@@ -593,6 +593,42 @@ def build_actors_gltf(lv, out="out/godot"):
     return path
 
 
+EFFECT_MODELS = (0x40,)     # the resident models effects draw: 0x40 the spore
+
+
+def build_effects_gltf(lv, out="out/godot"):
+    """The resident models the effects draw (+0xe), one node each, `mNNN`,
+    for godot/effects.gd to copy: model 0x40 is the spore. Lit by the level's
+    lighting class 0 -- which class the effect draw uses is not read yet."""
+    import modelbank
+    vram = object_vram(lv)
+    look = lighting.table()
+    llm, lcm, bk = light_class(look, 0, 0)
+    g = gltf.Gltf()
+    mats, items = {}, []
+    for m in EFFECT_MODELS:
+        try:
+            _flags, objs = modelbank.load(m)
+        except Exception as e:
+            print(f"effect model {m}: {e}")
+            continue
+        groups = {}
+        emit_object(objs, lambda v: (v[0] / UNIT, -v[1] / UNIT, -v[2] / UNIT),
+                    lambda raw: shade(raw, llm, lcm, bk), groups,
+                    fog=fog_of(look, 0))
+        prims = []
+        for key, (pos, nrm, uv, col, fogs) in groups.items():
+            pr = g.primitive(pos, nrm, uv, col, fogs)
+            pr["material"] = material_for(g, mats, out, lv, key, vram)
+            prims.append(pr)
+        if prims:
+            items.append((f"m{m:03d}", prims, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)))
+    os.makedirs(out, exist_ok=True)
+    path, _n = g.write_nodes(f"{out}/effects{lv:02d}.gltf", items)
+    print(f"effect models: {len(items)} -> {path}")
+    return path
+
+
 # The opcodes whose objects turn on a hinge: `object_interpreter`'s arm for
 # opcode 1 (0x8004814c) swings the model a quarter turn and back. godot/doors.gd
 # runs it; the other door classes (0x00, 0x1b, and the grid-drawn 0x03 to 0x05)
@@ -860,6 +896,8 @@ SCENE = """[gd_scene load_steps={load_steps} format=3]
 [ext_resource type="Script" path="res://sky.gd" id="19"]
 [ext_resource type="Script" path="res://hud.gd" id="20"]
 [ext_resource type="Script" path="res://compass.gd" id="21"]
+[ext_resource type="PackedScene" path="res://effects{lv:02d}.gltf" id="22"]
+[ext_resource type="Script" path="res://effects.gd" id="23"]
 {gallery_res}
 
 [sub_resource type="Environment" id="Env"]
@@ -893,6 +931,12 @@ far = 400.0
 
 [node name="Actors" type="Node" parent="."]
 script = ExtResource("16")
+
+[node name="EffectModels" parent="." instance=ExtResource("22")]
+visible = false
+
+[node name="Effects" type="Node3D" parent="."]
+script = ExtResource("23")
 
 [node name="Doors" type="Node" parent="."]
 script = ExtResource("18")
@@ -1084,7 +1128,7 @@ def project(lv, out="out/godot", start=(57, 4)):
                        for i in range(len(pieces)))
     open(f"{out}/world.tscn", "w").write(
         SCENE.format(lv=lv, px=px, py=py, pz=pz, gallery_res=res,
-                     gallery_nodes=nodes, load_steps=14 + len(pieces)))
+                     gallery_nodes=nodes, load_steps=16 + len(pieces)))
     # The boot chain: the shell, the opening and the pad, which is where the
     # project now starts. world.tscn is still the level and boot.gd hands over
     # to it the way SLUS_002.55 hands over to GAME.EXE.
@@ -1095,7 +1139,7 @@ def project(lv, out="out/godot", start=(57, 4)):
                  "game.gd", "objects.gd", "escript.gd", "items.gd",
                  "damage.gd", "equip.gd", "objcoll.gd", "scroll.gd",
                  "doors.gd", "sky.gd", "hud.gd", "compass.gd", "ai.gd",
-                 "weapon.gd", "anim.gd"):
+                 "weapon.gd", "anim.gd", "effects.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening
@@ -1138,6 +1182,11 @@ def project(lv, out="out/godot", start=(57, 4)):
         anim.export(out, lv)
     except Exception as e:
         print(f"creature animation skipped: {e}")
+    try:
+        import effects
+        effects.export(out)
+    except Exception as e:
+        print(f"effect cases skipped: {e}")
     try:
         import escript
         escript.export(out)
@@ -1257,7 +1306,7 @@ def verify(out="out/godot"):
                             "fences:",
                             "creature run:",
                             "levels:", "angles:",
-                            "scripts:", "damage:", "knock-back:", "weapon:", "animation:", "FAIL", "  first",
+                            "scripts:", "damage:", "knock-back:", "weapon:", "animation:", "spores:", "FAIL", "  first",
                             "  level case", "  angle (", "  script level",
                             "  hit ")):
             print("   " + line.strip())
@@ -1279,6 +1328,7 @@ if __name__ == "__main__":
         build_gltf(lv, limit=limit)
         build_objects_gltf(lv)
         build_actors_gltf(lv)
+        build_effects_gltf(lv)
         build_collision_gltf(lv)
         build_sky_gltf(lv)
     project(lv)

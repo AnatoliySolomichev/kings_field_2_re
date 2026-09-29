@@ -172,10 +172,10 @@ arm(0x8002ab18, 'hurt', function()
     -- types are the stack words at sp+0x10..0x20 (tools/damage.py), and ra
     -- says which of the nine call sites struck
     local sp = reg(g, 29)
-    log(string.format('HURT in  a0=%d a1=%d a2=%d a3=%d hp=%d %s m=%d,%d,%d,%d,%d ra=%08x',
+    log(string.format('HURT in  a0=%d a1=%d a2=%d a3=%d hp=%d %s m=%d,%d,%d,%d,%d ra=%08x scale=%d pct=%d',
         reg(g, 4), reg(g, 5), reg(g, 6), reg(g, 7), u16(PLAYER_HP), where(),
         u16(sp + 0x10), u16(sp + 0x14), u16(sp + 0x18), u16(sp + 0x1c),
-        u16(sp + 0x20), reg(g, 31)))
+        u16(sp + 0x20), reg(g, 31), u32(sp + 0x24), u32(sp + 0x28)))
 end)
 arm(0x8002b110, 'hurtout', function()
     bump('hurtout')

@@ -108,8 +108,8 @@ func _ready() -> void:
 					recs.append(raw)
 				kd["behaviours"] = recs
 				for field in ["accel", "turn_accel", "fall", "radius", "height",
-						"weight", "arc_face", "arc_back", "hp", "exp", "gold"]:
-					kd[field] = int(kd.get(field, 0))
+						"weight", "arc_face", "arc_back", "hp", "exp", "gold", "scale"]:
+					kd[field] = int(kd.get(field, 0x1000 if field == "scale" else 0))
 				var dfn := []
 				for v in kd.get("defence", []):
 					dfn.append(int(v))
@@ -184,6 +184,9 @@ func _pass(px: int, pz: int) -> void:
 		if (frame & 3) == (n & 3):
 			ai.pick(a, kind, p)
 		var blow := ai.tick(a, kind, p, awake)
+		if a.has("fired"):
+			_launch(a, kind, a["fired"])
+			a.erase("fired")
 		if a.get("retire", false):
 			a.erase("retire")
 			_kill(k)
@@ -280,6 +283,36 @@ func _animate(k: int) -> void:
 			own.surface_set_material(own.get_surface_count() - 1, sf["material"])
 
 
+# A volley's fire (actor_animation_effects, 0x8004f414, keyed by the record's
+# +0xc): for arm 0x26, the spores, each entry is a vertex of the creature's
+# animated model -- scaled by +0x48 and turned by the yaw + 0x800
+# (actor_vertex_point, 0x8004ede0) -- and a spore rises from it, with +0x18's
+# low byte as its percentage. tools/effects.py puts slot 40's spore at the
+# point bp26 logged, to the unit.
+# @orig game:0x8004f6c4  status:verified -- actor_animation_effects arm 0x26; the other 129 arms are not here
+func _launch(a: Dictionary, kind: Dictionary, fired: Array) -> void:
+	var raw: Array = a["rec"]
+	if raw == null or int(raw[0xC]) != 0x26:
+		return
+	var fx := get_node_or_null("../Effects")
+	if fx == null or not fx.has_method("spawn_spore"):
+		return
+	var m := int(a["model"])
+	for f in fired:
+		if f.size() != 1:
+			continue
+		var v := Vector3i(0, -(int(a["height"]) >> 1), -int(a["radius"]))
+		if KFAnim.models.has(m):
+			var vs := KFAnim.vertices(m, int(a.get("anim", 0x80)) & 0xFF, int(a["clock"]))
+			if int(f[0]) < vs.size():
+				v = vs[int(f[0])]
+		var sc := int(kind.get("scale", 0x1000))
+		var w := KFWeapon.vec_rotate(coll, 0, (int(a["ry"]) + 0x800) & 0xFFF, 0,
+			[(v.x * sc) >> 12, (v.y * sc) >> 12, (v.z * sc) >> 12])
+		fx.spawn_spore(Vector3i(int(a["px"]) + int(w[0]), int(a["py"]) + int(w[1]),
+			int(a["pz"]) + int(w[2])), KFCreatureAI.u16f(raw, 0x18) & 0xFF)
+
+
 # How render_walk (0x80040c94) turns a creature to draw it: its angles +0x40,
 # +0x42 + 0x800, +0x44 into draw_model_plain, which builds Ry Rx Rz with the
 # game's own rot_matrix_y (cos, -sin / sin, cos) at 0x800166f4 -- so a model's
@@ -288,9 +321,14 @@ func _animate(k: int) -> void:
 # flag 0x20 (+0x28) is drawn with no turn at all (0x80040c34).
 # @orig game:0x80040c94  status:transcribed -- a label inside render_walk
 func _draw_basis(a: Dictionary) -> Basis:
+	# the kind's +0x32, at the actor's +0x48..+0x4c: draw_model_plain's
+	# ScaleMatrix -- 0x1400 for level 0's commonest monsters, a quarter larger
+	var s := float(kinds[int(a["kind"])].get("scale", 0x1000)) / 4096.0 \
+		if kinds.has(int(a["kind"])) else 1.0
 	if int(a.get("eflags", 0)) & 0x20:
-		return Basis()
-	return Basis(Vector3.UP, float((int(a["ry"]) + 0x800) & 0xFFF) * TAU / 4096.0)
+		return Basis().scaled_local(Vector3(s, s, s))
+	return Basis(Vector3.UP, float((int(a["ry"]) + 0x800) & 0xFFF) * TAU / 4096.0) \
+		.scaled_local(Vector3(s, s, s))
 
 
 # A blow opcode 4 struck: the player within its reach of the creature raised by
