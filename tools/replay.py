@@ -148,7 +148,8 @@ def runs_of(rows):
     return out
 
 
-def step_horizontal(lvl, p, ang, fwd_speed, strafe_speed, actors=None):
+def step_horizontal(lvl, p, ang, fwd_speed, strafe_speed, actors=None,
+                    state=0):
     """The two calls `0x8002f9bc` makes, in its own order and its own directions.
 
     Forward goes along `facing + 0x400` and the strafe along `facing` — the
@@ -163,8 +164,10 @@ def step_horizontal(lvl, p, ang, fwd_speed, strafe_speed, actors=None):
     slides down it, and by two pushes a frame.
     """
     fd, sd = movement.step_distances(strafe_speed, fwd_speed)
-    p, _ok = movement.horizontal(lvl, p, (ang + 0x400) & 0xFFF, fd, actors=actors)
-    p, _ok = movement.horizontal(lvl, p, ang & 0xFFF, sd, actors=actors)
+    p, _ok = movement.horizontal(lvl, p, (ang + 0x400) & 0xFFF, fd,
+                                 state=state, actors=actors)
+    p, _ok = movement.horizontal(lvl, p, ang & 0xFFF, sd, state=state,
+                                 actors=actors)
     return p
 
 
@@ -419,8 +422,9 @@ def report(path="out/lua_bp16.log"):
             print(f"     of the {tb} that differ, {to} are within reach of a "
                   f"swinging door, {tw} the model turned away at a wall"
                   + ("" if rest <= 0 else f" and {rest} it took whole "
-                     "(a creature the log did not hold: sessions before "
-                     "bp16 logged act=)"))
+                     "(something the model does not see: creatures in the "
+                     "sessions before bp16 logged act=, and something solid "
+                     "at cell (10,26))"))
         if rung == 2 and TOUCH:
             print(f"     {TOUCH[True]} of {TOUCH[True] + TOUCH[False]} frames that "
                   f"run into a logged creature come out exact")

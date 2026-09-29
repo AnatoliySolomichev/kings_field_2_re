@@ -594,6 +594,36 @@ def tick(a, kind, lvl, player, others, rand):
         brake(a, lvl, raw[0xD], 0xA, others, player)
     elif op == 6:                                       # 0x8005205c
         _burrowed(a, kind, raw, lvl, player, others, rand, dist)
+    elif op == 2:                                       # 0x80050400, a flinch
+        if a["phase"] == 0:
+            a["phase"], a["sub"] = 0xF0, 0
+            start_anim(a, raw[1])
+        s = a["sub"]
+        clock(a, s16f(raw, 8))
+        if s == 0:
+            a["sub"] = 1                                # the tint set (not kept)
+        elif s == 1 and a["clock"] >= 0x7FF:
+            a["sub"] = 2
+        elif s == 2 and a["clock"] >= 0xFFF:
+            a["sub"] = 3
+        elif s == 3:
+            finish(a, kind, player, rand)
+        brake(a, lvl, kind["accel"] << 1, 0xA, others, player)   # 0x80052bd0
+    elif op == 3:                                       # 0x800505a4, dying
+        if a["phase"] == 0:
+            a["phase"], a["sub"] = 0xF0, 0
+            start_anim(a, raw[1])
+        s = a["sub"]
+        if s == 0:
+            clock(a, s16f(raw, 8))                      # the drops at 0x800 are not here
+            if a["clock"] >= 0xFFF or s16f(raw, 8) == 0:
+                a["sub"] = 0xF                          # 0x800507b0
+        else:
+            a["sub"] = s + 1                            # 0x80050828
+            if s >= 0x26:                               # 0x80050868: gone,
+                a["retire"] = True                      # by its category
+                return blow
+        brake(a, lvl, kind["accel"] << 1, 0xA, others, player)
     move_vertical(a, lvl, kind)
     return blow
 
@@ -662,7 +692,15 @@ def kind_of(lv, k, blob=None):
     kd = [x for x in kinds(lv, blob) if x["kind"] == k][0]
     return {"accel": e[3], "turn_accel": e[4], "fall": e[5],
             "radius": u16f(e, 0x12), "height": u16f(e, 0x14),
-            "behaviours": kd["behaviours"]}
+            "behaviours": kd["behaviours"],
+            # what a hit reads (actor_take_hit, held_item_tick): the push's
+            # weight +2, the two arcs +0x16 and +0x18, the HP actor_copy_kind
+            # copies from +0x1a, the experience +0x1e, the eight defences
+            # +0x20..+0x2e and the gold +0x30
+            "weight": e[2], "arc_face": s16f(e, 0x16), "arc_back": s16f(e, 0x18),
+            "hp": u16f(e, 0x1A), "exp": s16f(e, 0x1E),
+            "defence": [u16f(e, 0x20 + 2 * i) for i in range(8)],
+            "gold": u16f(e, 0x30)}
 
 
 def new_actor(x, y, z, yaw, kind, flags=0):
@@ -827,6 +865,9 @@ def export(out_dir, lv):
         doc["kinds"][str(k)] = {
             "accel": kf["accel"], "turn_accel": kf["turn_accel"],
             "fall": kf["fall"], "radius": kf["radius"], "height": kf["height"],
+            "weight": kf["weight"], "arc_face": kf["arc_face"],
+            "arc_back": kf["arc_back"], "hp": kf["hp"], "exp": kf["exp"],
+            "defence": kf["defence"], "gold": kf["gold"],
             "behaviours": [list(b["raw"]) for b in kf["behaviours"]]}
     if lv == 0:
         doc["run"] = run(lv)

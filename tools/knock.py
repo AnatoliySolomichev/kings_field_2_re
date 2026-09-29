@@ -262,7 +262,9 @@ def frame(lvl, r, nxt, v):
                                   r["btn"] & B["back"], r["max"])
         stf = movement.accelerate(r["stf"], r["btn"] & B["strafe_pos"],
                                   r["btn"] & B["strafe_neg"], r["max"], 2)
-    p = replay.step_horizontal(lvl, r["p"], nxt["ang"], fwd, stf, r.get("act"))
+    # player_horizontal takes no step up outside player state 0 (0x8002e5cc)
+    p = replay.step_horizontal(lvl, r["p"], nxt["ang"], fwd, stf, r.get("act"),
+                               state=r["pst"])
     p, v, _moved = player_move(lvl, p, (v[0], 1, v[2]), r.get("act"))
     p, _st, _vv = movement.walk_step(lvl, p, 0, 0, r["vst"], r["vv"], r["mag"])
     return p, v
@@ -379,7 +381,7 @@ def check(out=sys.stdout, verbose=False):
     # predicted from the creature where the log names it, else taken from the
     # first frame's step
     recs = strike_records(0)
-    steps_ok = steps = 0
+    steps_ok = steps = vel_ok = vels = 0
     for e in eps:
         att, rec = _attacker(e[1], recs)
         v = None
@@ -394,6 +396,9 @@ def check(out=sys.stdout, verbose=False):
                 v = (nxt["p"][0] - r["p"][0], 1, nxt["p"][2] - r["p"][2])
             p = frame(lvl, r, nxt, v)
             p, v = p
+            if nxt.get("pv") and nxt["pst"] == 0x10:
+                vels += 1                 # bp16's pv=, from 2026-09-28 on
+                vel_ok += tuple(v) == nxt["pv"]
             if first:
                 continue
             steps += 1
@@ -405,6 +410,10 @@ def check(out=sys.stdout, verbose=False):
           f"put the player -- the walk, player_move and player_vertical, the "
           f"push carried across the whole episode", file=out)
     good &= steps_ok == steps
+    if vels:
+        print(f"  {vel_ok} of {vels} frames leave player_velocity what the "
+              f"game logged (pv=)", file=out)
+        good &= vel_ok == vels
     # the push predicted from the creature, where the log names it
     pred_ok = pred_n = 0
     for e in eps:

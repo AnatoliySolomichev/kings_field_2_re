@@ -373,8 +373,10 @@ What is left of movement:
    `0x40`, and `player_horizontal` adds that push to any step it takes; the
    ceiling (`0x801e6478`) gates the step up. Both are in `tools/collision.py`,
    `tools/movement.py` and the port (FORMATS.md, "The ceiling, the push"), and
-   rung 2 stands at 119 588 of 119 793 (the log has grown); 12 frames are
-   still turned away at a wall where the game went on.
+   rung 2 stands at 124 891 of 125 116 (the log has grown); 12 frames are
+   still turned away at a wall where the game went on, and 20 of the newest
+   session, at cell (10,26), the model walks into something solid it does not
+   see -- the game stays at its height and is pushed back.
 2. **The turn rate**, `0x8002fe1c`. The per-frame increment lives at
    `0x801b264c` and was seen ramping 0, 8, 16, 24, 32; the routine is unread, so
    the replay takes the facing from the game rather than deriving it.
@@ -388,9 +390,14 @@ What is left of movement:
    (the port has no such state) and the follower's `+0x22` test. What moves
    the creatures -- the emulator's walk away and stand elsewhere, the port's
    stay home -- is the AI, now in the port (godot/ai.gd). A blow's knock-back
-   is done too: tools/knock.py, 55 of 55 recorded frames, and player.gd's
+   is done too: tools/knock.py, 83 of 83 recorded frames, and player.gd's
    state 0x10 and 0x12. Left: the seven effects of a hit's +0x11 (poison and
    its kin), the armour and rings that cut an attack, and a death.
+   **The player hits back too** (tools/weapon.py, godot/weapon.gd): the swing,
+   the probe, the damage, the flinch, the dying and the push -- read, not yet
+   recorded; `emu/bp25.lua` records it. Left: the bows (0x1b, 0x1c), the
+   spells a swing can carry (+3, +4), phase 1, the drops a death leaves, and a
+   visible weapon.
 4. **The door shoves the player — found.** The X writes `emu/bp15.lua` caught
    at `0x800482e4` are the swinging door (opcode 1, `0x8004814c`): while it
    opens and the player is in its sweep it adds (0, 0, -0x4c) turned by its

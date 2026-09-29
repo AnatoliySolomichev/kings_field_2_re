@@ -530,6 +530,38 @@ func tick(a: Dictionary, kind: Dictionary, player: Vector3i, others: Array) -> D
 			brake(a, int(raw[0xD]), 0xA, others, player)
 		6:
 			_burrowed(a, kind, raw, player, others, dist)
+		2:                              # 0x80050400, a flinch
+			if int(a["phase"]) == 0:
+				a["phase"] = 0xF0
+				a["sub"] = 0
+				start_anim(a, int(raw[1]))
+			var s2: int = int(a["sub"])
+			clock(a, s16f(raw, 8))
+			if s2 == 0:
+				a["sub"] = 1
+			elif s2 == 1 and int(a["clock"]) >= 0x7FF:
+				a["sub"] = 2
+			elif s2 == 2 and int(a["clock"]) >= 0xFFF:
+				a["sub"] = 3
+			elif s2 == 3:
+				finish(a, kind, player)
+			brake(a, int(kind["accel"]) << 1, 0xA, others, player)   # 0x80052bd0
+		3:                              # 0x800505a4, dying
+			if int(a["phase"]) == 0:
+				a["phase"] = 0xF0
+				a["sub"] = 0
+				start_anim(a, int(raw[1]))
+			var s3: int = int(a["sub"])
+			if s3 == 0:
+				clock(a, s16f(raw, 8))
+				if int(a["clock"]) >= 0xFFF or s16f(raw, 8) == 0:
+					a["sub"] = 0xF
+			else:
+				a["sub"] = s3 + 1
+				if s3 >= 0x26:          # 0x80050868: gone, by its category
+					a["retire"] = true
+					return blow
+			brake(a, int(kind["accel"]) << 1, 0xA, others, player)
 	move_vertical(a, kind)
 	return blow
 

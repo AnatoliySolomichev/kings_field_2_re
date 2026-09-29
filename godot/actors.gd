@@ -106,8 +106,13 @@ func _ready() -> void:
 						raw.append(int(v))
 					recs.append(raw)
 				kd["behaviours"] = recs
-				for field in ["accel", "turn_accel", "fall", "radius", "height"]:
-					kd[field] = int(kd[field])
+				for field in ["accel", "turn_accel", "fall", "radius", "height",
+						"weight", "arc_face", "arc_back", "hp", "exp", "gold"]:
+					kd[field] = int(kd.get(field, 0))
+				var dfn := []
+				for v in kd.get("defence", []):
+					dfn.append(int(v))
+				kd["defence"] = dfn
 				kinds[int(key)] = kd
 	if saved.has(level):
 		for pair in saved[level]:
@@ -175,6 +180,11 @@ func _pass(px: int, pz: int) -> void:
 		if (frame & 3) == (n & 3):
 			ai.pick(a, kind, p)
 		var blow := ai.tick(a, kind, p, awake)
+		if a.get("retire", false):
+			a.erase("retire")
+			_kill(k)
+			refresh()
+			continue
 		if not blow.is_empty():
 			_blow(a, blow)
 		n += 1
@@ -213,6 +223,114 @@ func _blow(a: Dictionary, blow: Dictionary) -> void:
 		return
 	if player.has_method("take_blow"):
 		player.call("take_blow", a, blow["rec"])
+
+
+# The player's blow (held_item_tick, 0x8002dcd8): a quarter of the reach
+# walked four times from the player's point 0x320 above the feet, each point
+# asked of actor_spot_taken at radius 0x190 and height 0x258 with nothing let
+# through; the first creature met is struck if the view's yaw is within its
+# kind's +0x16 of the bearing to it and its own yaw within +0x18 of the bearing
+# back. Returns {slot, damage, hp, exp, strong} or {}.
+# @orig game:0x8002dcd8  status:transcribed -- a label inside held_item_tick; weapons 0x1f and 0x20's specials are not here
+func strike(p: Vector3i, step: Array, view_yaw: int, stat: int,
+		attacks: Array, strength: int, push: bool) -> Dictionary:
+	var q := Vector3i(p.x, p.y - KFWeapon.PROBE_UP, p.z)
+	for _i in 4:
+		q += Vector3i(int(step[0]), int(step[1]), int(step[2]))
+		var k := _spot(q)
+		if k == -1:
+			continue
+		var a: Dictionary = actors[k]
+		var kind: Dictionary = kinds[int(a["kind"])]
+		var b := coll.vec_angle(int(a["px"]) - p.x, int(a["pz"]) - p.z)
+		if not KFCreatureAI.facing_test(view_yaw, KFCreatureAI.s16(b), int(kind["arc_face"])):
+			continue
+		if not KFCreatureAI.facing_test(int(a["ry"]), KFCreatureAI.s16(b + 0x800), int(kind["arc_back"])):
+			continue
+		var dmg := KFWeapon.creature_damage(stat, attacks, kind["defence"], strength)
+		var point := Vector3i(p.x, p.y - KFWeapon.EYE_DROP, p.z)
+		var out := _take_hit(k, dmg, strength, point if push else null)
+		out["slot"] = k
+		return out
+	return {}
+
+
+# actor_spot_taken (0x8004d644) as the blow asks it: mask 0, the dying skipped.
+func _spot(q: Vector3i) -> int:
+	for j in SLOTS:
+		var o = actors[j]
+		if o == null or o["st"] != ACTIVE or int(o.get("op", 0)) == 3:
+			continue
+		if not kinds.has(int(o["kind"])):
+			continue
+		if _in_range(o["px"], o["py"], o["pz"], q.x, q.y, q.z,
+				int(o["radius"]) + KFWeapon.PROBE_R, o["height"], KFWeapon.PROBE_H) != -1:
+			return j
+	return -1
+
+
+# actor_take_hit (0x8004c668) after the damage, for the player's blow (flags
+# 0x50): the level's hook (level 0's spares slot 0x20 any blow that would not
+# kill it), the HP at +0x1a, and at 0 the experience and the kind's opcode 3
+# (dying); short of that the first opcode-2 behaviour the damage reaches and
+# the roll allows (a flinch). Then the push from the player's point, and the
+# vertical state 0x10 either way. tools/weapon.py take_hit.
+# @orig game:0x8004c668 actor_take_hit  status:transcribed -- the player's blow; the special weapons 0x1f and 0x20 and the followers' leader are not here
+func _take_hit(k: int, dmg: int, strength: int, point) -> Dictionary:
+	var a: Dictionary = actors[k]
+	var kind: Dictionary = kinds[int(a["kind"])]
+	var out := {"damage": 0, "exp": 0, "strong": false, "hp": int(a.get("hp", 0))}
+	var op := int(a.get("op", 0))
+	if op == 0x1A or (op == 3 and int(a["clock"]) >= 0x60C):
+		return out
+	if op == 0x15:
+		if int(a["sub"]) == 0:
+			a["sub"] = 2
+		return out
+	if op == 6 and int(a["sub"]) == 0:
+		a["sub"] = 2
+	KFWeapon.load_from()
+	if KFWeapon.guard.get(level, -1) == k and dmg < int(a["hp"]):
+		dmg = 0
+	if dmg == 0:
+		return out
+	out["damage"] = dmg
+	out["strong"] = int(a["hp"]) != 0 and strength >= KFWeapon.STRONG
+	if not (op == 0x13 and int(a["sub"]) == 0x10):
+		var left := int(a["hp"]) - dmg
+		if left <= 0:
+			if int(a["hp"]) != 0:
+				out["exp"] = int(kind["exp"])
+			KFCreatureAI.switch_to(a, _with_op(kind, 3))
+			a["hp"] = 0
+		else:
+			for rec in kind["behaviours"]:
+				if int(rec[0]) != 2 or dmg < KFCreatureAI.u16f(rec, 0xC):
+					continue
+				if int(rec[2]) == 0xFF or (_rand() >> 7) < int(rec[2]):
+					KFCreatureAI.switch_to(a, rec)
+					break
+			a["hp"] = left
+	if point != null:
+		var v := KFWeapon.knock(coll, dmg, int(kind["weight"]), point,
+			Vector3i(int(a["px"]), int(a["py"]), int(a["pz"])), int(a["height"]))
+		if not v.is_empty():
+			a["vx"] = v[0]
+			a["vy"] = v[1]
+			a["vz"] = v[2]
+	a["vst"] = 0x10
+	out["hp"] = int(a["hp"])
+	print("actors: f%d  slot %d  model %d  struck for %d, %d HP left%s" % [
+		frame, k, a["model"], dmg, int(a["hp"]), "  -- dying" if int(a["hp"]) == 0 else ""])
+	return out
+
+
+# 0x8004c068: the kind's first behaviour with that opcode.
+func _with_op(kind: Dictionary, op: int):
+	for rec in kind["behaviours"]:
+		if int(rec[0]) == op:
+			return rec
+	return null
 
 
 # 0x8004c1f0
@@ -293,6 +411,7 @@ func _spawn(k: int) -> void:
 	# actor_wake's AI bytes, and actor_activate's entrance (ai.gd)
 	if kinds.has(int(a["kind"])):
 		KFCreatureAI.wake(a, kinds[int(a["kind"])])
+		a["hp"] = int(kinds[int(a["kind"])]["hp"])   # actor_copy_kind, +0x1a
 	_place(k)
 
 
@@ -360,7 +479,7 @@ func solid() -> Array:
 	var out := []
 	for k in SLOTS:
 		var a = actors[k]
-		if a != null and a["st"] == ACTIVE:
+		if a != null and a["st"] == ACTIVE and int(a.get("op", 0)) != 3:
 			out.append([a["px"], a["py"], a["pz"], a["radius"], a["height"],
 				a["eflags"]])
 	return out

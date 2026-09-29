@@ -222,6 +222,9 @@ func _init() -> void:
 	if not _knock():
 		quit(1)
 		return
+	if not _weapon():
+		quit(1)
+		return
 	if not _equip():
 		quit(1)
 		return
@@ -309,6 +312,78 @@ func _knock() -> bool:
 	pl.free()
 	print("knock-back: %d of %d cases match tools/knock.py (%d hits, %d shakes, %d falls, %d pushes)" % [
 		n - bad, n, d["hits"].size(), d["springs"].size(), d["falls"].size(), d["moves"].size()])
+	if bad > 0:
+		print("  first difference: " + first)
+	return bad == 0
+
+
+# The player's weapon, weapon.gd against tools/weapon.py: every weapon's swing
+# and the refill after it frame by frame, the probe's step, the damage to a
+# creature and the push it gets.
+func _weapon() -> bool:
+	if not KFWeapon.load_from():
+		print("weapon: no cases to check against")
+		return true
+	var d = JSON.parse_string(FileAccess.get_file_as_string("res://weapon.json"))
+	var bad := 0
+	var n := 0
+	var first := ""
+	for sw in d["swings"]:
+		var rec: PackedByteArray = KFWeapon.records[int(sw[0])]
+		var w := {"clock": -1, "meter": 5000, "pause": 0}
+		KFWeapon.start(w, rec)
+		var swinging := true
+		for fr in sw[1]:
+			n += 1
+			var snd := 0
+			var hit := -1
+			if swinging:
+				var ev := KFWeapon.swing(w, rec)
+				snd = 1 if ev["sound"] else 0
+				hit = int(ev["hit"])
+				if int(w["clock"]) == -1:
+					swinging = false
+			else:
+				KFWeapon.refill(w, rec, 20, false)
+			var got := [int(w["clock"]), int(w["meter"]), int(w["pause"]), snd, hit]
+			var want := []
+			for v in fr:
+				want.append(int(v))
+			if got != want:
+				bad += 1
+				if first == "":
+					first = "weapon %d: godot %s, python %s" % [int(sw[0]), str(got), str(want)]
+				break
+	for pr in d["probes"]:
+		n += 1
+		var got := KFWeapon.probe(coll, int(pr[0]), int(pr[1]), int(pr[2]))
+		if got != [int(pr[3]), int(pr[4]), int(pr[5])]:
+			bad += 1
+			if first == "":
+				first = "probe %s: godot %s" % [str(pr), str(got)]
+	for dm in d["damages"]:
+		n += 1
+		var att := []
+		var dfn := []
+		for i in 8:
+			att.append(int(dm[1 + i]))
+			dfn.append(int(dm[9 + i]))
+		var got := KFWeapon.creature_damage(int(dm[0]), att, dfn, int(dm[17]))
+		if got != int(dm[18]):
+			bad += 1
+			if first == "":
+				first = "damage %s: godot %d" % [str(dm), got]
+	for kn in d["knocks"]:
+		n += 1
+		var got := KFWeapon.knock(coll, int(kn[0]), int(kn[1]),
+			Vector3i(int(kn[2]), int(kn[3]), int(kn[4])), Vector3i(100700, -12800, 59300), 1625)
+		var want := [int(kn[5]), int(kn[6]), int(kn[7])] if int(kn[8]) else []
+		if got != want:
+			bad += 1
+			if first == "":
+				first = "knock %s: godot %s" % [str(kn), str(got)]
+	print("weapon: %d of %d cases match tools/weapon.py (%d swings, %d probes, %d damages, %d pushes)" % [
+		n - bad, n, d["swings"].size(), d["probes"].size(), d["damages"].size(), d["knocks"].size()])
 	if bad > 0:
 		print("  first difference: " + first)
 	return bad == 0

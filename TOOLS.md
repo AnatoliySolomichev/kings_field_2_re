@@ -434,8 +434,21 @@ python3 tools/knock.py 14 50        the push, shake and length of 14 on 50 HP
 `apply_damage`'s push and shake, `player_move` (the mover while thrown), the
 tilt spring that decides how long the player stays in state 0x10, and fall
 damage (`t^3 / 118000`). Against `emu/bp16.lua`: **2 of 2** knock-backs last
-the 28 frames a shake of 0x2a gives, **2 of 2** landings, **55 of 55** frames
+the 28 frames a shake of 0x2a gives, **2 of 2** landings, **83 of 83** frames
 land where the game put the player, the push predicted from the creature.
+
+**`weapon.py`** — the player's weapon: the swing, what it reaches, what a hit
+does to a creature.
+
+```
+python3 tools/weapon.py             every weapon's swing, and the check
+python3 tools/weapon.py 0 0         weapon 0 against level 0's kind 0
+```
+
+`held_item_tick`'s clock and meter, the probe `vec_rotate` walks, the damage
+`actor_take_hit` makes (`((sum * strength / 5000) + 0x80) >> 4`), the flinch,
+the death and the push. Checked: **69 of 69** awake creatures carry their
+kind's HP; the swing waits on `emu/bp25.lua`.
 
 **`player.py`** — the player's stat block, from a snapshot or from the emulator.
 
@@ -687,7 +700,7 @@ three — the turn rate is in `0x8002fe1c` and is not transcribed, and putting a
 unread layer under a checked one would spoil the point of the ladder.
 
 `player_horizontal` is in whole -- the objects, a steep ramp's push, the
-ceiling -- and rung 2 stands at 119 588 of 119 793. A run in player state 0x10
+ceiling -- and rung 2 stands at 124 891 of 125 116. A run in player state 0x10
 is a knock-back and goes through `tools/knock.py`'s frame, the push predicted
 from the creature that struck. The output counts what is left in three heaps
 rather than one total: a **swinging door** near the player (its shove and its

@@ -4495,16 +4495,19 @@ spring alone. The view adds the tilts (`0x80032028`): pitch `0x801b2608` =
 `0x801b260c` = `0x801b2614 + tilt.z + ...`, which `camera_pose` hands to
 `RotMatrix`.
 
-**Checked against the recording**: both knock-backs in `emu/bp16.lua`'s log
-last 28 frames in state 0x10 -- a shake of 0x2a, which any hit of 12 or more on
+**Checked against the recording**: all three knock-backs in `emu/bp16.lua`'s
+log last 28 frames in state 0x10 -- a shake of 0x2a, which any hit of 12 or more on
 50 HP reaches. The push is **predicted from the creature**: kind 0's strike
 (lift 0x20) at its logged position gives (224, 22, -74), and 22 is the Y the
 game put into `player_vvel`; carried through the walk, `player_move` and
-`player_vertical`, **55 of 55** frames of the two land where the game put the
+`player_vertical`, **83 of 83** frames of the two land where the game put the
 player -- one pinned against a wall for fourteen frames and then let go on the
 same frame as in the game. The last frame of each needs the end's order: the
-walk ran before `0x8003078c` zeroed the speeds. `emu/bp16.lua` logs
-`player_velocity` as `pv=` from now on.
+walk ran before `0x8003078c` zeroed the speeds. The third, from a session that logged `player_velocity` (`pv=`), climbs a
+slope on the push -- the step up of `player_move`, the push 0x38 shorter -- and
+then walks backwards on it: `player_horizontal` takes no step up outside player
+state 0 (`0x8002e5cc`), so the walk there keeps its height and takes no ramp's
+push. 27 of 27 of its frames leave `player_velocity` what the game logged.
 
 **Landing, and falling hard.** A fall (state 0x40) that lands does not wait a
 frame: `crouch` (`0x801b2654`) = 1, state 0x50, and on into 0x50's code at once
@@ -4517,6 +4520,61 @@ crouch of 4, 22 -> -278 and 6, state 0 the frame after, 2 of 2. A landing at
 `0x8e2e0727` at `0x8002ef9c` is that division): 1 at 0x1e0, 25 at 0x300, 142 at
 0x400. The eye is `player_y + bob + crouch - 0x640` (`camera_pose`), so the bob
 and the crouch both lower it -- the port had the bob raising it.
+
+### The player's blow
+
+`tools/weapon.py`, and `godot/weapon.gd` for the port. `player_turn` starts a
+swing on the attack button's edge once the pause after the last blow
+(`0x801b24f3`) is over (`0x8002c040`, phase 0): the clock `0x801b25a4` at 0 --
+it is -1 between swings -- the hit time `0x801b25a6` at the weapon record's
++0x1e, the sound time `0x801b25a8` at +0x2c, the meter kept in `0x801b2504` as
+**the blow's strength** and emptied. `held_item_tick` (`0x8002d2a0`), last in
+the controller, adds +0x1c to the clock a frame; the frame it crosses the hit
+time the blow falls -- a pause of 10, the meter 0 -- and at 0x1000 the swing is
+over. Between swings, with the button up, the meter refills after the pause at
+`2 * min((stat << 6) / (+1 + 1) + 1, 5000)` a frame (`0x80029390`). The
+dagger a new character holds (weapon 0): +0x1c 0x180, the blow on the 8th
+frame of 11, refill 11 -- 214 a frame, 24 frames from empty.
+
+The blow walks a quarter of `(0, 0, +0x1a)` turned by `vec_rotate`
+(`Ry(facing) Rx(-pitch) Rz(0)`, each product through the GTE's `>> 12`; the Y
+scaled by `(0xe10 - reach) / 1800`) four times from 0x320 above the feet, and
+asks `actor_spot_taken` at radius 0x190 and height 0x258 with nothing let
+through. The first creature is struck if the view's yaw is within its kind's
++0x16 of the bearing (250 for level 0's monsters, about 22 degrees) and its
+own yaw within +0x18 of the bearing back (4096, always, on level 0).
+
+`actor_take_hit` (`0x8004c668`) takes the eight offense ratings against the
+kind's eight defences (+0x20..+0x2e) through `0x8004c5ec` --
+`max(0, A - D) + A*A / (2D)` with `A = (attack + stat) * 16` for a non-zero
+attack and `D = defence * 16` -- sums them to at most 0x68db7 and makes
+`((sum * strength / 5000) + 0x80) >> 4` of it (the multiply by `0x68db8bad`
+and the shift by 11 are the division by 5000). The dagger at a full meter does
+67 to a kind-0 creature's 200 HP; at half, 37. The level's hook at
+`level_hooks+0x48` may change it -- level 0's zeroes the damage to actor slot
+0x20 (kind 13) unless it kills. A blow of strength 2500 or more on a creature
+with HP counts towards the stat, one in a hundred (`0x8002a074`). Then the HP
+at +0x1a, which `actor_copy_kind` fills from the kind's +0x1a at waking (**69
+of 69** awake creatures in 13 snapshots carry it):
+
+* **at 0 or below**, `award_exp(kind+0x1e)` if it had any, and the kind's
+  opcode-3 behaviour: dying (`0x800505a4`) runs its clock -- gold and an item
+  drop at 0x800, not in the port -- then counts +0x70 from 0xf to 0x26 while it
+  fades, and goes where its category sends it, as the death branch does;
+* **else** the first of the kind's opcode-2 behaviours whose +0xc the damage
+  reaches and whose chance +2 the roll `rand() >> 7` is under (0xff: always) --
+  a **flinch** (`0x80050400`): the clock, and +0x70 from 0 through 3, tinted
+  up to the clock's half and down to its end, then `actor_finish`.
+
+Either way a kind lighter than 0xf0 (+2) is pushed away from the player's
+point 0x3e8 above the feet: `isqrt(isqrt(dmg << 11)) << 10`, over the weight,
+`<< 5`, over the weight again, at most 0x200, X and Z `>> 3`, Y `>> 6`, and
+the creature goes into vertical state 0x10 -- a hop, which the shared tail's
+`brake(accel << 1, 0xa)` carries while it is off the ground.
+
+**Not recorded yet**: `emu/bp25.lua` logs the swing, every `actor_take_hit`
+with its arguments and the creature before and after, and `award_exp`. The
+self-test holds `weapon.gd` to the Python on 2336 cases.
 
 ### What a death does, and what is remembered
 

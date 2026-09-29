@@ -140,12 +140,13 @@ the creatures' behaviour tables, against snapshots     168 896 of 168 896 bytes,
                                                        69 of 69 awake actors
 the creatures' machine, against the bp16 act= log      31 of 31 behaviour runs;
                                                        steps 48 and 32 a frame
-the walking, against the recording (replay rung 2)     119 588 of 119 793 frames;
+the walking, against the recording (replay rung 2)     124 891 of 125 116 frames;
                                                        447 of the 455 that touch
                                                        an object, 76 of 76 a
                                                        creature
-the knock-back, against the bp16 recording             55 of 55 frames, 2 of 2
+the knock-back, against the bp16 recording             83 of 83 frames, 3 of 3
                                                        lengths and landings
+the creatures' HP, against 13 snapshots                69 of 69
 the video memory, against every snapshot               2 994 944 of 2 998 544;
                                                        object pages 779 760 of
                                                        782 320 (the rest: the
@@ -159,7 +160,8 @@ movement 690 of 690 · steps 750 of 750 · creature steps 384 of 384
 creature run 480 of 480
 levels 40 of 40 · angles 400 of 400
 conversations 43 of 43, and 25 of 25 steps the emulator recorded
-damage 6 of 6 · knock-back 1764 of 1764 · equipment 16 of 16
+damage 6 of 6 · knock-back 2484 of 2484 · weapon 2336 of 2336
+equipment 16 of 16
 directions 400 of 400
 ```
 

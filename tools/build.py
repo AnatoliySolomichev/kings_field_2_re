@@ -139,9 +139,13 @@ def main(quick=False, only_check=False):
     run(["tools/doors.py", "--check"],
         "the swinging door, against what was played",
         keep=["steps of a moving door"])
+    run(["tools/weapon.py", "--check"],
+        "the creatures' HP, against every snapshot's RAM",
+        keep=["awake creatures"])
     run(["tools/knock.py", "--check"],
         "the knock-back, against what was played",
-        keep=["knock-backs", "landings", "frames of a knock-back", "pushes predicted"])
+        keep=["knock-backs", "landings", "frames of a knock-back",
+              "player_velocity what", "pushes predicted"])
     run(["tools/compass.py", "--check"],
         "the compass's records, against every snapshot's RAM",
         keep=["switches, pitches"])

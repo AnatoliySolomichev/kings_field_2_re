@@ -711,7 +711,7 @@
  "0x8002f320": {
   "name": "player_move",
   "kind": "code",
-  "evidence": "moves the player when thrown: candidate = pos + velocity, collision at 0x31, commit or one of two retries; gravity +0x20 a frame, a step up of at most 0x100, a slide of 0x20 or 0x38. NOT ordinary walking -- emu/bp14.lua caught it running 69 times in a session, every one in player_state 0x10 or 0x11, while the player walked eight hundred frames without it. tools/movement.py reproduces all 69 exactly; tools/knock.py: 55 of 55 frames of the recorded knock-backs, the push shortened 0x20 a frame on the ground by vec_length_2d"
+  "evidence": "moves the player when thrown: candidate = pos + velocity, collision at 0x31, commit or one of two retries; gravity +0x20 a frame, a step up of at most 0x100, a slide of 0x20 or 0x38. NOT ordinary walking -- emu/bp14.lua caught it running 69 times in a session, every one in player_state 0x10 or 0x11, while the player walked eight hundred frames without it. tools/movement.py reproduces all 69 exactly; tools/knock.py: 83 of 83 frames of the recorded knock-backs, the push shortened 0x20 a frame on the ground by vec_length_2d"
  },
  "0x80030fcc": {
   "name": "player_controller",
@@ -1689,9 +1689,9 @@
   "evidence": "the last call in render_frame: walks whatever free_object_resource is given and releases it"
  },
  "0x801b25a4": {
-  "name": "held_item_model",
+  "name": "swing_clock",
   "kind": "data",
-  "evidence": "-1 when the player's hands are empty; draw_held_item returns immediately on that and otherwise draws the model at 0x801b2594"
+  "evidence": "s16, -1 between swings; +weapon+0x1c a frame; draw_held_item draws the held model while it is not -1. Was named held_item_model"
  },
  "0x801b2594": {
   "name": "held_item_record",
@@ -1761,7 +1761,7 @@
  "0x8002a6f4": {
   "name": "apply_damage",
   "kind": "code",
-  "evidence": "(point, dmg, effect): the HP, and with an attacker a push away from its point raised 0x352 -- max(share >> 2, 0x50) up to 0x1c2 (x5 up to 0x258 for effect 0x40), its Y held to +-0xc8 -- a flash, and a shake isqrt(share << 2) in 0x10..0x2a into player_knock, or player_knock_hard for effect 0x80. tools/knock.py: 55 of 55 recorded knock-back frames"
+  "evidence": "(point, dmg, effect): the HP, and with an attacker a push away from its point raised 0x352 -- max(share >> 2, 0x50) up to 0x1c2 (x5 up to 0x258 for effect 0x40), its Y held to +-0xc8 -- a flash, and a shake isqrt(share << 2) in 0x10..0x2a into player_knock, or player_knock_hard for effect 0x80. tools/knock.py: 83 of 83 recorded knock-back frames"
  },
  "0x801b2524": {
   "name": "player_stat_effective",
@@ -1871,7 +1871,7 @@
  "0x8002d2a0": {
   "name": "held_item_tick",
   "kind": "code",
-  "evidence": "reads held_item_record and branches on 0x801b25af against 0x1b, 0x1d and 0xff; writes player_hp and reads offense_ratings, the buttons and bind_action. The frame of whatever is in the player's hands"
+  "evidence": "the frame of the weapon, last in player_controller (0x80032150): bows (0x1b, 0x1c) and no weapon aside, the swing clock by +0x1c, the sound and the blow as it crosses their times, the probe (four quarters of +0x1a turned by vec_rotate, actor_spot_taken at 0x190/0x258) and actor_take_hit; between swings the meter's refill after the pause. tools/weapon.py, godot/weapon.gd"
  },
  "0x8002d130": {
   "name": "spell_begin",
@@ -1896,7 +1896,7 @@
  "0x8004c668": {
   "name": "actor_take_hit",
   "kind": "code",
-  "evidence": "(actor index, ...): forms actor_table + 136*index, works out the bearing with vec_angle and facing_test, and when the creature dies calls **award_exp(entity[+0x1e])** -- so +0x1e of the 120-byte entity definition is the experience the creature is worth. On level 0 that reads 9, 11, 28, 15, 36 and 18 for the six monsters and **0 for all six townspeople**, the three men by the house among them"
+  "evidence": "(slot, stat, eight attacks, strength, flags, 0, point): the eight through creature_type_damage against the kind's +0x20..+0x2e, summed to at most 0x68db7, ((sum * strength / 5000) + 0x80) >> 4, the level hook at +0x48; at 0 HP award_exp(kind+0x1e) and opcode 3, else a flinch (opcode 2) the damage and roll allow; a push from the point for kinds under 0xf0 (+2), vertical state 0x10. tools/weapon.py"
  },
  "0x800533e8": {
   "name": "actor_attack_player",
@@ -2577,5 +2577,75 @@
   "name": "flash_frames",
   "kind": "data",
   "evidence": "max((0x514 - share/2) >> 2, 0x46), share = min((dmg << 12) / hp_max, 0x3b6); apply_damage"
+ },
+ "0x8002c040": {
+  "name": "swing_start",
+  "kind": "code",
+  "evidence": "(phase): unless a swing is running (0x801b25a4 != -1), nothing is held or 0x801b2568 is set: the clock 0, the hit time 0x801b25a6 and sound time 0x801b25a8 off the weapon record (+0x1e/+0x2c, or +0x26/+0x2e in phase 1), the meter into 0x801b2504 as the blow's strength and emptied. tools/weapon.py start"
+ },
+ "0x80029390": {
+  "name": "meter_gain",
+  "kind": "code",
+  "evidence": "(stat, rate): min((stat << 6) / (rate + 1) + 1, 5000); held_item_tick doubles it into the weapon meter a frame between swings, player_turn into the magic meter"
+ },
+ "0x8004c5ec": {
+  "name": "creature_type_damage",
+  "kind": "code",
+  "evidence": "(stat, attack, defence): 0 for no attack, else A = (attack + stat) * 16, D = defence * 16, max(0, A - D) + A*A / (2 * max(D, 0x10)) -- damage_of_type for a creature, without the fifth. actor_take_hit sums eight"
+ },
+ "0x8004c0b0": {
+  "name": "actor_switch_op",
+  "kind": "code",
+  "evidence": "(actor, op): actor_switch to the kind's first behaviour with that opcode (kind_behaviour_with_op); actor_take_hit's death is op 3"
+ },
+ "0x8002a074": {
+  "name": "strong_blow",
+  "kind": "code",
+  "evidence": "0x801b2508 += 1, and at 100 the stat at +0x36 goes up by one (to 999) with announce(1); actor_take_hit on a blow of strength 2500 or more against a creature with HP"
+ },
+ "0x80016680": {
+  "name": "rot_matrix_z",
+  "kind": "code",
+  "evidence": "from one angle, [cos,-sin,0; sin,cos,0; 0,0,0x1000]"
+ },
+ "0x800166f4": {
+  "name": "matrix_from_angles",
+  "kind": "code",
+  "evidence": "(angles, out): Ry(a[1]) Rx(a[0]) Rz(a[2]) through MulMatrix and MulMatrix2 -- the order vec_rotate applies"
+ },
+ "0x80074628": {
+  "name": "MulMatrix",
+  "kind": "code",
+  "evidence": "m0 = m0 x m1 through the GTE, each column of m1 by MVMVA, >> 12"
+ },
+ "0x80074734": {
+  "name": "MulMatrix2",
+  "kind": "code",
+  "evidence": "m1 = m0 x m1 through the GTE"
+ },
+ "0x801b25a6": {
+  "name": "swing_hit_time",
+  "kind": "data",
+  "evidence": "the clock value the blow falls at, 5000 once it has"
+ },
+ "0x801b25a8": {
+  "name": "swing_sound_time",
+  "kind": "data",
+  "evidence": "the clock value the swing's sound plays at"
+ },
+ "0x801b2504": {
+  "name": "swing_strength",
+  "kind": "data",
+  "evidence": "the weapon meter a swing began with -- the blow's strength, actor_take_hit's arg10"
+ },
+ "0x801b24f3": {
+  "name": "swing_pause",
+  "kind": "data",
+  "evidence": "frames before the meter refills and a new swing may start: 10 after a blow"
+ },
+ "0x801b2508": {
+  "name": "strong_blows",
+  "kind": "data",
+  "evidence": "strong_blow's count towards the stat, 0..99"
  }
 }

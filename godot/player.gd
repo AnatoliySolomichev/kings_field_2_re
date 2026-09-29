@@ -181,6 +181,17 @@ var flash := 0
 # the port does not follow the character's stats yet.
 var defence: Array = [13, 6, 4, 0, 0, 0, 0, 0]
 var stat := 20
+# The weapon in hand (0x801b25af) and its swing (tools/weapon.py): the clock
+# 0x801b25a4, the pause 0x801b24f3, the hit and sound times 0x801b25a6 and
+# 0x801b25a8, the strength 0x801b2504; the meter is weapon_meter. The
+# character's level and experience (award_exp), and 0x801b2508, the strong
+# blows counted towards the stat.
+var weapon_id := 0
+var wstate := {"clock": -1, "meter": 5000, "pause": 0, "hit": 5000,
+	"sound": 5000, "strength": 0}
+var attack_latch := false
+var character := {}
+var strong_hits := 0
 # The creatures in the way this frame, as [x, y, z, radius, height, flags]:
 # actors.gd's awake ones, taken before the step because the game moves the
 # player before actor_tick_driver.
@@ -195,6 +206,8 @@ func _ready() -> void:
 		if typeof(dc) == TYPE_DICTIONARY:
 			defence = Array(dc.get("defence", defence)).slice(0, KFDamage.TYPES)
 			stat = int(dc.get("stat", stat))
+	KFWeapon.load_from()
+	character = KFLevels.fresh()
 	gx = int(position.x * UNIT)
 	gy = int(-position.y * UNIT)
 	gz = int(-position.z * UNIT)
@@ -274,6 +287,10 @@ func _process(dt: float) -> void:
 	# and last frame's. Here that happens once a *rendered* frame rather than
 	# once a game tick, which only matters to the edge detection.
 	KFPad.poll()
+	# player_turn reads the attack button's edge once a game frame; the pad is
+	# read once a rendered frame here, so the edge is kept until a tick takes it.
+	if KFPad.hit(KFPad.ATTACK):
+		attack_latch = true
 	var dir := Vector3.ZERO
 	if KFPad.held(KFPad.FORWARD): dir -= transform.basis.z
 	if KFPad.held(KFPad.BACK): dir += transform.basis.z
@@ -339,7 +356,14 @@ func _tick(dir: Vector3) -> void:
 		if tilt == [0, 0, 0]:
 			_knock_end()
 		_view()
+		attack_latch = false
+		_weapon()
 		return
+	# player_turn (0x80030424): a swing begins on the attack button's edge
+	# when the pause after the last blow is over (0x8002c040).
+	if attack_latch and int(wstate["pause"]) == 0 and not KFWeapon.records.is_empty():
+		KFWeapon.start(wstate, KFWeapon.records[weapon_id])
+	attack_latch = false
 	var cap := SPEED_MAX_RUN if Input.is_key_pressed(KEY_SHIFT) else SPEED_MAX
 	# The controller's own order, off its call list: player_turn (the button
 	# edges), player_look (the turn and the pitch), player_walk (the speeds),
@@ -382,6 +406,56 @@ func _tick(dir: Vector3) -> void:
 	_move(0, 0)
 	_bob(coll.isqrt(fd * fd + sd * sd))
 	_view()
+	_weapon()
+
+
+# held_item_tick (0x8002d2a0), last in the controller (0x80032150): the swing,
+# or between swings the meter's refill; the blow is actors.gd's to land.
+func _weapon() -> void:
+	if KFWeapon.records.is_empty():
+		return
+	var rec: PackedByteArray = KFWeapon.records[weapon_id]
+	if int(wstate["clock"]) == -1:
+		KFWeapon.refill(wstate, rec, stat, KFPad.held(KFPad.ATTACK))
+	else:
+		var ev := KFWeapon.swing(wstate, rec)
+		if int(ev["hit"]) >= 0:
+			_blow(rec, int(ev["hit"]), bool(ev["push"]))
+	weapon_meter = int(wstate["meter"])
+
+
+# The blow: the probe's step off the pitch and facing, the offense ratings --
+# the weapon's own eight, which is all player_recalc_stats adds for a fresh
+# character -- against the creature, and what comes back: experience through
+# award_exp, and a strong blow counted towards the stat (0x8002a074, one in
+# a hundred).
+func _blow(rec: PackedByteArray, strength: int, push_back: bool) -> void:
+	var an := get_node_or_null("../Actors")
+	if an == null or not an.has_method("strike"):
+		return
+	var step := KFWeapon.probe(coll, pitch, facing, KFWeapon.u16(rec, 0x1A))
+	var attacks := []
+	for i in 8:
+		attacks.append(KFWeapon.u16(rec, 6 + 2 * i))
+	var r: Dictionary = an.strike(Vector3i(gx, gy, gz), step,
+		coll._s16(facing + int(tilt[1])), stat, attacks, strength, push_back)
+	if r.is_empty():
+		return
+	if bool(r.get("strong", false)):
+		strong_hits += 1
+		if strong_hits >= 100:           # 0x8002a074
+			strong_hits = 0
+			character["stat36"] = mini(int(character["stat36"]) + 1, 999)
+			stat = int(character["stat36"])
+	if int(r.get("exp", 0)) > 0:
+		var before := int(character["level"])
+		character = KFLevels.award(character, int(r["exp"]))
+		hp_max = int(character["hp_max"])
+		stat = int(character["stat36"])
+		print("player: %d experience, %d of %d, level %d" % [int(r["exp"]),
+			int(character["exp"]), int(character["exp_next"]), int(character["level"])])
+		if int(character["level"]) != before:
+			print("player: level %d, HP max %d" % [int(character["level"]), hp_max])
 
 
 # 0x8002ef80: a landing at 0x1e0 or faster hurts, t^3 / 118000 with t the
@@ -421,7 +495,7 @@ static func _u16(rec: Array, o: int) -> int:
 # shake of isqrt(share << 2) held to 0x10..0x2a, one of eight by the bearing
 # against the view's yaw, into player_knock; effect bit 0x80 makes it a stun.
 # Without an attacker (a fall) the HP and the flash alone.
-# @orig game:0x8002a6f4 apply_damage  status:transcribed -- tools/knock.py: 55 of 55 knock-back frames, the push's Y from the creature
+# @orig game:0x8002a6f4 apply_damage  status:transcribed -- tools/knock.py: 83 of 83 knock-back frames, the push's Y from the creature
 func _apply_damage(dmg: int, has_at: bool, at: Vector3i, effect: int) -> void:
 	if pstate == 0x11 or dmg == 0:
 		return
@@ -479,7 +553,7 @@ func _len2d(a: int, b: int) -> int:
 # way is clear; else at the same height, the push 0x20 shorter after; else up a
 # step of at most 0x100 if nothing but floor and wall (0x205) is in the way,
 # 0x38 shorter; else not at all. A push shorter than what it loses stops.
-# @orig game:0x8002f320 player_move  status:transcribed -- tools/knock.py: 55 of 55 frames of the recorded knock-backs
+# @orig game:0x8002f320 player_move  status:transcribed -- tools/knock.py: 83 of 83 frames of the recorded knock-backs
 func _push() -> void:
 	var nx: int = gx + int(push[0])
 	var ny: int = gy + int(push[1])
@@ -582,7 +656,8 @@ func _view() -> void:
 #                                0x40 or more is added once and the step asked
 #                                again -- a slide back down
 #   nothing outside 0x207, the surface no more than 0x500 above the feet,
-#   player state 0, the ceiling more than a body above it
+#   player state 0 (0x8002e5cc -- none while knocked back), the ceiling more
+#   than a body above it
 #                                a step up: take it, the same way
 #   an object with a rectangle   (its byte +3 has bit 4) slide along one of its
 #                                axes: the step turned into its frame, one part
@@ -601,7 +676,7 @@ func _view() -> void:
 #
 # The creatures are the awake ones in `creatures`, asked as actor_spot_taken
 # asks for the player (_creature_at).
-# @orig game:0x8002e3f8 player_horizontal  status:transcribed -- tools/replay.py: 119 588 of 119 793 ground frames; the creatures against the Python on made steps
+# @orig game:0x8002e3f8 player_horizontal  status:transcribed -- tools/replay.py: 124 891 of 125 116 ground frames; the creatures against the Python on made steps
 func _horizontal(angle: int, dist: int) -> void:
 	var s4: int = (coll.game_cos(angle) * dist) >> 12
 	var s2: int = (coll.game_sin(angle) * dist) >> 12
@@ -628,7 +703,7 @@ func _horizontal(angle: int, dist: int) -> void:
 		var take := mask == 0
 		var blocked := false
 		if not take and mask & ~0x207 == 0:
-			if not (int(q["floor"]) + STEP_UP < gy) \
+			if not (int(q["floor"]) + STEP_UP < gy) and pstate == 0 \
 					and int(q["ceil"]) - int(q["floor"]) < -coll.body:
 				take = true
 			elif not (mask & 2):
