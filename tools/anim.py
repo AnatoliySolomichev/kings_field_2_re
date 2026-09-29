@@ -114,6 +114,20 @@ def load(m):
     return Model(TArc(os.path.join(ROOT, tmd.ARCHIVES[arch])).raw(entry))
 
 
+WEAPON_ENTRY = 0x62        # FDAT.T entry 0x62 + the weapon (sub_8002bdc0)
+WEAPON_KEY = 0x10000       # where the export files a weapon's model
+
+
+def load_weapon(w):
+    """The model in the player's hand while they swing weapon w: FDAT.T
+    (archive 4) entry 0x62 + w, which sub_8002bdc0 reads into 0x801b2598 and
+    installs as model_table[0x20] -- the same wrapper as MO.T's creatures, a
+    hand and the weapon, animated by the swing clock (draw_held_item)."""
+    from tarc import TArc
+    return Model(TArc(os.path.join(ROOT, "extract", "CD", "COM", "FDAT.T"))
+                 .raw(WEAPON_ENTRY + w))
+
+
 def pick(segs, clock):
     """0x80042cac: (segment index, factor)."""
     end = start = 0
@@ -242,9 +256,11 @@ def export(out_dir, lv=0):
     import actors
     doc = {"_note": "MO.T entries as 0x800431e8 reads them; tools/anim.py",
            "models": {}, "cases": []}
-    for m in sorted({a["model"] for a in actors.table(lv) if a}):
+    wanted = [(m, None) for m in sorted({a["model"] for a in actors.table(lv) if a})]
+    wanted.append((WEAPON_KEY + 0, 0))          # the weapon a new character holds
+    for m, w in wanted:
         try:
-            mo = load(m)
+            mo = load(m) if w is None else load_weapon(w)
         except Exception:
             continue
         if mo.nanim == 0:

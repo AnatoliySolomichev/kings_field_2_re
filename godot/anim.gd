@@ -101,3 +101,68 @@ static func vertices(model: int, anim: int, clock: int) -> Array:
 		overlay(v, md["poses"][int(p)])
 	blend(v, md["poses"][int(sg[2])], int(pt[1]))
 	return v
+
+
+# A node's meshes made so their vertices can be moved: each imported vertex is
+# matched back to the model vertex it came from by its position -- the
+# creatures' first objects have no two vertices in the same place but for one
+# pair in model 32 -- and the surfaces copied into meshes of the node's own.
+# {} when the model has no animation.
+static func skin(node: Node3D, model: int) -> Dictionary:
+	if not models.has(model):
+		return {}
+	var base: Array = models[model]["base"]
+	var where := {}
+	for i in base.size():
+		if not where.has(base[i]):
+			where[base[i]] = i
+	var parts := []
+	var found: Array = node.find_children("*", "MeshInstance3D", true, false)
+	if node is MeshInstance3D:
+		found.push_front(node)          # the glTF node is the mesh itself
+	for mi in found:
+		var mesh: Mesh = (mi as MeshInstance3D).mesh
+		if mesh == null:
+			continue
+		var own := ArrayMesh.new()
+		var surfaces := []
+		for s in mesh.get_surface_count():
+			var arrays := mesh.surface_get_arrays(s)
+			var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			var idx := PackedInt32Array()
+			idx.resize(verts.size())
+			for i in verts.size():
+				var v := verts[i]
+				var key := Vector3i(roundi(v.x * 1000.0), roundi(-v.y * 1000.0),
+					roundi(-v.z * 1000.0))
+				idx[i] = where.get(key, -1)
+			surfaces.append({"arrays": arrays, "idx": idx,
+				"material": mesh.surface_get_material(s)})
+		(mi as MeshInstance3D).mesh = own
+		parts.append({"mesh": own, "surfaces": surfaces})
+	return {"model": model, "parts": parts, "anim": -1, "clock": -1}
+
+
+# A skin at this animation and clock: the vertices moved, the surfaces made
+# again, when either has changed.
+static func animate(sk: Dictionary, anim: int, clock: int) -> void:
+	if anim == int(sk["anim"]) and clock == int(sk["clock"]):
+		return
+	sk["anim"] = anim
+	sk["clock"] = clock
+	var v := vertices(int(sk["model"]), anim, clock)
+	for part in sk["parts"]:
+		var own: ArrayMesh = part["mesh"]
+		own.clear_surfaces()
+		for sf in part["surfaces"]:
+			var arrays: Array = sf["arrays"]
+			var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			var idx: PackedInt32Array = sf["idx"]
+			for i in verts.size():
+				var j := idx[i]
+				if j >= 0:
+					var p: Vector3i = v[j]
+					verts[i] = Vector3(p.x, -p.y, -p.z) / 1000.0
+			arrays[Mesh.ARRAY_VERTEX] = verts
+			own.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+			own.surface_set_material(own.get_surface_count() - 1, sf["material"])

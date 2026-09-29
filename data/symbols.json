@@ -1651,7 +1651,7 @@
  "0x8003df50": {
   "name": "draw_held_item",
   "kind": "code",
-  "evidence": "returns at once when 0x801b25a4 is -1. Otherwise it takes the lighting of the cell the player stands in -- tile_look + 108 * (cell & 0x3f), which is what fixes tile_look's stride at 108 -- loads it into the GTE's light and colour matrices, and draws the model at 0x801b2594 with its own rotation. The thing in the player's hand"
+  "evidence": "returns while the swing clock is -1; else draws model_table[0x20] -- FDAT.T entry 0x62 + the weapon, installed by sub_8002bdc0 -- into the camera's space with RotMatrix(weapon record +0x3c) and the translation +0x34..+0x38, lit by the player's cell, animated by model_animate with the swing phase and clock. godot/held.gd"
  },
  "0x8003c35c": {
   "name": "draw_model_cell_lit",
@@ -2757,5 +2757,10 @@
   "name": "in_range_3d",
   "kind": "code",
   "evidence": "(point, radius, target, own, height): a box of radius + own, then the 3D length through game_isqrt, the target's middle height/2 up; the distance past own, or -1"
+ },
+ "0x80042c64": {
+  "name": "model_install",
+  "kind": "code",
+  "evidence": "(slot, data): model_table[slot] = data, then its preparation (0x80042b70); the weapon goes in slot 0x20"
  }
 }

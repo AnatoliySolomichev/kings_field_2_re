@@ -629,6 +629,41 @@ def build_effects_gltf(lv, out="out/godot"):
     return path
 
 
+def build_held_gltf(lv, out="out/godot", weapons=(0,)):
+    """The hand and weapon draw_held_item draws while the player swings --
+    FDAT.T entry 0x62 + the weapon, one node `wNNN` each, for godot/held.gd.
+    draw_held_item lights it with the player's cell; this bakes the level's
+    class 0 into it."""
+    import anim
+    vram = object_vram(lv)
+    look = lighting.table()
+    llm, lcm, bk = light_class(look, 0, 0)
+    g = gltf.Gltf()
+    mats, items = {}, []
+    for w in weapons:
+        raw = anim.load_weapon(w).raw
+        o = tmd.find_tmd(raw)
+        data = raw[o:]
+        _idv, _flags, nobj = struct.unpack_from("<3I", data, 0)
+        objs = [tmd.Obj(data, struct.unpack_from("<7i", data, tmd.HDR + 28 * k))
+                for k in range(nobj)]
+        groups = {}
+        emit_object(objs, lambda v: (v[0] / UNIT, -v[1] / UNIT, -v[2] / UNIT),
+                    lambda raw: shade(raw, llm, lcm, bk), groups,
+                    fog=fog_of(look, 0))
+        prims = []
+        for key, (pos, nrm, uv, col, fogs) in groups.items():
+            pr = g.primitive(pos, nrm, uv, col, fogs)
+            pr["material"] = material_for(g, mats, out, lv, key, vram)
+            prims.append(pr)
+        if prims:
+            items.append((f"w{w:03d}", prims, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)))
+    os.makedirs(out, exist_ok=True)
+    path, _n = g.write_nodes(f"{out}/held{lv:02d}.gltf", items)
+    print(f"held models: {len(items)} -> {path}")
+    return path
+
+
 # The opcodes whose objects turn on a hinge: `object_interpreter`'s arm for
 # opcode 1 (0x8004814c) swings the model a quarter turn and back. godot/doors.gd
 # runs it; the other door classes (0x00, 0x1b, and the grid-drawn 0x03 to 0x05)
@@ -898,6 +933,8 @@ SCENE = """[gd_scene load_steps={load_steps} format=3]
 [ext_resource type="Script" path="res://compass.gd" id="21"]
 [ext_resource type="PackedScene" path="res://effects{lv:02d}.gltf" id="22"]
 [ext_resource type="Script" path="res://effects.gd" id="23"]
+[ext_resource type="PackedScene" path="res://held{lv:02d}.gltf" id="24"]
+[ext_resource type="Script" path="res://held.gd" id="25"]
 {gallery_res}
 
 [sub_resource type="Environment" id="Env"]
@@ -928,6 +965,12 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
 current = true
 fov = 61.9275
 far = 400.0
+
+[node name="Held" type="Node3D" parent="Player/Camera"]
+script = ExtResource("25")
+
+[node name="HeldModels" parent="Player/Camera/Held" instance=ExtResource("24")]
+visible = false
 
 [node name="Actors" type="Node" parent="."]
 script = ExtResource("16")
@@ -1128,7 +1171,7 @@ def project(lv, out="out/godot", start=(57, 4)):
                        for i in range(len(pieces)))
     open(f"{out}/world.tscn", "w").write(
         SCENE.format(lv=lv, px=px, py=py, pz=pz, gallery_res=res,
-                     gallery_nodes=nodes, load_steps=16 + len(pieces)))
+                     gallery_nodes=nodes, load_steps=18 + len(pieces)))
     # The boot chain: the shell, the opening and the pad, which is where the
     # project now starts. world.tscn is still the level and boot.gd hands over
     # to it the way SLUS_002.55 hands over to GAME.EXE.
@@ -1139,7 +1182,7 @@ def project(lv, out="out/godot", start=(57, 4)):
                  "game.gd", "objects.gd", "escript.gd", "items.gd",
                  "damage.gd", "equip.gd", "objcoll.gd", "scroll.gd",
                  "doors.gd", "sky.gd", "hud.gd", "compass.gd", "ai.gd",
-                 "weapon.gd", "anim.gd", "effects.gd"):
+                 "weapon.gd", "anim.gd", "effects.gd", "held.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening
@@ -1329,6 +1372,7 @@ if __name__ == "__main__":
         build_objects_gltf(lv)
         build_actors_gltf(lv)
         build_effects_gltf(lv)
+        build_held_gltf(lv)
         build_collision_gltf(lv)
         build_sky_gltf(lv)
     project(lv)

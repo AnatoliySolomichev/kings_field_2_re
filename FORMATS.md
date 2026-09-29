@@ -4673,6 +4673,22 @@ level 0; the models put no two vertices in one place but for a pair in model
 holds it to the Python on 288 frames. The normals stay: the game's poses move
 only positions.
 
+### The weapon in the hand
+
+`draw_held_item` (`0x8003df50`) returns while the swing clock (`0x801b25a4`)
+is -1, so the weapon is seen only in a swing. It draws `model_table[0x20]`,
+which `sub_8002bdc0` fills when a weapon is equipped from **FDAT.T entry
+0x62 + the weapon** (archive 4, `read_entry_b`) -- the MO.T wrapper again,
+a hand and the weapon: weapon 0 is 441 vertices with one animation of eight
+segments of 0x200, the whole clock. It is drawn straight into the camera's
+space, with no view matrix: `RotMatrix` of the weapon record's +0x3c and its
++0x34..+0x38 as the translation -- (204, 130, 202) for the dagger, low and to
+the right -- lit by the player's cell's class, and animated by
+`model_animate` with the swing's phase (`0x801b25ae`) and clock. The port's
+`godot/held.gd` does the same under the camera (`Rx(a) Ry(-b) Rz(-c)` once Y and
+Z are flipped), with the level's class 0 baked in for now; the VRAM the port
+builds holds the weapon's pages as the snapshot has them (0xd and 0xe exactly).
+
 ### The player's blow
 
 `tools/weapon.py`, and `godot/weapon.gd` for the port. `player_turn` starts a

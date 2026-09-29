@@ -212,45 +212,11 @@ func _place(k: int) -> void:
 	_animate(k)
 
 
-# An animated creature's mesh, made so its vertices can be moved: each imported
-# vertex is matched back to the model vertex it came from by its position (the
-# models' first objects have no two vertices in the same place, but for one
-# pair in model 32), and the surfaces are copied into a mesh of the node's own.
+# An animated creature's mesh, made so its vertices can be moved (KFAnim.skin).
 func _skin(k: int) -> void:
-	var a: Dictionary = actors[k]
-	var m := int(a["model"])
-	if not KFAnim.models.has(m):
-		return
-	var base: Array = KFAnim.models[m]["base"]
-	var where := {}
-	for i in base.size():
-		if not where.has(base[i]):
-			where[base[i]] = i
-	var parts := []
-	var found: Array = (nodes[k] as Node3D).find_children("*", "MeshInstance3D", true, false)
-	if nodes[k] is MeshInstance3D:
-		found.push_front(nodes[k])      # the glTF node is the mesh itself
-	for mi in found:
-		var mesh: Mesh = (mi as MeshInstance3D).mesh
-		if mesh == null:
-			continue
-		var own := ArrayMesh.new()
-		var surfaces := []
-		for s in mesh.get_surface_count():
-			var arrays := mesh.surface_get_arrays(s)
-			var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-			var idx := PackedInt32Array()
-			idx.resize(verts.size())
-			for i in verts.size():
-				var v := verts[i]
-				var key := Vector3i(roundi(v.x * 1000.0), roundi(-v.y * 1000.0),
-					roundi(-v.z * 1000.0))
-				idx[i] = where.get(key, -1)
-			surfaces.append({"arrays": arrays, "idx": idx,
-				"material": mesh.surface_get_material(s)})
-		(mi as MeshInstance3D).mesh = own
-		parts.append({"mesh": own, "surfaces": surfaces})
-	skins[k] = {"model": m, "parts": parts, "anim": -1, "clock": -1}
+	var sk := KFAnim.skin(nodes[k], int(actors[k]["model"]))
+	if not sk.is_empty():
+		skins[k] = sk
 
 
 # The frame 0x800431e8 would draw: the animation +0xc and the clock +0x18.
@@ -258,29 +224,7 @@ func _animate(k: int) -> void:
 	if not skins.has(k):
 		return
 	var a: Dictionary = actors[k]
-	var sk: Dictionary = skins[k]
-	var anim := int(a.get("anim", 0x80)) & 0xFF
-	var clock := int(a.get("clock", 0))
-	if anim == int(sk["anim"]) and clock == int(sk["clock"]):
-		return
-	sk["anim"] = anim
-	sk["clock"] = clock
-	var v := KFAnim.vertices(int(sk["model"]), anim, clock)
-	for part in sk["parts"]:
-		var own: ArrayMesh = part["mesh"]
-		own.clear_surfaces()
-		for sf in part["surfaces"]:
-			var arrays: Array = sf["arrays"]
-			var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-			var idx: PackedInt32Array = sf["idx"]
-			for i in verts.size():
-				var j := idx[i]
-				if j >= 0:
-					var p: Vector3i = v[j]
-					verts[i] = Vector3(p.x, -p.y, -p.z) / 1000.0
-			arrays[Mesh.ARRAY_VERTEX] = verts
-			own.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-			own.surface_set_material(own.get_surface_count() - 1, sf["material"])
+	KFAnim.animate(skins[k], int(a.get("anim", 0x80)) & 0xFF, int(a.get("clock", 0)))
 
 
 # A volley's fire (actor_animation_effects, 0x8004f414, keyed by the record's
