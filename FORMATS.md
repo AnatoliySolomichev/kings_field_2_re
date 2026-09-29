@@ -4550,6 +4550,38 @@ the default arm and had no tick for it, so a creature that chose it stood
 still for good; both are in now. The effects it launches are the effect
 system's (`effect_tick`, 4584 instructions) and are not.
 
+### The spores (read, not yet recorded or ported)
+
+What level 0's kind-3 creatures (model 57) throw, read off the listing and
+waiting on `emu/bp26.lua` before it is ported:
+
+* **Launch.** The volley's list entry (0x2d) goes to `actor_animation_effects`
+  as a vertex number: `0x8004ede0` takes that vertex of the creature's
+  animated model (`0x8004352c`) turned by its angles, yaw + 0x800. Arm 0x26
+  aims at the player's eye (`0x8004f1d0`, `vec_to_angles` to player + 0x640)
+  and calls `effect_spawn(rec+0x18, 0x81, 0x26, point, angles)`, then sets
+  the grace count +0xb to 0.
+* **Setup** (`effect_spawn` arm 0x26, `0x80054338`): `0x80053ba8` -- +8 1,
+  +4 0x80, +0xc 0x34, +2 and +3 0x24, +9 5, +0x12 0x1000, the scale 0x400 --
+  then the model +0xe 0x40, a life +0x10 of 0x32 frames, the half-step test
+  +0xd 1, growth +0x44 0x14 frames, and 200 higher.
+* **Each frame** (`effect_driver` counts +0x10 down and frees the slot at -1;
+  `effect_tick` arm 0x26, `0x80056de8`): while +0x44 lasts, +0x30 and +0x34
+  grow 0x96; +0x32 grows 0x96 to 0x1000; it rises 0x28 a frame until the
+  life is down to 0x20, then sinks 0x55. As 0x81 it asks `0x80053850`:
+  bit 1 of +0 is `sub_8002b114` -- the player within the radius +0x30
+  (`0x80016fb4`, a box then a 3D length through the game's root, the
+  player's 0x320 and 0x6a4), the damage scaled down to 0x400 at the edge --
+  into `player_take_hit` with the record's attacks. Then as 0x84 it moves by
+  its velocity through `sub_800566d4` -- tiles only (`sub_80053310`: +0 & 7
+  picks 0xa1, 0x31, 0xb1 or 1) -- and is freed if it hits.
+* **Poison.** `spell_table` record 0x26 carries no attack at all, only the
+  effect 3: `player_take_hit`'s arm for it rolls `(100 * rand()) >> 15`
+  against the resistance at `0x801b255a` and on a loss sets `0x801b255c` to
+  0x384 (0x2a3 with ring 0x4a, a quarter with 0x53). The controller counts it
+  down (`0x80031e78`): every 30th frame a flash (0x960, 60 frames) and
+  `0x8002a6a0(-1)`, one HP -- thirty in all, and a throw if it is the last.
+
 ### Where a creature may go, and which way it is drawn
 
 **The fences.** `collide_query` (`0x80033f38`) has a flag the player never

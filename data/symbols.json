@@ -2707,5 +2707,55 @@
   "name": "actor_volley",
   "kind": "label",
   "evidence": "actor_tick's arm for opcode 0x19 (0x800523f0): the clock, fire times at +0x70 from rec+0xe, rec+0x12 apart, back to 0 past rec+0x10, each running the list at rec+0x1a (0x8000 restart, 0x8001 repeat, 0x8002 skip, 0x8003/0x8004 with arguments) through actor_animation_effects; actor_finish at 0xfff; brake(kind+3, 0xa). tools/ai.py: 42 of 42 logged frames"
+ },
+ "0x801b255c": {
+  "name": "poison_frames",
+  "kind": "data",
+  "evidence": "player_take_hit's effect 3 sets it to 0x384 when the roll beats the resistance at 0x801b255a; the controller (0x80031e78) counts it down, and every 30th frame flashes 0x960 and takes one HP through hp_add"
+ },
+ "0x8002a6a0": {
+  "name": "hp_add",
+  "kind": "code",
+  "evidence": "(delta): player_hp += delta, at 0 or below 0 and player_throw(0); the poison's tick calls it with -1"
+ },
+ "0x8002b114": {
+  "name": "effect_hurt_player",
+  "kind": "code",
+  "evidence": "(point, near, radius, mode, edge, slash, blow, stab, effect, m1..m5, scale, pct): the player within radius of the point (mode 0x8000: 0x80016fb4 with 0x320 and 0x6a4), the damage scaled down to edge/0x1000 at the rim, into player_take_hit"
+ },
+ "0x80053850": {
+  "name": "effect_strike",
+  "kind": "code",
+  "evidence": "an effect's blow: bit 1 of its +0 on the player (effect_hurt_player), bit 2 on the creatures (0x8004ceac), with the attacks and the effect byte of its spell_table record"
+ },
+ "0x80053310": {
+  "name": "effect_collide",
+  "kind": "code",
+  "evidence": "after the grace count +0xb, collide_query at the effect with flags by +0 & 7: 1 0xa1, 2 0x31, 3 0xb1, 4 1"
+ },
+ "0x800566d4": {
+  "name": "effect_move",
+  "kind": "code",
+  "evidence": "(radius, height, spin): position += the velocity at +0x38, effect_collide, and with +0xd the half-step too; the layer into +0xa, +0x2c turned by spin"
+ },
+ "0x80053ba8": {
+  "name": "effect_setup",
+  "kind": "code",
+  "evidence": "(slot, a, scale, b): +8 1, +4 0x80, +0xc 0x34, +2/+3 a, +9 b, +0x12 0x1000, the three scales"
+ },
+ "0x8004ede0": {
+  "name": "actor_vertex_point",
+  "kind": "code",
+  "evidence": "(actor, vertex, out): that vertex of the actor's animated model, turned by its angles with the yaw + 0x800 -- where a volley's effect starts"
+ },
+ "0x8004f1d0": {
+  "name": "effect_aim",
+  "kind": "code",
+  "evidence": "the angles from a point to the player's eye (+0x640), limited against the actor's own facing, and a velocity along them"
+ },
+ "0x80016fb4": {
+  "name": "in_range_3d",
+  "kind": "code",
+  "evidence": "(point, radius, target, own, height): a box of radius + own, then the 3D length through game_isqrt, the target's middle height/2 up; the distance past own, or -1"
  }
 }
