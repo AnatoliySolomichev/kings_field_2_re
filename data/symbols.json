@@ -1371,7 +1371,7 @@
  "0x8003e34c": {
   "name": "draw_model_plain",
   "kind": "code",
-  "evidence": "the other model draw: render_walk calls it for every creature in the 0x88 table, and for an object whose record[+3] has bit 0x40 -- which is drawn against the matrix at 0x801aec0c with its position zeroed, the held-item path"
+  "evidence": "the other model draw: render_walk calls it for every creature in the 0x88 table, and for an object whose record[+3] has bit 0x40 -- which is drawn against the matrix at 0x801aec0c with its position zeroed, the held-item path. Its model is animated through model_animate with the actor's +0xc (under 0x80) and +0x18"
  },
  "0x801aec0c": {
   "name": "hand_matrix",
@@ -2647,5 +2647,35 @@
   "name": "strong_blows",
   "kind": "data",
   "evidence": "strong_blow's count towards the stat, 0..99"
+ },
+ "0x800431e8": {
+  "name": "model_animate",
+  "kind": "code",
+  "evidence": "(cache, model, animation, clock, vertex count): a creature's vertices for the frame -- the segment 0x80042cac picks, its start poses on the model's first object's vertices (kept in the cache at actor +0x5c), blended towards its target pose. tools/anim.py: 11 of 11 caches in the snapshots"
+ },
+ "0x80042cac": {
+  "name": "anim_segment",
+  "kind": "code",
+  "evidence": "(model, animation, clock, &segment, &t): the segments' lengths added until the clock falls in one; t = ((clock - start) << 12) / length, 0x1000 - t for a reversed segment; 0x1000 past the end"
+ },
+ "0x80042d70": {
+  "name": "pose_start",
+  "kind": "code",
+  "evidence": "(dst, base, pose): the base vertices with the pose's absolute ones written over them; 0x8000, k copies k from the base"
+ },
+ "0x80042e34": {
+  "name": "pose_overlay",
+  "kind": "code",
+  "evidence": "(dst, pose): the pose's vertices written over dst; 0x8000, k skips k"
+ },
+ "0x80042eb0": {
+  "name": "pose_blend",
+  "kind": "code",
+  "evidence": "(verts, pose, t): each vertex the pose names moves by ((target - v) * t) >> 12, three at a time through ScaleMatrix"
+ },
+ "0x801acb98": {
+  "name": "anim_scratch",
+  "kind": "data",
+  "evidence": "the blended vertices of the last animated model drawn; 3 snapshots hold the last creature's exactly (tools/anim.py)"
  }
 }

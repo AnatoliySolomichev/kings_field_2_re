@@ -4550,6 +4550,43 @@ so the port draws a creature at yaw + 0x800; it had left the half turn out and
 every creature walked and struck backwards. A kind with flag 0x20 (+0x28) is
 drawn with no turn (`0x80040c34`).
 
+### A creature's animation
+
+`tools/anim.py`, and `godot/anim.gd` for the port. The creatures have no
+skeletons: `draw_model_plain` hands `0x800431e8` the model, the animation
+byte +0xc (+0xd is the vertical state; 0x80 and up draws the model still), the
+clock +0x18 and the vertex count of the model's first TMD object, and gets
+that object's vertices for the frame.
+
+An MO.T entry keeps, after the TMD's own offset at +8, the number of
+animations at +4, a pose table at +0xc and an animation table at +0x10,
+offsets from the entry's start. An animation is `u16 n, u16 0` and n offsets
+to segments -- `u16 reverse, u16 length, u16 target pose, u16 count, count u16
+start poses` -- and a pose is `s16 n` and n entries, an absolute `(x, y, z)`
+for the next vertex or `0x8000, k` to leave the next k alone.
+
+`0x80042cac` adds the segments' lengths until the clock falls inside one; the
+factor is `((clock - start) << 12) / length`, `0x1000 -` it for a reversed
+segment, 0x1000 past the end. The segment's start is the model's vertices with
+its start poses written over them (`0x80042d70`, then `0x80042e34`) -- kept in
+the actor's cache (the handle at +0x5c: +4 the animation, +6 the segment, +8
+the target, +0xc the vertices) -- and `0x80042eb0` moves every vertex the
+target pose names by `((target - v) * t) >> 12`, three at a time through
+`ScaleMatrix`. Model 50's first animation is six segments of 0x2aa -- one turn
+of the clock -- from its own vertices to pose 12, on to 13, back to 12 and
+back again.
+
+**Checked against the snapshots**: all 11 awake creatures with a cache hold
+the segment and the start vertices this builds from their animation and
+clock, and in 3 snapshots the scratch buffer at `0x801acb98` -- the last
+creature drawn -- is the blend exactly, at the clock or one step before (the
+snapshot fell between `actor_tick` and the draw). The port matches every
+imported vertex back to its model vertex by position -- 70 167 of 70 167 on
+level 0; the models put no two vertices in one place but for a pair in model
+32 -- and moves them when the animation or the clock changes; the self-test
+holds it to the Python on 288 frames. The normals stay: the game's poses move
+only positions.
+
 ### The player's blow
 
 `tools/weapon.py`, and `godot/weapon.gd` for the port. `player_turn` starts a

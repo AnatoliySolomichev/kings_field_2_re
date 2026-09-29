@@ -1095,7 +1095,7 @@ def project(lv, out="out/godot", start=(57, 4)):
                  "game.gd", "objects.gd", "escript.gd", "items.gd",
                  "damage.gd", "equip.gd", "objcoll.gd", "scroll.gd",
                  "doors.gd", "sky.gd", "hud.gd", "compass.gd", "ai.gd",
-                 "weapon.gd"):
+                 "weapon.gd", "anim.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening
@@ -1133,6 +1133,11 @@ def project(lv, out="out/godot", start=(57, 4)):
         weapon.export(out)
     except Exception as e:
         print(f"weapon cases skipped: {e}")
+    try:
+        import anim
+        anim.export(out, lv)
+    except Exception as e:
+        print(f"creature animation skipped: {e}")
     try:
         import escript
         escript.export(out)
@@ -1252,7 +1257,7 @@ def verify(out="out/godot"):
                             "fences:",
                             "creature run:",
                             "levels:", "angles:",
-                            "scripts:", "damage:", "knock-back:", "weapon:", "FAIL", "  first",
+                            "scripts:", "damage:", "knock-back:", "weapon:", "animation:", "FAIL", "  first",
                             "  level case", "  angle (", "  script level",
                             "  hit ")):
             print("   " + line.strip())

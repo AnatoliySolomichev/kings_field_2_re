@@ -263,6 +263,9 @@ func _init() -> void:
 	if not _weapon():
 		quit(1)
 		return
+	if not _anim():
+		quit(1)
+		return
 	if not _equip():
 		quit(1)
 		return
@@ -422,6 +425,35 @@ func _weapon() -> bool:
 				first = "knock %s: godot %s" % [str(kn), str(got)]
 	print("weapon: %d of %d cases match tools/weapon.py (%d swings, %d probes, %d damages, %d pushes)" % [
 		n - bad, n, d["swings"].size(), d["probes"].size(), d["damages"].size(), d["knocks"].size()])
+	if bad > 0:
+		print("  first difference: " + first)
+	return bad == 0
+
+
+# The creatures' animation, anim.gd against tools/anim.py: every animation of
+# every animated model of level 0 at six clocks -- a weighted sum of all the
+# vertices and the middle one.
+func _anim() -> bool:
+	if not KFAnim.load_from("res://anim00.json"):
+		print("animation: no cases to check against")
+		return true
+	var d = JSON.parse_string(FileAccess.get_file_as_string("res://anim00.json"))
+	var bad := 0
+	var first := ""
+	for c in d["cases"]:
+		var v := KFAnim.vertices(int(c[0]), int(c[1]), int(c[2]))
+		var sum := 0
+		for i in v.size():
+			var p: Vector3i = v[i]
+			sum += (p.x + p.y + p.z) * (i + 1)
+		var mid: Vector3i = v[v.size() / 2]
+		if sum != int(c[3]) or [mid.x, mid.y, mid.z] != [int(c[4][0]), int(c[4][1]), int(c[4][2])]:
+			bad += 1
+			if first == "":
+				first = "model %d animation %d clock %d: godot %d %s" % [
+					int(c[0]), int(c[1]), int(c[2]), sum, str(mid)]
+	print("animation: %d of %d frames match tools/anim.py" % [
+		d["cases"].size() - bad, d["cases"].size()])
 	if bad > 0:
 		print("  first difference: " + first)
 	return bad == 0

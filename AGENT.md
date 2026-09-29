@@ -147,6 +147,8 @@ the walking, against the recording (replay rung 2)     124 891 of 125 116 frames
 the knock-back, against the bp16 recording             83 of 83 frames, 3 of 3
                                                        lengths and landings
 the creatures' HP, against 13 snapshots                69 of 69
+the creatures' fences, against the bp16 act= log       5006 of 5006 positions
+the creatures' animation, against the actor caches     11 of 11
 the video memory, against every snapshot               2 994 944 of 2 998 544;
                                                        object pages 779 760 of
                                                        782 320 (the rest: the
@@ -161,6 +163,7 @@ creature run 480 of 480
 levels 40 of 40 · angles 400 of 400
 conversations 43 of 43, and 25 of 25 steps the emulator recorded
 damage 6 of 6 · knock-back 2484 of 2484 · weapon 2336 of 2336
+fences 600 of 600 · animation 288 of 288
 equipment 16 of 16
 directions 400 of 400
 ```

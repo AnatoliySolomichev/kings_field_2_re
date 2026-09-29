@@ -437,6 +437,16 @@ damage (`t^3 / 118000`). Against `emu/bp16.lua`: **2 of 2** knock-backs last
 the 28 frames a shake of 0x2a gives, **2 of 2** landings, **83 of 83** frames
 land where the game put the player, the push predicted from the creature.
 
+**`anim.py`** — a creature's animation: the vertex poses its clock picks.
+
+```
+python3 tools/anim.py 50            model 50's animations, segment by segment
+python3 tools/anim.py --check       against every snapshot's actor caches
+```
+
+**11 of 11** awake creatures' caches hold the segment and start vertices it
+builds; 3 snapshots' last drawn creature is its blend exactly.
+
 **`weapon.py`** — the player's weapon: the swing, what it reaches, what a hit
 does to a creature.
 

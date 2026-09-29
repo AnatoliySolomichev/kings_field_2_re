@@ -56,6 +56,7 @@ var player: Node3D
 var coll: KFCollision          # for the game's square root
 var ai: KFCreatureAI           # what an awake creature does (ai.gd)
 var kinds := {}                # kind -> its fields and behaviours, aiNN.json
+var skins := {}                # slot -> its animated mesh (KFAnim), see _skin
 
 
 func _ready() -> void:
@@ -114,6 +115,9 @@ func _ready() -> void:
 					dfn.append(int(v))
 				kd["defence"] = dfn
 				kinds[int(key)] = kd
+	if KFAnim.load_from("res://anim%02d.json" % level):
+		for k in nodes:
+			_skin(k)
 	if saved.has(level):
 		for pair in saved[level]:
 			if actors[pair[0]] != null:
@@ -202,6 +206,78 @@ func _place(k: int) -> void:
 	nd.position = Vector3(float(a["px"]) / 1000.0, float(-int(a["py"])) / 1000.0,
 		float(-int(a["pz"])) / 1000.0)
 	nd.basis = _draw_basis(a)
+	_animate(k)
+
+
+# An animated creature's mesh, made so its vertices can be moved: each imported
+# vertex is matched back to the model vertex it came from by its position (the
+# models' first objects have no two vertices in the same place, but for one
+# pair in model 32), and the surfaces are copied into a mesh of the node's own.
+func _skin(k: int) -> void:
+	var a: Dictionary = actors[k]
+	var m := int(a["model"])
+	if not KFAnim.models.has(m):
+		return
+	var base: Array = KFAnim.models[m]["base"]
+	var where := {}
+	for i in base.size():
+		if not where.has(base[i]):
+			where[base[i]] = i
+	var parts := []
+	var found: Array = (nodes[k] as Node3D).find_children("*", "MeshInstance3D", true, false)
+	if nodes[k] is MeshInstance3D:
+		found.push_front(nodes[k])      # the glTF node is the mesh itself
+	for mi in found:
+		var mesh: Mesh = (mi as MeshInstance3D).mesh
+		if mesh == null:
+			continue
+		var own := ArrayMesh.new()
+		var surfaces := []
+		for s in mesh.get_surface_count():
+			var arrays := mesh.surface_get_arrays(s)
+			var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			var idx := PackedInt32Array()
+			idx.resize(verts.size())
+			for i in verts.size():
+				var v := verts[i]
+				var key := Vector3i(roundi(v.x * 1000.0), roundi(-v.y * 1000.0),
+					roundi(-v.z * 1000.0))
+				idx[i] = where.get(key, -1)
+			surfaces.append({"arrays": arrays, "idx": idx,
+				"material": mesh.surface_get_material(s)})
+		(mi as MeshInstance3D).mesh = own
+		parts.append({"mesh": own, "surfaces": surfaces})
+	skins[k] = {"model": m, "parts": parts, "anim": -1, "clock": -1}
+
+
+# The frame 0x800431e8 would draw: the animation +0xc and the clock +0x18.
+func _animate(k: int) -> void:
+	if not skins.has(k):
+		return
+	var a: Dictionary = actors[k]
+	var sk: Dictionary = skins[k]
+	var anim := int(a.get("anim", 0x80)) & 0xFF
+	var clock := int(a.get("clock", 0))
+	if anim == int(sk["anim"]) and clock == int(sk["clock"]):
+		return
+	sk["anim"] = anim
+	sk["clock"] = clock
+	var v := KFAnim.vertices(int(sk["model"]), anim, clock)
+	for part in sk["parts"]:
+		var own: ArrayMesh = part["mesh"]
+		own.clear_surfaces()
+		for sf in part["surfaces"]:
+			var arrays: Array = sf["arrays"]
+			var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			var idx: PackedInt32Array = sf["idx"]
+			for i in verts.size():
+				var j := idx[i]
+				if j >= 0:
+					var p: Vector3i = v[j]
+					verts[i] = Vector3(p.x, -p.y, -p.z) / 1000.0
+			arrays[Mesh.ARRAY_VERTEX] = verts
+			own.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+			own.surface_set_material(own.get_surface_count() - 1, sf["material"])
 
 
 # How render_walk (0x80040c94) turns a creature to draw it: its angles +0x40,
