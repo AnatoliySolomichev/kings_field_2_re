@@ -94,7 +94,7 @@
  "0x800441d4": {
   "name": "load_entry",
   "kind": "code",
-  "evidence": "(archive, entry) into the buffer at load_buffer_ptr",
+  "evidence": "(archive, entry): shows an entry -- read into load_buffer_ptr, VRAM (960, 256, 64, 240) cleared and the entry's TIMs loaded where they say, the screen kept, load_wait_screen(0, 0xc) fading the page in over it, a wait for the pad up and a press, load_wait_screen(0x50 or where a press caught it, -0xc) fading it out, the screen's VRAM put back. object_interact's signs (ITEM.T, 0x96 + +0x38), script_interpreter's lines (TALK.T), use_item. godot/document.gd",
   "size": 500
  },
  "0x80044204": {
@@ -2001,7 +2001,7 @@
  "0x80043bb8": {
   "name": "load_wait_screen",
   "kind": "code",
-  "evidence": "load_entry’s own draw loop: DrawSync three times, frame_begin_3d and frame_end_3d, PadRead, and twelve reads of `buttons` against eight of `bind_use` -- what is on screen while an archive entry is read"
+  "evidence": "(s2, step): frames of a shown entry -- the kept screen at 0x80 - s2/2, the page at (32, 32) added and one texel down subtracted at s2 -- s2 += step while it is 1..0x77, the pad read after each frame: up first, then a press returns s2; else it returns -1, or -2 if the pad went up. tools/readables.py wait_screen"
  },
  "0x8004b984": {
   "name": "actor_behaviour",

@@ -534,6 +534,12 @@ on the lid's path. Left:
 * **a recording**: nothing here has been checked frame by frame against the
   game; a bp script on the lid's arm and on `object_give`'s loop would.
 
+The signs (classes `0x0d` and `0x14`) are read with USE too: `load_entry`
+shows the ITEM.T page as the game does (`godot/document.gd`). The same routine
+shows a conversation's lines from TALK.T, so the conversations need only
+`script_interpreter`'s stepping, which `godot/escript.gd` has, and its own
+wait and animation -- the next thing to join up.
+
 ## 5c. Doors that open, and the ones that are hidden
 
 **The swinging doors are read and in the port** (FORMATS.md, "A door that

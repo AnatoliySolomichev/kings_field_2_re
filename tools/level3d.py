@@ -851,8 +851,8 @@ def build_objects_gltf(lv, out="out/godot"):
     with open(f"{out}/doors{lv:02d}.json", "w") as f:
         json.dump(door_rows, f, separators=(",", ":"))
     print(f"objects: {placed} placed, {len(doors)} of them doors on their own "
-          f"node, {len(lifts)} lift doors, {len(loot_rows)} chests and things to "
-          f"pick up, {missing} without a model, {hidden} the game does not draw, "
+          f"node, {len(lifts)} lift doors, {len(loot_rows)} chests, things to take and "
+          f"things to read, {missing} without a model, {hidden} the game does not draw, "
           f"{ntri} triangles, {len(mats)} materials -> {path}")
     return path
 
@@ -926,6 +926,22 @@ def build_loot(lv, load, grid, look, prims_of, rows, slots):
             "kind": tr[1], "c": struct.unpack_from("<h", tr, 0xC)[0],
             "e": struct.unpack_from("<h", tr, 0xE)[0],
             "model": lift_model(o["type"], lv)})
+    # and what object_interact reads (.L38): rows only, the objects stay where
+    # the level's own mesh has them, or nowhere -- type 299 is not drawn
+    import readables
+    for k, o in sorted(load.recs.items()):
+        if o["cls"] not in readables.READ_CLASSES:
+            continue
+        tr = load.rows[o["type"]]
+        rows.append({
+            "slot": k, "cls": o["cls"], "op": o["op"], "type": o["type"],
+            "x": o["x"], "y": o["y"], "z": o["z"], "angles": list(o["angles"]),
+            "b0": o["b0"], "b1": o.get("b1", 0x80), "lock": o["tail"][0],
+            "text": struct.unpack_from("<H", o["tail"], 0)[0],
+            "facing": o["tail"][5], "on": o["tail"][6], "inside": 0xFFFF,
+            "trap": 0xFF, "reach": struct.unpack_from("<H", tr, 6)[0],
+            "top": struct.unpack_from("<H", tr, 8)[0], "kind": tr[1],
+            "c": 0, "e": 0, "model": 0})
     return items
 
 
@@ -1138,6 +1154,7 @@ SCENE = """[gd_scene load_steps={load_steps} format=3]
 [ext_resource type="Script" path="res://held.gd" id="25"]
 [ext_resource type="Script" path="res://loot.gd" id="26"]
 [ext_resource type="Script" path="res://messages.gd" id="27"]
+[ext_resource type="Script" path="res://document.gd" id="28"]
 {gallery_res}
 
 [sub_resource type="Environment" id="Env"]
@@ -1225,6 +1242,13 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
 script = ExtResource("27")
+
+[node name="Document" type="Control" parent="UI"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+script = ExtResource("28")
 
 [node name="Compass" type="Control" parent="UI"]
 anchors_preset = 15
@@ -1384,7 +1408,7 @@ def project(lv, out="out/godot", start=(57, 4)):
                        for i in range(len(pieces)))
     open(f"{out}/world.tscn", "w").write(
         SCENE.format(lv=lv, px=px, py=py, pz=pz, gallery_res=res,
-                     gallery_nodes=nodes, load_steps=20 + len(pieces)))
+                     gallery_nodes=nodes, load_steps=21 + len(pieces)))
     # The boot chain: the shell, the opening and the pad, which is where the
     # project now starts. world.tscn is still the level and boot.gd hands over
     # to it the way SLUS_002.55 hands over to GAME.EXE.
@@ -1396,7 +1420,7 @@ def project(lv, out="out/godot", start=(57, 4)):
                  "damage.gd", "equip.gd", "objcoll.gd", "scroll.gd",
                  "doors.gd", "sky.gd", "hud.gd", "compass.gd", "ai.gd",
                  "weapon.gd", "anim.gd", "effects.gd", "held.gd",
-                 "loot.gd", "messages.gd"):
+                 "loot.gd", "messages.gd", "document.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening
@@ -1454,6 +1478,11 @@ def project(lv, out="out/godot", start=(57, 4)):
         chests.export(out)
     except Exception as e:
         print(f"chest cases skipped: {e}")
+    try:
+        import readables
+        readables.export(out, lv)
+    except Exception as e:
+        print(f"inscriptions skipped: {e}")
     try:
         import escript
         escript.export(out)
@@ -1573,7 +1602,7 @@ def verify(out="out/godot"):
                             "fences:",
                             "creature run:",
                             "levels:", "angles:",
-                            "scripts:", "damage:", "knock-back:", "weapon:", "animation:", "spores:", "lift doors:", "chests:", "FAIL", "  first",
+                            "scripts:", "damage:", "knock-back:", "weapon:", "animation:", "spores:", "lift doors:", "chests:", "inscriptions:", "FAIL", "  first",
                             "  level case", "  angle (", "  script level",
                             "  hit ")):
             print("   " + line.strip())

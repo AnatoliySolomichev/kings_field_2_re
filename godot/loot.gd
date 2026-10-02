@@ -68,6 +68,8 @@ var slots := []                    # in slot order, as object_interact asks
 var acc := 0.0
 var give := {}                     # object_give while it runs
 var press := 0                     # a press latched for its next frame
+var reading = null                 # the document up, load_entry's frames
+var resume := 0                    # where object_interact goes on after it
 # What was opened and taken, by level, across the reload a revive makes:
 # {level: {slot: [type, lock, +0]}} -- the game keeps it in level_state.
 static var saved := {}
@@ -125,6 +127,13 @@ func _exit_tree() -> void:
 # @port engine -- USE into _interact, the arms at 15 a second, and object_give's own frames while it runs
 func _process(dt: float) -> void:
 	if rows.is_empty():
+		return
+	if reading != null:
+		if not reading.is_open():
+			reading = null
+			KFGame.modal = false
+			player.clear_movement()
+			_interact(resume)
 		return
 	if not give.is_empty():
 		# object_give reads the pad itself: a press is a word that is not 0
@@ -250,7 +259,7 @@ static func _spring_to(target: int, cur: int, vel: int) -> int:
 # type's +6 plus 0x320, the type's +8 as its top and 0x9c4 as the point's, and
 # within 0x200 of the facing -- in slot order from `from`. A lid must also face
 # the player within 0x155. After a thing is taken the walk stops.
-# @orig game:0x8005e2d0 object_interact  status:partial -- classes 6, 7 and 0x40 (.L13, .L26, .L28); doors.gd has the doors, and no conversation, inscription or save point is here
+# @orig game:0x8005e2d0 object_interact  status:partial -- classes 6, 7, 0x40, 0x0d and 0x14 (.L13, .L26, .L28, .L38); doors.gd has the doors, and no conversation or save point is here
 # @orig game:0x80045c7c find_object  status:partial -- the plain test, for a class past 2
 func _interact(from: int) -> void:
 	var c: KFCollision = player.coll
@@ -277,6 +286,29 @@ func _interact(from: int) -> void:
 			0x40:
 				if _give(r, i):
 					return
+			0x0D, 0x14:
+				if _read(r, i):
+					return
+
+
+# object_interact's .L38: something to read, while its +0x3e is not 0 --
+# facing it within 0x155 unless its +0x3d says not to ask -- shows ITEM.T
+# entry 0x96 + its u16 at +0x38 (load_entry, godot/document.gd). True when the
+# walk is to wait for it.
+# @orig game:0x8005e7c4 object_interact+0x4f4  status:transcribed
+func _read(r: Dictionary, at: int) -> bool:
+	if int(r["on"]) == 0:
+		return false
+	if int(r["facing"]) == 0 and not _facing(player.facing,
+			(int(r["angles"][1]) + 0x800) & 0xFFF, LID_FACING):
+		return false
+	var d = get_node_or_null("../UI/Document")
+	if d == null or not d.open(int(r["text"])):
+		return false
+	reading = d
+	resume = at + 1
+	KFGame.modal = true
+	return true
 
 
 # object_interact's .L28: what a chest's lock says to USE.

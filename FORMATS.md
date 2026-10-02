@@ -3734,10 +3734,36 @@ addiu $a1, $a1, 0x96
 jal   load_entry         show ITEM.T[150 + it]
 ```
 
-So **the text an object shows is `ITEM.T[150 + u16 at +0x38]`**, and the only
-condition is geometric: you have to be facing it. 150 is exactly where the
-signs and nameplates begin in our index of `ITEM.T`, which is the corroboration
-— the offset was not chosen to fit, it fell out of the code.
+So **the text an object shows is `ITEM.T[150 + u16 at +0x38]`**. 150 is
+exactly where the signs and nameplates begin in our index of `ITEM.T`, which is
+the corroboration — the offset was not chosen to fit, it fell out of the code.
+
+**The whole branch** (`.L38`, `0x8005e7c4`) asks two bytes first, which the
+excerpt above leaves out: the object's `+0x3e` must not be 0 (`object_mode` 0
+zeroes it, which is how a sign is taken away), and the facing test is made
+only while `+0x3d` is 0 -- level 0's signs carry 0 or 0xff there, so some are
+read from any side. Classes `0x0d` and `0x14` both come here.
+
+**How it is shown.** `load_entry` (`0x800441d4`) reads the entry, clears VRAM
+(960, 256, 64, 240) to 0 and loads each of the entry's TIMs where it says --
+the words sit at their place on a 4-bit page, under the CLUT the TIM brings to
+(96, 480), the banners' palette -- keeps the screen, and runs
+`load_wait_screen` (`0x80043bb8`), frames of its own:
+
+```
+each frame   the kept screen at 0x80 - s2 / 2; the page's (0,0)-(255,208) at
+             (32, 32) twice, subtracted one texel down and right, then added,
+             both at s2: the words and a shadow
+fade in      s2 = 0, 0xc .. 0x6c: ten frames; the pad read after each -- up
+             first, then a press ends it, and the fade out starts from there
+wait         (load_entry, 0x800442c8) nothing drawn: the pad up, then any
+fade out     from 0x50 by 0xc: seven frames, a press ending it early too
+```
+
+The same call shows a conversation's lines (`script_interpreter`, archive 7,
+TALK.T) and `use_item`'s pictures. The port: `godot/document.gd`, started by
+`godot/loot.gd`'s walk; `tools/readables.py` composes the pages and models the
+frames, and the self-test holds the port to it (27 of 27).
 
 `+0x38` belongs to the union each class reads its own way, so the index means
 something only for the classes that read. **Type 299 is the readable one**: 13

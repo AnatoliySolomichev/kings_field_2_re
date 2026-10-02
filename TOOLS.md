@@ -643,6 +643,10 @@ python3 tools/chests.py             the lid's path against every opened lid in t
 python3 tools/chests.py --check     the counts alone
 ```
 
+`readables.py` also composes the page `load_entry` shows for a sign
+(`read/N.png`, ITEM.T 0x96 + N) and models its fade, for `godot/document.gd`,
+which `loot.gd`'s walk opens on USE.
+
 `tools/doors.py lift_step` is the arm, and `godot/selftest.gd` holds the
 port to it (273 of 273 frames). Against the bp27 recording: 867 of 867
 steps, and 35 frames held by a creature the log did not carry.

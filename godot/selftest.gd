@@ -284,6 +284,9 @@ func _init() -> void:
 	if not _chests():
 		quit(1)
 		return
+	if not _inscriptions():
+		quit(1)
+		return
 	if not _equip():
 		quit(1)
 		return
@@ -631,6 +634,51 @@ func _chests() -> bool:
 			i += 1
 		flights += 1
 	print("chests: %d of %d frames match tools/chests.py (the lid, the big chest, %d flights of object_give)" % [n - bad, n, flights])
+	if bad > 0:
+		print("  first difference: " + first)
+	return bad == 0
+
+
+# load_entry's frames, document.gd against tools/readables.py: for two pad
+# histories, the brightness of every frame drawn, in and out.
+func _inscriptions() -> bool:
+	if not FileAccess.file_exists("res://readcheck.json"):
+		print("inscriptions: no cases to check against")
+		return true
+	var doc = JSON.parse_string(FileAccess.get_file_as_string("res://readcheck.json"))
+	var n := 0
+	var bad := 0
+	var first := ""
+	for case in doc["cases"]:
+		var d = load("res://document.gd").new()
+		d.phase = 1
+		d.s2 = 0
+		d.armed = -1
+		var hist: Array = case["pad"]
+		var look := 0
+		var frames := []
+		var guard := 0
+		while d.phase != 0 and guard < 200:
+			guard += 1
+			var drew: bool = d.phase != 2
+			if d.phase == 3:
+				d.step(0)                # tools/readables.py fades out on an idle pad
+			elif d.step(int(hist[mini(look, hist.size() - 1)])):
+				look += 1
+			if drew:
+				frames.append(d.shown)
+		var want := []
+		for v in case["in"]:
+			want.append(int(v))
+		for v in case["out"]:
+			want.append(int(v))
+		n += want.size()
+		if frames != want:
+			bad += want.size()
+			if first == "":
+				first = "godot %s python %s" % [str(frames), str(want)]
+		d.free()
+	print("inscriptions: %d of %d frames match tools/readables.py" % [n - bad, n])
 	if bad > 0:
 		print("  first difference: " + first)
 	return bad == 0
