@@ -634,6 +634,41 @@ checked. TOOLS.md has the five numbered things to do in the game; in short:
 * **the shop and the inn.** The arm of `script_interpreter` that runs when a
   talker's header `+0x12` is not `0xff`.
 
+## 12. The port against the game
+
+Every function in `godot/` now says what it is in the game (AGENT.md, "The port
+and the game, one to one"; PORT.md the table). The pass that put the markers on
+read each function against the code it names, and this is what it left open --
+each one is also in its function's marker, as `partial` and what differs:
+
+* **`give_item` and `take_item` call the level's own hook** after the count
+  changes (`level_hooks+0x18`, `+0x2c`); `godot/items.gd` does not.
+* **`new_character` does much more than `KFLevels.fresh`**: the gold, the
+  equipment slots, the place and the spells.
+* **The movie's skip.** `godot/cutscene.gd` uses `OPEN.EXE`'s rule for
+  GAME.EXE's `str_play`, whose own pad test sits in one of its unread
+  sub-routines. And `play_movie` (`open:0x80013960`) tests START and the face
+  buttons *held*, where `opening.gd` and `cutscene.gd` wait for a new press.
+* **`actor_start_anim` adds 2** to the animation while `0x80199150` is set for
+  the actor at `0x80199148`; `ai.gd start_anim` does not.
+* **The effects are drawn without `render_walk`'s view test** (`+8 & 3`,
+  `view_bits_at`), so a spore in a cell the game would not draw is drawn.
+* **The "Program Loading" card's rectangle** in `opening.gd` was not checked
+  against the primitive `open_main+0x3e4` fills.
+* **One routine, several copies.** `in_range` is written three times
+  (`collision.gd`, `doors.gd`, `actors.gd`), `facing_test` and
+  `kind_behaviour_with_op` twice. Each copy is marked, and the self-test would
+  show one drifting; folding them into one is a refactor nobody has needed yet.
+
+Settled in the same pass rather than listed: a copy of `in_oriented_rect` in
+`objcoll.gd` that nothing called, with arithmetic that was not the game's
+(removed -- `collision.gd` has the faithful one); `_tick` and `_spring` in
+`player.gd` carrying the markers of routines they only call; the names
+`ai_driver` and `flag_gate` in `game.gd` and FORMATS.md, both withdrawn from
+the symbol table long ago; a pointer misread as `0x801f825c` in
+`cutscene.gd` (it is `0x801e825c`); and two steps of `game.gd`'s frame map
+marked as not ported that are.
+
 ## Last: putting a translation back on the disc
 
 **Lowest priority.** Nothing else depends on it, and reading the game is worth

@@ -1035,42 +1035,64 @@ the only place the number appears.
 
 [CONSTANTS.md](CONSTANTS.md) is the generated index of all of it.
 
-**`portmap.py`** — what in the port corresponds to what in the game.
+**`portmap.py`** — what in the port corresponds to what in the game, function
+by function, and the check that it is written down for every one.
 
 ```
-python3 tools/portmap.py              the coverage, in one screen
-python3 tools/portmap.py --check      every marker resolves; exit 1 if not
-python3 tools/portmap.py --next       what to port next, and why that
-python3 tools/portmap.py --doc        regenerate PORT.md
-python3 tools/portmap.py 0x8002ed60   what the port does with one routine
+python3 tools/portmap.py                    the coverage, in one screen, and the check
+python3 tools/portmap.py --check            every rule below; exit 1 if not
+python3 tools/portmap.py godot/ai.gd:turn   the port's side: what in the game it is
+python3 tools/portmap.py godot/ai.gd:213    the same, by line
+python3 tools/portmap.py game:0x8004e928    the game's side: what in the port copies
+                                            it, and every line of the port citing it
+python3 tools/portmap.py --next             what to port next, and why that
+python3 tools/portmap.py --doc              regenerate PORT.md
 ```
 
-The two sides drifted apart in the obvious way: `godot/player.gd` opens with
+The two sides drifted apart in the obvious way: `godot/player.gd` opened with
 forty lines of prose saying it came from `player_vertical` at `0x8002ed60`,
-which is exactly right and which no tool can read. So the correspondence is
-written where both sides can carry it — a marker comment in the GDScript:
+which was exactly right and which no tool could read. So the correspondence is
+written where both sides can carry it, and **for every function, with no
+default**: in the comment block directly above it, either what it reproduces
 
 ```gdscript
-# @orig game:0x8002ed60 player_vertical  status:verified -- 48 of 48, bp15
+# @orig game:0x8002ed60 player_vertical  status:verified -- 48 of 48 of the game's own height stores, bp15
 func _move(dx: int, dz: int) -> void:
 ```
 
-and the same pairing comes back the other way, as a `; port:` line at the top
-of the listing `tools/rdis.py` prints. The marker names the executable as well
-as the address, because three of the four load at `0x80011000`.
+-- one line per routine, or per stretch inside one, that it folds in -- or that
+the game has no counterpart, and which kind of the port's own code it is:
 
-**A marker is a claim that the port reproduces that routine, not that it does
-so correctly.** `--check` only verifies the address is real. `status` says how
-far it went: **verified** (checked against a recording, with a count),
-**transcribed** (read off the MIPS), **partial**, or **guessed**.
+```gdscript
+# @port engine -- runs _pass at the game's 15 frames a second
+func _process(dt: float) -> void:
+```
 
-A marker may point *inside* a routine, and often should: `player_bob` and the
-death branch of `actor_tick` are labels, and the port has a function for each.
-Those count as parts rather than as the whole routine — counting `player_bob`
-as `player_vertical` would claim all 368 of its instructions for twelve lines.
+(`engine`, `data`, `check`, `helper`; a file that is all the port's own says
+`# @port-file check` once). The marker names the executable as well as the
+address, because three of the four load at `0x80011000`, and the name is
+checked against the symbol table -- the routine's, or `routine+0xoff` for a
+stretch inside it -- so renaming a symbol shows every marker left behind. A
+plain address in a comment takes the executable its file declares with
+`# @exe game`; one from another executable is written `open:0x80013a20`. Those
+are read too, as citations, and come back in the listings.
 
-[PORT.md](PORT.md) is the generated index, and its last table is the queue:
-every routine with no marker, ordered by how many routines call it.
+**A marker is a claim that the port reproduces that code, not that it does so
+correctly.** `status` says how far it went: **verified** (checked against a
+recording, with a count), **transcribed** (read off the MIPS), **partial** (the
+note says what is missing), or **guessed**.
+
+A marker pointing *inside* a routine claims that stretch, not the routine:
+counting `player_bob` as `player_vertical` would claim all 368 of its
+instructions for twelve lines.
+
+`tools/rdis.py` and `tools/pseudo.py` print the pairing from the game's side:
+a `; port:` line for the routine, a line for each stretch the port pins, and in
+`rdis.py` the port's citations against the instructions they name.
+
+[PORT.md](PORT.md) is the generated table of every function, and its last table
+is the queue: every routine with no marker, ordered by how many routines call
+it. AGENT.md, "The port and the game, one to one", has the rule.
 
 **`disasm.py`** — MIPS disassembly of `GAME.EXE`, binding the capstone that
 ships inside the emulator's AppImage. With no arguments it cross-references the
