@@ -49,7 +49,8 @@ extends Node
 # 1424 of the game's 4838 placed objects. 300 is also where model_of_type
 # starts adding the level to the model number, which is the same boundary seen
 # from the other side.
-# @orig game:0x80047010 object_interpreter  status:partial -- the walk and the dispatch, none of the arms
+#
+# @exe game
 
 const SLOTS := 396                   # OBJECT_COUNT, 0x18c
 const OPCODES := 236                 # OBJECT_OPCODES, 0xec -- the sltiu bound
@@ -68,6 +69,7 @@ const GROUPS := {
 var klass := {}                      # type id -> its class byte
 
 
+# @port data -- reads objclass.json, object_type_table's class bytes as tools/objops.py takes them off FDAT entry 97
 func load_classes(path := "res://objclass.json") -> bool:
 	if not FileAccess.file_exists(path):
 		return false
@@ -80,6 +82,7 @@ func load_classes(path := "res://objclass.json") -> bool:
 	return not klass.is_empty()
 
 
+# @port check -- the group OBJECTS.md gives an opcode's arm, for the readout
 func group_of(op: int) -> String:
 	for name in GROUPS:
 		if op in GROUPS[name]:
@@ -102,7 +105,7 @@ static func player_in_rect(px: int, pz: int, cx: int, cz: int,
 # One frame of the interpreter over whatever the port has placed. It finds each
 # object's opcode and its group and returns the tally; it runs no handler,
 # because no handler has been checked against the game.
-# @orig game:0x80047010 object_interpreter  status:partial
+# @orig game:0x80047010 object_interpreter  status:partial -- the walk and the dispatch, none of the arms; doors.gd runs opcode 1's and 3-5's
 func tick(objects: Array) -> Dictionary:
 	var seen := {}
 	var n := 0
@@ -118,6 +121,7 @@ func tick(objects: Array) -> Dictionary:
 	return seen
 
 
+# @port check -- the readout's line
 func summary(objects: Array) -> String:
 	if klass.is_empty() and not load_classes():
 		return "objects: no class table (objclass.json is not there)"

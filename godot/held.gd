@@ -11,6 +11,8 @@ extends Node3D
 #
 # RotMatrix is Rx Ry Rz with the textbook matrices; with Y and Z flipped into
 # Godot's axes that is Rx(a) Ry(-b) Rz(-c), and the translation (x, -y, -z).
+#
+# @exe game
 
 const WEAPON_KEY := 0x10000      # tools/anim.py files a weapon's model here
 
@@ -19,6 +21,7 @@ var skins := {}                  # weapon -> KFAnim skin
 var nodes := {}                  # weapon -> its node, out of heldNN.gltf
 
 
+# @port engine -- takes each weapon's node out of heldNN.gltf and hides it
 func _ready() -> void:
 	player = get_node_or_null("../..")      # Held -> Camera -> Player
 	var models := get_node_or_null("HeldModels")

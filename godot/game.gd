@@ -14,11 +14,11 @@ extends Node
 #    3  0x80047010                           the object opcode interpreter
 #    4  player_controller       0x80030fcc   pad, then turn, look, walk, height
 #    5  actor_tick_driver       0x80052e5c   the 199 creature slots
-#    6  ai_driver               0x8005bc50   128 behaviour slots -> actor_ai
+#    6  effect_driver           0x8005bc50   128 effect slots -> effect_tick
 #    7  spawn_anywhere = 0                   0x801b24f2, cleared every frame
 #    8  level_overlay_tick      0x8005eb20   the level's own code, and fades
 #    9  level_load              0x80018358   acts when a transition is pending
-#   10  flag_gate               0x80061940   the story flags
+#   10  cutscene_step           0x80061940   the scene running, if one is
 #   11  camera_pose             0x8002b330   the eye and the three view angles
 #   12  audio_listener_set      0x800156bc   the same pose, for 3D sound
 #   13  light_table_step        0x80034300   interpolate the lighting
@@ -42,24 +42,26 @@ extends Node
 #
 # The port's own scene tree still drives the parts that are ported -- player.gd
 # has its own _process -- so this node does not take over. It is the map.
-# @orig game:0x80014bd4 game_main  status:partial -- the order, and the six steps that exist
+#
+# @exe game
 
 # What the game does with $gp+0x1e4 when it wants to stop.
 enum Exit { RUNNING = 0, TO_OPENING = 2, TO_ENDING_A = 3, TO_ENDING_B = 4 }
 
 # Every step of the loop, in order: the address it stands for, a name, and
 # whether the port has it. Read by the frame readout and by nothing else.
+# @orig game:0x80014f24 game_main+0x350  status:partial -- the loop's sixteen steps in order, as data; nothing here runs them
 const FRAME := [
 	[0x800341e8, "light_table_reset", false],
 	[0x80034180, "render_flags_reset", false],
-	[0x80047010, "object_interpreter", false],
+	[0x80047010, "object_interpreter", true],    # doors.gd, objects.gd: part
 	[0x80030fcc, "player_controller", true],
 	[0x80052e5c, "actor_tick_driver", true],
-	[0x8005bc50, "ai_driver", false],
+	[0x8005bc50, "effect_driver", true],         # effects.gd: the spores
 	[0x00000000, "spawn_anywhere = 0", true],
 	[0x8005eb20, "level_overlay_tick", false],
 	[0x80018358, "level_load", false],
-	[0x80061940, "flag_gate", false],
+	[0x80061940, "cutscene_step", false],
 	[0x8002b330, "camera_pose", true],
 	[0x800156bc, "audio_listener_set", false],
 	[0x80034300, "light_table_step", false],
@@ -69,6 +71,7 @@ const FRAME := [
 ]
 
 
+# @port check -- counts the steps marked ported, for the frame readout
 static func ported() -> int:
 	var n := 0
 	for step in FRAME:
@@ -77,16 +80,17 @@ static func ported() -> int:
 	return n
 
 
+# @port check -- the frame readout's line
 static func summary() -> String:
 	return "frame: %d of %d steps in the port" % [ported(), FRAME.size()]
 
 
 # The eye, as camera_pose builds it (0x8002b330): the player's X and Z, and
 # Y + bob + crouch - EYE_HEIGHT. Y points down, so minus is up.
-# @orig game:0x8002b330 camera_pose  status:transcribed
-const EYE_HEIGHT := 0x640            # 1600, and sync_player_pos adds it back
+const EYE_HEIGHT := 0x640            # 0x8002b370; 1600, and sync_player_pos adds it back
 
 
+# @orig game:0x8002b330 camera_pose  status:partial -- the eye; the three view angles are player.gd's _view
 static func camera_pose(px: int, py: int, pz: int, bob: int,
 		crouch: int) -> Vector3i:
 	return Vector3i(px, (py + bob + crouch) - EYE_HEIGHT, pz)

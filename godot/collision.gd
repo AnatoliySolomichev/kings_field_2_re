@@ -20,6 +20,8 @@ extends RefCounted
 #
 # All arithmetic here is the PlayStation's: integers, world units, Y increasing
 # downward. The caller converts.
+#
+# @exe game
 
 const W := 80
 const CELL := 0x800
@@ -55,6 +57,7 @@ var objects := []                    # [slot, 0 circle / 1 rect, a, b, byte +3,
                                      #  x, y, z, top, angle, push radius]
 
 
+# @port data -- reads collNN.json: the grid's collision fields and the tile shapes, as tools/gdcoll.py writes them
 func load_from(path: String) -> bool:
 	var f := FileAccess.open(path, FileAccess.READ)
 	if f == null:
@@ -153,6 +156,7 @@ func apply_matrix(m: PackedInt32Array, v: PackedInt32Array) -> PackedInt32Array:
 	return out
 
 
+# @port helper -- a halfword, sign-extended
 func _s16(v: int) -> int:
 	v &= 0xFFFF
 	return v - 0x10000 if v >= 0x8000 else v
@@ -204,6 +208,7 @@ func arctan_unit(ratio: int) -> int:
 
 # MIPS `div` truncates towards zero; GDScript's integer / does too, but the
 # shift has to happen first and stay exact, so both are written out.
+# @port helper -- the MIPS div, truncating towards zero
 func _idiv(a: int, b: int) -> int:
 	var q := absi(a) / absi(b)
 	return -q if (a < 0) != (b < 0) else q
@@ -246,6 +251,7 @@ func isqrt(x: int) -> int:
 	return ((isqrt_table[idx] << t1) & 0xFFFFFFFF) >> 12
 
 
+# @orig game:0x800328c0 tile_op_20_wall  status:verified -- opcode 0x20's face test, which 0x21 and 0x22 make on two faces; 1427 of 1430, 83 of 83 and 143 of 143 logged calls on cells carrying them
 func _plane(f: int, tx: int, tz: int, op0: int, a3: int, t6: int) -> bool:
 	match f:
 		0: return tx <= op0 + a3
@@ -255,6 +261,7 @@ func _plane(f: int, tx: int, tz: int, op0: int, a3: int, t6: int) -> bool:
 
 
 # Handler 0x24: a wall of limited length, op0..op1 from its own face.
+# @orig game:0x80032c3c tile_collision+0x630  status:verified -- opcode 0x24; 4 of 4 logged calls on cells carrying it
 func _slab(f: int, tx: int, tz: int, a3: int, a: Array) -> bool:
 	var u := tx
 	match f:
@@ -266,6 +273,7 @@ func _slab(f: int, tx: int, tz: int, a3: int, a: Array) -> bool:
 
 # Handler 0x23: a wall at 45 degrees. This is what the tx +- tz values the
 # routine precomputes in its prologue are for.
+# @orig game:0x80032b90 tile_collision+0x584  status:verified -- opcode 0x23; 82 of 82 logged calls on cells carrying it
 func _diag_wall(f: int, tx: int, tz: int, a3: int, a: Array) -> bool:
 	var d := tx - tz
 	var adj := -CELL
@@ -282,6 +290,7 @@ func _diag_wall(f: int, tx: int, tz: int, a3: int, a: Array) -> bool:
 
 
 # Handler 0x30: a sloping floor. Returns NO_SURFACE when outside its extent.
+# @orig game:0x80032f78 tile_op_30_ramp  status:verified -- opcode 0x30; 3558 of 3558 logged calls on cells carrying it
 func _ramp(f: int, tx: int, tz: int, a3: int, t6: int, a: Array) -> int:
 	var op1 := int(a[1])
 	var op2 := int(a[2])
@@ -309,6 +318,7 @@ func _ramp(f: int, tx: int, tz: int, a3: int, t6: int, a: Array) -> int:
 
 
 # Handler 0x32: a floor sloping along a diagonal, clamped into op1..op2.
+# @orig game:0x80033460 tile_collision+0xe54  status:verified -- opcode 0x32; 166 of 166 logged calls on cells carrying it
 func _diag_ramp(f: int, tx: int, tz: int, a: Array) -> int:
 	var a2 := CELL + tz - tx
 	match f:
@@ -325,6 +335,8 @@ func _diag_ramp(f: int, tx: int, tz: int, a: Array) -> int:
 
 # Handlers 0x33 and 0x34: a corner slope, following the nearer axis or the
 # farther one. The diagonal is in plan; the pitch is usually very gentle.
+# @orig game:0x800331b0 tile_collision+0xba4  status:verified -- opcode 0x33, the nearer axis; 193 of 193 logged calls on cells carrying it
+# @orig game:0x80033308 tile_collision+0xcfc  status:verified -- opcode 0x34, the farther; 413 of 413
 func _corner(f: int, tx: int, tz: int, a: Array, outer: bool) -> int:
 	var p := tx
 	var q := tz
@@ -370,13 +382,14 @@ func _layer(i: int, ymid: int) -> int:
 # `ymid` overrides that last part, because the game has two wrappers and they
 # disagree: 0x80033d38 halves the body height, 0x80033b44 passes a flat y-0x500.
 # `surface()` below is the second one, which is what the walking code asks.
-# @orig game:0x8003260c tile_collision  status:verified -- every logged call reproduced, tools/collision.py
+#
 # What opcodes 0x17, 0x18 and 0x19 left behind on the last query, by opcode.
 # The game keeps them at 0x801e6484, 0x801e647c and 0x801e6480 and nothing but
 # sync_player_pos reads them.
 var surfaces := {}
 
 
+# @orig game:0x8003260c tile_collision  status:verified -- 8075 of 8078 logged calls, through tools/collision.py
 func query(x: int, y: int, z: int, ymid := 0x7FFFFFFF) -> Dictionary:
 	if ymid == 0x7FFFFFFF:
 		ymid = y - (body >> 1)
@@ -533,7 +546,7 @@ func query(x: int, y: int, z: int, ymid := 0x7FFFFFFF) -> Dictionary:
 
 
 # Handler 0x31, from 0x800338c4: within op0 + r .. op1 - r across the face.
-# @orig game:0x800338c4  status:transcribed -- a label inside tile_collision, opcode 0x31
+# @orig game:0x800338c4 tile_collision+0x12b8  status:transcribed -- a label inside tile_collision, opcode 0x31
 func _opening(f: int, tx: int, tz: int, a3: int, a: Array) -> bool:
 	var u := tz if f == 0 else (tx if f == 1 else (CELL - tz if f == 2 else CELL - tx))
 	return int(a[0]) + a3 <= u and u <= int(a[1]) - a3
@@ -547,7 +560,7 @@ func _opening(f: int, tx: int, tz: int, a3: int, a: Array) -> bool:
 #
 # The code says it in exactly that shape: a pair of tests that only reject
 # together, then two that reject on their own.
-# @orig game:0x80032d3c  status:transcribed -- a label inside tile_collision, opcode 0x25
+# @orig game:0x80032d3c tile_collision+0x730  status:transcribed -- a label inside tile_collision, opcode 0x25
 func _notch(f: int, tx: int, tz: int, a3: int, a: Array) -> bool:
 	var u := tx if f == 0 else (CELL - tz if f == 1 else
 		(CELL - tx if f == 2 else tz))
@@ -593,6 +606,7 @@ func ratan2(y: int, x: int) -> int:
 # 0x80016ec8 and the height test it shares with in_oriented_rect: a thing at
 # py whose top is `top` above its feet against one at y whose top is `own`
 # above; Y grows downward.
+# @orig game:0x80016f28 in_range+0x60  status:transcribed -- the height overlap, skipped for y 0xffff
 func _heights(py: int, y: int, top: int, own: int) -> bool:
 	if py < y:
 		return not (py < y - own)
@@ -666,7 +680,7 @@ func query_all(x: int, y: int, z: int) -> Dictionary:
 # collide_query's flag 2 on the answer of query(): the layer it looked at
 # ("at", what 0x801e6468 holds) is fenced -- a wall, with the surface written
 # over as 0xfffe7960.
-# @orig game:0x80033f94  status:verified -- a label inside collide_query; 5006 of 5006 logged creature positions stand clear of a fence, tools/ai.py
+# @orig game:0x80033f94 collide_query+0x5c  status:verified -- a label inside collide_query; 5006 of 5006 logged creature positions stand clear of a fence, tools/ai.py
 func fenced(q: Dictionary) -> bool:
 	var at := int(q["at"])
 	if at < 0 or fence.is_empty():
@@ -677,6 +691,7 @@ func fenced(q: Dictionary) -> bool:
 const FENCED_SURFACE := -100000
 
 
+# @port helper -- the lateral bits of query()'s mask; nothing calls it now
 func blocked(x: int, y: int, z: int) -> bool:
 	return (query(x, y, z)["mask"] & BLOCKING) != 0
 

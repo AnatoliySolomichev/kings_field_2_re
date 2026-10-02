@@ -22,8 +22,10 @@ class_name KFObjectCollision
 # that turns a rectangle come from the object itself.
 #
 # `emu/bp23.lua` recorded 401 touches while the player walked into things and
-# this reproduces all 401, over 13 distinct shapes.
-# @orig game:0x80045ac8 object_collide  status:verified -- the shape and the radius
+# this reproduces all 401, over 13 distinct shapes. The walk over the slots and
+# the two tests are collision.gd's `object_collide` and `in_oriented_rect`.
+#
+# @exe game
 
 const SCALE_BIT := 0x10        # in the type row's byte +3
 const RECT_BIT := 0x04         # the same byte, and the object's copy of it
@@ -32,6 +34,7 @@ const SCALE_ONE := 128         # the object's +0x38 is over this
 var shapes: Dictionary = {}    # level -> { type -> {kind, a, b} }
 
 
+# @port data -- reads objcoll.json, each level's type shapes as tools/objcoll.py reads them
 func load_shapes(path := "res://objcoll.json") -> bool:
 	if not FileAccess.file_exists(path):
 		return false
@@ -47,7 +50,7 @@ func load_shapes(path := "res://objcoll.json") -> bool:
 	return true
 
 
-# @orig game:0x80045ac8 object_collide  status:verified
+# @orig game:0x80045b64 object_collide+0x9c  status:verified -- 401 of 401 touches, emu/bp23.lua
 static func radius_of(row_flags: int, row_radius: int, obj_scale: int) -> int:
 	if row_flags & SCALE_BIT:
 		return (row_radius * obj_scale) / SCALE_ONE
@@ -55,7 +58,7 @@ static func radius_of(row_flags: int, row_radius: int, obj_scale: int) -> int:
 
 
 # The shape a type gives, at the object's own scale.
-# @orig game:0x80045ac8 object_collide  status:verified
+# @orig game:0x80045b9c object_collide+0xd4  status:verified -- 401 of 401 touches, emu/bp23.lua
 static func shape_of(row_flags: int, row_radius: int, rect_a: int, rect_b: int,
 		obj_scale := SCALE_ONE) -> Dictionary:
 	var r := radius_of(row_flags, row_radius, obj_scale)
@@ -65,23 +68,3 @@ static func shape_of(row_flags: int, row_radius: int, rect_a: int, rect_b: int,
 		return {"kind": "rect", "a": rect_a, "b": rect_b}
 	return {"kind": "none", "a": 0, "b": 0}
 
-
-# Does the query point stand inside this object?
-#
-# The circle is `in_range`: |dx| and |dz| within r first, then the true
-# distance. The rectangle is `in_oriented_rect` -- the offset turned into the
-# object's frame by its angle, then compared against the two half-extents.
-# @orig game:0x80016d3c in_oriented_rect  status:transcribed
-func hits(s: Dictionary, dx: int, dz: int, angle: int, coll) -> bool:
-	if s["kind"] == "circle":
-		var r: int = int(s["a"])
-		if absi(dx) > r or absi(dz) > r:
-			return false
-		return dx * dx + dz * dz <= r * r
-	if s["kind"] == "rect":
-		var c: int = coll.game_cos(angle)
-		var sn: int = coll.game_sin(angle)
-		var lx: int = (dx * c + dz * sn) >> 12
-		var lz: int = (dz * c - dx * sn) >> 12
-		return absi(lx) <= int(s["a"]) and absi(lz) <= int(s["b"])
-	return false

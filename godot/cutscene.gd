@@ -25,8 +25,10 @@ extends CanvasLayer
 #
 # The routine behind it is 0x80060d20; `build_str_name` is a label inside it,
 # which is why nothing appeared to call it. It reads the scene number through
-# the pointer at 0x801f825c and splits it into the two digits of
-# `\STR\SXX.S;1`.
+# the pointer at 0x801e825c (cutscene_record) and splits it into the two digits
+# of `\STR\SXX.S;1`.
+#
+# @exe game
 
 const SCENE := 3                  # \STR\S03.S
 
@@ -41,7 +43,9 @@ var card_frames := 0
 const CARD_FRAMES := 90
 
 
-# @orig game:0x80060d20  status:partial -- build_str_name is a label inside it
+# @orig game:0x80014e4c game_main+0x278  status:transcribed -- the guard bne $s1, 1, so on a new game only: cutscene_number 3, cutscene_record, then 0x80061bc4 -> str_play
+# @orig game:0x8003c9dc load_data_screen  status:partial -- LOAD.MSG as a picture; the port has no CD to wait on
+# @orig game:0x80060d20 str_play  status:partial -- which movie (build_str_name is a label inside it); the decoder is Godot's
 func _ready() -> void:
 	# The shell's own byte: 0 is NEW, which is what open_main leaves in
 	# overlay_arg2 when the title menu's first entry was chosen. Without a
@@ -93,6 +97,8 @@ func _ready() -> void:
 		p.set_process(false)
 
 
+# @port engine -- the card's 90 frames, then the movie to its end; the skip is
+# OPEN.EXE's play_movie rule (open:0x800136d8), not read in str_play's own loop
 func _process(_dt: float) -> void:
 	KFPad.poll()
 	if card_frames > 0:
@@ -119,6 +125,7 @@ func _process(_dt: float) -> void:
 		_finish()
 
 
+# @port engine -- gives the player back its _process and goes
 func _finish() -> void:
 	var p := get_node_or_null("/root/World/Player")
 	if p:

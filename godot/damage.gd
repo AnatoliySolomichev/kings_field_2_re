@@ -33,7 +33,8 @@ class_name KFDamage
 # 14 for the damage. **6 of 6 recorded hits**. The seventh, the one that
 # killed the player, logged (10, 10, 70) with effect 0x40: 30 from those
 # against 33 HP, so the magic five that log did not carry were not all zero.
-# @orig game:0x8002ab18 player_take_hit  status:verified -- 6 of 6 hits in out/lua_bp20.log
+#
+# @exe game
 
 const TYPES := 8                     # slash blow stab, then the five magic
 const NAMES := ["slash", "blow", "stab", "magic 1", "magic 2", "magic 3",
@@ -43,7 +44,7 @@ const ARG9 := 0x1000                 # 0x8004d358
 const ARG10 := 0xA                   # 0x8004d35c
 
 
-# @orig game:0x8002a5f8 damage_of_type  status:verified
+# @orig game:0x8002a5f8 damage_of_type  status:verified -- through hit(), 6 of 6
 static func of_type(attack: int, defence: int, stat: int, k := K) -> int:
 	var a := attack * 16
 	if a == 0:
@@ -59,7 +60,7 @@ static func of_type(attack: int, defence: int, stat: int, k := K) -> int:
 # long; anything shorter is taken as zero, which is what the call site does
 # with the five types it never sets, and anything past the eighth -- the effect
 # damagecheck.json carries ninth -- is not an attack.
-# @orig game:0x8002ab18 player_take_hit  status:verified
+# @orig game:0x8002ab18 player_take_hit  status:partial -- the arithmetic, 6 of 6 hits in out/lua_bp20.log; what the hit then does is player.gd's
 static func hit(attacks: Array, defence: Array, stat: int,
 		k := K, arg9 := ARG9, arg10 := ARG10) -> Dictionary:
 	var base := 0

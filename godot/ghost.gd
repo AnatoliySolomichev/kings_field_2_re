@@ -7,6 +7,10 @@ extends Node3D
 #
 # While comparing, the camera takes both angles from the game: yaw from
 # 0x801b2612 and pitch from 0x801b2614.
+#
+# @port-file check -- the side-by-side comparison with the emulator; it runs the
+# port's copies, it is not one
+# @exe game
 #   1  height only           2  ground and height  3  from the buttons
 #
 # `emu/bp16.lua` overwrites `res://live.txt` once per game frame with the

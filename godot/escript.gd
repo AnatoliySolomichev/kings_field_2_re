@@ -50,7 +50,8 @@ class_name KFScript
 # recorded in play. An earlier version of this file agreed with an earlier
 # version of that one on 1086 scripts; they were not scripts, and the
 # agreement meant nothing. See tools/entities.py.
-# @orig game:0x8005c308 script_interpreter  status:partial -- flow and flags
+#
+# @exe game
 
 # 256, not 128: reset_story_flags clears 0x40 **words** and save_serialise
 # copies 0x100 bytes. Six flags a conversation reads are past 128.
@@ -66,6 +67,7 @@ const SIZE := {0xF0: 2, 0xF2: 2, 0xF3: 1, 0xF4: 2, 0xF5: 2, 0xF6: 1,
 	0xF7: 3, 0xF8: 2, 0xF9: 4, 0xFF: 1}
 
 
+# @orig game:0x8005c3f8 script_interpreter+0xf0  status:verified -- below 0xf0 is a line, and so are the six arms of the table that go where a line goes; through run(), 25 of 25 recorded steps
 static func is_line(op: int) -> bool:
 	return op < 0xF0 or op in LINE_OPS
 
@@ -100,7 +102,7 @@ static func start_pc(code: PackedByteArray, flags: Array = [], pc := 0) -> int:
 	return pc
 
 
-# @orig game:0x8005c308 script_interpreter  status:partial
+# @orig game:0x8005c308 script_interpreter  status:partial -- the order of execution and the flags; not the waiting, the animation or the text
 static func run(code: PackedByteArray, flags: Array = [],
 		limit := 400, stop_on_loop := true) -> Dictionary:
 	var f: Array = flags.duplicate() if flags.size() == FLAG_COUNT \
@@ -170,7 +172,8 @@ static func run(code: PackedByteArray, flags: Array = [],
 # `0xf0` and resumes just past it. `0xf8` jumps back without setting the
 # flag, so a section ending on one repeats for ever: the entity is out of
 # things to say.
-# @orig game:0x8005c308 script_interpreter  status:verified -- .L1..L3 and .L6
+# @orig game:0x8005c390 script_interpreter+0x88  status:verified -- the entry: script_prescan, the speaker test and the retry scan to past the next 0xf0
+# @orig game:0x8005c42c script_interpreter+0x124  status:verified -- 0xf0 setting the retry flag, and with 0xf8 jumping back
 static func visits(code: PackedByteArray, flags: Array = [],
 		count := 16, limit := 400) -> Array:
 	var f: Array = flags.duplicate() if flags.size() == FLAG_COUNT else _zeros()
@@ -223,10 +226,12 @@ static func visits(code: PackedByteArray, flags: Array = [],
 	return out
 
 
+# @port helper -- run()'s answer, in one shape
 static func _done(trace: Array, said: Array, f: Array, why: String) -> Dictionary:
 	return {"trace": trace, "said": said, "flags": f, "why": why}
 
 
+# @port helper -- 256 story flags, all clear
 static func _zeros() -> Array:
 	var f: Array = []
 	f.resize(FLAG_COUNT)

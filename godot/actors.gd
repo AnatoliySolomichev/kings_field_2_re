@@ -26,6 +26,8 @@ extends Node
 # What an awake creature then does -- actor_tick's behaviours -- is ai.gd, run
 # from _pass. F10 kills the nearest awake one, to try the rules on -- not X,
 # which is the emulator's CROSS and the port's too.
+#
+# @exe game
 
 const TICK_HZ := 15.0          # the game's frame, four blanks: see player.gd
 const SLOTS := 200
@@ -59,6 +61,7 @@ var kinds := {}                # kind -> its fields and behaviours, aiNN.json
 var skins := {}                # slot -> its animated mesh (KFAnim), see _skin
 
 
+# @orig game:0x8005f444 apply_level_state  status:partial -- the category-1 states put back from `saved`; reading actorsNN.json, aiNN.json and animNN.json and finding the nodes is the port's
 func _ready() -> void:
 	player = get_node_or_null("../Player")
 	actors.resize(SLOTS)
@@ -125,6 +128,7 @@ func _ready() -> void:
 	refresh()
 
 
+# @orig game:0x8005efd4 level_state_write  status:partial -- slot and 3-or-0 for each category-1 actor, into `saved`
 func _exit_tree() -> void:
 	var keep := []
 	for k in SLOTS:
@@ -134,6 +138,7 @@ func _exit_tree() -> void:
 	saved[level] = keep
 
 
+# @port engine -- runs _pass at the game's 15 frames a second
 func _process(dt: float) -> void:
 	if player == null or nodes.is_empty():
 		return
@@ -145,6 +150,7 @@ func _process(dt: float) -> void:
 		refresh()
 
 
+# @port check -- F10 kills the nearest awake creature
 func _unhandled_input(e: InputEvent) -> void:
 	# X, because K is the pad's cross in pad.gd and N the labels
 	if e is InputEventKey and e.pressed and not e.echo and e.keycode == KEY_F10:
@@ -201,6 +207,7 @@ func _pass(px: int, pz: int) -> void:
 
 
 # Where the creature's node stands and faces: its position and its yaw +0x42.
+# @port engine -- the node where the actor stands; the turn is _draw_basis's
 func _place(k: int) -> void:
 	if not nodes.has(k):
 		return
@@ -213,6 +220,7 @@ func _place(k: int) -> void:
 
 
 # An animated creature's mesh, made so its vertices can be moved (KFAnim.skin).
+# @port engine -- an animated creature's mesh, made movable
 func _skin(k: int) -> void:
 	var sk := KFAnim.skin(nodes[k], int(actors[k]["model"]))
 	if not sk.is_empty():
@@ -220,6 +228,7 @@ func _skin(k: int) -> void:
 
 
 # The frame 0x800431e8 would draw: the animation +0xc and the clock +0x18.
+# @port engine -- hands the skin +0xc and +0x18; the frame is anim.gd's model_animate
 func _animate(k: int) -> void:
 	if not skins.has(k):
 		return
@@ -233,7 +242,7 @@ func _animate(k: int) -> void:
 # (actor_vertex_point, 0x8004ede0) -- and a spore rises from it, with +0x18's
 # low byte as its percentage. tools/effects.py puts slot 40's spore at the
 # point bp26 logged, to the unit.
-# @orig game:0x8004f6c4  status:verified -- actor_animation_effects arm 0x26; the other 129 arms are not here
+# @orig game:0x8004f6c4 actor_animation_effects+0x2b0  status:verified -- actor_animation_effects arm 0x26; the other 129 arms are not here
 func _launch(a: Dictionary, kind: Dictionary, fired: Array) -> void:
 	var raw: Array = a["rec"]
 	if raw == null or int(raw[0xC]) != 0x26:
@@ -263,7 +272,7 @@ func _launch(a: Dictionary, kind: Dictionary, fired: Array) -> void:
 # front is its -z, and the half turn faces it the way it walks. Flip Y and Z
 # into Godot's axes and that is a turn of yaw + 0x800 about up. A kind with
 # flag 0x20 (+0x28) is drawn with no turn at all (0x80040c34).
-# @orig game:0x80040c94  status:transcribed -- a label inside render_walk
+# @orig game:0x80040c94 render_walk+0x1b0  status:transcribed -- a label inside render_walk
 func _draw_basis(a: Dictionary) -> Basis:
 	# the kind's +0x32, at the actor's +0x48..+0x4c: draw_model_plain's
 	# ScaleMatrix -- 0x1400 for level 0's commonest monsters, a quarter larger
@@ -302,7 +311,7 @@ func _blow(a: Dictionary, blow: Dictionary) -> void:
 # through; the first creature met is struck if the view's yaw is within its
 # kind's +0x16 of the bearing to it and its own yaw within +0x18 of the bearing
 # back. Returns {slot, damage, hp, exp, strong} or {}.
-# @orig game:0x8002dcd8  status:transcribed -- a label inside held_item_tick; weapons 0x1f and 0x20's specials are not here
+# @orig game:0x8002dcd8 held_item_tick+0xa38  status:transcribed -- a label inside held_item_tick; weapons 0x1f and 0x20's specials are not here
 func strike(p: Vector3i, step: Array, view_yaw: int, stat: int,
 		attacks: Array, strength: int, push: bool) -> Dictionary:
 	var q := Vector3i(p.x, p.y - KFWeapon.PROBE_UP, p.z)
@@ -327,6 +336,7 @@ func strike(p: Vector3i, step: Array, view_yaw: int, stat: int,
 
 
 # actor_spot_taken (0x8004d644) as the blow asks it: mask 0, the dying skipped.
+# @orig game:0x8004d644 actor_spot_taken  status:transcribed -- as the blow asks it: mask 0, the dying skipped
 func _spot(q: Vector3i) -> int:
 	for j in SLOTS:
 		var o = actors[j]
@@ -397,6 +407,7 @@ func _take_hit(k: int, dmg: int, strength: int, point) -> Dictionary:
 
 
 # 0x8004c068: the kind's first behaviour with that opcode.
+# @orig game:0x8004c068 kind_behaviour_with_op  status:transcribed
 func _with_op(kind: Dictionary, op: int):
 	for rec in kind["behaviours"]:
 		if int(rec[0]) == op:
@@ -455,7 +466,7 @@ func _activate(k: int, px: int, pz: int) -> void:
 
 
 # 0x8004c380: spawn, unless 0x8004d644 finds the spot taken
-# @orig game:0x8004c380  status:transcribed -- a label inside actor_activate
+# @orig game:0x8004c380 actor_activate+0x190  status:transcribed -- a label inside actor_activate
 func _try(k: int) -> void:
 	if _taken(k) != -1:
 		_block(k, "spot taken")
@@ -464,7 +475,7 @@ func _try(k: int) -> void:
 
 
 # 0x8004c418: category 2 just waits; any other is held
-# @orig game:0x8004c418  status:transcribed -- a label inside actor_activate
+# @orig game:0x8004c418 actor_activate+0x228  status:transcribed -- a label inside actor_activate
 func _block(k: int, why: String) -> void:
 	if actors[k]["cat"] != 2:
 		_state(k, HELD, why)
@@ -501,7 +512,7 @@ func _taken(k: int) -> int:
 
 
 # the death branch of actor_tick, 0x80052b7c
-# @orig game:0x80052b7c  status:transcribed -- the death branch, a label inside actor_tick
+# @orig game:0x80052b7c actor_tick+0x2ad4  status:transcribed -- the death branch, a label inside actor_tick
 func _kill(k: int) -> void:
 	var a: Dictionary = actors[k]
 	match int(a["cat"]):
@@ -546,6 +557,7 @@ func _in_range(ax: int, ay: int, az: int, x: int, y: int, z: int, r: int,
 # in slot order, as [x, y, z, radius, height, flags] -- flags the entity's
 # +0x34, which the actor carries at +0x28. player.gd asks them as
 # actor_spot_taken does.
+# @port helper -- the awake creatures' shapes, which player.gd asks as actor_spot_taken does
 func solid() -> Array:
 	var out := []
 	for k in SLOTS:
@@ -556,10 +568,12 @@ func solid() -> Array:
 	return out
 
 
+# @port helper -- in_range with the height skipped (y 0xffff), the ring test actor_activate makes
 func _dist(a: Dictionary, px: int, pz: int, r: int) -> int:
 	return _in_range(a["px"], a["py"], a["pz"], px, NO_Y, pz, r)
 
 
+# @port helper -- the actor in the slot its leader byte names
 func _leader(a: Dictionary):
 	var j: int = a["leader"]
 	if j < 0 or j >= SLOTS:
@@ -567,6 +581,7 @@ func _leader(a: Dictionary):
 	return actors[j]
 
 
+# @port helper -- back to its placement, where actor_spawn puts it when it wakes
 func _home(a: Dictionary) -> void:
 	a["px"] = a["x"]
 	a["py"] = a["y"]
@@ -581,6 +596,7 @@ func _rand() -> int:
 	return (rand_next >> 16) & 0x7FFF
 
 
+# @port helper -- writes the state, the game's +9, and logs the change
 func _state(k: int, st: int, why: String) -> void:
 	var a: Dictionary = actors[k]
 	if a["st"] == st:
@@ -595,6 +611,7 @@ func _state(k: int, st: int, why: String) -> void:
 	print("actors: " + line)
 
 
+# @port check -- the nearest awake creature, for F10
 func _nearest(px: int, pz: int, r: int) -> int:
 	var best := -1
 	var bd := r + 1
@@ -609,6 +626,7 @@ func _nearest(px: int, pz: int, r: int) -> int:
 	return best
 
 
+# @orig game:0x80040b9c render_walk+0xb8  status:transcribed -- a creature is drawn while its +9 is 1; show_all is the port's
 func refresh() -> void:
 	for k in nodes:
 		var a: Dictionary = actors[k]
@@ -621,6 +639,7 @@ func refresh() -> void:
 		g.call("_hud", "")
 
 
+# @port check -- the readout's lines
 func summary() -> String:
 	var n := [0, 0, 0, 0]
 	for a in actors:

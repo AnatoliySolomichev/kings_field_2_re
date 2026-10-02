@@ -24,7 +24,8 @@ extends Node3D
 # +0x39 cells -- and one that holds the player writes its +0x3b to sky_on, so
 # the last in slot order wins and the value stays when none does. game_main
 # starts it at 1 (0x80035610). On level 0 every zone says 1.
-# @orig game:0x800400ac draw_model_at_eye  status:transcribed -- the sky's draw: view-space translation (0, 0x64, 0), the class's light, the side ordering table
+#
+# @exe game
 
 const LIFT := 0.1                  # 0x64 game units below the eye, in metres
 const REACH := 390.0               # just inside the camera's far plane of 400
@@ -53,6 +54,7 @@ var player: Node3D
 var dome: Node3D
 
 
+# @port data -- reads skyNN.json (the 0xe3 zones) and skyNN.gltf, which tools/level3d.py writes
 func _ready() -> void:
 	player = get_node_or_null("../Player")
 	var lv: int = player._level() if player else 0
@@ -73,6 +75,7 @@ func _ready() -> void:
 	_swap(dome, sh)
 
 
+# @port engine -- puts the dome's textures on the shader in CODE
 func _swap(n: Node, sh: Shader) -> void:
 	if n is MeshInstance3D and n.mesh:
 		n.extra_cull_margin = 16384.0
@@ -90,6 +93,9 @@ func _swap(n: Node, sh: Shader) -> void:
 		_swap(c, sh)
 
 
+# @orig game:0x8004a954 object_interpreter+0x3944  status:transcribed -- class 0xe3's arm: the zone that holds the player writes sky_on
+# @orig game:0x80040fac render_walk+0x4c8  status:transcribed -- class 0xf0: drawn only while sky_on
+# @orig game:0x800400ac draw_model_at_eye  status:transcribed -- the dome on the eye; the shader in CODE is its view-space (0, 0x64, 0) and the far ordering table
 func _process(_dt: float) -> void:
 	if dome == null:
 		return

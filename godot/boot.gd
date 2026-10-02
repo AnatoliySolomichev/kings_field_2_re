@@ -23,6 +23,8 @@ extends Node
 # Those bytes are `next_exe`, `overlay_arg` and `overlay_arg2` below, and the
 # port keeps them static for the same reason the shell keeps them out of the
 # way of the overlays: a scene change here is an Exec there.
+#
+# @exe boot -- a plain address in this file is the shell's; OPEN.EXE's say open:
 
 const OPEN := 0
 const GAME := 1
@@ -35,6 +37,8 @@ static var overlay_arg2 := 0       # 0x800102fa: the title menu's choice
 var screen: Node2D
 
 
+# @port engine -- the screen node the overlays draw into; shell_main's own start
+# (SetMem, CdRemove, CdInit) is what Godot does before any script runs
 func _ready() -> void:
 	KFPad.apply()
 	var layer := CanvasLayer.new()
@@ -47,7 +51,7 @@ func _ready() -> void:
 	_exec()
 
 
-# The PlayStation's display is 640x240 here -- init_graphics (0x80012500) hands
+# The PlayStation's display is 640x240 here -- init_graphics (open:0x80012500) hands
 # SetDefDrawEnv a width of 0x280 -- shown on a 4:3 screen, so every pixel is
 # twice as tall as it is wide. The port keeps the game's own coordinates and
 # does the stretching here, which is why every rectangle in opening.gd is the
@@ -85,5 +89,6 @@ func _exec() -> void:
 
 # What an overlay does when it returns: the shell reads the byte and goes round
 # again. `open_main` reaches this by falling off the end of itself.
+# @orig boot:0x800100dc shell_main+0xa4  status:transcribed -- after Exec: next_index = *next_exe, CdInit, round again
 func overlay_returned() -> void:
 	_exec()

@@ -16,6 +16,8 @@ extends Node3D
 #
 # Models sit two hundred metres apart, so the camera being at one of them means
 # nothing else is in the frame.
+#
+# @port-file check -- a model browser for naming things; nothing in it is the game's
 
 var index := 0
 var models: Array = []

@@ -1,7 +1,7 @@
 class_name KFPad
 # The controller, as the game reads it.
 #
-# `PadRead` is the Sony library's, at 0x800785ac in GAME.EXE and 0x8001f9f0 in
+# `PadRead` is the Sony library's, at 0x800785ac in GAME.EXE and open:0x8001f9f0 in
 # OPEN.EXE: it calls the BIOS (B0 0x16) and returns NOT of the buffer the BIOS
 # fills, so **a set bit means pressed**. The bits below are the PSY-Q layout --
 # the two halves of the hardware's word swapped -- and every one of them is
@@ -17,6 +17,8 @@ class_name KFPad
 # The edge detection is the game's too: 0x801b265c is this frame's word and
 # 0x801b265e last frame's, and every menu asks for a bit set in the first and
 # clear in the second.
+#
+# @exe game -- OPEN.EXE's addresses say open:
 
 const UP := 0x1000
 const RIGHT := 0x2000
@@ -144,6 +146,7 @@ static func apply(move_type := START_MOVE, action_type := START_ACTION) -> void:
 
 
 # PadRead: one word, a set bit meaning pressed.
+# @port engine -- the keyboard, a joypad or the emulator's word, in PadRead's layout (0x800785ac)
 static func read() -> int:
 	if from_emulator:
 		return live_word
@@ -168,11 +171,14 @@ static func read() -> int:
 # player_controller stores this frame's word at 0x801b265c and, at the end of
 # the frame, last frame's at 0x801b265e. Call once a frame, before asking
 # anything else.
+# @orig game:0x80031120 player_controller+0x154  status:transcribed -- PadRead into buttons (0x801b265c)
+# @orig game:0x80031e84 player_controller+0xeb8  status:transcribed -- buttons into buttons_prev (0x801b265e), at the frame's end
 static func poll() -> void:
 	prev = now
 	now = read()
 
 
+# @port helper -- the test every reader of a slot makes inline: this frame's word & the slot
 static func held(slot: int) -> bool:
 	if binding.is_empty():
 		apply()
@@ -180,6 +186,7 @@ static func held(slot: int) -> bool:
 
 
 # The shape every menu in the game uses: set now, clear last frame.
+# @port helper -- that test, made inline by every menu, on a slot
 static func hit(slot: int) -> bool:
 	if binding.is_empty():
 		apply()
@@ -187,11 +194,13 @@ static func hit(slot: int) -> bool:
 	return (now & m) != 0 and (prev & m) == 0
 
 
+# @port helper -- the same test on buttons rather than a slot
 static func hit_mask(mask: int) -> bool:
 	return (now & mask) != 0 and (prev & mask) == 0
 
 
 # Every button in a word, named. For a readout that has to be glanced at.
+# @port check -- the readout's names
 static func names_of(word: int) -> String:
 	var out := PackedStringArray()
 	for m in [UP, DOWN, LEFT, RIGHT, TRIANGLE, CIRCLE, CROSS, SQUARE,
@@ -202,6 +211,7 @@ static func names_of(word: int) -> String:
 
 
 # A slot's button and the key that presses it, for the HUD: "CROSS [X]".
+# @port check -- the readout's key hint
 static func slot_key(slot: int) -> String:
 	if binding.is_empty():
 		apply()
@@ -210,6 +220,7 @@ static func slot_key(slot: int) -> String:
 	return "%s [%s]" % [name_of(m), OS.get_keycode_string(keys[0]) if keys else "-"]
 
 
+# @port check -- one button's name
 static func name_of(mask: int) -> String:
 	match mask:
 		UP: return "UP"

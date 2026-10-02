@@ -8,6 +8,8 @@ extends Node
 # its kind's arm. A spore swells, rises and then sinks, strikes the player
 # within its x scale -- poison, through player.gd take_effect -- and goes
 # when it meets the tiles.
+#
+# @exe game
 
 const TICK_HZ := 15.0
 const SPORE := 0x26
@@ -27,6 +29,7 @@ var coll: KFCollision
 var template: Node3D             # model 0x40, out of effectsNN.gltf
 
 
+# @port engine -- finds the player, its collision and model 0x40's node
 func _ready() -> void:
 	player = get_node_or_null("../Player")
 	if player and player.get("coll") is KFCollision:
@@ -36,6 +39,7 @@ func _ready() -> void:
 		template = models.find_child("m064", true, false) as Node3D
 
 
+# @port engine -- runs _pass at the game's 15 frames a second
 func _process(dt: float) -> void:
 	acc = minf(acc + dt, 0.25)
 	while acc >= 1.0 / TICK_HZ:
@@ -46,7 +50,7 @@ func _process(dt: float) -> void:
 # effect_spawn's arm 0x26 (0x80054338): the scale 0x400, model 0x40, a life of
 # 0x32, the half-step test, 0x14 frames of growth, 200 higher; the grace count
 # 0 as actor_animation_effects leaves it, and +6 the percentage.
-# @orig game:0x80054338  status:verified -- a label inside effect_spawn; tools/effects.py against bp26
+# @orig game:0x80054338 effect_spawn+0x6b4  status:verified -- a label inside effect_spawn; tools/effects.py against bp26
 func spawn_spore(point: Vector3i, pct: int) -> void:
 	if slots.size() >= 128:
 		return                          # effect_alloc: none free
@@ -63,6 +67,7 @@ func spawn_spore(point: Vector3i, pct: int) -> void:
 	_draw(e)
 
 
+# @orig game:0x8005bc50 effect_driver  status:partial -- the walk over the live slots; the count is _tick's, the 128 a cap in spawn_spore
 func _pass() -> void:
 	if coll == null:
 		return
@@ -80,7 +85,8 @@ func _pass() -> void:
 
 # effect_driver's count and effect_tick's arm 0x26 (0x80056de8). False when
 # the slot goes.
-# @orig game:0x80056de8  status:verified -- tools/effects.py: 118 of 118 frames of the recorded spores, 118 of 118 strikes
+# @orig game:0x8005bcc0 effect_driver+0x70  status:verified -- the life, counted down; -1 retires the slot
+# @orig game:0x80056de8 effect_tick+0x52c  status:verified -- tools/effects.py: 118 of 118 frames of the recorded spores, 118 of 118 strikes
 func _tick(e: Dictionary, t: Vector3i) -> bool:
 	e["life"] = int(e["life"]) - 1
 	if int(e["life"]) == -1:
@@ -113,7 +119,8 @@ func _tick(e: Dictionary, t: Vector3i) -> bool:
 # a box of radius + 0x320, then the length to the player's middle through the
 # game's root, less 0x320, must be 0 or more -- and the scale falling to 0x400
 # at the rim. -1 for a miss.
-# @orig game:0x8002b114  status:verified -- 118 of 118 strikes of bp26, scale and all
+# @orig game:0x8002b114 effect_hurt_player  status:verified -- 118 of 118 strikes of bp26, scale and all
+# @orig game:0x80016fb4 in_range_3d  status:verified -- through effect_hurt_player, the same 118
 func _strike_scale(p: Vector3i, radius: int, t: Vector3i) -> int:
 	var r := radius + OWN
 	var dx := t.x - p.x
@@ -156,6 +163,7 @@ func _collides(e: Dictionary) -> bool:
 
 # render_walk's third loop draws a slot's model +0xe at its point, turned by
 # +0x28.. with 0x800 on the yaw, through the scale +0x30..+0x34.
+# @orig game:0x8004165c render_walk+0xb78  status:partial -- the place, the turn and the scale; not the view test (+8 & 3, view_bits_at) nor the light
 func _draw(e: Dictionary) -> void:
 	var n = e["node"]
 	if n == null:

@@ -43,7 +43,8 @@ extends Node
 # in_range(player, point, 0x5dc + 0x320, 0x6a4, the door's height). Only the
 # player is asked here: the port's creatures stand at home. And a stamp here
 # changes the collision, not the drawn tile.
-# @orig game:0x80047010 object_interpreter  status:partial -- opcode 1's arm at 0x8004814c: the swing, the stamps and the wait, 226 of 226 recorded steps (tools/doors.py)
+#
+# @exe game
 
 const TICK_HZ := 15.0              # frame_limit; see player.gd
 const OPENING := 0x20
@@ -65,6 +66,7 @@ var player: Node3D
 var acc := 0.0
 
 
+# @port data -- reads doorsNN.json, the doors tools/level3d.py finds in the placement, and finds their nodes
 func _ready() -> void:
 	player = get_node_or_null("../Player")
 	if player == null:
@@ -86,6 +88,7 @@ func _ready() -> void:
 		doors.append(d)
 
 
+# @port engine -- USE into _interact, the arms at 15 a second, the nodes turned to the yaw
 func _process(dt: float) -> void:
 	if doors.is_empty():
 		return
@@ -107,7 +110,8 @@ func _process(dt: float) -> void:
 # object_interact for the doors: find_object's point for class 1 is the player,
 # 0x1f4 up, moved 0x400 back along the door's own yaw; it must be within the
 # type's reach plus 0x320 of the door, and the door within 0x200 of the facing.
-# @orig game:0x8005e2d0 object_interact  status:partial -- the swinging doors only
+# @orig game:0x8005e2d0 object_interact  status:partial -- the swinging doors, class 1: state 0 and the lock
+# @orig game:0x80045c7c find_object  status:partial -- its point and its tests for class 1
 func _interact() -> void:
 	var c: KFCollision = player.coll
 	for d in doors:
@@ -129,6 +133,7 @@ func _interact() -> void:
 		d["state"] = 1
 
 
+# @orig game:0x8004814c object_interpreter+0x113c  status:verified -- opcode 1's arm: the swing, the shove, the stamps and the wait; 226 of 226 recorded steps (emu/bp24.lua, tools/doors.py)
 func _step(d: Dictionary) -> void:
 	var c: KFCollision = player.coll
 	if int(d["state"]) == 1:
@@ -230,6 +235,7 @@ static func _facing(a: int, b: int, tol: int) -> bool:
 
 
 # in_range (0x80016ec8), as godot/actors.gd has it.
+# @orig game:0x80016ec8 in_range  status:transcribed
 func _in_range(ax: int, ay: int, az: int, x: int, y: int, z: int, r: int,
 		top := 0, own := 0) -> int:
 	var dx := ax - x

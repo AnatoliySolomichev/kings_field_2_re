@@ -19,6 +19,8 @@ class_name KFItems
 # `z` is 25, 0x7f is a space and 0xff ends it. All 150 decode without a single
 # unknown code, so nothing here needs the OCR that read item 0 as "Excel
 # Iecor" -- it is `excellector`. tools/itemtext.py writes them out.
+#
+# @exe game
 
 const COUNT := 150                   # ids 0..149
 const CAP := 0x63                    # 99, the per-slot cap in both arrays
@@ -31,6 +33,7 @@ var b: PackedByteArray = _empty()
 var last_message := -1
 
 
+# @port helper -- 150 zero counts
 static func _empty() -> PackedByteArray:
 	var p := PackedByteArray()
 	p.resize(COUNT)
@@ -45,7 +48,7 @@ func has_item(id: int) -> bool:
 	return a[id] != 0 or b[id] != 0
 
 
-# @orig game:0x8005d7f8 take_item  status:transcribed
+# @orig game:0x8005d7f8 take_item  status:partial -- not the level's hook it calls after (level_hooks+0x2c)
 func take_item(id: int) -> bool:
 	if id < 0 or id >= COUNT:
 		return false
@@ -58,7 +61,7 @@ func take_item(id: int) -> bool:
 	return false
 
 
-# @orig game:0x8005d898 give_item  status:transcribed
+# @orig game:0x8005d898 give_item  status:partial -- not the level's hook it calls after (level_hooks+0x18)
 func give_item(id: int) -> bool:
 	if id < 0 or id >= COUNT:
 		return false
@@ -72,6 +75,7 @@ func give_item(id: int) -> bool:
 	return false
 
 
+# @port helper -- both arrays' count of one id, for the readouts
 func count(id: int) -> int:
 	if id < 0 or id >= COUNT:
 		return 0
@@ -81,6 +85,7 @@ func count(id: int) -> int:
 var item_names := {}
 
 
+# @port data -- reads itemnames.json: tools/itemtext.py decodes the 24-byte rows at 0x8007f620
 func load_names(path := "res://itemnames.json") -> bool:
 	if not FileAccess.file_exists(path):
 		return false
@@ -93,12 +98,14 @@ func load_names(path := "res://itemnames.json") -> bool:
 	return not item_names.is_empty()
 
 
+# @port data -- one name out of that table
 func name_of(id: int) -> String:
 	if item_names.is_empty():
 		load_names()
 	return item_names.get(id, "item %d" % id)
 
 
+# @port check -- the readout's line
 func summary() -> String:
 	var held := 0
 	for i in range(COUNT):

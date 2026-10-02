@@ -15,27 +15,32 @@ extends RefCounted
 #   flee cut      opcode 5's +0x70 and +0x71
 #
 # and a kind is {accel, turn_accel, fall, radius, height, behaviours}.
-# @orig game:0x800500a8 actor_tick  status:partial -- opcodes 0, 1, 4, 5 and 6; not the hit (2), the death (3) or the level's own opcodes
+#
+# @exe game
 
 var coll: KFCollision
 var rand: Callable                 # the BIOS rand, 0..0x7fff
 
 
+# @port helper -- a halfword, sign-extended
 static func s16(v: int) -> int:
 	v &= 0xFFFF
 	return v - 0x10000 if v >= 0x8000 else v
 
 
+# @port helper -- a little-endian halfword out of a record's bytes
 static func u16f(raw: Array, off: int) -> int:
 	if off + 1 >= raw.size():
 		return 0
 	return int(raw[off]) | (int(raw[off + 1]) << 8)
 
 
+# @port helper -- the same, sign-extended
 static func s16f(raw: Array, off: int) -> int:
 	return s16(u16f(raw, off))
 
 
+# @orig game:0x800170c0 rand_score  status:transcribed
 func rand_score(x: int) -> int:
 	# 0x800170c0: ((rand() + rand()) * x) >> 15, 0 to 2x
 	var r1: int = rand.call()
@@ -43,11 +48,13 @@ func rand_score(x: int) -> int:
 	return ((r1 + r2) * x) >> 15
 
 
+# @orig game:0x80016a2c facing_test  status:transcribed
 static func facing_test(a: int, b: int, tol: int) -> bool:
 	var d := (a - b) & 0xFFF
 	return d <= tol or d >= 0x1000 - tol
 
 
+# @orig game:0x80017158 fixed_madd  status:transcribed -- with the caller's b - a folded in
 static func lerp_fixed(a: int, b: int, t: int) -> int:
 	# fixed_madd (0x80017158): a + ((b - a) * t >> 12)
 	return a + (((b - a) * t) >> 12)
@@ -55,6 +62,7 @@ static func lerp_fixed(a: int, b: int, t: int) -> int:
 
 # -- the clock ------------------------------------------------------------------
 
+# @orig game:0x8004db3c actor_clock  status:transcribed
 static func clock(a: Dictionary, rate: int) -> void:
 	# actor_clock (0x8004db3c)
 	rate = s16(rate)
@@ -63,6 +71,7 @@ static func clock(a: Dictionary, rate: int) -> void:
 	a["clock"] = 0xFFF if t >= 0x1000 else (0 if t < 0 else t)
 
 
+# @orig game:0x8004db08 sub_8004db08  status:transcribed -- actor_clock that wraps instead of stopping
 static func clock_loop(a: Dictionary, rate: int) -> void:
 	# 0x8004db08
 	rate = s16(rate)
@@ -70,17 +79,20 @@ static func clock_loop(a: Dictionary, rate: int) -> void:
 	a["clock"] = (int(a["clock"]) + rate) & 0xFFF
 
 
+# @orig game:0x8004db98 actor_clock_passed  status:transcribed
 static func clock_passed(a: Dictionary, t: int) -> bool:
 	# actor_clock_passed (0x8004db98)
 	return t < int(a["clock"]) and not t < int(a["clock"]) - int(a["step"])
 
 
+# @orig game:0x8004c130 actor_start_anim  status:partial -- not the +2 it adds while 0x80199150 is set for the actor at 0x80199148
 static func start_anim(a: Dictionary, anim: int) -> void:
 	if anim != 0xFF:
 		a["anim"] = anim
 		a["clock"] = 0
 
 
+# @orig game:0x8004b94c actor_switch  status:transcribed
 static func switch_to(a: Dictionary, rec) -> void:
 	# actor_switch (0x8004b94c)
 	a["prev"] = a["op"]
@@ -94,6 +106,8 @@ static func switch_to(a: Dictionary, rec) -> void:
 		a["phase"] = 0
 
 
+# @orig game:0x8004c3bc actor_activate+0x1cc  status:transcribed -- asks for 0x15, then 6, then 0x1a
+# @orig game:0x8004c068 kind_behaviour_with_op  status:transcribed
 static func entrance(kind: Dictionary):
 	# 0x8004c068 as actor_activate asks it: 0x15, else 6, else 0x1a
 	for op in [0x15, 6, 0x1A]:
@@ -105,6 +119,7 @@ static func entrance(kind: Dictionary):
 
 # -- choosing -------------------------------------------------------------------
 
+# @orig game:0x8004b984 actor_behaviour  status:partial -- the opcodes level 0's kinds use
 func score(a: Dictionary, rec: Array, dist: int, player: Vector3i) -> int:
 	# actor_behaviour (0x8004b984), the opcodes level 0's kinds use
 	var op := int(rec[0])
@@ -164,6 +179,8 @@ func score(a: Dictionary, rec: Array, dist: int, player: Vector3i) -> int:
 	return -2
 
 
+# @orig game:0x8004c01c actor_choose  status:transcribed -- the distance, through dist_to
+# @orig game:0x8004bf1c actor_pick  status:transcribed
 func pick(a: Dictionary, kind: Dictionary, player: Vector3i) -> void:
 	# actor_pick (0x8004bf1c)
 	if int(a["phase"]) == 0xF0 or int(a["phase"]) == 0:
@@ -180,12 +197,14 @@ func pick(a: Dictionary, kind: Dictionary, player: Vector3i) -> void:
 		switch_to(a, best_rec)
 
 
+# @orig game:0x8004c104 actor_finish  status:transcribed
 func finish(a: Dictionary, kind: Dictionary, player: Vector3i) -> void:
 	# actor_finish (0x8004c104)
 	a["phase"] = 0xFF
 	pick(a, kind, player)
 
 
+# @orig game:0x80016c08 vec_length_2d  status:transcribed -- of the actor to the player, as actor_choose takes it
 func dist_to(a: Dictionary, player: Vector3i) -> int:
 	# vec_length_2d (0x80016c08)
 	var dx: int = (player.x - int(a["px"])) >> 3
@@ -195,6 +214,7 @@ func dist_to(a: Dictionary, player: Vector3i) -> int:
 
 # -- moving ---------------------------------------------------------------------
 
+# @orig game:0x80015fdc approach  status:transcribed
 static func approach(cur: int, target: int, step: int) -> int:
 	# 0x80015fdc
 	if step > 0:
@@ -210,6 +230,7 @@ static func approach(cur: int, target: int, step: int) -> int:
 	return cur
 
 
+# @orig game:0x8004e928 actor_turn  status:transcribed
 func turn(a: Dictionary, target: int, most: int, accel: int) -> void:
 	# 0x8004e928
 	target = s16(target)
@@ -233,11 +254,13 @@ func turn(a: Dictionary, target: int, most: int, accel: int) -> void:
 			a["ry"] = target
 
 
+# @orig game:0x80016a78 sub_80016a78  status:transcribed -- the angle difference; its callers' > 0 folded in
 static func _gt(p: int, q: int) -> bool:
 	# 0x80016a78
 	return s16(((p + 0x800) & 0xFFF) - ((q + 0x800) & 0xFFF)) > 0
 
 
+# @orig game:0x8004e824 actor_drive  status:transcribed
 func drive(a: Dictionary, yaw: int, speed: int, accel: int, flags: int,
 		others: Array, player: Vector3i) -> int:
 	# 0x8004e824
@@ -252,6 +275,7 @@ func drive(a: Dictionary, yaw: int, speed: int, accel: int, flags: int,
 	return move_horizontal(a, flags, others, player)
 
 
+# @orig game:0x8004ea7c actor_walk_to  status:transcribed
 func walk_to(a: Dictionary, angle: int, speed: int, most: int, accel: int,
 		turn_accel: int, flags: int, others: Array, player: Vector3i) -> int:
 	# 0x8004ea7c
@@ -259,6 +283,7 @@ func walk_to(a: Dictionary, angle: int, speed: int, most: int, accel: int,
 	return drive(a, int(a["ry"]), speed, accel, flags, others, player)
 
 
+# @orig game:0x8004e6f8 actor_brake  status:transcribed
 func brake(a: Dictionary, decel: int, flags: int, others: Array, player: Vector3i) -> int:
 	# 0x8004e6f8
 	if int(a["vst"]) != 0:
@@ -275,6 +300,7 @@ func brake(a: Dictionary, decel: int, flags: int, others: Array, player: Vector3
 
 # collide_query for a creature: its own radius and height on the tiles, then
 # the other awake creatures (0x10) and the player (0x80).
+# @orig game:0x80033f38 collide_query  status:partial -- a creature's 0x93: the tiles, the fence (2), the other creatures (0x10) and the player (0x80)
 func _query(a: Dictionary, x: int, z: int, others: Array, player: Vector3i) -> Dictionary:
 	var keep_r := coll.radius
 	var keep_b := coll.body
@@ -302,6 +328,7 @@ func _query(a: Dictionary, x: int, z: int, others: Array, player: Vector3i) -> D
 	return q
 
 
+# @orig game:0x80033f38 collide_query  status:partial -- the floor alone, at a creature's size, for actor_move_horizontal's probes
 func _floor_at(a: Dictionary, x: int, z: int) -> int:
 	var keep_r := coll.radius
 	var keep_b := coll.body
@@ -475,6 +502,7 @@ func move_vertical(a: Dictionary, kind: Dictionary) -> void:
 # -- one frame --------------------------------------------------------------------
 
 # Returns a blow opcode 4 struck this frame -- {reach, lift, arc, rec} -- or {}.
+# @orig game:0x800500a8 actor_tick  status:partial -- the arms of opcodes 0 to 6 and 0x19: 8 of the 30 its switch has besides the one 209 opcodes share
 func tick(a: Dictionary, kind: Dictionary, player: Vector3i, others: Array) -> Dictionary:
 	var blow := {}
 	if a["rec"] == null:
@@ -602,11 +630,13 @@ func tick(a: Dictionary, kind: Dictionary, player: Vector3i, others: Array) -> D
 	return blow
 
 
+# @orig game:0x80051cf8 actor_tick+0x1c50  status:transcribed -- the tail the arms share: clock at 0xfff, actor_finish
 func _done(a: Dictionary, kind: Dictionary, player: Vector3i) -> void:
 	if int(a["clock"]) >= 0xFFF:
 		finish(a, kind, player)
 
 
+# @orig game:0x8005205c actor_tick+0x1fb4  status:transcribed -- opcode 6's arm
 func _burrowed(a: Dictionary, kind: Dictionary, raw: Array, player: Vector3i,
 		others: Array, dist: int) -> void:
 	if int(a["phase"]) == 0:
@@ -651,7 +681,7 @@ func _burrowed(a: Dictionary, kind: Dictionary, raw: Array, player: Vector3i,
 # fire -- a vertex of the creature's model each, for level 0's records; 0x8000
 # goes back to the start, 0x8001 n sets how many, 0x8003 n skips n, and the
 # three-argument 0x8002 and 0x8004 are passed on as [code, a, b, c].
-# @orig game:0x80052484  status:transcribed -- a label inside actor_tick; tools/effects.py volley
+# @orig game:0x80052484 actor_tick+0x23dc  status:transcribed -- a label inside actor_tick; tools/effects.py volley
 static func volley(raw: Array, a: Dictionary) -> Array:
 	var fired := []
 	var left := 1
@@ -680,6 +710,8 @@ static func volley(raw: Array, a: Dictionary) -> Array:
 
 
 # What actor_wake leaves, with the entrance behaviour switched in.
+# @orig game:0x8004b698 actor_wake  status:partial -- the AI bytes cleared; its random yaw is actors.gd _spawn's, the cells it marks are not here
+# @orig game:0x8004c3f8 actor_activate+0x208  status:transcribed -- the entrance behaviour switched in
 static func wake(a: Dictionary, kind: Dictionary) -> void:
 	for k in ["vx", "vz", "vy", "vst", "turn", "op", "prev", "anim", "clock",
 			"step", "aim", "sub", "n72", "flee", "cut"]:

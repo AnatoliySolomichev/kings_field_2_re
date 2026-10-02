@@ -18,8 +18,8 @@ extends Control
 # the rest solid, so each sprite is two rectangles here: its solid texels, and
 # its STP texels with the blend. The colour is the brightness byte, 0x80, which
 # leaves the texels as they are.
-# @orig game:0x80041ad4  status:transcribed -- one panel sprite: SPRT, DR_TPAGE, the record's place in the ordering table
-# @orig game:0x80041e68  status:transcribed -- the walk over hud_sprites
+#
+# @exe game
 
 const SCREEN_H := 240.0
 const PANEL_BOTTOM := 62.0        # the lowest row the style-2 sprites cover, 12 + 48 + 2
@@ -33,6 +33,10 @@ var rects := {}                   # index -> [solid TextureRect, semi TextureRec
 var shown_scale := -1.0
 
 
+# Made once rather than every frame: one pair of nodes per sprite, in the
+# ordering table's order. hud.json is tools/hud.py's read of hud_sprites.
+# @orig game:0x80041e68 hud_draw  status:transcribed -- the walk over hud_sprites and the order it files them in
+# @orig game:0x80041ad4 hud_sprite  status:transcribed -- one panel sprite: SPRT, DR_TPAGE's blend, the record's place in the ordering table
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -80,6 +84,7 @@ func _ready() -> void:
 	_update()
 
 
+# @port engine -- the numbers, every frame
 func _process(_dt: float) -> void:
 	_update()
 
@@ -87,6 +92,7 @@ func _process(_dt: float) -> void:
 # render_frame's style-2 arithmetic (0x80042668): three digits of HP and MP,
 # and the meters over 5000 -- tools/hud.py, held to 520 of 520 fields of the
 # live table in the snapshots.
+# @orig game:0x80042668 render_frame+0x3b0  status:transcribed -- style 2's digits and meters; tools/hud.py holds 520 of 520 fields
 func _update() -> void:
 	if sprites.is_empty():
 		return

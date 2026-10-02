@@ -32,6 +32,8 @@ extends Node2D
 # a VideoStreamPlayer can take -- 15 frames a second and 37800 Hz stereo, both
 # off the stream itself. If those files are missing the state machine still
 # runs and shows one decoded frame instead, which is what it did before.
+#
+# @exe open -- the shell's bytes say boot:
 
 var shell: Node
 
@@ -60,6 +62,7 @@ var music: AudioStreamPlayer
 var playing := false
 
 
+# @orig open:0x80011ee0 open_main+0xcc  status:transcribed -- overlay_arg 1 goes straight to the title, else play_movie(3); the nodes are the port's
 func _ready() -> void:
 	art = _tex("opd0")
 	kings = _tex("opd1")
@@ -97,12 +100,14 @@ func _ready() -> void:
 	set_process(true)
 
 
-# The byte at 0x800102f8. GAME.EXE leaves 1 in it when it hands the machine
+# The byte at boot:0x800102f8. GAME.EXE leaves 1 in it when it hands the machine
 # back, and open_main takes that as "you have seen the logos".
+# @port engine -- the shell's byte, off the shell node
 func _arg() -> int:
 	return shell.overlay_arg if shell else 0
 
 
+# @port data -- one of the pictures tools/opening.py cuts out of OP.D
 func _tex(name: String) -> Texture2D:
 	var p := "res://opening/%s.png" % name
 	return load(p) if ResourceLoader.exists(p) else null
@@ -112,6 +117,7 @@ func _tex(name: String) -> Texture2D:
 # them at 60 a second rather than working in seconds.
 var acc := 0.0
 
+# @port engine -- runs _tick at the 60 frames a second open_main's loop runs at
 func _process(dt: float) -> void:
 	acc = minf(acc + dt, 0.25)
 	while acc >= 1.0 / 60.0:
@@ -156,7 +162,7 @@ func _tick() -> void:
 
 
 # play_movie (0x800136d8): open the file, stream it, and watch the pad.
-# @orig open:0x800136d8 play_movie  status:transcribed
+# @orig open:0x800136d8 play_movie  status:partial -- which file; the streaming is Godot's VideoStreamPlayer
 func _start_movie(idx: int) -> void:
 	movie = idx
 	frames = 0
@@ -181,6 +187,8 @@ func _start_title_music() -> void:
 
 # START returns 1 and skips the whole chain; any of the four face buttons
 # returns 2 and skips this movie only.
+# @orig open:0x80013960 play_movie+0x288  status:partial -- START ends the chain (1), a face button the movie (2); the game tests them held, this a new press
+# @orig open:0x80011ee0 open_main+0xcc  status:transcribed -- what open_main does with what play_movie returns
 func _movie_tick() -> void:
 	var skipped_all := KFPad.hit_mask(KFPad.START)
 	var skipped_one := KFPad.hit_mask(KFPad.TRIANGLE | KFPad.SQUARE
@@ -237,6 +245,7 @@ func _title_tick() -> void:
 		_start_movie(4)                          # L1.S, the FromSoftware logo
 
 
+# @port engine -- draws what the state shows
 func _draw() -> void:
 	draw_rect(Rect2(0, 0, 640, 240), Color.BLACK)
 	match state:
@@ -249,6 +258,7 @@ func _draw() -> void:
 	hud.text = _caption()
 
 
+# @port engine -- one decoded frame, in place of a movie that has not been converted
 func _draw_still() -> void:
 	if playing:
 		return                      # the VideoStreamPlayer is drawing it
@@ -262,7 +272,9 @@ func _draw_still() -> void:
 
 # layer_a (0x8001279c), layer_b (0x80012b0c) and layer_c (0x80012ea0), with the
 # rectangles they write into their primitives.
-# @orig open:0x8001279c title_layer_a  status:transcribed -- with title_layer_b 0x80012b0c and title_layer_c 0x80012ea0
+# @orig open:0x8001279c title_layer_a  status:transcribed
+# @orig open:0x80012b0c title_layer_b  status:transcribed
+# @orig open:0x80012ea0 title_layer_c  status:transcribed
 func _draw_title() -> void:
 	if art:
 		draw_texture_rect(art, Rect2(0, 0, 640, 240), false)          # full screen
@@ -293,11 +305,13 @@ func _draw_title() -> void:
 		draw_rect(Rect2(268, 188 + choice * 12, 104, 12), Color(1, 1, 1, 0.25))
 
 
+# @orig open:0x800121f8 open_main+0x3e4  status:partial -- the "Program Loading" card off the 4-bit page at (960, 0); the rectangle is not checked against the primitive
 func _draw_loading() -> void:
 	if loading:
 		draw_texture_rect(loading, Rect2(240, 48, 160, 144), false)
 
 
+# @port check -- the readout line
 func _caption() -> String:
 	match state:
 		LOGO, ATTRACT, STORY:

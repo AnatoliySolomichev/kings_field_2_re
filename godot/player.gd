@@ -47,6 +47,10 @@ extends Node3D
 # still missing: the game turns a refused step along the wall's own facing, out
 # of 0x801e6498 and 0x801e649c, and tools/collision.py does not compute those.
 # Walking into a wall therefore stops dead here where the game would slide.
+# *Update:* the refusals and the slides were read since -- _horizontal below,
+# 124 891 of 125 116 ground frames of the recording.
+#
+# @exe game
 
 const UNIT := 1000.0
 const CELL := 2048.0
@@ -74,7 +78,6 @@ const EYE := 1.6
 # frames a second**, slower only when a frame's own work overruns. This was 30
 # for a long time, from two wall-clock measurements an uncapped emulator could
 # not give -- which made the port walk and turn twice as fast as the game.
-# @orig game:0x80019614 frame_limit  status:transcribed
 const TICK_HZ := 15.0
 
 # player_vertical's own constants, at the addresses named
@@ -215,6 +218,7 @@ var use_prev := false
 var creatures: Array = []
 
 
+# @orig game:0x80031d60 checks_item_107  status:partial -- the crystal's spot, where a death with item 107 puts the player; loading the collision and the tables is the port's
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	have_coll = coll.load_from("res://coll%02d.json" % _level())
@@ -245,16 +249,19 @@ func _ready() -> void:
 # The level out/godot was built for: tools/level3d.py names the project
 # "King's Field II - level N". This returned 0 whatever the build, so on any
 # other level the port read level 0's collision, doors and sky.
+# @port engine -- the level out/godot was built for, off the project's name
 func _level() -> int:
 	var name := str(ProjectSettings.get_setting("application/config/name", ""))
 	var i := name.rfind("level ")
 	return int(name.substr(i + 6)) if i >= 0 else 0
 
 
+# @port engine -- the game's position into the node's
 func _to_godot() -> void:
 	position = Vector3(float(gx) / UNIT, float(-gy) / UNIT, float(-gz) / UNIT)
 
 
+# @port check -- the readout's lines
 func _refresh() -> void:
 	var hud := get_node_or_null("../UI/Hud")
 	if hud == null:
@@ -281,6 +288,7 @@ func _refresh() -> void:
 		KFPad.slot_key(KFPad.PAUSE)]
 
 
+# @port engine -- the mouse turns the facing and the pitch; F1, G, Esc and Tab are the port's keys
 func _unhandled_input(e: InputEvent) -> void:
 	if e is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		# The mouse moves the game's own facing rather than the node, so that
@@ -308,7 +316,7 @@ func _unhandled_input(e: InputEvent) -> void:
 				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
-# @orig game:0x80030fcc player_controller  status:partial -- the pad once a frame and the edge detection; the rest of the routine is not here
+# @orig game:0x80019614 frame_limit  status:transcribed -- the 15 frames a second _tick and _look run at; the pad's poll, flying and the attack latch are the port's
 func _process(dt: float) -> void:
 	# player_controller reads the pad once a frame and keeps this frame's word
 	# and last frame's. Here that happens once a *rendered* frame rather than
@@ -370,7 +378,7 @@ func _ramp(speed: int, pos: bool, neg: bool, cap: int, decay := 3) -> int:
 	return 0
 
 
-# @orig game:0x8002e3f8 player_horizontal  status:partial -- the step; the slide along a refused wall is missing
+# @orig game:0x80030fcc player_controller  status:partial -- one frame: the state's arm (_frame), then the poison at its end (_poison)
 func _tick(dir: Vector3) -> void:
 	_frame(dir)
 	_poison()
@@ -381,7 +389,7 @@ func _tick(dir: Vector3) -> void:
 # flashes and one HP goes (hp_add, 0x8002a6a0; at 0 the player is thrown).
 # So a spore that keeps striking, setting it back to 0x384 each frame, takes
 # one HP a frame: 31 of 32 such frames in bp26, the other a roll resisted.
-# @orig game:0x80031e78  status:verified -- a label inside player_controller; tools/effects.py against bp26
+# @orig game:0x80031e78 player_controller+0xeac  status:verified -- a label inside player_controller; tools/effects.py against bp26
 func _poison() -> void:
 	if poison == 0:
 		return
@@ -409,6 +417,11 @@ func take_effect(attacks: Array, effect: int, scale: int, pct: int, point: Vecto
 	_apply_damage(dmg, true, point, effect)
 
 
+# @orig game:0x800313fc player_controller+0x430  status:partial -- the switch on the state, for 0, 0x10, 0x11 and 0x12
+# @orig game:0x80031b98 player_controller+0xbcc  status:transcribed -- state 0x10 after the walk: the push, the tilt spring, the end
+# @orig game:0x80031c14 player_controller+0xc48  status:transcribed -- state 0x12, the stun
+# @orig game:0x80030424 player_turn+0x608  status:transcribed -- a swing begins on the attack edge once the pause is over
+# @orig game:0x8002fc94 player_step_distances  status:transcribed -- speed squared over the root of the sum, and the two steps (0x8002fda0, 0x8002fdb4)
 func _frame(dir: Vector3) -> void:
 	var an := get_node_or_null("../Actors")
 	creatures = an.solid() if an and an.has_method("solid") else []
@@ -485,7 +498,7 @@ func _frame(dir: Vector3) -> void:
 # meter's pause counts down, or it refills by meter_gain(the five working
 # skills' average, 0) a frame, and damage_scale climbs back by 0x80 to 0x1000.
 # tools/weapon.py use_held: with the swing, 817 of 817 frames of bp25.
-# @orig game:0x80030010  status:transcribed -- a label inside player_turn; the rings (0x4d, 0x4f) and a spell's rate are not here
+# @orig game:0x80030010 player_turn+0x1f4  status:transcribed -- a label inside player_turn; the rings (0x4d, 0x4f) and a spell's rate are not here
 func _use() -> void:
 	var now := KFPad.held(KFPad.USE)
 	if now and use_prev:
@@ -518,6 +531,7 @@ func _use() -> void:
 
 # held_item_tick (0x8002d2a0), last in the controller (0x80032150): the swing,
 # or between swings the meter's refill; the blow is actors.gd's to land.
+# @orig game:0x8002d2a0 held_item_tick  status:partial -- which of its two paths runs: the swing or the refill (weapon.gd)
 func _weapon() -> void:
 	if KFWeapon.records.is_empty():
 		return
@@ -536,6 +550,7 @@ func _weapon() -> void:
 # character -- against the creature, and what comes back: experience through
 # award_exp, and a strong blow counted towards the stat (0x8002a074, one in
 # a hundred).
+# @orig game:0x8002a074 strong_blow  status:transcribed -- a strong blow counted, one in a hundred to stat 36; the strike is actors.gd's, the experience levelup.gd's
 func _blow(rec: PackedByteArray, strength: int, push_back: bool) -> void:
 	var an := get_node_or_null("../Actors")
 	if an == null or not an.has_method("strike"):
@@ -568,7 +583,7 @@ func _blow(rec: PackedByteArray, strength: int, push_back: bool) -> void:
 # 0x8002ef80: a landing at 0x1e0 or faster hurts, t^3 / 118000 with t the
 # velocity squared over 0x1000 -- the multiply by 0x8e2e0727 and the shift by
 # 16 at 0x8002ef9c are a division by exactly 118000. 0x1e0 costs 1 HP, 0x300 25.
-# @orig game:0x8002ef80  status:transcribed -- read, not yet seen in a recording
+# @orig game:0x8002ef80 player_vertical+0x220  status:transcribed -- read, not yet seen in a recording
 static func fall_damage(v: int) -> int:
 	var t := (v * v) >> 12
 	var c := t * t * t
@@ -591,6 +606,7 @@ func take_blow(a: Dictionary, rec: Array) -> void:
 	_apply_damage(dmg, true, at, int(rec[0x11]))
 
 
+# @port helper -- a little-endian halfword out of a record's bytes
 static func _u16(rec: Array, o: int) -> int:
 	return int(rec[o]) | (int(rec[o + 1]) << 8)
 
@@ -655,6 +671,7 @@ const SHAKES := [[-1, 0], [-1, 1], [0, 1], [1, 1], [1, 0], [1, -1], [0, -1],
 
 
 # vec_length_2d (0x80016c08): the length to eight, through the game's root.
+# @orig game:0x80016c08 vec_length_2d  status:transcribed
 func _len2d(a: int, b: int) -> int:
 	return coll.isqrt((a >> 3) * (a >> 3) + (b >> 3) * (b >> 3)) << 3
 
@@ -695,6 +712,7 @@ func _push() -> void:
 
 
 # collide_query with the player's 0x31: tiles, objects and the creatures.
+# @orig game:0x80033f38 collide_query  status:partial -- the player's 0x31: the tiles, the objects and the creatures
 func _query31(x: int, y: int, z: int) -> Dictionary:
 	var q := coll.query_all(x, y, z)
 	if _creature_at(x, y, z) != -1:
@@ -712,13 +730,14 @@ func _tilt() -> void:
 		tilt[i] = coll._s16(int(tilt[i]) + int(tilt_vel[i]))
 
 
-# @orig game:0x80016168 spring_to  status:transcribed -- target 0, 8 and 4 as 0x8003047c calls it
+# @port helper -- spring_to as player_tilt_spring calls it: target 0, accel 8, friction 4
 static func _spring(cur: int, vel: int) -> int:
 	return _spring_to(0, cur, vel, 8, 4)
 
 
 # spring_to (0x80016168): within accel/2 of the target and no faster than
 # accel, the velocity that lands on it; else accel towards it, friction off.
+# @orig game:0x80016168 spring_to  status:transcribed
 static func _spring_to(target: int, cur: int, vel: int, accel: int, friction: int) -> int:
 	var d := (target - cur) & 0xFFF
 	var tol := accel >> 1
@@ -755,7 +774,7 @@ func _throw(pv) -> void:
 # with item 107 the crystal revives -- a fixed spot on level 0, the item taken,
 # HP and MP full (0x8002b3a8) -- else a new character (0x8002b468) and the
 # story flags cleared, and level 0 loaded either way (level_state_writer).
-# @orig game:0x80031c54  status:transcribed -- a label inside player_controller; the revive needs an inventory the port does not keep
+# @orig game:0x80031c54 player_controller+0xc88  status:transcribed -- a label inside player_controller; the revive needs an inventory the port does not keep
 func _dying() -> void:
 	hp = 0
 	tilt_vel[0] = coll._s16(_spring_to(-0x400, coll._s16(int(tilt[0])), int(tilt_vel[0]), 8, 4))
@@ -790,6 +809,7 @@ func _dying() -> void:
 static var respawn = null
 
 
+# @port engine -- the black the dying fades to, as a layer; its value is _dying's
 func _fade() -> void:
 	var layer := get_node_or_null("DeathFade")
 	if layer == null:
@@ -819,6 +839,7 @@ func _knock_end() -> void:
 # crouch below 0x640 (Y grows down), pitch + tilt.x + the nod, yaw + tilt.y,
 # roll = tilt.z, as Rx(pitch) Ry(yaw) Rz(roll) from the world to the eye. The
 # player node carries the facing, so the camera takes what is left of it.
+# @orig game:0x8002b330 camera_pose  status:partial -- the eye's bob and crouch, and the three angles with the tilts, as the view takes them
 func _view() -> void:
 	var cam := get_node_or_null("Camera")
 	if cam == null:
@@ -1017,6 +1038,7 @@ func _creature_at(x: int, y: int, z: int) -> int:
 
 # A product over 4096 rounded towards zero, the way player_horizontal's
 # push-out does it (`addiu 0xfff` before the shift when negative).
+# @port helper -- a product over 4096 rounded towards zero, as player_horizontal's push-out does it
 static func _trunc12(v: int) -> int:
 	return (v + 0xFFF if v < 0 else v) >> 12
 
@@ -1100,10 +1122,12 @@ func _look() -> void:
 
 
 # The camera follows the pitch the way ghost.gd has it: negated, 0x1000 a turn.
+# @port engine -- the camera after a change of pitch
 func _aim() -> void:
 	_view()
 
 
+# @port helper -- an angle, 0x1000 to the turn, as -0x800..0x7ff
 static func _signed(a: int) -> int:
 	a &= 0xFFF
 	return a - 0x1000 if a >= 0x800 else a

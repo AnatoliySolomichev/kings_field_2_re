@@ -1688,7 +1688,7 @@ back to `OPEN.EXE`, 3 and 4 both go to `END.EXE` with `overlay_arg` 2 and 3.
 | 3 | the object interpreter | `0x80047010`, with its own 236-arm switch |
 | 4 | `player_controller` | `0x80030fcc` — pad, then turn, look, walk, height |
 | 5 | `actor_tick_driver` | `0x80052e5c` — the 199 creature slots |
-| 6 | `ai_driver` | `0x8005bc50` — 128 behaviour slots, each into `actor_ai` |
+| 6 | `effect_driver` | `0x8005bc50` — 128 effect slots, each into `effect_tick` (it was called `ai_driver` here; see `data/symbols.json` for why it is not) |
 | 7 | `spawn_anywhere = 0` | `0x801b24f2`, cleared every frame |
 | 8 | `level_overlay_tick` | `0x8005eb20` — the level's own code, through `[0x8018fae0]+4` |
 | 9 | `level_load` | `0x80018358` — acts only when a transition is pending |

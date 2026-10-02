@@ -8,12 +8,15 @@ class_name KFAnim
 # their lengths until the clock falls in one; its start is the model's
 # vertices with the segment's start poses written over them, and every vertex
 # the target pose names moves towards it by ((target - v) * t) >> 12.
+#
+# @exe game
 
 const SKIP := -0x8000
 
 static var models := {}          # model -> {base, anims, poses}
 
 
+# @port data -- reads animNN.json: each model's base vertices, animations and poses, as tools/anim.py takes them
 static func load_from(path: String) -> bool:
 	if not FileAccess.file_exists(path):
 		return false
@@ -38,13 +41,14 @@ static func load_from(path: String) -> bool:
 	return true
 
 
+# @port helper -- a halfword, sign-extended: the game's vertices are s16
 static func _s16(v: int) -> int:
 	v &= 0xFFFF
 	return v - 0x10000 if v >= 0x8000 else v
 
 
 # 0x80042cac: [segment, factor].
-# @orig game:0x80042cac  status:verified -- the segment of 11 of 11 creatures' caches in the snapshots, tools/anim.py
+# @orig game:0x80042cac anim_segment  status:verified -- the segment of 11 of 11 creatures' caches in the snapshots, tools/anim.py
 static func pick(segs: Array, clock: int) -> Array:
 	var end := 0
 	var start := 0
@@ -60,7 +64,8 @@ static func pick(segs: Array, clock: int) -> Array:
 
 
 # 0x80042d70 and 0x80042e34: a pose's vertices written over, its runs skipped.
-# @orig game:0x80042e34  status:verified -- the start vertices of 11 of 11 creatures' caches
+# @orig game:0x80042d70 pose_start  status:verified -- with the copy of the base vertices() makes first
+# @orig game:0x80042e34 pose_overlay  status:verified -- the start vertices of 11 of 11 creatures' caches
 static func overlay(verts: Array, pose: Array) -> void:
 	var i := 0
 	for e in pose:
@@ -72,7 +77,7 @@ static func overlay(verts: Array, pose: Array) -> void:
 
 
 # 0x80042eb0: every vertex the pose names moves by ((target - v) * t) >> 12.
-# @orig game:0x80042eb0  status:verified -- 3 snapshots' last drawn creature, tools/anim.py
+# @orig game:0x80042eb0 pose_blend  status:verified -- 3 snapshots' last drawn creature, tools/anim.py
 static func blend(verts: Array, pose: Array, t: int) -> void:
 	var i := 0
 	for e in pose:
@@ -88,7 +93,7 @@ static func blend(verts: Array, pose: Array, t: int) -> void:
 
 
 # The model's first-object vertices for this animation and clock (0x800431e8).
-# @orig game:0x800431e8  status:verified -- tools/anim.py against the snapshots
+# @orig game:0x800431e8 model_animate  status:verified -- tools/anim.py against the snapshots
 static func vertices(model: int, anim: int, clock: int) -> Array:
 	var md: Dictionary = models[model]
 	var v: Array = (md["base"] as Array).duplicate()
@@ -108,6 +113,7 @@ static func vertices(model: int, anim: int, clock: int) -> Array:
 # creatures' first objects have no two vertices in the same place but for one
 # pair in model 32 -- and the surfaces copied into meshes of the node's own.
 # {} when the model has no animation.
+# @port engine -- makes a node's meshes movable, each vertex matched to the model's
 static func skin(node: Node3D, model: int) -> Dictionary:
 	if not models.has(model):
 		return {}
@@ -145,6 +151,7 @@ static func skin(node: Node3D, model: int) -> Dictionary:
 
 # A skin at this animation and clock: the vertices moved, the surfaces made
 # again, when either has changed.
+# @port engine -- moves a skin's vertices to vertices() and rebuilds its surfaces
 static func animate(sk: Dictionary, anim: int, clock: int) -> void:
 	if anim == int(sk["anim"]) and clock == int(sk["clock"]):
 		return

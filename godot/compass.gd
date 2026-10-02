@@ -12,8 +12,8 @@ extends Control
 # semi-transparent, the STP texels mixing half and half. tools/compass.py has
 # it all, and compass.json carries the model, the light and RotMatrix's own
 # sine table, which is not the one game_sin reads.
-# @orig game:0x8003c35c draw_model_cell_lit  status:transcribed -- the compass: orthographic, class light turned by R, NCLIP
-# @orig game:0x80076168  status:transcribed -- the library's RotMatrix, with its own table
+#
+# @exe game
 
 const SCREEN_W := 320.0
 const SCREEN_H := 240.0
@@ -29,6 +29,7 @@ var acc := 0.0
 var player: Node
 
 
+# @port data -- reads compass.json: the model, the light, the records and RotMatrix's table, as tools/compass.py takes them
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -50,6 +51,7 @@ func _ready() -> void:
 			tex[f["png"]] = load("res://" + str(f["png"]))
 
 
+# @port engine -- runs _swing at the game's 15 frames a second, and redraws
 func _process(dt: float) -> void:
 	if rec.is_empty() or player == null:
 		return
@@ -61,6 +63,7 @@ func _process(dt: float) -> void:
 
 
 # render_frame, 0x80042448: the spring the ball's yaw rides on.
+# @orig game:0x80042448 render_frame+0x190  status:transcribed
 func _swing(view_yaw: int) -> void:
 	var d := (view_yaw - yaw) & 0xFFF
 	if d >= 0x801:
@@ -73,6 +76,7 @@ func _swing(view_yaw: int) -> void:
 	yaw = (yaw + (vel >> 6)) & 0xFFFF
 
 
+# @orig game:0x80076168 RotMatrix  status:transcribed -- the sine and cosine it looks up inline for each of the three angles, off its own table
 func _sc(a: int) -> Vector2i:
 	a &= 0xFFFF
 	if a >= 0x8000:
@@ -85,6 +89,7 @@ func _sc(a: int) -> Vector2i:
 
 
 # 0x80076168: Rx(ax) Ry(ay) Rz(az), carrying -sin y as the routine does.
+# @orig game:0x80076168 RotMatrix  status:transcribed -- the library's RotMatrix
 func _rot(ax: int, ay: int, az: int) -> Array:
 	var x := _sc(ax)
 	var y := _sc(ay)
@@ -103,6 +108,7 @@ func _rot(ax: int, ay: int, az: int) -> Array:
 
 
 # The GTE's lit colour for one normal: tools/level3d.py's shade().
+# @port helper -- the GTE's NCS: the coprocessor's arithmetic, which draw_model_cell_lit asks for
 func _shade(n: Array, l: Array) -> Color:
 	var ir := [0, 0, 0]
 	for r in 3:
@@ -119,6 +125,8 @@ func _shade(n: Array, l: Array) -> Color:
 	return Color(c[0], c[1], c[2], 1.0)
 
 
+# @orig game:0x8003c35c draw_model_cell_lit  status:transcribed -- the compass: orthographic, the class light turned by R
+# @orig game:0x80035ca4 model_prims  status:transcribed -- the faces NCLIP drops; the ordering is by the mean z
 func _draw() -> void:
 	if rec.is_empty():
 		return

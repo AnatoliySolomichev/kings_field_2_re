@@ -13,6 +13,9 @@ extends SceneTree
 # Whether the model matches the *game* is a separate question, answered by
 # `python3 tools/movement.py bp15`: 48 of 48 of the height stores the game made
 # in a recorded walk are the ones this model reaches for.
+#
+# @port-file check -- the self-test; it runs the port's copies, it is not one
+# @exe game
 
 var coll: KFCollision
 

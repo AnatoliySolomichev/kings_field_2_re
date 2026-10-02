@@ -13,6 +13,8 @@ extends Node3D
 # and readable at once: stand somewhere in the game, read the type off the world
 # label here, then find the shape you can actually see in the gallery and read
 # its number. Each such pair is one fact, and a handful of them name the rule.
+#
+# @port-file check -- labels for comparing the two windows; nothing in it is the game's
 
 const GALLERY_Y := 400.0        # far above the level, so flying there is separate
 

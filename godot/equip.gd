@@ -22,7 +22,8 @@ class_name KFEquip
 # `tools/equip.py` writes them here as `equip.json`. Checked against a RAM
 # snapshot of a running game: 3264 of 3264 weapon bytes, 2112 of 2112 armour
 # bytes, and 16 of 16 ratings.
-# @orig game:0x80029500 player_recalc_stats  status:partial -- the equipment
+#
+# @exe game
 
 const RATINGS := 8
 const NONE := 0xFF
@@ -35,6 +36,7 @@ var weapons: Array = []     # id -> its eight offense values
 var armour: Array = []      # (id - 34) -> its eight defense values
 
 
+# @port data -- reads equip.json, the two tables tools/equip.py cuts out of FDAT entry 97
 func load_tables(path := "res://equip.json") -> bool:
 	if not FileAccess.file_exists(path):
 		return false
@@ -57,7 +59,7 @@ func add_armour(id: int, defense: Array) -> void:
 		defense[k] = int(defense[k]) + int(armour[i][k])
 
 
-# @orig game:0x80029500 player_recalc_stats  status:partial
+# @orig game:0x80029500 player_recalc_stats  status:partial -- the equipment: 16 of 16 ratings against a snapshot; not the skills
 func ratings(weapon: int, worn: Array,
 		bonus_offense := false, bonus_defense := false) -> Dictionary:
 	var off: Array = []

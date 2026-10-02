@@ -40,8 +40,8 @@ extends Node
 #
 # F2 turns the darkening off and on -- the port's own switch, not the game's,
 # for seeing what the black hides.
-# @orig game:0x800351fc texture_scroll_step  status:transcribed
-# @orig game:0x80035358 fog_range_set  status:transcribed
+#
+# @exe game
 
 const PAGE := "tex_000f_"            # the page the square is on
 const X0 := 224.0                    # (1016 - 960) * 4 pixels
@@ -89,6 +89,7 @@ var cued := true
 var clock := 0.0
 
 
+# @port engine -- puts the shader in CODE on every material of the world
 func _ready() -> void:
 	var shaders := {}
 	for root_name in ["../Level", "../Objects", "../Creatures", "../Gallery"]:
@@ -97,6 +98,10 @@ func _ready() -> void:
 			_swap(root, shaders)
 
 
+# The shader it hands each material is the depth cue below and the scroll's
+# sampling; the blend modes are the GPU's semi-transparency rates.
+# @orig game:0x80035358 fog_range_set  status:transcribed -- near and far per class, which tools/level3d.py puts in UV2
+# @orig game:0x8003abfc draw_tmd_object+0xf8  status:transcribed -- t per vertex, capped at 0x1f0f, none from near 0x7d00; the game takes one t per face
 func _swap(n: Node, shaders: Dictionary) -> void:
 	if n is MeshInstance3D and n.mesh:
 		for i in n.mesh.get_surface_count():
@@ -133,6 +138,7 @@ func _swap(n: Node, shaders: Dictionary) -> void:
 		_swap(c, shaders)
 
 
+# @port check -- F2: the darkening off and on, the port's own switch
 func _unhandled_input(e: InputEvent) -> void:
 	if e is InputEventKey and e.pressed and not e.echo and e.keycode == KEY_F2:
 		cued = not cued
@@ -140,6 +146,7 @@ func _unhandled_input(e: InputEvent) -> void:
 			s.set_shader_parameter("cued", cued)
 
 
+# @orig game:0x800351fc texture_scroll_step  status:transcribed -- delay 0, step 1, wrapped at 32; the shader samples the square the way its MoveImages leave it
 func _process(dt: float) -> void:
 	if mats.is_empty():
 		return

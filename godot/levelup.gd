@@ -22,6 +22,8 @@ class_name KFLevels
 # 0x801b2520: for each one that is not already zero, rand() < 0x6665 adds one,
 # about four times in five. It is the only place levelling uses rand, and it is
 # why two characters at the same level are not the same character.
+#
+# @exe game
 
 const EXP_CAP := 0xF423F             # 0x8002a35c
 const STAT_CAP := 0x3E7              # 0x8002a52c and the three beside it
@@ -32,6 +34,7 @@ const TABLE_LEVELS := 0x63           # above 99 the routine extrapolates
 static var levels: Array = []
 
 
+# @port data -- reads levels.json, the 99 records tools/levelup.py takes off FDAT entry 97
 static func load_from(path := "res://levels.json") -> bool:
 	if not levels.is_empty():
 		return true
@@ -48,11 +51,12 @@ static func load_from(path := "res://levels.json") -> bool:
 # reproduced here -- so a levelling run in the port will not roll the same
 # stats as the same run in the game. The rule is the game's; the sequence is
 # not, and that is said here rather than left to be discovered.
+# @port helper -- Godot's randi in the place of the game's rand; not its sequence
 static func _roll() -> int:
 	return randi() & 0x7FFF
 
 
-# @orig game:0x8002a310  status:transcribed -- award_exp; checked against 13 of 13 snapshots
+# @orig game:0x8002a310 award_exp  status:transcribed -- award_exp; checked against 13 of 13 snapshots
 static func award(state: Dictionary, delta: int) -> Dictionary:
 	if not load_from():
 		return state
@@ -93,6 +97,7 @@ static func award(state: Dictionary, delta: int) -> Dictionary:
 
 # What a fresh character is, out of the table's first record rather than out of
 # a constant: 0x8002b468 seeds the block at level 1 the same way.
+# @orig game:0x8002b468 new_character  status:partial -- the level, the experience, HP and MP, stat 36 and the five that grow; not the gold, the equipment, the place or the spells
 static func fresh() -> Dictionary:
 	load_from()
 	var r: Dictionary = levels[0] if not levels.is_empty() else {}
