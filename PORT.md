@@ -237,7 +237,7 @@ floor, not a score.
 |  | `game:0x80045c7c` find_object | partial |
 | [`_step`](godot/doors.gd#L210) | `game:0x8004814c` object_interpreter+0x113c | verified |
 | [`_lift`](godot/doors.gd#L253) | — port's own, *helper*: hands lift_step the doorway test and the stamps | |
-| [`lift_step`](godot/doors.gd#L264) | `game:0x800470c4` object_interpreter+0xb4 | transcribed |
+| [`lift_step`](godot/doors.gd#L264) | `game:0x800470c4` object_interpreter+0xb4 | verified |
 |  | `game:0x80047290` object_interpreter+0x280 | transcribed |
 |  | `game:0x80047444` object_interpreter+0x434 | transcribed |
 | [`_lift_clear`](godot/doors.gd#L299) | `game:0x80033f38` collide_query | partial |
@@ -669,7 +669,7 @@ The whole file is the port's own: **check** — a model browser for naming thing
 | `game:0x80045c7c` find_object | [`godot/doors.gd:174`](godot/doors.gd#L174) | `func _interact` | partial |
 | `game:0x80046884` player_in_rect | [`godot/objects.gd:97`](godot/objects.gd#L97) | `func player_in_rect` | transcribed |
 | `game:0x80047010` object_interpreter | [`godot/objects.gd:108`](godot/objects.gd#L108) | `func tick` | partial |
-| `game:0x800470c4` object_interpreter+0xb4 | [`godot/doors.gd:261`](godot/doors.gd#L261) | `func lift_step` | transcribed |
+| `game:0x800470c4` object_interpreter+0xb4 | [`godot/doors.gd:261`](godot/doors.gd#L261) | `func lift_step` | verified |
 | `game:0x80047290` object_interpreter+0x280 | [`godot/doors.gd:262`](godot/doors.gd#L262) | `func lift_step` | transcribed |
 | `game:0x80047444` object_interpreter+0x434 | [`godot/doors.gd:263`](godot/doors.gd#L263) | `func lift_step` | transcribed |
 | `game:0x8004814c` object_interpreter+0x113c | [`godot/doors.gd:209`](godot/doors.gd#L209) | `func _step` | verified |

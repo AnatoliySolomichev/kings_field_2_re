@@ -526,8 +526,10 @@ it would open:
   wall the grid draws; its arm swaps the wall tile for its animated model,
   lifts it 57 frames, stamps the doorway passable at 0xc18, stands eighteen
   frames, waits for the doorway to clear and drops. `godot/doors.gd` does all
-  of it, with the door's cells as a node of their own. **Not yet recorded**:
-  `emu/bp27.lua` is written and `tools/doors.py` replays its log.
+  of it, with the door's cells as a node of their own. Against `emu/bp27.lua`:
+  867 of 867 steps. Left: 35 frames the game held the doorway with the player
+  out of reach, a creature by every sign; bp27 now logs the query's answer and
+  the creature, and a recording with a creature by a lift door would settle it.
 * **class 0x54 (one on level 0)** -- `stamp_table` from `0x8008288c + 40 *
   (2 * tr[+0xe] + (p[+0x16] & 1))` at load; its arm is not read.
 * **classes 0x00 (12) and 0x1b (23)**, `find_object` points 0x700 in front of or

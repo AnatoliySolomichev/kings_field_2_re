@@ -8,7 +8,7 @@
 -- USE, walk through while it stands open, and once stand in the doorway so it
 -- has to wait before it drops.
 --
--- Three breakpoints, at the heads of object_interpreter's arms for opcodes 3,
+-- Six breakpoints. Three at the heads of object_interpreter's arms for opcodes 3,
 -- 4 and 5 (0x800470c4, 0x80047290, 0x80047444), which run once a frame for
 -- every such door, shut or not. There $s2 is the record plus 8. A line is
 -- written while the door's state is not 0, and once more when it gets back to
@@ -96,10 +96,44 @@ local function arm(op)
     end
 end
 
+-- And the doorway test's answer, in state 0x14: a breakpoint on the branch
+-- right after each arm's collide_query returns (0x800471f4, 0x800473a8,
+-- 0x8004755c), where $v0 is the mask -- 0x80 the player, 0x10 a creature --
+-- and 0x801e648c the creature actor_in_range found, -1 for none. For that
+-- creature: its slot, model (+1), state (+9), position (+0x2c), radius (+0x1c),
+-- height (+0x1e) and flags (+0x28), so tools/doors.py can ask in_range itself.
+local ACTORS, ASTRIDE = 0x80185da8, 0x88
+local COLLIDE_ACTOR = 0x801e648c
+
+local function query(op)
+    return function()
+        local g = regs()
+        if not g then return end
+        local rec = (tonumber(g.s2) % 0x100000000) - 8
+        local slot = math.floor((rec - OBJECT_TABLE) / STRIDE)
+        local mask = tonumber(g.v0) % 0x100000000
+        local k = s32(COLLIDE_ACTOR)
+        local who = 'actor=-1'
+        if k >= 0 and k < 200 then
+            local a = ACTORS + k * ASTRIDE
+            who = string.format('actor=%d model=%d st=%d at=%d %d %d r=%d h=%d flags=%d',
+                k, u8(a + 1), u8(a + 9), s32(a + 0x2c), s32(a + 0x30), s32(a + 0x34),
+                u16(a + 0x1c), u16(a + 0x1e), s32(a + 0x28))
+        end
+        log(string.format('Q vb=%d slot=%d op=%d mask=%d %s', s32(VBLANKS), slot, op,
+            mask, who))
+    end
+end
+
 bp27 = {}
 for i, a in ipairs({ {0x800470c4, 3}, {0x80047290, 4}, {0x80047444, 5} }) do
     local ok, bp = pcall(PCSX.addBreakpoint, a[1], 'Exec', 4, 'lift' .. a[2], arm(a[2]))
     log(string.format('arm %08x lift %d -> %s', a[1], a[2], tostring(ok)))
     if ok then bp27[i] = bp end
+end
+for i, a in ipairs({ {0x800471f4, 3}, {0x800473a8, 4}, {0x8004755c, 5} }) do
+    local ok, bp = pcall(PCSX.addBreakpoint, a[1], 'Exec', 4, 'liftq' .. a[2], query(a[2]))
+    log(string.format('query %08x lift %d -> %s', a[1], a[2], tostring(ok)))
+    if ok then bp27[3 + i] = bp end
 end
 log('=== bp27 recording; open a lift door with USE, walk through, let it drop ===')

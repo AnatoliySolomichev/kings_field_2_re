@@ -208,11 +208,20 @@ LIFT_LINE = re.compile(r"vb=(\d+) slot=(\d+) op=(\d+) st=(\d+) ctr=(\d+) "
                        r"cells=(-?\d+),(-?\d+) (-?\d+),(-?\d+)")
 
 
+LIFT_QUERY = re.compile(r"Q vb=(\d+) slot=(\d+) op=\d+ mask=(\d+) actor=(-?\d+)"
+                        r"(?: model=(\d+) st=(\d+) at=(-?\d+) (-?\d+) (-?\d+) "
+                        r"r=(\d+) h=(\d+) flags=(-?\d+))?")
+
+
 def lift_load(path=None):
+    """bp27's door lines, each with the doorway test's answer that frame when
+    the log has one: q = (mask, the creature as [x, y, z, radius, height] or
+    None)."""
     path = path or os.path.join(ROOT, "out", "lua_bp27.log")
     rows = []
     if not os.path.exists(path):
         return rows
+    queries = {}
     for line in open(path):
         m = LIFT_LINE.match(line)
         if m:
@@ -220,6 +229,14 @@ def lift_load(path=None):
             rows.append({"vb": g[0], "slot": g[1], "op": g[2], "st": g[3],
                          "ctr": g[4], "scale": g[5], "p": (g[6], g[7], g[8]),
                          "cells": ((g[9], g[10]), (g[11], g[12]))})
+            continue
+        m = LIFT_QUERY.match(line)
+        if m:
+            g = [None if x is None else int(x) for x in m.groups()]
+            who = None if g[3] < 0 else [g[6], g[7], g[8], g[9], g[10]]
+            queries[(g[0], g[1])] = (g[2], who)
+    for r in rows:
+        r["q"] = queries.get((r["vb"], r["slot"]))
     return rows
 
 
@@ -237,7 +254,7 @@ def lift_check(out=sys.stdout, verbose=False):
     by = {}
     for r in rows:
         by.setdefault(r["slot"], []).append(r)
-    ok = bad = used = 0
+    ok = bad = used = unseen = held = freed = 0
     for slot, rs in sorted(by.items()):
         rec = ld.recs.get(slot)
         if rec is None or rec["op"] not in LIFT_OPS:
@@ -247,10 +264,10 @@ def lift_check(out=sys.stdout, verbose=False):
         # the log carries layer 1's tile and shape
         k1 = 0 if rec["b0"] != 1 else 1
         order = [(x, z) for x, z, _q in tables[0]]
+        used += sum(1 for r in rs if r["st"] == 1 and r["ctr"] == 0)
         for a, b in zip(rs, rs[1:]):
             if a["st"] == 0:
-                used += b["st"] == 1            # object_interact, on USE
-                continue
+                continue                        # USE, object_interact: not the arm
             d = {"state": a["st"], "counter": a["ctr"], "scale": a["scale"],
                  "x": rec["x"], "y": rec["y"], "z": rec["z"]}
             cells = {xz: list(v) for xz, v in zip(order, a["cells"])}
@@ -265,20 +282,36 @@ def lift_check(out=sys.stdout, verbose=False):
                         c[1] = q[k]
                     if q[k + 2] != 0xFF:
                         c[0] = q[k + 2]
-            lift_step(d, lambda d=d, a=a: lift_clear(d, a["p"]), stamp)
+            # the creature the game found in the doorway, when the log says
+            creatures = [a["q"][1]] if a["q"] and a["q"][1] else []
+            lift_step(d, lambda d=d, a=a, cr=creatures: lift_clear(d, a["p"], cr), stamp)
             got = (d["state"], d["counter"], d["scale"],
                    tuple(tuple(cells[xz]) for xz in order))
             want = (b["st"], b["ctr"], b["scale"], b["cells"])
             if got == want:
                 ok += 1
+                if a["st"] == LIFT_WAIT:
+                    held += b["st"] == LIFT_WAIT
+                    freed += b["st"] == 0x15
+            elif (a["st"] == b["st"] == LIFT_WAIT and a["q"] is None
+                  and a["ctr"] == b["ctr"] and a["cells"] == b["cells"]):
+                # The game held the doorway and the player was out of reach:
+                # what collide_query's 0xc0 asks besides the player is the
+                # creatures, and a log without Q lines does not carry them.
+                unseen += 1
             else:
                 bad += 1
                 if verbose:
                     print(f"  slot {slot} vb {a['vb']}: model {got}, game {want}",
                           file=out)
     print(f"  {ok} of {ok + bad} steps of a lift door reproduced -- state, counter, "
-          f"scale and its two cells' tile and shape; opened {used} times by USE",
+          f"scale and its two cells' tile and shape; {used} lifts from USE, "
+          f"{held} frames held with the player in the doorway, {freed} let go",
           file=out)
+    if unseen:
+        print(f"  {unseen} more at 0x14 where the game held the doorway with the "
+              f"player out of reach: a creature, which a log without Q lines does "
+              f"not carry", file=out)
     return bad == 0
 
 

@@ -140,7 +140,8 @@ def main(quick=False, only_check=False):
         keep=["bytes of the kinds", "runs of one behaviour", "creature frames stepped"])
     run(["tools/doors.py", "--check"],
         "the swinging and the lift doors, against what was played",
-        keep=["steps of a moving door", "steps of a lift door", "no out/lua_bp27"])
+        keep=["steps of a moving door", "steps of a lift door", "more at 0x14",
+              "no out/lua_bp27"])
     run(["tools/weapon.py", "--check"],
         "the creatures' HP and the player's weapon, against snapshots and bp25",
         keep=["awake creatures", "frames of the weapon", "blows landed"])

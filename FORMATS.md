@@ -2554,8 +2554,20 @@ draws; the model is `lNNN` in the objects, with the vertices unturned so
 `godot/anim.gd` can pose them, shown while the scale is not 0; and the shapes
 go into the collision cells. `tools/doors.py lift_step` is the arm in Python;
 `godot/selftest.gd` holds the port to it (273 of 273 frames, a door let drop
-at once and one held open), and `emu/bp27.lua` records the real thing for
-`tools/doors.py` to replay -- not yet recorded.
+at once and one held open).
+
+**Checked against a recording.** `emu/bp27.lua` stops at the head of the arm
+for every lift door not at rest and logs its state, counter and scale, the
+player, and the tile and shape of its two cells; `tools/doors.py` replays it
+locked, one step from each line against the next. Three lifts, of doors 51
+and 123: **867 of 867** steps -- the 57 frames up with both stamps, the
+eighteen standing, 468 frames held while the player stood in the doorway,
+three let go, and the drops. 35 more frames in state `0x14` were held with the
+player out of reach -- at 3400 units from door 51 for twelve frames, then let
+go with the player not having moved -- which leaves the creatures, the other
+thing the query asks; kind 4 lives beside both doors (slots 15 and 7). That
+log did not carry them, so bp27 now also logs the query's answer and the
+creature it found.
 
 ### What makes an object solid — found
 

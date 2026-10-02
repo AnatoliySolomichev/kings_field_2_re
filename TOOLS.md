@@ -631,7 +631,8 @@ python3 tools/doors.py --check      the counts alone
 ```
 
 `tools/doors.py lift_step` is the arm, and `godot/selftest.gd` holds the
-port to it (273 of 273 frames). Against the game it waits on a bp27 log.
+port to it (273 of 273 frames). Against the bp27 recording: 867 of 867
+steps, and 35 frames held by a creature the log did not carry.
 
 **The sky in the port.** `level3d.py` writes the level's class-0xf0 object --
 the dome, model 44 of the resident bank -- as `skyNN.gltf`, and its class-0xe3
