@@ -1420,7 +1420,7 @@ def project(lv, out="out/godot", start=(57, 4)):
                  "damage.gd", "equip.gd", "objcoll.gd", "scroll.gd",
                  "doors.gd", "sky.gd", "hud.gd", "compass.gd", "ai.gd",
                  "weapon.gd", "anim.gd", "effects.gd", "held.gd",
-                 "loot.gd", "messages.gd", "document.gd"):
+                 "loot.gd", "messages.gd", "document.gd", "talk.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening
@@ -1483,6 +1483,11 @@ def project(lv, out="out/godot", start=(57, 4)):
         readables.export(out, lv)
     except Exception as e:
         print(f"inscriptions skipped: {e}")
+    try:
+        import talk
+        talk.export(out, lv)
+    except Exception as e:
+        print(f"conversations skipped: {e}")
     try:
         import escript
         escript.export(out)
@@ -1602,7 +1607,7 @@ def verify(out="out/godot"):
                             "fences:",
                             "creature run:",
                             "levels:", "angles:",
-                            "scripts:", "damage:", "knock-back:", "weapon:", "animation:", "spores:", "lift doors:", "chests:", "inscriptions:", "FAIL", "  first",
+                            "scripts:", "damage:", "knock-back:", "weapon:", "animation:", "spores:", "lift doors:", "chests:", "inscriptions:", "conversations:", "FAIL", "  first",
                             "  level case", "  angle (", "  script level",
                             "  hit ")):
             print("   " + line.strip())

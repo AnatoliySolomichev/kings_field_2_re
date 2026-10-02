@@ -574,6 +574,25 @@ func in_range_of(x: int, y: int, z: int, r: int, own: int) -> int:
 	return -1
 
 
+# actor_spot_taken (0x8004d644) as object_interact asks it before anything
+# else: the first awake creature, in slot order, in range of the point -- the
+# player's, 0x1f4 up -- at its radius + 0x578, its height as the top and 0xc80
+# as the point's, whose flags have nothing in common with 4: object_interact
+# runs inside player_controller, while actor_skip_mask is 4. The actor, or {}.
+# @orig game:0x8004d644 actor_spot_taken  status:transcribed -- with r 0x578, own 0xc80 and the mask at 4
+func talker(x: int, y: int, z: int) -> Dictionary:
+	for k in SLOTS:
+		var a = actors[k]
+		if a == null or a["st"] != ACTIVE:
+			continue
+		if int(a["eflags"]) & 4:
+			continue
+		if _in_range(a["px"], a["py"], a["pz"], x, y, z, int(a["radius"]) + 0x578,
+				a["height"], 0xC80) != -1:
+			return a
+	return {}
+
+
 # The creatures the player can run into: every awake one (the game's +9 is 1),
 # in slot order, as [x, y, z, radius, height, flags] -- flags the entity's
 # +0x34, which the actor carries at +0x28. player.gd asks them as

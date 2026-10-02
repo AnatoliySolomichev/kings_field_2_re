@@ -48,6 +48,7 @@ const USE_REACH := 0x320
 const USE_OWN := 0x9C4
 const USE_FACING := 0x200
 const LID_FACING := 0x155
+const TALK_FACING := 0x12C         # object_interact's facing test for a talker
 const EYE := 0x640
 const FLIGHT := 0x200
 const SPIN := 0x40
@@ -70,6 +71,7 @@ var give := {}                     # object_give while it runs
 var press := 0                     # a press latched for its next frame
 var reading = null                 # the document up, load_entry's frames
 var resume := 0                    # where object_interact goes on after it
+var talking := {}                  # script_interpreter's call while it runs (KFTalk)
 # What was opened and taken, by level, across the reload a revive makes:
 # {level: {slot: [type, lock, +0]}} -- the game keeps it in level_state.
 static var saved := {}
@@ -128,12 +130,21 @@ func _exit_tree() -> void:
 func _process(dt: float) -> void:
 	if rows.is_empty():
 		return
+	if not talking.is_empty():
+		var doc = get_node_or_null("../UI/Document")
+		if doc == null or not doc.is_open():
+			var use := 0
+			if doc != null and not KFPad.binding.is_empty():
+				use = int(doc.closed_by) & KFPad.binding[KFPad.USE]
+			KFTalk.closed(talking, use != 0)
+			_talk_next()
+		return
 	if reading != null:
 		if not reading.is_open():
 			reading = null
 			KFGame.modal = false
 			player.clear_movement()
-			_interact(resume)
+			_interact(resume, true)
 		return
 	if not give.is_empty():
 		# object_give reads the pad itself: a press is a word that is not 0
@@ -259,13 +270,22 @@ static func _spring_to(target: int, cur: int, vel: int) -> int:
 # type's +6 plus 0x320, the type's +8 as its top and 0x9c4 as the point's, and
 # within 0x200 of the facing -- in slot order from `from`. A lid must also face
 # the player within 0x155. After a thing is taken the walk stops.
-# @orig game:0x8005e2d0 object_interact  status:partial -- classes 6, 7, 0x40, 0x0d and 0x14 (.L13, .L26, .L28, .L38); doors.gd has the doors, and no conversation or save point is here
+# @orig game:0x8005e2d0 object_interact  status:partial -- the talker first, then classes 6, 7, 0x40, 0x0d and 0x14 (.L13, .L26, .L28, .L38); doors.gd has the doors, and no save point is here
 # @orig game:0x80045c7c find_object  status:partial -- the plain test, for a class past 2
-func _interact(from: int) -> void:
+func _interact(from: int, talked := false) -> void:
 	var c: KFCollision = player.coll
 	var px: int = player.gx
 	var py: int = player.gy + USE_UP
 	var pz: int = player.gz
+	if from == 0 and not talked:
+		# the creature in front, within 0x12c of the facing: script_interpreter
+		var an := get_node_or_null("../Actors")
+		if an and an.has_method("talker"):
+			var a: Dictionary = an.talker(px, py, pz)
+			if not a.is_empty() and _facing(player.facing,
+					c.vec_angle(int(a["px"]) - px, int(a["pz"]) - pz), TALK_FACING):
+				if _talk(a):
+					return
 	for i in range(from, slots.size()):
 		var r: Dictionary = rows[slots[i]]
 		if int(r["type"]) == GONE:
@@ -309,6 +329,41 @@ func _read(r: Dictionary, at: int) -> bool:
 	resume = at + 1
 	KFGame.modal = true
 	return true
+
+
+# script_interpreter for the talker: its conversation (escript.json, by the
+# actor's kind, the entity), one call (KFTalk). False when it has none, and
+# object_interact goes straight on to the objects.
+# @orig game:0x8005e3a4 object_interact+0xd4  status:transcribed -- the call of script_interpreter, after the talker test
+func _talk(a: Dictionary) -> bool:
+	var lv: int = player._level()
+	var sc := KFTalk.script_for(lv, int(a["kind"]))
+	if sc.is_empty():
+		return false
+	talking = KFTalk.begin(lv, int(a["kind"]), sc, int(a["model"]))
+	KFGame.modal = true
+	_talk_next()
+	return true
+
+
+# The call's next line through load_entry (TALK.T, talk/N.png), or its end:
+# then the object walk from the first object, as object_interact goes on.
+# @port engine -- the lines of a call shown one after another through document.gd
+func _talk_next() -> void:
+	var lv: int = player._level()
+	var doc = get_node_or_null("../UI/Document")
+	while true:
+		var entry := KFTalk.advance(talking,
+			func(x: int) -> void: KFTalk.hook(lv, x, player.inventory))
+		if entry < 0:
+			break
+		if doc != null and doc.open_path("res://talk/%d.png" % entry):
+			return
+		KFTalk.closed(talking, false)       # no page: as if closed without USE
+	talking = {}
+	KFGame.modal = false
+	player.clear_movement()
+	_interact(0, true)
 
 
 # object_interact's .L28: what a chest's lock says to USE.
@@ -508,7 +563,7 @@ func _give_done() -> void:
 	player._view()
 	player.clear_movement()
 	if not taken:
-		_interact(resume)
+		_interact(resume, true)
 
 
 # @port engine -- the nodes: a lid turned by its angles, a big chest posed by its counter, a thing shown while it is there

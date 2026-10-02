@@ -535,10 +535,20 @@ on the lid's path. Left:
   game; a bp script on the lid's arm and on `object_give`'s loop would.
 
 The signs (classes `0x0d` and `0x14`) are read with USE too: `load_entry`
-shows the ITEM.T page as the game does (`godot/document.gd`). The same routine
-shows a conversation's lines from TALK.T, so the conversations need only
-`script_interpreter`'s stepping, which `godot/escript.gd` has, and its own
-wait and animation -- the next thing to join up.
+shows the ITEM.T page as the game does (`godot/document.gd`), and so are the
+conversations -- one call of `script_interpreter` a USE (`godot/talk.gd`,
+FORMATS.md "A conversation, one USE at a time"). Left in them:
+
+* **the services** at the end of a call, by `+0x12`'s high nibble:
+  `sub_80021114` (entity 6 on level 0 has 1), the shop (`0x30`,
+  `sub_80021aac`), a scene (`0x40`, `sub_8002200c`, entity 7);
+* **the animation**: the first line starts the talker's (`+1`, `+8`), the end
+  its end one (`+0x11`, `+0xe`), and `seq_lookup` the voice;
+* **level 0's entry 4 arms 2 and 4**, which read the play clock
+  (`0x801b2588` over 60, `0x801b24e4`), and arm 1's unequipping of the sword;
+  the other levels' hooks;
+* **the speaker test**: an actor's `+1` is its model, so two talkers sharing
+  a model would count as one; level 0 has none.
 
 ## 5c. Doors that open, and the ones that are hidden
 

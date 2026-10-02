@@ -287,6 +287,9 @@ func _init() -> void:
 	if not _inscriptions():
 		quit(1)
 		return
+	if not _conversations():
+		quit(1)
+		return
 	if not _equip():
 		quit(1)
 		return
@@ -634,6 +637,55 @@ func _chests() -> bool:
 			i += 1
 		flights += 1
 	print("chests: %d of %d frames match tools/chests.py (the lid, the big chest, %d flights of object_give)" % [n - bad, n, flights])
+	if bad > 0:
+		print("  first difference: " + first)
+	return bad == 0
+
+
+# script_interpreter's calls, talk.gd against tools/talk.py: for each of
+# level 0's talkers, eight calls under two ways of closing the lines -- with
+# USE but each sixth, and never -- the lines shown, the hooks called, the pc,
+# the retry flag and why each call ended.
+func _conversations() -> bool:
+	if not FileAccess.file_exists("res://talkcheck.json"):
+		print("conversations: no cases to check against")
+		return true
+	var doc = JSON.parse_string(FileAccess.get_file_as_string("res://talkcheck.json"))
+	var n := 0
+	var bad := 0
+	var first := ""
+	for case in doc["cases"]:
+		var ent := int(case["entity"])
+		var sc := KFTalk.script_for(0, ent)
+		if sc.is_empty():
+			continue
+		KFTalk.states.erase("0/%d" % ent)
+		KFTalk.flags.fill(0)
+		KFTalk.speaker = -1
+		var pattern: Array = case["pattern"]
+		var k := 0
+		for want in case["calls"]:
+			var c := KFTalk.begin(0, ent, sc, int(sc["kind"]))
+			var shown := []
+			while true:
+				var e := KFTalk.advance(c)
+				if e < 0:
+					break
+				shown.append(e)
+				KFTalk.closed(c, bool(pattern[k % pattern.size()]))
+				k += 1
+			var got := [shown, c["hooks"], int(c["st"]["pc"]), int(c["st"]["retry"]), c["why"]]
+			var w := [[], [], int(want[2]), int(want[3]), str(want[4])]
+			for v in want[0]:
+				w[0].append(int(v))
+			for v in want[1]:
+				w[1].append(int(v))
+			n += 1
+			if str(got) != str(w):
+				bad += 1
+				if first == "":
+					first = "entity %d: godot %s python %s" % [ent, str(got), str(w)]
+	print("conversations: %d of %d calls match tools/talk.py" % [n - bad, n])
 	if bad > 0:
 		print("  first difference: " + first)
 	return bad == 0

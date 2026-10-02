@@ -64,13 +64,25 @@ PAGE_X, PAGE_Y, PAGE_W, PAGE_H = 960, 256, 256, 208
 FADE_IN, FADE_OUT_FROM = 0xC, 0x50
 
 
-def page(n, arc=None):
-    """RGBA rows, 256 x 208, of ITEM.T[150 + n] as load_entry lays it in VRAM:
-    the cleared page with every TIM of the entry loaded at its own place."""
+ARCHIVE_FILES = {6: "ITEM.T", 7: "TALK.T"}     # load_entry's archive numbers
+
+
+def archive(number):
+    """The TArc load_entry reads for archive `number` -- 6 ITEM.T, 7 TALK.T."""
     from tarc import TArc
-    arc = arc or TArc(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                   "..", "extract", "CD", "COM", "ITEM.T"))
-    raw = arc.raw(TEXT_BASE + n)
+    return TArc(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
+                             "extract", "CD", "COM", ARCHIVE_FILES[number]))
+
+
+def page(n, arc=None):
+    """RGBA rows, 256 x 208, of ITEM.T[150 + n] as load_entry lays it in VRAM."""
+    return page_entry(arc or archive(6), TEXT_BASE + n)
+
+
+def page_entry(arc, entry):
+    """RGBA rows, 256 x 208, of entry `entry` of `arc` as load_entry lays it in
+    VRAM: the cleared page with every TIM of the entry loaded at its own place."""
+    raw = arc.raw(entry)
     words, clut, off = {}, [0] * 16, 0
     while raw and off + 8 <= len(raw):
         magic, flags = struct.unpack_from("<II", raw, off)

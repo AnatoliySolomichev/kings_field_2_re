@@ -33,6 +33,10 @@ var phase := 0                     # 0 shut, 1 fading in, 2 waiting, 3 fading ou
 var s2 := 0
 var armed := -1                    # load_wait_screen's local: -1, then -2 once the pad is up
 var shown := -1                    # the s2 of the frame on screen
+# The press that ended it: load_entry ORs its USE bit into `buttons`
+# (0x801b265c), or clears it, and script_interpreter asks it whether the next
+# line follows.
+var closed_by := 0
 var page: Texture2D
 var dim: ColorRect
 var words := []                    # [subtract, add]
@@ -61,10 +65,15 @@ func _ready() -> void:
 		words.append(r)
 
 
-# load_entry's start: the page, and load_wait_screen(0, 0xc).
+# load_entry's start: the page, and load_wait_screen(0, 0xc). A sign's page is
+# ITEM.T 0x96 + n, read/N.png; a conversation's line TALK.T n, talk/N.png.
 # @orig game:0x800441d4 load_entry  status:partial -- the page and the frames; the page comes ready-made from tools/readables.py rather than through VRAM
 func open(n: int) -> bool:
-	var path := "res://read/%d.png" % n
+	return open_path("res://read/%d.png" % n)
+
+
+# @port helper -- load_entry on a page tools/readables.py or tools/talk.py wrote
+func open_path(path: String) -> bool:
 	if not ResourceLoader.exists(path):
 		return false
 	page = load(path)
@@ -74,6 +83,7 @@ func open(n: int) -> bool:
 	s2 = 0
 	armed = -1
 	shown = -1
+	closed_by = 0
 	return true
 
 
@@ -99,6 +109,7 @@ func step(pad: int) -> bool:
 				if pad == 0:
 					armed = -2
 			elif pad != 0:
+				closed_by = pad
 				if phase == 1:          # a press while it fades in: out from here
 					phase = 3
 					armed = -1
@@ -110,6 +121,7 @@ func step(pad: int) -> bool:
 				if pad == 0:
 					armed = -2
 			elif pad != 0:
+				closed_by = pad
 				s2 = OUT_FROM
 				phase = 3
 				armed = -1

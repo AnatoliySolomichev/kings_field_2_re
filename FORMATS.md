@@ -1276,6 +1276,47 @@ to settle it.
 `tools/story.py` is the result: the game's talkers and their lines, level by
 level, into `out/story.txt`.
 
+### A conversation, one USE at a time
+
+USE on a creature in front is the first thing `object_interact` asks:
+`actor_spot_taken` at the player's point `0x1f4` up, the creature's radius +
+`0x578`, `0xc80` as the point's height -- inside `player_controller`, where
+`actor_skip_mask` is 4, so a creature whose flags carry 4 is not found -- and
+the creature within `0x12c` of the facing. Then one call of
+`script_interpreter`, and the walk over the objects after it.
+
+A call keeps its place in the conversation's block -- the pc at `+0x10`, the
+retry flag at `+0x13` -- and in `script_speaker` (`0x801baa2e`):
+
+```
+a zero pc       the speaker is this actor
+script_prescan  the pc a guard picks, or past the 0xfe
+speaker not this actor, retry set: on to past the next 0xf0 and its operand
+op by op:
+  a line        TALK.T[+0xc + op] through load_entry; one more step if the
+                press that closed it had USE in it and +0x12 is 0xff
+  0xf0 n        retry set, pc -= n          0xf8 n   pc -= n
+  0xf9 i v t    story_flags[i] == v: label t
+  0xf2 x        past it                     0xf6     speaker this actor, retry clear
+  0xf4 a        the level's entry 4 (a)     0xf5 n   n steps
+  0xf7 i v      story_flags[i] = v          -- these three then the step test
+  0xf3          a step spent, or the end    0xff     the end
+the step test   pc + 1; a step left: spend it and go on, else the end
+the end         +0x12's service by its high nibble (0 sub_80021114, 0x30 the
+                shop, 0x40 a scene); the speaker this actor; the end animation
+```
+
+So where `+0x12` is `0xff` -- level 0's men by the house, and entity 8 --
+every USE that closes a line brings the next, and the last line before an
+`0xf0` comes back for as long as USE closes it; any other button ends the
+call, and the next USE on the talker starts there again. Talking to somebody
+else first moves it past the `0xf0`. Successive calls show bp21's four
+recorded conversations line for line (`tools/talk.py`, 4 of 4), and the port
+(`godot/talk.gd`, through `godot/document.gd`) is held to the model, 96 of 96
+calls. Level 0's entry 4 arms 0, 1 and 5 are in it: whether the player holds
+Ichrius' eye, wings and crown (130, 131, 132) and the sword (2), and the
+trade; arms 2 and 4 read the play clock and are not.
+
 ### The story flags are allocated per level
 
 `tools/story.py flags` puts the two sources together — the 36 flags a level

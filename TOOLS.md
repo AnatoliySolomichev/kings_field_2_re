@@ -647,6 +647,16 @@ python3 tools/chests.py --check     the counts alone
 (`read/N.png`, ITEM.T 0x96 + N) and models its fade, for `godot/document.gd`,
 which `loot.gd`'s walk opens on USE.
 
+**`talk.py`** -- a conversation as the player meets it: one call of
+`script_interpreter` a USE, with the pc, the retry flag and the speaker kept
+between calls; `godot/talk.gd` is the port, and `talk/N.png` its TALK.T
+pages.
+
+```
+python3 tools/talk.py              level 0's talkers: what each USE shows
+python3 tools/talk.py --check      bp21's recorded conversations, by successive calls
+```
+
 `tools/doors.py lift_step` is the arm, and `godot/selftest.gd` holds the
 port to it (273 of 273 frames). Against the bp27 recording: 867 of 867
 steps, and 35 frames held by a creature the log did not carry.

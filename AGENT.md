@@ -216,6 +216,8 @@ the lift doors, against the bp27 recording             867 of 867 steps; 35 held
                                                        a creature the log lacks
 the chests' lids, against the snapshots                7 of 7 opened lids on the
                                                        lid's path, one moving
+the conversations a USE at a time, bp21                4 of 4 recorded conversations,
+                                                       line for line
 the creatures' behaviour tables, against snapshots     168 896 of 168 896 bytes,
                                                        69 of 69 awake actors
 the creatures' machine, against the bp16 act= log      181 of 181 behaviour runs;
