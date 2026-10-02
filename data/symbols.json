@@ -2787,5 +2787,50 @@
   "name": "lift_tile_table_5",
   "kind": "data",
   "evidence": "class 5's lift door tile table: tile 0x1a shut, 0xfc open"
+ },
+ "0x8005be28": {
+  "kind": "code",
+  "name": "object_give_point",
+  "evidence": "(x, y, z, pitch, facing, dy, dz, out): the point object_give flies a thing to -- (x, y + dy, z + dz) turned by (-pitch, facing, 0) through vec_rotate, added to the eye (player_pos, player_y - 0x640 + dy): (0, 0x1f4 + row[+0xc], 0x5dc + row[+0xe]) ahead and below for the flight in, (-0x1f4, 0x1f4, 0) for the flight away. tools/chests.py eye_point"
+ },
+ "0x8005bee0": {
+  "kind": "code",
+  "name": "object_lerp",
+  "evidence": "(object, from, to, angles_from, angles_to, t): the object's +0x14..+0x1c by fixed_madd from `from` to `to` and its three angles by angle_lerp, t / 0x1000 of the way -- object_give's flights"
+ },
+ "0x80017170": {
+  "kind": "code",
+  "name": "angle_lerp",
+  "evidence": "(a, b, t): a + (b - a) * t >> 12 the short way round the circle, & 0xfff -- the difference taken & 0xfff and 0x1000 off above 0x800"
+ },
+ "0x80041d9c": {
+  "kind": "code",
+  "name": "message_draw",
+  "evidence": "render_frame's walk over message_tick's six sprites at 0x80081928: bit 1 of a record's +0 an additive SPRT, bit 2 a subtractive one, both coloured by the brightness 0x801aeaf9, bit 4 subtractive at a quarter of it. Every texel of their page has STP set. godot/messages.gd"
+ },
+ "0x800277c0": {
+  "kind": "code",
+  "name": "number_digits",
+  "evidence": "(value, n, fill, mode, out): value as n decimal digits into out, right-aligned, the rest filled with 0xa when fill is 0, 0xff after; the modes 1 to 5 put a prefix glyph in front. The gold's banner asks for (amount, 4, 0, 0)"
+ },
+ "0x80041f8c": {
+  "kind": "code",
+  "name": "sprite_digit",
+  "evidence": "(sprite, digit): the sprite's u = digit << 3 -- one glyph of the 8-wide digit strip at v 238 of the message page"
+ },
+ "0x80081928": {
+  "name": "message_sprites",
+  "kind": "data",
+  "evidence": "message_tick's six sprite records, 0x14 bytes each as hud_sprites, ended by 0xff: 0 the message (127 x 14 at (96, 203)), 1 the word Gold (at (160, 203)), 2-5 the amount's digits right to left (8 x 9 at x 140, 127, 114, 101). Page 0x1a, CLUT 0x7804. tools/hud.py export_messages"
+ },
+ "0x801aeaed": {
+  "name": "message_ring",
+  "kind": "data",
+  "evidence": "announce's ring of eight codes, 0xff free; 0x801aeaf6 where announce writes, 0x801aeaf5 where message_tick reads, 0x801aead8 the gold's amounts beside them"
+ },
+ "0x801aeaf7": {
+  "name": "message_state",
+  "kind": "data",
+  "evidence": "message_tick's state: 0 waiting, 1 fading in (0x801aeaf9 += 0x14 to 0x64), 2 holding (0x801aeaf8 from 15 to 0), 3 fading out"
  }
 }

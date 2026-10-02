@@ -259,15 +259,15 @@ def export(out_dir, lv=0):
            "models": {}, "cases": []}
     wanted = [(m, None) for m in sorted({a["model"] for a in actors.table(lv) if a})]
     wanted.append((WEAPON_KEY + 0, 0))          # the weapon a new character holds
-    # and the lift doors' models, which draw_model_plain animates by the
-    # door's counter (tools/doors.py, level3d.build_lifts)
+    # and the lift doors' and the big chests' models, which draw_model_plain
+    # animates by the object's counter (tools/doors.py, tools/chests.py)
     try:
         import objload
         import doors
         import level3d
         ld = objload.Load(lv)
         for m in sorted({level3d.lift_model(r["type"], lv) for r in ld.recs.values()
-                         if r["op"] in doors.LIFT_OPS}):
+                         if r["op"] in doors.LIFT_OPS or r["op"] == 7}):
             if (m, None) not in wanted:
                 wanted.append((m, None))
     except Exception:

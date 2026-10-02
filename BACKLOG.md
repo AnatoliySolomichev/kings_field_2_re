@@ -510,6 +510,30 @@ movement model is being finished:
 
 Neither has been looked for. Recorded so the observation is not lost.
 
+## 5b'. Chests, and what is in them -- in the port
+
+The lids (opcode 6), the big chests (opcode 7) and `object_give` are read and
+in the port (FORMATS.md, "Chests, and picking things up"): USE opens a chest,
+its lid springs open, and what is inside or on the floor flies to the eye and
+is taken or put back; gold is counted. Seven opened lids in the snapshots lie
+on the lid's path. Left:
+
+* **the trap**: a lid whose `+0x3c` is not 0xff (level 0's slot 168) spawns
+  effect `0x83`/`0x23` at the player every frame it opens, aimed by
+  `0x80046dcc` -- neither is read;
+* **`+0xe`**, which the flight and the big chest move and `draw_model_plain`
+  takes as its argument `0x30` -- by its use, the model's light; not read;
+* **`object_give`'s special cases**: types `0x86`, `0x88` and `0x8d` with
+  opcode `0x70` wait on another object's state (`+0x40`, then that one's
+  `+0x3b`), and type `0x85` on level 7 on the facing; and a call with no
+  object, which spawns one in front of the player -- the overlays' way of
+  giving things;
+* **what class 9 hides**: 24 things on level 0 are taken away on the first
+  frame by opcode 9, and nothing in GAME.EXE calls `object_mode` to bring
+  them back -- the level's own code, or a creature's death, presumably;
+* **a recording**: nothing here has been checked frame by frame against the
+  game; a bp script on the lid's arm and on `object_give`'s loop would.
+
 ## 5c. Doors that open, and the ones that are hidden
 
 **The swinging doors are read and in the port** (FORMATS.md, "A door that
@@ -534,8 +558,10 @@ it would open:
   (2 * tr[+0xe] + (p[+0x16] & 1))` at load; its arm is not read.
 * **classes 0x00 (12) and 0x1b (23)**, `find_object` points 0x700 in front of or
   behind them; 11 of the 12 class-0 doors carry lock byte `0x8c`, a key.
-* **keys and messages**: a lock byte other than 0xff, 0xfd or 0xfe is either an
-  item `use_item` takes or an `announce` code, and neither is in the port.
+* **keys**: a lock byte other than 0xff, 0xfd or 0xfe is either an item
+  `use_item` takes or an `announce` code. The banners are in the port now
+  (`godot/messages.gd`, FORMATS.md "The banners"), so a locked chest says
+  "Locked"; `use_item`, which opens it with its key, is not.
 * **a frame-by-frame check -- done**: `emu/bp24.lua` recorded two cycles of the
   door at (41,10) and `tools/doors.py` reproduces 226 of 226 steps. What it
   cannot see is the shove, which moves the player in the same frame the player
@@ -655,8 +681,6 @@ each one is also in its function's marker, as `partial` and what differs:
   `view_bits_at`), so a spore in a cell the game would not draw is drawn.
 * **The "Program Loading" card's rectangle** in `opening.gd` was not checked
   against the primitive `open_main+0x3e4` fills.
-* **The lift doors' "drawn" test** is `draw_terrain`'s (`0x8003c1b8`), not
-  `draw_tile`'s as the comment on `DRAWN` in `doors.gd` says.
 * **One routine, several copies.** `in_range` is written three times
   (`collision.gd`, `doors.gd`, `actors.gd`), `facing_test` and
   `kind_behaviour_with_op` twice. Each copy is marked, and the self-test would

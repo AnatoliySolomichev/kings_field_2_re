@@ -43,16 +43,16 @@ and `@port` says which kind of the port's own code a function is:
 
 ## How much is covered
 
-304 functions in 29 files: **174 reproduce
-code of the game** and 130 are the port's own
-(60 check, 13 data, 27 engine, 30 helper). 204 markers, 442 addresses cited in
+334 functions in 31 files: **193 reproduce
+code of the game** and 141 are the port's own
+(61 check, 16 data, 30 engine, 34 helper). 224 markers, 471 addresses cited in
 comments, every one of them with its executable.
 
 | executable | routines | with a marker | stretches marked inside them | instructions | covered |
 | --- | --- | --- | --- | --- | --- |
 | boot | 10 | 1 | 1 | 115 | 50 (43%) |
 | open | 293 | 8 | 3 | 20002 | 1490 (7%) |
-| game | 820 | 112 | 60 | 93512 | 24896 (26%) |
+| game | 820 | 121 | 66 | 93512 | 25999 (27%) |
 | end | 167 | 0 | 0 | 9966 | 0 (0%) |
 
 Those percentages are of *all* the code in the image, which includes
@@ -68,35 +68,35 @@ floor, not a score.
 | [`_ready`](godot/actors.gd#L65) | `game:0x8005f444` apply_level_state | partial |
 | [`_exit_tree`](godot/actors.gd#L132) | `game:0x8005efd4` level_state_write | partial |
 | [`_process`](godot/actors.gd#L142) | — port's own, *engine*: runs _pass at the game's 15 frames a second | |
-| [`_unhandled_input`](godot/actors.gd#L154) | — port's own, *check*: F10 kills the nearest awake creature | |
-| [`_pass`](godot/actors.gd#L171) | `game:0x80052e5c` actor_tick_driver | transcribed |
-| [`_place`](godot/actors.gd#L211) | — port's own, *engine*: the node where the actor stands; the turn is _draw_basis's | |
-| [`_skin`](godot/actors.gd#L224) | — port's own, *engine*: an animated creature's mesh, made movable | |
-| [`_animate`](godot/actors.gd#L232) | — port's own, *engine*: hands the skin +0xc and +0x18; the frame is anim.gd's model_animate | |
-| [`_launch`](godot/actors.gd#L246) | `game:0x8004f6c4` actor_animation_effects+0x2b0 | verified |
-| [`_draw_basis`](godot/actors.gd#L276) | `game:0x80040c94` render_walk+0x1b0 | transcribed |
-| [`_blow`](godot/actors.gd#L291) | `game:0x8004d254` actor_blow | transcribed |
-| [`strike`](godot/actors.gd#L315) | `game:0x8002dcd8` held_item_tick+0xa38 | transcribed |
-| [`_spot`](godot/actors.gd#L340) | `game:0x8004d644` actor_spot_taken | transcribed |
-| [`_take_hit`](godot/actors.gd#L360) | `game:0x8004c668` actor_take_hit | transcribed |
-| [`_with_op`](godot/actors.gd#L411) | `game:0x8004c068` kind_behaviour_with_op | transcribed |
-| [`_activate`](godot/actors.gd#L420) | `game:0x8004c1f0` actor_activate | transcribed |
-| [`_try`](godot/actors.gd#L470) | `game:0x8004c380` actor_activate+0x190 | transcribed |
-| [`_block`](godot/actors.gd#L479) | `game:0x8004c418` actor_activate+0x228 | transcribed |
-| [`_spawn`](godot/actors.gd#L486) | `game:0x8004b868` actor_spawn | transcribed |
-| [`_taken`](godot/actors.gd#L502) | `game:0x8004d644` actor_spot_taken | transcribed |
-| [`_kill`](godot/actors.gd#L516) | `game:0x80052b7c` actor_tick+0x2ad4 | transcribed |
-| [`_in_range`](godot/actors.gd#L536) | `game:0x80016ec8` in_range | transcribed |
-| [`in_range_of`](godot/actors.gd#L564) | `game:0x8004d838` actor_in_range | transcribed |
-| [`solid`](godot/actors.gd#L580) | — port's own, *helper*: the awake creatures' shapes, which player.gd asks as actor_spot_taken does | |
-| [`_dist`](godot/actors.gd#L591) | — port's own, *helper*: in_range with the height skipped (y 0xffff), the ring test actor_activate makes | |
-| [`_leader`](godot/actors.gd#L596) | — port's own, *helper*: the actor in the slot its leader byte names | |
-| [`_home`](godot/actors.gd#L604) | — port's own, *helper*: back to its placement, where actor_spawn puts it when it wakes | |
-| [`_rand`](godot/actors.gd#L613) | `game:0x800796c0` rand | transcribed |
-| [`_state`](godot/actors.gd#L619) | — port's own, *helper*: writes the state, the game's +9, and logs the change | |
-| [`_nearest`](godot/actors.gd#L634) | — port's own, *check*: the nearest awake creature, for F10 | |
-| [`refresh`](godot/actors.gd#L649) | `game:0x80040b9c` render_walk+0xb8 | transcribed |
-| [`summary`](godot/actors.gd#L662) | — port's own, *check*: the readout's lines | |
+| [`_unhandled_input`](godot/actors.gd#L156) | — port's own, *check*: F10 kills the nearest awake creature | |
+| [`_pass`](godot/actors.gd#L173) | `game:0x80052e5c` actor_tick_driver | transcribed |
+| [`_place`](godot/actors.gd#L213) | — port's own, *engine*: the node where the actor stands; the turn is _draw_basis's | |
+| [`_skin`](godot/actors.gd#L226) | — port's own, *engine*: an animated creature's mesh, made movable | |
+| [`_animate`](godot/actors.gd#L234) | — port's own, *engine*: hands the skin +0xc and +0x18; the frame is anim.gd's model_animate | |
+| [`_launch`](godot/actors.gd#L248) | `game:0x8004f6c4` actor_animation_effects+0x2b0 | verified |
+| [`_draw_basis`](godot/actors.gd#L278) | `game:0x80040c94` render_walk+0x1b0 | transcribed |
+| [`_blow`](godot/actors.gd#L293) | `game:0x8004d254` actor_blow | transcribed |
+| [`strike`](godot/actors.gd#L317) | `game:0x8002dcd8` held_item_tick+0xa38 | transcribed |
+| [`_spot`](godot/actors.gd#L342) | `game:0x8004d644` actor_spot_taken | transcribed |
+| [`_take_hit`](godot/actors.gd#L362) | `game:0x8004c668` actor_take_hit | transcribed |
+| [`_with_op`](godot/actors.gd#L413) | `game:0x8004c068` kind_behaviour_with_op | transcribed |
+| [`_activate`](godot/actors.gd#L422) | `game:0x8004c1f0` actor_activate | transcribed |
+| [`_try`](godot/actors.gd#L472) | `game:0x8004c380` actor_activate+0x190 | transcribed |
+| [`_block`](godot/actors.gd#L481) | `game:0x8004c418` actor_activate+0x228 | transcribed |
+| [`_spawn`](godot/actors.gd#L488) | `game:0x8004b868` actor_spawn | transcribed |
+| [`_taken`](godot/actors.gd#L504) | `game:0x8004d644` actor_spot_taken | transcribed |
+| [`_kill`](godot/actors.gd#L518) | `game:0x80052b7c` actor_tick+0x2ad4 | transcribed |
+| [`_in_range`](godot/actors.gd#L538) | `game:0x80016ec8` in_range | transcribed |
+| [`in_range_of`](godot/actors.gd#L566) | `game:0x8004d838` actor_in_range | transcribed |
+| [`solid`](godot/actors.gd#L582) | — port's own, *helper*: the awake creatures' shapes, which player.gd asks as actor_spot_taken does | |
+| [`_dist`](godot/actors.gd#L593) | — port's own, *helper*: in_range with the height skipped (y 0xffff), the ring test actor_activate makes | |
+| [`_leader`](godot/actors.gd#L598) | — port's own, *helper*: the actor in the slot its leader byte names | |
+| [`_home`](godot/actors.gd#L606) | — port's own, *helper*: back to its placement, where actor_spawn puts it when it wakes | |
+| [`_rand`](godot/actors.gd#L615) | `game:0x800796c0` rand | transcribed |
+| [`_state`](godot/actors.gd#L621) | — port's own, *helper*: writes the state, the game's +9, and logs the change | |
+| [`_nearest`](godot/actors.gd#L636) | — port's own, *check*: the nearest awake creature, for F10 | |
+| [`refresh`](godot/actors.gd#L651) | `game:0x80040b9c` render_walk+0xb8 | transcribed |
+| [`summary`](godot/actors.gd#L664) | — port's own, *check*: the readout's lines | |
 
 ### [`godot/ai.gd`](godot/ai.gd)
 
@@ -233,20 +233,20 @@ floor, not a score.
 | --- | --- | --- |
 | [`_ready`](godot/doors.gd#L107) | — port's own, *data*: reads doorsNN.json, the doors tools/level3d.py finds in the placement, and finds their nodes | |
 | [`_process`](godot/doors.gd#L147) | — port's own, *engine*: USE into _interact, the arms at 15 a second, the nodes turned to the yaw | |
-| [`_interact`](godot/doors.gd#L175) | `game:0x8005e2d0` object_interact | partial |
+| [`_interact`](godot/doors.gd#L177) | `game:0x8005e2d0` object_interact | partial |
 |  | `game:0x80045c7c` find_object | partial |
-| [`_step`](godot/doors.gd#L210) | `game:0x8004814c` object_interpreter+0x113c | verified |
-| [`_lift`](godot/doors.gd#L253) | — port's own, *helper*: hands lift_step the doorway test and the stamps | |
-| [`lift_step`](godot/doors.gd#L264) | `game:0x800470c4` object_interpreter+0xb4 | verified |
+| [`_step`](godot/doors.gd#L212) | `game:0x8004814c` object_interpreter+0x113c | verified |
+| [`_lift`](godot/doors.gd#L255) | — port's own, *helper*: hands lift_step the doorway test and the stamps | |
+| [`lift_step`](godot/doors.gd#L266) | `game:0x800470c4` object_interpreter+0xb4 | verified |
 |  | `game:0x80047290` object_interpreter+0x280 | transcribed |
 |  | `game:0x80047444` object_interpreter+0x434 | transcribed |
-| [`_lift_clear`](godot/doors.gd#L299) | `game:0x80033f38` collide_query | partial |
-| [`_stamp_table`](godot/doors.gd#L317) | `game:0x800443c8` stamp_table | transcribed |
-| [`_draw_lift`](godot/doors.gd#L346) | `game:0x8003e34c` draw_model_plain | partial |
+| [`_lift_clear`](godot/doors.gd#L301) | `game:0x80033f38` collide_query | partial |
+| [`_stamp_table`](godot/doors.gd#L319) | `game:0x800443c8` stamp_table | transcribed |
+| [`_draw_lift`](godot/doors.gd#L348) | `game:0x8003e34c` draw_model_plain | partial |
 |  | `game:0x8003c1b8` draw_terrain+0x1e8 | transcribed |
-| [`_stamp`](godot/doors.gd#L370) | `game:0x800445b8` stamp_rect | transcribed |
-| [`_facing`](godot/doors.gd#L419) | `game:0x80016a2c` facing_test | transcribed |
-| [`_in_range`](godot/doors.gd#L426) | `game:0x80016ec8` in_range | transcribed |
+| [`_stamp`](godot/doors.gd#L372) | `game:0x800445b8` stamp_rect | transcribed |
+| [`_facing`](godot/doors.gd#L421) | `game:0x80016a2c` facing_test | transcribed |
+| [`_in_range`](godot/doors.gd#L428) | `game:0x80016ec8` in_range | transcribed |
 
 ### [`godot/effects.gd`](godot/effects.gd)
 
@@ -254,14 +254,14 @@ floor, not a score.
 | --- | --- | --- |
 | [`_ready`](godot/effects.gd#L33) | — port's own, *engine*: finds the player, its collision and model 0x40's node | |
 | [`_process`](godot/effects.gd#L43) | — port's own, *engine*: runs _pass at the game's 15 frames a second | |
-| [`spawn_spore`](godot/effects.gd#L54) | `game:0x80054338` effect_spawn+0x6b4 | verified |
-| [`_pass`](godot/effects.gd#L71) | `game:0x8005bc50` effect_driver | partial |
-| [`_tick`](godot/effects.gd#L90) | `game:0x8005bcc0` effect_driver+0x70 | verified |
+| [`spawn_spore`](godot/effects.gd#L56) | `game:0x80054338` effect_spawn+0x6b4 | verified |
+| [`_pass`](godot/effects.gd#L73) | `game:0x8005bc50` effect_driver | partial |
+| [`_tick`](godot/effects.gd#L92) | `game:0x8005bcc0` effect_driver+0x70 | verified |
 |  | `game:0x80056de8` effect_tick+0x52c | verified |
-| [`_strike_scale`](godot/effects.gd#L124) | `game:0x8002b114` effect_hurt_player | verified |
+| [`_strike_scale`](godot/effects.gd#L126) | `game:0x8002b114` effect_hurt_player | verified |
 |  | `game:0x80016fb4` in_range_3d | verified |
-| [`_collides`](godot/effects.gd#L145) | `game:0x80053310` effect_collide | verified |
-| [`_draw`](godot/effects.gd#L167) | `game:0x8004165c` render_walk+0xb78 | partial |
+| [`_collides`](godot/effects.gd#L147) | `game:0x80053310` effect_collide | verified |
+| [`_draw`](godot/effects.gd#L169) | `game:0x8004165c` render_walk+0xb78 | partial |
 
 ### [`godot/equip.gd`](godot/equip.gd)
 
@@ -288,9 +288,9 @@ floor, not a score.
 
 | function | in the game | status |
 | --- | --- | --- |
-| [`ported`](godot/game.gd#L75) | — port's own, *check*: counts the steps marked ported, for the frame readout | |
-| [`summary`](godot/game.gd#L84) | — port's own, *check*: the frame readout's line | |
-| [`camera_pose`](godot/game.gd#L94) | `game:0x8002b330` camera_pose | partial |
+| [`ported`](godot/game.gd#L81) | — port's own, *check*: counts the steps marked ported, for the frame readout | |
+| [`summary`](godot/game.gd#L90) | — port's own, *check*: the frame readout's line | |
+| [`camera_pose`](godot/game.gd#L100) | `game:0x8002b330` camera_pose | partial |
 
 ### [`godot/ghost.gd`](godot/ghost.gd)
 
@@ -363,6 +363,44 @@ The whole file is the port's own: **check** — labels for comparing the two win
 | [`award`](godot/levelup.gd#L60) | `game:0x8002a310` award_exp | transcribed |
 | [`fresh`](godot/levelup.gd#L101) | `game:0x8002b468` new_character | partial |
 
+### [`godot/loot.gd`](godot/loot.gd)
+
+| function | in the game | status |
+| --- | --- | --- |
+| [`_ready`](godot/loot.gd#L77) | — port's own, *data*: reads lootNN.json, tools/level3d.py build_loot's rows, and finds their nodes | |
+| [`_exit_tree`](godot/loot.gd#L115) | — port's own, *data*: what was opened and taken, kept for the next load of the level | |
+| [`_process`](godot/loot.gd#L126) | — port's own, *engine*: USE into _interact, the arms at 15 a second, and object_give's own frames while it runs | |
+| [`_mode`](godot/loot.gd#L164) | `game:0x80044900` object_mode | partial |
+| [`lid_step`](godot/loot.gd#L181) | `game:0x80048790` object_interpreter+0x1780 | verified |
+| [`big_step`](godot/loot.gd#L209) | `game:0x80048960` object_interpreter+0x1950 | transcribed |
+| [`_spring_to`](godot/loot.gd#L234) | `game:0x80016168` spring_to | transcribed |
+| [`_interact`](godot/loot.gd#L255) | `game:0x8005e2d0` object_interact | partial |
+|  | `game:0x80045c7c` find_object | partial |
+| [`_lock`](godot/loot.gd#L284) | `game:0x8005e704` object_interact+0x434 | transcribed |
+| [`_give`](godot/loot.gd#L304) | `game:0x8005db30` object_give | partial |
+| [`eye_point`](godot/loot.gd#L327) | `game:0x8005be28` object_give_point | transcribed |
+| [`give_start`](godot/loot.gd#L335) | — port's own, *helper*: object_give's set-up: where it flies from and to, and the view's pitch | |
+| [`lerp_i`](godot/loot.gd#L353) | `game:0x80017158` fixed_madd | transcribed |
+| [`angle_lerp`](godot/loot.gd#L359) | `game:0x80017170` angle_lerp | transcribed |
+| [`give_step`](godot/loot.gd#L369) | `game:0x8005dda4` object_give+0x274 | transcribed |
+| [`_decide`](godot/loot.gd#L424) | `game:0x8005dff0` object_give+0x4c0 | transcribed |
+| [`_out`](godot/loot.gd#L453) | — port's own, *helper*: the flight out, from `frm` (t = 0) to where it is (t = 0x1000) | |
+| [`_give_done`](godot/loot.gd#L467) | `game:0x8005e284` object_give+0x754 | transcribed |
+| [`_draw`](godot/loot.gd#L483) | — port's own, *engine*: the nodes: a lid turned by its angles, a big chest posed by its counter, a thing shown while it is there | |
+| [`game_basis`](godot/loot.gd#L511) | — port's own, *helper*: the matrix tools/level3d.py's _rot3 and quaternion make, at run time | |
+| [`_facing`](godot/loot.gd#L536) | `game:0x80016a2c` facing_test | transcribed |
+
+### [`godot/messages.gd`](godot/messages.gd)
+
+| function | in the game | status |
+| --- | --- | --- |
+| [`announce`](godot/messages.gd#L64) | `game:0x80041eec` announce | transcribed |
+| [`digits`](godot/messages.gd#L75) | `game:0x800277c0` number_digits | partial |
+| [`tick`](godot/messages.gd#L90) | `game:0x80041f9c` message_tick | transcribed |
+| [`_ready`](godot/messages.gd#L131) | — port's own, *data*: the page and the six records, and a pair of rects for each | |
+| [`_process`](godot/messages.gd#L163) | — port's own, *engine*: message_tick at the game's 15 frames a second, whatever else is stopped | |
+| [`_show`](godot/messages.gd#L175) | `game:0x80041d9c` message_draw | partial |
+
 ### [`godot/objcoll.gd`](godot/objcoll.gd)
 
 | function | in the game | status |
@@ -422,48 +460,50 @@ The whole file is the port's own: **check** — labels for comparing the two win
 
 | function | in the game | status |
 | --- | --- | --- |
-| [`_ready`](godot/player.gd#L222) | `game:0x80031d60` checks_item_107 | partial |
-| [`_level`](godot/player.gd#L253) | — port's own, *engine*: the level out/godot was built for, off the project's name | |
-| [`_to_godot`](godot/player.gd#L260) | — port's own, *engine*: the game's position into the node's | |
-| [`_refresh`](godot/player.gd#L265) | — port's own, *check*: the readout's lines | |
-| [`_unhandled_input`](godot/player.gd#L292) | — port's own, *engine*: the mouse turns the facing and the pitch; F1, G, Esc and Tab are the port's keys | |
-| [`_process`](godot/player.gd#L320) | `game:0x80019614` frame_limit | transcribed |
-| [`_ramp`](godot/player.gd#L368) | `game:0x8002f9bc` player_walk | verified |
-| [`_tick`](godot/player.gd#L382) | `game:0x80030fcc` player_controller | partial |
-| [`_poison`](godot/player.gd#L393) | `game:0x80031e78` player_controller+0xeac | verified |
-| [`take_effect`](godot/player.gd#L411) | `game:0x8002ab18` player_take_hit | partial |
-| [`_frame`](godot/player.gd#L425) | `game:0x800313fc` player_controller+0x430 | partial |
+| [`_ready`](godot/player.gd#L226) | `game:0x80031d60` checks_item_107 | partial |
+| [`_level`](godot/player.gd#L261) | — port's own, *engine*: the level out/godot was built for, off the project's name | |
+| [`_to_godot`](godot/player.gd#L268) | — port's own, *engine*: the game's position into the node's | |
+| [`_refresh`](godot/player.gd#L273) | — port's own, *check*: the readout's lines | |
+| [`_unhandled_input`](godot/player.gd#L300) | — port's own, *engine*: the mouse turns the facing and the pitch; F1, G, Esc and Tab are the port's keys | |
+| [`_process`](godot/player.gd#L328) | `game:0x80019614` frame_limit | transcribed |
+| [`_ramp`](godot/player.gd#L379) | `game:0x8002f9bc` player_walk | verified |
+| [`_tick`](godot/player.gd#L393) | `game:0x80030fcc` player_controller | partial |
+| [`_poison`](godot/player.gd#L404) | `game:0x80031e78` player_controller+0xeac | verified |
+| [`take_effect`](godot/player.gd#L422) | `game:0x8002ab18` player_take_hit | partial |
+| [`_frame`](godot/player.gd#L436) | `game:0x800313fc` player_controller+0x430 | partial |
 |  | `game:0x80031b98` player_controller+0xbcc | transcribed |
 |  | `game:0x80031c14` player_controller+0xc48 | transcribed |
 |  | `game:0x80030424` player_turn+0x608 | transcribed |
 |  | `game:0x8002fc94` player_step_distances | transcribed |
-| [`_use`](godot/player.gd#L502) | `game:0x80030010` player_turn+0x1f4 | transcribed |
-| [`_weapon`](godot/player.gd#L535) | `game:0x8002d2a0` held_item_tick | partial |
-| [`_blow`](godot/player.gd#L554) | `game:0x8002a074` strong_blow | transcribed |
-| [`fall_damage`](godot/player.gd#L587) | `game:0x8002ef80` player_vertical+0x220 | transcribed |
-| [`take_blow`](godot/player.gd#L601) | `game:0x8002ab18` player_take_hit | partial |
-| [`_u16`](godot/player.gd#L610) | — port's own, *helper*: a little-endian halfword out of a record's bytes | |
-| [`_apply_damage`](godot/player.gd#L622) | `game:0x8002a6f4` apply_damage | transcribed |
-| [`_len2d`](godot/player.gd#L675) | `game:0x80016c08` vec_length_2d | transcribed |
-| [`_push`](godot/player.gd#L684) | `game:0x8002f320` player_move | transcribed |
-| [`_query31`](godot/player.gd#L716) | `game:0x80033f38` collide_query | partial |
-| [`_tilt`](godot/player.gd#L726) | `game:0x8003047c` player_tilt_spring | transcribed |
-| [`_spring`](godot/player.gd#L734) | — port's own, *helper*: spring_to as player_tilt_spring calls it: target 0, accel 8, friction 4 | |
-| [`_spring_to`](godot/player.gd#L741) | `game:0x80016168` spring_to | transcribed |
-| [`_throw`](godot/player.gd#L758) | `game:0x80030a6c` player_throw | transcribed |
-| [`_dying`](godot/player.gd#L778) | `game:0x80031c54` player_controller+0xc88 | transcribed |
-| [`_fade`](godot/player.gd#L813) | — port's own, *engine*: the black the dying fades to, as a layer; its value is _dying's | |
-| [`_knock_end`](godot/player.gd#L830) | `game:0x8003078c` player_state_reset | transcribed |
-| [`_view`](godot/player.gd#L843) | `game:0x8002b330` camera_pose | partial |
-| [`_horizontal`](godot/player.gd#L890) | `game:0x8002e3f8` player_horizontal | transcribed |
-| [`_creature_at`](godot/player.gd#L1028) | `game:0x8004d644` actor_spot_taken | transcribed |
-| [`_trunc12`](godot/player.gd#L1042) | — port's own, *helper*: a product over 4096 rounded towards zero, as player_horizontal's push-out does it | |
-| [`_turn`](godot/player.gd#L1056) | `game:0x8002f5c0` player_look | transcribed |
-| [`_look`](godot/player.gd#L1088) | `game:0x8002f5c0` player_look | transcribed |
-| [`_aim`](godot/player.gd#L1126) | — port's own, *engine*: the camera after a change of pitch | |
-| [`_signed`](godot/player.gd#L1131) | — port's own, *helper*: an angle, 0x1000 to the turn, as -0x800..0x7ff | |
-| [`_bob`](godot/player.gd#L1140) | `game:0x8002f298` player_bob | transcribed |
-| [`_move`](godot/player.gd#L1155) | `game:0x8002ed60` player_vertical | verified |
+| [`_use`](godot/player.gd#L513) | `game:0x80030010` player_turn+0x1f4 | transcribed |
+| [`_weapon`](godot/player.gd#L546) | `game:0x8002d2a0` held_item_tick | partial |
+| [`_blow`](godot/player.gd#L565) | `game:0x8002a074` strong_blow | transcribed |
+| [`fall_damage`](godot/player.gd#L598) | `game:0x8002ef80` player_vertical+0x220 | transcribed |
+| [`take_blow`](godot/player.gd#L612) | `game:0x8002ab18` player_take_hit | partial |
+| [`_u16`](godot/player.gd#L621) | — port's own, *helper*: a little-endian halfword out of a record's bytes | |
+| [`_apply_damage`](godot/player.gd#L633) | `game:0x8002a6f4` apply_damage | transcribed |
+| [`_len2d`](godot/player.gd#L686) | `game:0x80016c08` vec_length_2d | transcribed |
+| [`_push`](godot/player.gd#L695) | `game:0x8002f320` player_move | transcribed |
+| [`_query31`](godot/player.gd#L727) | `game:0x80033f38` collide_query | partial |
+| [`_tilt`](godot/player.gd#L737) | `game:0x8003047c` player_tilt_spring | transcribed |
+| [`_spring`](godot/player.gd#L745) | — port's own, *helper*: spring_to as player_tilt_spring calls it: target 0, accel 8, friction 4 | |
+| [`_spring_to`](godot/player.gd#L752) | `game:0x80016168` spring_to | transcribed |
+| [`_throw`](godot/player.gd#L769) | `game:0x80030a6c` player_throw | transcribed |
+| [`_dying`](godot/player.gd#L789) | `game:0x80031c54` player_controller+0xc88 | transcribed |
+| [`_fade`](godot/player.gd#L831) | — port's own, *engine*: the black the dying fades to, as a layer; its value is _dying's | |
+| [`_knock_end`](godot/player.gd#L848) | `game:0x8003078c` player_state_reset | transcribed |
+| [`_view`](godot/player.gd#L861) | `game:0x8002b330` camera_pose | partial |
+| [`_horizontal`](godot/player.gd#L908) | `game:0x8002e3f8` player_horizontal | transcribed |
+| [`_creature_at`](godot/player.gd#L1046) | `game:0x8004d644` actor_spot_taken | transcribed |
+| [`_trunc12`](godot/player.gd#L1060) | — port's own, *helper*: a product over 4096 rounded towards zero, as player_horizontal's push-out does it | |
+| [`_turn`](godot/player.gd#L1074) | `game:0x8002f5c0` player_look | transcribed |
+| [`_look`](godot/player.gd#L1106) | `game:0x8002f5c0` player_look | transcribed |
+| [`_aim`](godot/player.gd#L1144) | — port's own, *engine*: the camera after a change of pitch | |
+| [`view_pitch_now`](godot/player.gd#L1151) | — port's own, *helper*: the pitch _view draws at, for object_give to start from | |
+| [`clear_movement`](godot/player.gd#L1159) | `game:0x8002b6f0` clear_movement_state | partial |
+| [`_signed`](godot/player.gd#L1167) | — port's own, *helper*: an angle, 0x1000 to the turn, as -0x800..0x7ff | |
+| [`_bob`](godot/player.gd#L1176) | `game:0x8002f298` player_bob | transcribed |
+| [`_move`](godot/player.gd#L1191) | `game:0x8002ed60` player_vertical | verified |
 
 ### [`godot/scroll.gd`](godot/scroll.gd)
 
@@ -489,18 +529,19 @@ The whole file is the port's own: **check** — the self-test; it runs the port'
 | [`_ai_run`](godot/selftest.gd#L170) | — port's own, *check* | |
 | [`_one_run`](godot/selftest.gd#L185) | — port's own, *check* | |
 | [`_init`](godot/selftest.gd#L227) | — port's own, *check* | |
-| [`_knock`](godot/selftest.gd#L299) | — port's own, *check* | |
-| [`_weapon`](godot/selftest.gd#L379) | — port's own, *check* | |
-| [`_anim`](godot/selftest.gd#L451) | — port's own, *check* | |
-| [`_spores`](godot/selftest.gd#L480) | — port's own, *check* | |
-| [`_lifts`](godot/selftest.gd#L528) | — port's own, *check* | |
-| [`_damage`](godot/selftest.gd#L567) | — port's own, *check* | |
-| [`_scripts`](godot/selftest.gd#L610) | — port's own, *check* | |
-| [`_equip`](godot/selftest.gd#L679) | — port's own, *check* | |
-| [`_objects`](godot/selftest.gd#L702) | — port's own, *check* | |
-| [`_directions`](godot/selftest.gd#L737) | — port's own, *check* | |
-| [`_angles`](godot/selftest.gd#L768) | — port's own, *check* | |
-| [`_levels`](godot/selftest.gd#L795) | — port's own, *check* | |
+| [`_knock`](godot/selftest.gd#L302) | — port's own, *check* | |
+| [`_weapon`](godot/selftest.gd#L382) | — port's own, *check* | |
+| [`_anim`](godot/selftest.gd#L454) | — port's own, *check* | |
+| [`_spores`](godot/selftest.gd#L483) | — port's own, *check* | |
+| [`_lifts`](godot/selftest.gd#L531) | — port's own, *check* | |
+| [`_chests`](godot/selftest.gd#L572) | — port's own, *check* | |
+| [`_damage`](godot/selftest.gd#L641) | — port's own, *check* | |
+| [`_scripts`](godot/selftest.gd#L684) | — port's own, *check* | |
+| [`_equip`](godot/selftest.gd#L753) | — port's own, *check* | |
+| [`_objects`](godot/selftest.gd#L776) | — port's own, *check* | |
+| [`_directions`](godot/selftest.gd#L811) | — port's own, *check* | |
+| [`_angles`](godot/selftest.gd#L842) | — port's own, *check* | |
+| [`_levels`](godot/selftest.gd#L869) | — port's own, *check* | |
 
 ### [`godot/sky.gd`](godot/sky.gd)
 
@@ -552,73 +593,79 @@ The whole file is the port's own: **check** — a model browser for naming thing
 | `boot:0x80010038` shell_main | [`godot/boot.gd:70`](godot/boot.gd#L70) | `func _exec` | transcribed |
 | `boot:0x800100dc` shell_main+0xa4 | [`godot/boot.gd:92`](godot/boot.gd#L92) | `func overlay_returned` | transcribed |
 | `game:0x80014e4c` game_main+0x278 | [`godot/cutscene.gd:46`](godot/cutscene.gd#L46) | `func _ready` | transcribed |
-| `game:0x80014f24` game_main+0x350 | [`godot/game.gd:53`](godot/game.gd#L53) | `const FRAME` | partial |
+| `game:0x80014f24` game_main+0x350 | [`godot/game.gd:53`](godot/game.gd#L53) | `other static` | partial |
 | `game:0x80015fdc` approach | [`godot/ai.gd:217`](godot/ai.gd#L217) | `func approach` | transcribed |
-| `game:0x80016168` spring_to | [`godot/player.gd:740`](godot/player.gd#L740) | `func _spring_to` | transcribed |
+| `game:0x80016168` spring_to | [`godot/loot.gd:233`](godot/loot.gd#L233) | `func _spring_to` | transcribed |
+| `game:0x80016168` spring_to | [`godot/player.gd:751`](godot/player.gd#L751) | `func _spring_to` | transcribed |
 | `game:0x80016598` rot_matrix_x | [`godot/collision.gd:136`](godot/collision.gd#L136) | `func rot_matrix_x` | verified |
 | `game:0x8001660c` rot_matrix_y | [`godot/collision.gd:143`](godot/collision.gd#L143) | `func rot_matrix_y` | verified |
 | `game:0x800167cc` direction_from_angles | [`godot/collision.gd:165`](godot/collision.gd#L165) | `func direction_from_angles` | verified |
 | `game:0x800168a8` vec_rotate | [`godot/weapon.gd:141`](godot/weapon.gd#L141) | `func vec_rotate` | transcribed |
 | `game:0x80016a2c` facing_test | [`godot/ai.gd:51`](godot/ai.gd#L51) | `func facing_test` | transcribed |
-| `game:0x80016a2c` facing_test | [`godot/doors.gd:418`](godot/doors.gd#L418) | `func _facing` | transcribed |
+| `game:0x80016a2c` facing_test | [`godot/doors.gd:420`](godot/doors.gd#L420) | `func _facing` | transcribed |
+| `game:0x80016a2c` facing_test | [`godot/loot.gd:535`](godot/loot.gd#L535) | `func _facing` | transcribed |
 | `game:0x80016a78` sub_80016a78 | [`godot/ai.gd:257`](godot/ai.gd#L257) | `func _gt` | transcribed |
 | `game:0x80016ab8` vec_angle | [`godot/collision.gd:217`](godot/collision.gd#L217) | `func vec_angle` | transcribed |
 | `game:0x80016c08` vec_length_2d | [`godot/ai.gd:207`](godot/ai.gd#L207) | `func dist_to` | transcribed |
-| `game:0x80016c08` vec_length_2d | [`godot/player.gd:674`](godot/player.gd#L674) | `func _len2d` | transcribed |
+| `game:0x80016c08` vec_length_2d | [`godot/player.gd:685`](godot/player.gd#L685) | `func _len2d` | transcribed |
 | `game:0x80016d3c` in_oriented_rect | [`godot/collision.gd:632`](godot/collision.gd#L632) | `func in_oriented_rect` | transcribed |
-| `game:0x80016ec8` in_range | [`godot/actors.gd:535`](godot/actors.gd#L535) | `func _in_range` | transcribed |
+| `game:0x80016ec8` in_range | [`godot/actors.gd:537`](godot/actors.gd#L537) | `func _in_range` | transcribed |
 | `game:0x80016ec8` in_range | [`godot/collision.gd:616`](godot/collision.gd#L616) | `func in_range` | transcribed |
-| `game:0x80016ec8` in_range | [`godot/doors.gd:425`](godot/doors.gd#L425) | `func _in_range` | transcribed |
+| `game:0x80016ec8` in_range | [`godot/doors.gd:427`](godot/doors.gd#L427) | `func _in_range` | transcribed |
 | `game:0x80016f28` in_range+0x60 | [`godot/collision.gd:609`](godot/collision.gd#L609) | `func _heights` | transcribed |
-| `game:0x80016fb4` in_range_3d | [`godot/effects.gd:123`](godot/effects.gd#L123) | `func _strike_scale` | verified |
+| `game:0x80016fb4` in_range_3d | [`godot/effects.gd:125`](godot/effects.gd#L125) | `func _strike_scale` | verified |
 | `game:0x800170c0` rand_score | [`godot/ai.gd:43`](godot/ai.gd#L43) | `func rand_score` | transcribed |
 | `game:0x80017158` fixed_madd | [`godot/ai.gd:57`](godot/ai.gd#L57) | `func lerp_fixed` | transcribed |
-| `game:0x80019614` frame_limit | [`godot/player.gd:319`](godot/player.gd#L319) | `func _process` | transcribed |
+| `game:0x80017158` fixed_madd | [`godot/loot.gd:352`](godot/loot.gd#L352) | `func lerp_i` | transcribed |
+| `game:0x80017170` angle_lerp | [`godot/loot.gd:358`](godot/loot.gd#L358) | `func angle_lerp` | transcribed |
+| `game:0x80019614` frame_limit | [`godot/player.gd:327`](godot/player.gd#L327) | `func _process` | transcribed |
 | `game:0x8001f4c0` apply_control_scheme | [`godot/pad.gd:129`](godot/pad.gd#L129) | `func apply` | transcribed |
-| `game:0x80028e48` player_in_range | [`godot/doors.gd:241`](godot/doors.gd#L241) | `func _step, line 241` | transcribed |
-| `game:0x80028e48` player_in_range | [`godot/doors.gd:306`](godot/doors.gd#L306) | `func _lift_clear, line 306` | transcribed |
+| `game:0x800277c0` number_digits | [`godot/messages.gd:74`](godot/messages.gd#L74) | `func digits` | partial |
+| `game:0x80028e48` player_in_range | [`godot/doors.gd:243`](godot/doors.gd#L243) | `func _step, line 243` | transcribed |
+| `game:0x80028e48` player_in_range | [`godot/doors.gd:308`](godot/doors.gd#L308) | `func _lift_clear, line 308` | transcribed |
 | `game:0x80029390` meter_gain | [`godot/weapon.gd:67`](godot/weapon.gd#L67) | `func gain` | transcribed |
 | `game:0x800293e4` add_armour_ratings | [`godot/equip.gd:51`](godot/equip.gd#L51) | `func add_armour` | verified |
 | `game:0x80029500` player_recalc_stats | [`godot/equip.gd:62`](godot/equip.gd#L62) | `func ratings` | partial |
-| `game:0x8002a074` strong_blow | [`godot/player.gd:553`](godot/player.gd#L553) | `func _blow` | transcribed |
+| `game:0x8002a074` strong_blow | [`godot/player.gd:564`](godot/player.gd#L564) | `func _blow` | transcribed |
 | `game:0x8002a310` award_exp | [`godot/levelup.gd:59`](godot/levelup.gd#L59) | `func award` | transcribed |
 | `game:0x8002a5f8` damage_of_type | [`godot/damage.gd:47`](godot/damage.gd#L47) | `func of_type` | verified |
-| `game:0x8002a6f4` apply_damage | [`godot/player.gd:621`](godot/player.gd#L621) | `func _apply_damage` | transcribed |
+| `game:0x8002a6f4` apply_damage | [`godot/player.gd:632`](godot/player.gd#L632) | `func _apply_damage` | transcribed |
 | `game:0x8002ab18` player_take_hit | [`godot/damage.gd:63`](godot/damage.gd#L63) | `func hit` | partial |
-| `game:0x8002ab18` player_take_hit | [`godot/player.gd:410`](godot/player.gd#L410) | `func take_effect` | partial |
-| `game:0x8002ab18` player_take_hit | [`godot/player.gd:600`](godot/player.gd#L600) | `func take_blow` | partial |
-| `game:0x8002b114` effect_hurt_player | [`godot/effects.gd:122`](godot/effects.gd#L122) | `func _strike_scale` | verified |
-| `game:0x8002b330` camera_pose | [`godot/game.gd:93`](godot/game.gd#L93) | `func camera_pose` | partial |
-| `game:0x8002b330` camera_pose | [`godot/player.gd:842`](godot/player.gd#L842) | `func _view` | partial |
+| `game:0x8002ab18` player_take_hit | [`godot/player.gd:421`](godot/player.gd#L421) | `func take_effect` | partial |
+| `game:0x8002ab18` player_take_hit | [`godot/player.gd:611`](godot/player.gd#L611) | `func take_blow` | partial |
+| `game:0x8002b114` effect_hurt_player | [`godot/effects.gd:124`](godot/effects.gd#L124) | `func _strike_scale` | verified |
+| `game:0x8002b330` camera_pose | [`godot/game.gd:99`](godot/game.gd#L99) | `func camera_pose` | partial |
+| `game:0x8002b330` camera_pose | [`godot/player.gd:860`](godot/player.gd#L860) | `func _view` | partial |
 | `game:0x8002b468` new_character | [`godot/levelup.gd:100`](godot/levelup.gd#L100) | `func fresh` | partial |
+| `game:0x8002b6f0` clear_movement_state | [`godot/player.gd:1158`](godot/player.gd#L1158) | `func clear_movement` | partial |
 | `game:0x8002c040` swing_start | [`godot/weapon.gd:86`](godot/weapon.gd#L86) | `func start` | transcribed |
-| `game:0x8002d2a0` held_item_tick | [`godot/player.gd:534`](godot/player.gd#L534) | `func _weapon` | partial |
+| `game:0x8002d2a0` held_item_tick | [`godot/player.gd:545`](godot/player.gd#L545) | `func _weapon` | partial |
 | `game:0x8002d7bc` held_item_tick+0x51c | [`godot/weapon.gd:100`](godot/weapon.gd#L100) | `func swing` | transcribed |
 | `game:0x8002dbd8` held_item_tick+0x938 | [`godot/weapon.gd:157`](godot/weapon.gd#L157) | `func probe` | transcribed |
-| `game:0x8002dcd8` held_item_tick+0xa38 | [`godot/actors.gd:314`](godot/actors.gd#L314) | `func strike` | transcribed |
+| `game:0x8002dcd8` held_item_tick+0xa38 | [`godot/actors.gd:316`](godot/actors.gd#L316) | `func strike` | transcribed |
 | `game:0x8002dde8` held_item_tick+0xb48 | [`godot/weapon.gd:74`](godot/weapon.gd#L74) | `func refill` | transcribed |
-| `game:0x8002e3f8` player_horizontal | [`godot/player.gd:889`](godot/player.gd#L889) | `func _horizontal` | transcribed |
-| `game:0x8002ed60` player_vertical | [`godot/player.gd:1154`](godot/player.gd#L1154) | `func _move` | verified |
-| `game:0x8002ef80` player_vertical+0x220 | [`godot/player.gd:586`](godot/player.gd#L586) | `func fall_damage` | transcribed |
-| `game:0x8002f298` player_bob | [`godot/player.gd:1139`](godot/player.gd#L1139) | `func _bob` | transcribed |
-| `game:0x8002f320` player_move | [`godot/player.gd:683`](godot/player.gd#L683) | `func _push` | transcribed |
-| `game:0x8002f5c0` player_look | [`godot/player.gd:1055`](godot/player.gd#L1055) | `func _turn` | transcribed |
-| `game:0x8002f5c0` player_look | [`godot/player.gd:1087`](godot/player.gd#L1087) | `func _look` | transcribed |
-| `game:0x8002f9bc` player_walk | [`godot/player.gd:367`](godot/player.gd#L367) | `func _ramp` | verified |
-| `game:0x8002fc94` player_step_distances | [`godot/player.gd:424`](godot/player.gd#L424) | `func _frame` | transcribed |
-| `game:0x80030010` player_turn+0x1f4 | [`godot/player.gd:501`](godot/player.gd#L501) | `func _use` | transcribed |
-| `game:0x80030424` player_turn+0x608 | [`godot/player.gd:423`](godot/player.gd#L423) | `func _frame` | transcribed |
-| `game:0x8003047c` player_tilt_spring | [`godot/player.gd:725`](godot/player.gd#L725) | `func _tilt` | transcribed |
-| `game:0x8003078c` player_state_reset | [`godot/player.gd:829`](godot/player.gd#L829) | `func _knock_end` | transcribed |
-| `game:0x80030a6c` player_throw | [`godot/player.gd:757`](godot/player.gd#L757) | `func _throw` | transcribed |
-| `game:0x80030fcc` player_controller | [`godot/player.gd:381`](godot/player.gd#L381) | `func _tick` | partial |
+| `game:0x8002e3f8` player_horizontal | [`godot/player.gd:907`](godot/player.gd#L907) | `func _horizontal` | transcribed |
+| `game:0x8002ed60` player_vertical | [`godot/player.gd:1190`](godot/player.gd#L1190) | `func _move` | verified |
+| `game:0x8002ef80` player_vertical+0x220 | [`godot/player.gd:597`](godot/player.gd#L597) | `func fall_damage` | transcribed |
+| `game:0x8002f298` player_bob | [`godot/player.gd:1175`](godot/player.gd#L1175) | `func _bob` | transcribed |
+| `game:0x8002f320` player_move | [`godot/player.gd:694`](godot/player.gd#L694) | `func _push` | transcribed |
+| `game:0x8002f5c0` player_look | [`godot/player.gd:1073`](godot/player.gd#L1073) | `func _turn` | transcribed |
+| `game:0x8002f5c0` player_look | [`godot/player.gd:1105`](godot/player.gd#L1105) | `func _look` | transcribed |
+| `game:0x8002f9bc` player_walk | [`godot/player.gd:378`](godot/player.gd#L378) | `func _ramp` | verified |
+| `game:0x8002fc94` player_step_distances | [`godot/player.gd:435`](godot/player.gd#L435) | `func _frame` | transcribed |
+| `game:0x80030010` player_turn+0x1f4 | [`godot/player.gd:512`](godot/player.gd#L512) | `func _use` | transcribed |
+| `game:0x80030424` player_turn+0x608 | [`godot/player.gd:434`](godot/player.gd#L434) | `func _frame` | transcribed |
+| `game:0x8003047c` player_tilt_spring | [`godot/player.gd:736`](godot/player.gd#L736) | `func _tilt` | transcribed |
+| `game:0x8003078c` player_state_reset | [`godot/player.gd:847`](godot/player.gd#L847) | `func _knock_end` | transcribed |
+| `game:0x80030a6c` player_throw | [`godot/player.gd:768`](godot/player.gd#L768) | `func _throw` | transcribed |
+| `game:0x80030fcc` player_controller | [`godot/player.gd:392`](godot/player.gd#L392) | `func _tick` | partial |
 | `game:0x80031120` player_controller+0x154 | [`godot/pad.gd:174`](godot/pad.gd#L174) | `func poll` | transcribed |
-| `game:0x800313fc` player_controller+0x430 | [`godot/player.gd:420`](godot/player.gd#L420) | `func _frame` | partial |
-| `game:0x80031b98` player_controller+0xbcc | [`godot/player.gd:421`](godot/player.gd#L421) | `func _frame` | transcribed |
-| `game:0x80031c14` player_controller+0xc48 | [`godot/player.gd:422`](godot/player.gd#L422) | `func _frame` | transcribed |
-| `game:0x80031c54` player_controller+0xc88 | [`godot/player.gd:777`](godot/player.gd#L777) | `func _dying` | transcribed |
-| `game:0x80031d60` checks_item_107 | [`godot/player.gd:221`](godot/player.gd#L221) | `func _ready` | partial |
-| `game:0x80031e78` player_controller+0xeac | [`godot/player.gd:392`](godot/player.gd#L392) | `func _poison` | verified |
+| `game:0x800313fc` player_controller+0x430 | [`godot/player.gd:431`](godot/player.gd#L431) | `func _frame` | partial |
+| `game:0x80031b98` player_controller+0xbcc | [`godot/player.gd:432`](godot/player.gd#L432) | `func _frame` | transcribed |
+| `game:0x80031c14` player_controller+0xc48 | [`godot/player.gd:433`](godot/player.gd#L433) | `func _frame` | transcribed |
+| `game:0x80031c54` player_controller+0xc88 | [`godot/player.gd:788`](godot/player.gd#L788) | `func _dying` | transcribed |
+| `game:0x80031d60` checks_item_107 | [`godot/player.gd:225`](godot/player.gd#L225) | `func _ready` | partial |
+| `game:0x80031e78` player_controller+0xeac | [`godot/player.gd:403`](godot/player.gd#L403) | `func _poison` | verified |
 | `game:0x80031e84` player_controller+0xeb8 | [`godot/pad.gd:175`](godot/pad.gd#L175) | `func poll` | transcribed |
 | `game:0x800324f0` select_cell_layer | [`godot/collision.gd:368`](godot/collision.gd#L368) | `func _layer` | transcribed |
 | `game:0x8003260c` tile_collision | [`godot/collision.gd:392`](godot/collision.gd#L392) | `func query` | verified |
@@ -635,25 +682,28 @@ The whole file is the port's own: **check** — a model browser for naming thing
 | `game:0x80033f38` collide_query | [`godot/ai.gd:303`](godot/ai.gd#L303) | `func _query` | partial |
 | `game:0x80033f38` collide_query | [`godot/ai.gd:331`](godot/ai.gd#L331) | `func _floor_at` | partial |
 | `game:0x80033f38` collide_query | [`godot/collision.gd:664`](godot/collision.gd#L664) | `func query_all` | partial |
-| `game:0x80033f38` collide_query | [`godot/doors.gd:298`](godot/doors.gd#L298) | `func _lift_clear` | partial |
-| `game:0x80033f38` collide_query | [`godot/player.gd:715`](godot/player.gd#L715) | `func _query31` | partial |
+| `game:0x80033f38` collide_query | [`godot/doors.gd:300`](godot/doors.gd#L300) | `func _lift_clear` | partial |
+| `game:0x80033f38` collide_query | [`godot/player.gd:726`](godot/player.gd#L726) | `func _query31` | partial |
 | `game:0x80033f94` collide_query+0x5c | [`godot/collision.gd:683`](godot/collision.gd#L683) | `func fenced` | verified |
 | `game:0x800351fc` texture_scroll_step | [`godot/scroll.gd:149`](godot/scroll.gd#L149) | `func _process` | transcribed |
 | `game:0x80035358` fog_range_set | [`godot/scroll.gd:103`](godot/scroll.gd#L103) | `func _swap` | transcribed |
 | `game:0x80035ca4` model_prims | [`godot/compass.gd:129`](godot/compass.gd#L129) | `func _draw` | transcribed |
 | `game:0x8003abfc` draw_tmd_object+0xf8 | [`godot/scroll.gd:104`](godot/scroll.gd#L104) | `func _swap` | transcribed |
-| `game:0x8003c1b8` draw_terrain+0x1e8 | [`godot/doors.gd:345`](godot/doors.gd#L345) | `func _draw_lift` | transcribed |
+| `game:0x8003c1b8` draw_terrain+0x1e8 | [`godot/doors.gd:347`](godot/doors.gd#L347) | `func _draw_lift` | transcribed |
 | `game:0x8003c35c` draw_model_cell_lit | [`godot/compass.gd:128`](godot/compass.gd#L128) | `func _draw` | transcribed |
 | `game:0x8003c9dc` load_data_screen | [`godot/cutscene.gd:47`](godot/cutscene.gd#L47) | `func _ready` | partial |
 | `game:0x8003df50` draw_held_item | [`godot/held.gd:40`](godot/held.gd#L40) | `func _process` | transcribed |
-| `game:0x8003e34c` draw_model_plain | [`godot/doors.gd:344`](godot/doors.gd#L344) | `func _draw_lift` | partial |
+| `game:0x8003e34c` draw_model_plain | [`godot/doors.gd:346`](godot/doors.gd#L346) | `func _draw_lift` | partial |
 | `game:0x800400ac` draw_model_at_eye | [`godot/sky.gd:98`](godot/sky.gd#L98) | `func _process` | transcribed |
-| `game:0x80040b9c` render_walk+0xb8 | [`godot/actors.gd:648`](godot/actors.gd#L648) | `func refresh` | transcribed |
-| `game:0x80040c94` render_walk+0x1b0 | [`godot/actors.gd:275`](godot/actors.gd#L275) | `func _draw_basis` | transcribed |
+| `game:0x80040b9c` render_walk+0xb8 | [`godot/actors.gd:650`](godot/actors.gd#L650) | `func refresh` | transcribed |
+| `game:0x80040c94` render_walk+0x1b0 | [`godot/actors.gd:277`](godot/actors.gd#L277) | `func _draw_basis` | transcribed |
 | `game:0x80040fac` render_walk+0x4c8 | [`godot/sky.gd:97`](godot/sky.gd#L97) | `func _process` | transcribed |
-| `game:0x8004165c` render_walk+0xb78 | [`godot/effects.gd:166`](godot/effects.gd#L166) | `func _draw` | partial |
+| `game:0x8004165c` render_walk+0xb78 | [`godot/effects.gd:168`](godot/effects.gd#L168) | `func _draw` | partial |
 | `game:0x80041ad4` hud_sprite | [`godot/hud.gd:39`](godot/hud.gd#L39) | `func _ready` | transcribed |
+| `game:0x80041d9c` message_draw | [`godot/messages.gd:174`](godot/messages.gd#L174) | `func _show` | partial |
 | `game:0x80041e68` hud_draw | [`godot/hud.gd:38`](godot/hud.gd#L38) | `func _ready` | transcribed |
+| `game:0x80041eec` announce | [`godot/messages.gd:63`](godot/messages.gd#L63) | `func announce` | transcribed |
+| `game:0x80041f9c` message_tick | [`godot/messages.gd:89`](godot/messages.gd#L89) | `func tick` | transcribed |
 | `game:0x80042448` render_frame+0x190 | [`godot/compass.gd:66`](godot/compass.gd#L66) | `func _swing` | transcribed |
 | `game:0x80042668` render_frame+0x3b0 | [`godot/hud.gd:95`](godot/hud.gd#L95) | `func _update` | transcribed |
 | `game:0x80042cac` anim_segment | [`godot/anim.gd:51`](godot/anim.gd#L51) | `func pick` | verified |
@@ -661,43 +711,47 @@ The whole file is the port's own: **check** — a model browser for naming thing
 | `game:0x80042e34` pose_overlay | [`godot/anim.gd:68`](godot/anim.gd#L68) | `func overlay` | verified |
 | `game:0x80042eb0` pose_blend | [`godot/anim.gd:80`](godot/anim.gd#L80) | `func blend` | verified |
 | `game:0x800431e8` model_animate | [`godot/anim.gd:96`](godot/anim.gd#L96) | `func vertices` | verified |
-| `game:0x800443c8` stamp_table | [`godot/doors.gd:316`](godot/doors.gd#L316) | `func _stamp_table` | transcribed |
-| `game:0x800445b8` stamp_rect | [`godot/doors.gd:369`](godot/doors.gd#L369) | `func _stamp` | transcribed |
+| `game:0x800443c8` stamp_table | [`godot/doors.gd:318`](godot/doors.gd#L318) | `func _stamp_table` | transcribed |
+| `game:0x800445b8` stamp_rect | [`godot/doors.gd:371`](godot/doors.gd#L371) | `func _stamp` | transcribed |
+| `game:0x80044900` object_mode | [`godot/loot.gd:163`](godot/loot.gd#L163) | `func _mode` | partial |
 | `game:0x80045ac8` object_collide | [`godot/collision.gd:647`](godot/collision.gd#L647) | `func object_collide` | transcribed |
 | `game:0x80045b64` object_collide+0x9c | [`godot/objcoll.gd:53`](godot/objcoll.gd#L53) | `func radius_of` | verified |
 | `game:0x80045b9c` object_collide+0xd4 | [`godot/objcoll.gd:61`](godot/objcoll.gd#L61) | `func shape_of` | verified |
-| `game:0x80045c7c` find_object | [`godot/doors.gd:174`](godot/doors.gd#L174) | `func _interact` | partial |
+| `game:0x80045c7c` find_object | [`godot/doors.gd:176`](godot/doors.gd#L176) | `func _interact` | partial |
+| `game:0x80045c7c` find_object | [`godot/loot.gd:254`](godot/loot.gd#L254) | `func _interact` | partial |
 | `game:0x80046884` player_in_rect | [`godot/objects.gd:97`](godot/objects.gd#L97) | `func player_in_rect` | transcribed |
 | `game:0x80047010` object_interpreter | [`godot/objects.gd:108`](godot/objects.gd#L108) | `func tick` | partial |
-| `game:0x800470c4` object_interpreter+0xb4 | [`godot/doors.gd:261`](godot/doors.gd#L261) | `func lift_step` | verified |
-| `game:0x80047290` object_interpreter+0x280 | [`godot/doors.gd:262`](godot/doors.gd#L262) | `func lift_step` | transcribed |
-| `game:0x80047444` object_interpreter+0x434 | [`godot/doors.gd:263`](godot/doors.gd#L263) | `func lift_step` | transcribed |
-| `game:0x8004814c` object_interpreter+0x113c | [`godot/doors.gd:209`](godot/doors.gd#L209) | `func _step` | verified |
+| `game:0x800470c4` object_interpreter+0xb4 | [`godot/doors.gd:263`](godot/doors.gd#L263) | `func lift_step` | verified |
+| `game:0x80047290` object_interpreter+0x280 | [`godot/doors.gd:264`](godot/doors.gd#L264) | `func lift_step` | transcribed |
+| `game:0x80047444` object_interpreter+0x434 | [`godot/doors.gd:265`](godot/doors.gd#L265) | `func lift_step` | transcribed |
+| `game:0x8004814c` object_interpreter+0x113c | [`godot/doors.gd:211`](godot/doors.gd#L211) | `func _step` | verified |
+| `game:0x80048790` object_interpreter+0x1780 | [`godot/loot.gd:180`](godot/loot.gd#L180) | `func lid_step` | verified |
+| `game:0x80048960` object_interpreter+0x1950 | [`godot/loot.gd:208`](godot/loot.gd#L208) | `func big_step` | transcribed |
 | `game:0x8004a954` object_interpreter+0x3944 | [`godot/sky.gd:96`](godot/sky.gd#L96) | `func _process` | transcribed |
 | `game:0x8004b698` actor_wake | [`godot/ai.gd:713`](godot/ai.gd#L713) | `func wake` | partial |
-| `game:0x8004b868` actor_spawn | [`godot/actors.gd:485`](godot/actors.gd#L485) | `func _spawn` | transcribed |
+| `game:0x8004b868` actor_spawn | [`godot/actors.gd:487`](godot/actors.gd#L487) | `func _spawn` | transcribed |
 | `game:0x8004b94c` actor_switch | [`godot/ai.gd:95`](godot/ai.gd#L95) | `func switch_to` | transcribed |
 | `game:0x8004b984` actor_behaviour | [`godot/ai.gd:122`](godot/ai.gd#L122) | `func score` | partial |
 | `game:0x8004bf1c` actor_pick | [`godot/ai.gd:183`](godot/ai.gd#L183) | `func pick` | transcribed |
 | `game:0x8004c01c` actor_choose | [`godot/ai.gd:182`](godot/ai.gd#L182) | `func pick` | transcribed |
-| `game:0x8004c068` kind_behaviour_with_op | [`godot/actors.gd:410`](godot/actors.gd#L410) | `func _with_op` | transcribed |
+| `game:0x8004c068` kind_behaviour_with_op | [`godot/actors.gd:412`](godot/actors.gd#L412) | `func _with_op` | transcribed |
 | `game:0x8004c068` kind_behaviour_with_op | [`godot/ai.gd:110`](godot/ai.gd#L110) | `func entrance` | transcribed |
 | `game:0x8004c104` actor_finish | [`godot/ai.gd:200`](godot/ai.gd#L200) | `func finish` | transcribed |
 | `game:0x8004c130` actor_start_anim | [`godot/ai.gd:88`](godot/ai.gd#L88) | `func start_anim` | partial |
-| `game:0x8004c1f0` actor_activate | [`godot/actors.gd:419`](godot/actors.gd#L419) | `func _activate` | transcribed |
-| `game:0x8004c380` actor_activate+0x190 | [`godot/actors.gd:469`](godot/actors.gd#L469) | `func _try` | transcribed |
+| `game:0x8004c1f0` actor_activate | [`godot/actors.gd:421`](godot/actors.gd#L421) | `func _activate` | transcribed |
+| `game:0x8004c380` actor_activate+0x190 | [`godot/actors.gd:471`](godot/actors.gd#L471) | `func _try` | transcribed |
 | `game:0x8004c3bc` actor_activate+0x1cc | [`godot/ai.gd:109`](godot/ai.gd#L109) | `func entrance` | transcribed |
 | `game:0x8004c3f8` actor_activate+0x208 | [`godot/ai.gd:714`](godot/ai.gd#L714) | `func wake` | transcribed |
-| `game:0x8004c418` actor_activate+0x228 | [`godot/actors.gd:478`](godot/actors.gd#L478) | `func _block` | transcribed |
+| `game:0x8004c418` actor_activate+0x228 | [`godot/actors.gd:480`](godot/actors.gd#L480) | `func _block` | transcribed |
 | `game:0x8004c5ec` creature_type_damage | [`godot/weapon.gd:165`](godot/weapon.gd#L165) | `func type_damage` | transcribed |
-| `game:0x8004c668` actor_take_hit | [`godot/actors.gd:359`](godot/actors.gd#L359) | `func _take_hit` | transcribed |
+| `game:0x8004c668` actor_take_hit | [`godot/actors.gd:361`](godot/actors.gd#L361) | `func _take_hit` | transcribed |
 | `game:0x8004c668` actor_take_hit | [`godot/weapon.gd:180`](godot/weapon.gd#L180) | `func creature_damage` | transcribed |
 | `game:0x8004cc10` actor_take_hit+0x5a8 | [`godot/weapon.gd:192`](godot/weapon.gd#L192) | `func knock` | transcribed |
-| `game:0x8004d254` actor_blow | [`godot/actors.gd:290`](godot/actors.gd#L290) | `func _blow` | transcribed |
-| `game:0x8004d644` actor_spot_taken | [`godot/actors.gd:339`](godot/actors.gd#L339) | `func _spot` | transcribed |
-| `game:0x8004d644` actor_spot_taken | [`godot/actors.gd:501`](godot/actors.gd#L501) | `func _taken` | transcribed |
-| `game:0x8004d644` actor_spot_taken | [`godot/player.gd:1027`](godot/player.gd#L1027) | `func _creature_at` | transcribed |
-| `game:0x8004d838` actor_in_range | [`godot/actors.gd:563`](godot/actors.gd#L563) | `func in_range_of` | transcribed |
+| `game:0x8004d254` actor_blow | [`godot/actors.gd:292`](godot/actors.gd#L292) | `func _blow` | transcribed |
+| `game:0x8004d644` actor_spot_taken | [`godot/actors.gd:341`](godot/actors.gd#L341) | `func _spot` | transcribed |
+| `game:0x8004d644` actor_spot_taken | [`godot/actors.gd:503`](godot/actors.gd#L503) | `func _taken` | transcribed |
+| `game:0x8004d644` actor_spot_taken | [`godot/player.gd:1045`](godot/player.gd#L1045) | `func _creature_at` | transcribed |
+| `game:0x8004d838` actor_in_range | [`godot/actors.gd:565`](godot/actors.gd#L565) | `func in_range_of` | transcribed |
 | `game:0x8004db08` sub_8004db08 | [`godot/ai.gd:74`](godot/ai.gd#L74) | `func clock_loop` | transcribed |
 | `game:0x8004db3c` actor_clock | [`godot/ai.gd:65`](godot/ai.gd#L65) | `func clock` | transcribed |
 | `game:0x8004db98` actor_clock_passed | [`godot/ai.gd:82`](godot/ai.gd#L82) | `func clock_passed` | transcribed |
@@ -707,18 +761,19 @@ The whole file is the port's own: **check** — a model browser for naming thing
 | `game:0x8004e824` actor_drive | [`godot/ai.gd:263`](godot/ai.gd#L263) | `func drive` | transcribed |
 | `game:0x8004e928` actor_turn | [`godot/ai.gd:233`](godot/ai.gd#L233) | `func turn` | transcribed |
 | `game:0x8004ea7c` actor_walk_to | [`godot/ai.gd:278`](godot/ai.gd#L278) | `func walk_to` | transcribed |
-| `game:0x8004f6c4` actor_animation_effects+0x2b0 | [`godot/actors.gd:245`](godot/actors.gd#L245) | `func _launch` | verified |
+| `game:0x8004f6c4` actor_animation_effects+0x2b0 | [`godot/actors.gd:247`](godot/actors.gd#L247) | `func _launch` | verified |
 | `game:0x800500a8` actor_tick | [`godot/ai.gd:505`](godot/ai.gd#L505) | `func tick` | partial |
 | `game:0x80051cf8` actor_tick+0x1c50 | [`godot/ai.gd:633`](godot/ai.gd#L633) | `func _done` | transcribed |
 | `game:0x8005205c` actor_tick+0x1fb4 | [`godot/ai.gd:639`](godot/ai.gd#L639) | `func _burrowed` | transcribed |
 | `game:0x80052484` actor_tick+0x23dc | [`godot/ai.gd:684`](godot/ai.gd#L684) | `func volley` | transcribed |
-| `game:0x80052b7c` actor_tick+0x2ad4 | [`godot/actors.gd:515`](godot/actors.gd#L515) | `func _kill` | transcribed |
-| `game:0x80052e5c` actor_tick_driver | [`godot/actors.gd:170`](godot/actors.gd#L170) | `func _pass` | transcribed |
-| `game:0x80053310` effect_collide | [`godot/effects.gd:144`](godot/effects.gd#L144) | `func _collides` | verified |
-| `game:0x80054338` effect_spawn+0x6b4 | [`godot/effects.gd:53`](godot/effects.gd#L53) | `func spawn_spore` | verified |
-| `game:0x80056de8` effect_tick+0x52c | [`godot/effects.gd:89`](godot/effects.gd#L89) | `func _tick` | verified |
-| `game:0x8005bc50` effect_driver | [`godot/effects.gd:70`](godot/effects.gd#L70) | `func _pass` | partial |
-| `game:0x8005bcc0` effect_driver+0x70 | [`godot/effects.gd:88`](godot/effects.gd#L88) | `func _tick` | verified |
+| `game:0x80052b7c` actor_tick+0x2ad4 | [`godot/actors.gd:517`](godot/actors.gd#L517) | `func _kill` | transcribed |
+| `game:0x80052e5c` actor_tick_driver | [`godot/actors.gd:172`](godot/actors.gd#L172) | `func _pass` | transcribed |
+| `game:0x80053310` effect_collide | [`godot/effects.gd:146`](godot/effects.gd#L146) | `func _collides` | verified |
+| `game:0x80054338` effect_spawn+0x6b4 | [`godot/effects.gd:55`](godot/effects.gd#L55) | `func spawn_spore` | verified |
+| `game:0x80056de8` effect_tick+0x52c | [`godot/effects.gd:91`](godot/effects.gd#L91) | `func _tick` | verified |
+| `game:0x8005bc50` effect_driver | [`godot/effects.gd:72`](godot/effects.gd#L72) | `func _pass` | partial |
+| `game:0x8005bcc0` effect_driver+0x70 | [`godot/effects.gd:90`](godot/effects.gd#L90) | `func _tick` | verified |
+| `game:0x8005be28` object_give_point | [`godot/loot.gd:326`](godot/loot.gd#L326) | `func eye_point` | transcribed |
 | `game:0x8005c18c` script_find_label | [`godot/escript.gd:75`](godot/escript.gd#L75) | `func find_label` | verified |
 | `game:0x8005c1e8` script_prescan | [`godot/escript.gd:90`](godot/escript.gd#L90) | `func start_pc` | verified |
 | `game:0x8005c308` script_interpreter | [`godot/escript.gd:105`](godot/escript.gd#L105) | `func run` | partial |
@@ -728,7 +783,13 @@ The whole file is the port's own: **check** — a model browser for naming thing
 | `game:0x8005d7bc` has_item | [`godot/items.gd:44`](godot/items.gd#L44) | `func has_item` | transcribed |
 | `game:0x8005d7f8` take_item | [`godot/items.gd:51`](godot/items.gd#L51) | `func take_item` | partial |
 | `game:0x8005d898` give_item | [`godot/items.gd:64`](godot/items.gd#L64) | `func give_item` | partial |
-| `game:0x8005e2d0` object_interact | [`godot/doors.gd:173`](godot/doors.gd#L173) | `func _interact` | partial |
+| `game:0x8005db30` object_give | [`godot/loot.gd:303`](godot/loot.gd#L303) | `func _give` | partial |
+| `game:0x8005dda4` object_give+0x274 | [`godot/loot.gd:368`](godot/loot.gd#L368) | `func give_step` | transcribed |
+| `game:0x8005dff0` object_give+0x4c0 | [`godot/loot.gd:423`](godot/loot.gd#L423) | `func _decide` | transcribed |
+| `game:0x8005e284` object_give+0x754 | [`godot/loot.gd:466`](godot/loot.gd#L466) | `func _give_done` | transcribed |
+| `game:0x8005e2d0` object_interact | [`godot/doors.gd:175`](godot/doors.gd#L175) | `func _interact` | partial |
+| `game:0x8005e2d0` object_interact | [`godot/loot.gd:253`](godot/loot.gd#L253) | `func _interact` | partial |
+| `game:0x8005e704` object_interact+0x434 | [`godot/loot.gd:283`](godot/loot.gd#L283) | `func _lock` | transcribed |
 | `game:0x8005efd4` level_state_write | [`godot/actors.gd:131`](godot/actors.gd#L131) | `func _exit_tree` | partial |
 | `game:0x8005f444` apply_level_state | [`godot/actors.gd:64`](godot/actors.gd#L64) | `func _ready` | partial |
 | `game:0x80060d20` str_play | [`godot/cutscene.gd:48`](godot/cutscene.gd#L48) | `func _ready` | partial |
@@ -740,7 +801,7 @@ The whole file is the port's own: **check** — a model browser for naming thing
 | `game:0x80076168` RotMatrix | [`godot/compass.gd:92`](godot/compass.gd#L92) | `func _rot` | transcribed |
 | `game:0x80076cc4` game_sin | [`godot/collision.gd:92`](godot/collision.gd#L92) | `func game_sin` | transcribed |
 | `game:0x80076da0` game_cos | [`godot/collision.gd:108`](godot/collision.gd#L108) | `func game_cos` | transcribed |
-| `game:0x800796c0` rand | [`godot/actors.gd:612`](godot/actors.gd#L612) | `func _rand` | transcribed |
+| `game:0x800796c0` rand | [`godot/actors.gd:614`](godot/actors.gd#L614) | `func _rand` | transcribed |
 | `open:0x80011e14` open_main | [`godot/opening.gd:130`](godot/opening.gd#L130) | `func _tick` | partial |
 | `open:0x80011ee0` open_main+0xcc | [`godot/opening.gd:65`](godot/opening.gd#L65) | `func _ready` | transcribed |
 | `open:0x80011ee0` open_main+0xcc | [`godot/opening.gd:191`](godot/opening.gd#L191) | `func _movie_tick` | transcribed |
@@ -774,7 +835,6 @@ load-bearing whatever its size.
 | 13 | 100 | `0x800261dc` | ui_draw_label |
 | 13 | 82 | `0x80061e00` | sub_80061e00 |
 | 12 | 67 | `0x800269c0` | sub_800269c0 |
-| 12 | 40 | `0x80041eec` | announce |
 | 11 | 58 | `0x80025f38` | sub_80025f38 |
 | 11 | 20 | `0x80016928` | vec_scale |
 | 10 | 1970 | `0x80053c84` | effect_spawn |
@@ -791,4 +851,5 @@ load-bearing whatever its size.
 | 8 | 94 | `0x80027198` | sub_80027198 |
 | 8 | 65 | `0x80027310` | sub_80027310 |
 | 8 | 63 | `0x80027c8c` | sub_80027c8c |
+| 8 | 54 | `0x80027bb4` | sub_80027bb4 |
 

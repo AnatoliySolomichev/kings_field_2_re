@@ -51,6 +51,12 @@ enum Exit { RUNNING = 0, TO_OPENING = 2, TO_ENDING_A = 3, TO_ENDING_B = 4 }
 # Every step of the loop, in order: the address it stands for, a name, and
 # whether the port has it. Read by the frame readout and by nothing else.
 # @orig game:0x80014f24 game_main+0x350  status:partial -- the loop's sixteen steps in order, as data; nothing here runs them
+# Set while a routine runs frames of its own -- object_give's flight and spin
+# (godot/loot.gd) -- in which game_main's loop does not turn: the player, the
+# creatures, the doors and the effects stand still, and only render_frame's
+# part goes on (the banners, messages.gd).
+static var modal := false
+
 const FRAME := [
 	[0x800341e8, "light_table_reset", false],
 	[0x80034180, "render_flags_reset", false],

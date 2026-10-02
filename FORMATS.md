@@ -2569,6 +2569,137 @@ thing the query asks; kind 4 lives beside both doors (slots 15 and 7). That
 log did not carry them, so bp27 now also logs the query's answer and the
 creature it found.
 
+### Chests, and picking things up
+
+A **small chest** is three objects in one cell: the body (type 155, class
+`0xff`, a solid rectangle), a lid of class 6 (opcode 6, types 152, 154, 156)
+`0x280` above it, and what is in it, a class-`0x40` object whose slot is the
+lid's u16 at `+0x3a`. A **big chest** is one object of class 7 (type 159,
+model 287) with a class-`0xe5` record for its body. Level 0 has eleven lids
+and two big chests; its other class-`0x40` objects lie about in the open.
+
+**Opening.** `object_interact` (`0x8005e2d0`) reaches a chest through
+`find_object`'s plain test -- in range of the player's point `0x1f4` up at
+the type's `+6` plus `0x320`, the type's `+8` as its top and `0x9c4` as the
+point's, and within `0x200` of the facing -- and a lid only while it faces
+the player within `0x155` (`facing_test(facing, yaw + 0x800, 0x155)`). Then
+the lock byte `+0x38` (`.L28`): `0xff` becomes `0xfe`, the arm's signal; an
+opened chest (`0xfe`) whose contents are gone says "Empty" (`announce(0x1a)`);
+`0xf1` "Sealed" (5), `0xf0` "Spell is Cast" (`0x17`), and anything else
+"Locked" (6) -- level 0's locks of 135, 137 and 138 are the royal, copper and
+silver keys, which `use_item` takes.
+
+**The lid** is `object_interpreter`'s arm for opcode 6 (`0x80048790`), on the
+state `+8`, the lid's X angle `+0x24` and an angular velocity `+0x40`:
+
+```
+state 0   lock 0xfe already: angle 0xa00, state 3. Else what is inside is
+          hidden -- object_mode(slot, 0) zeroes its +0 and +0x38, mode 3
+          its +0xe -- and state 1. (load_object_placement's first frame.)
+state 1   lock 0xfe: velocity -0x10, state 2, object_mode(slot, 1, the lid's
+          +0) puts the contents back, a sound
+state 2   velocity = spring_to(0xa00, angle, velocity, 8, 4); angle += it,
+          & 0xfff; under 0xc00 object_mode(slot, 2) sets the contents' +0x38
+          to 0xff -- now they can be taken; at rest on 0xa00, state 3.
+          A trap byte +0x3c other than 0xff spawns effect 0x83/0x23 at the
+          player every frame of it (0x80046dcc aims it)
+```
+
+The kick sends the angle the long way round, down through `0xfec`, and the
+spring carries it on to `0xa00` -- `0x600` short of a turn -- in 82 frames,
+the contents free from the 19th. **Checked against the snapshots:** seven
+opened lids on level 0 lie on that path -- six at rest on `0xa00` with no
+velocity, and one, slot 130 in `chest2`, caught moving at angle `0x9d4` with
+velocity 4, which is frame 69 of it, its contents present and free as the
+path says by then (`tools/chests.py`, 7 of 7).
+
+**The big chest** -- opcode 7 (`0x80048960`): state 0 adds `0xc8` to its
+contents' `+0xe` and hides them as the lid does; state 1 waits for the lock
+to read `0xfe`, then puts them back; state 2 counts `+0xa` up by `0x80` a
+frame and at `0xfff` frees them, state 3. `+1` is 0, so `render_walk` draws
+its model animated, the counter the clock: model 287's one animation, six
+segments run backwards, opens the lid. No snapshot holds one opened.
+
+**Taking a thing** -- `object_interact`'s `.L13` calls `object_give`
+(`0x8005db30`) for a class-`0x40` object, and stops the walk once one has been
+taken (its type `0xff`). `object_give` does nothing unless `+0x38` is `0xff`;
+gold -- the type row's `+1` is `0x20` -- is counted on the spot: the amount
+`+0x3a` into `player_gold`, `announce(0x19, amount)`, the type `0xff`.
+Anything else runs frames of its own (`render_frame` and `PadRead` in a loop:
+the creatures, the doors and the player stand still):
+
+```
+the view's pitch s7 levels to s3 -- 0 below 0x800, 0xfff above -- while the
+thing flies in nine frames, t = 0, 0x200 .. 0x1000 (object_lerp: fixed_madd
+on the place, angle_lerp on the angles), from where it lies to
+object_give_point: (0, 0x1f4 + row[+0xc], 0x5dc + row[+0xe]) turned by
+(-s3, facing, 0) about the eye, and row[+0xc] lower again; turning to
+(0, facing + 0x800, 0)
+then +0x26 += 0x40 a frame until a button goes down -- the pad all up first,
+then any; one during the flight cuts it short
+USE: give_item. Arrows (0x93) gain 4 + (6 * rand() >> 15) more and light
+arrows (0x94) 4, to 99; it flies in nine frames to (-0x1f4, 0x1f4, 0) about
+the eye, the pitch going back to s7, and its type is 0xff
+anything else, or give_item full ("Can't Carry Any More"): it turns 0x100 a
+frame until it faces the player within 0x80, and flies back in nine frames
+to where it lay and how it was turned
+then clear_movement_state, and object_interact goes on with the next object
+```
+
+The row's `+0xe` -- the record's `+0xe` approaches `row[+0x10]` during the
+flight, and the big chest adds `0xc8` to it -- reaches `draw_model_plain` as
+its argument `0x30`; it is not read further, and the port leaves it.
+
+### The banners
+
+`announce` (`0x80041eec`) queues a code under `0xf0` in a ring of eight
+(`0x801aeaed`, written at `0x801aeaf6`; a full place drops the code), with the
+amount beside it for `0x19`. `message_tick` (`0x80041f9c`), which
+`render_frame` calls every frame, object_give's included, shows one at a
+time: state 1 brightens `0x801aeaf9` by `0x14` to `0x64` (five frames), state
+2 holds fifteen, state 3 fades in five, then clears the code -- and the next
+ones while they are the same, except the gold -- and starts again.
+
+The words are pictures: a 4-bit page at VRAM (640, 256) under the CLUT at
+(64, 480), 127 x 14 each, eighteen to a column, so code `c` is at
+`u = 128 * (c / 18)`, `v = 14 * (c % 18)`. Read off the page:
+
+| code | | code | |
+|---|---|---|---|
+| 0 | Level Up | 18 | Fire Magic Up |
+| 1 | Strength Up | 19 | Earth Magic Up |
+| 2 | Intelligence Up | 20 | Water Magic Up |
+| 3 | Magic Learned | 21 | Wind Magic Up |
+| 4 | Excellector Up | 22 | Light Magic Up |
+| 5 | Sealed | 23 | Spell is Cast |
+| 6 | Locked | 24 | Spell is Broken |
+| 7 | Wrong key! | 25 | Gold |
+| 8 | Tombstone | 26 | Empty |
+| 9 | Need More MP | 27 | Worn Off |
+| 10 | Nothing Happens | 28 | Broken Sword |
+| 11 | Can't Carry Any More | 29 | Broken Shovel |
+| 12 | Drew Some Water | 30 | Dead |
+| 13 | Magic Power Up | 31 | Dead Body |
+| 14 | Broken | 32 | Soldier's Body |
+| 15 | Doesn't Open | 33 | Skeleton |
+| 16 | No Qualifications | 34 | Skeleton |
+| 17 | the digits 0-9, 8 wide at v 238 | 35 | Can't Used Here |
+
+Each matches its caller: `give_item` full announces 11, a chest's lock 5, 6
+and `0x17`, an empty chest 26, the broken shovel and sword (types `0xf8`,
+`0xf9`) 29 and 28. The gold puts "Gold" in sprite 1 at (160, 203) and the
+amount -- `number_digits(amount, 4, 0, 0)`, right-aligned, blanks 10 -- in
+sprites 2 to 5. `message_draw` (`0x80041d9c`) draws the six records at
+`0x80081928` that are on, each twice, additive and subtractive, coloured by
+the brightness; every texel of the page has STP set, so both blend, and
+what is left is the brighter of the scene and the word.
+
+In the port: `godot/loot.gd` (the arms, the locks, object_give's frames and
+`KFGame.modal` to stop the world while they run) and `godot/messages.gd`; the
+chests and the things are nodes of their own, `kNNN` in the objects
+(`tools/level3d.py build_loot`). `godot/selftest.gd` holds both to
+`tools/chests.py`, 188 of 188 frames.
+
 ### What makes an object solid — found
 
 `collide_query` takes a mask, and bit `0x20` of it means "test the objects".

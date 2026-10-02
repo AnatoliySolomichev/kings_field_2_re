@@ -214,6 +214,8 @@ the compass's records, against every snapshot          65 of 65 fields
 the swinging door, against the bp24 recording          226 of 226 steps
 the lift doors, against the bp27 recording             867 of 867 steps; 35 held by
                                                        a creature the log lacks
+the chests' lids, against the snapshots                7 of 7 opened lids on the
+                                                       lid's path, one moving
 the creatures' behaviour tables, against snapshots     168 896 of 168 896 bytes,
                                                        69 of 69 awake actors
 the creatures' machine, against the bp16 act= log      181 of 181 behaviour runs;

@@ -142,6 +142,8 @@ func _exit_tree() -> void:
 func _process(dt: float) -> void:
 	if player == null or nodes.is_empty():
 		return
+	if KFGame.modal:                  # object_give's frames: they stand still
+		return
 	acc = minf(acc + dt, 0.25)
 	while acc >= 1.0 / TICK_HZ:
 		acc -= 1.0 / TICK_HZ

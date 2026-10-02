@@ -196,6 +196,35 @@ def export(out_dir):
     path = os.path.join(out_dir, "hud.json")
     with open(path, "w") as f:
         json.dump(doc, f, separators=(",", ":"))
+    export_messages(out_dir)
+    return path
+
+
+MESSAGES = 0x80081928        # message_tick's six sprites, ended by 0xff
+MESSAGE_PAGE, MESSAGE_CLUT = 0x1A, 0x7804
+
+
+def export_messages(out_dir):
+    """messages.json and msgpage.png for godot/messages.gd: the six sprite
+    records `message_draw` (`0x80041d9c`) draws the banners with, out of GAME.EXE, and the
+    4-bit page at (640, 256) they cut the words from -- 36 pictures 127 x 14,
+    eighteen to a column, and the digits at v 238 -- under CLUT (64, 480).
+    Every texel but colour 0 has STP set, so the picture keeps its colours and
+    the port blends all of it, as the game does."""
+    import mips
+    import rtim
+    import tim
+    raw = mips.load("game").bytes(MESSAGES, STRIDE * 8)
+    table = parse(raw)
+    vram = rtim.level_vram(0)
+    px = rtim.page4(vram, MESSAGE_PAGE, MESSAGE_CLUT, semi=False)
+    tim.write_png(os.path.join(out_dir, "msgpage.png"), 256, 256, px)
+    doc = {"_note": "message_tick's sprites at 0x80081928 and the page they "
+                    "draw from; tools/hud.py export_messages",
+           "png": "msgpage.png", "sprites": table}
+    path = os.path.join(out_dir, "messages.json")
+    with open(path, "w") as f:
+        json.dump(doc, f, separators=(",", ":"))
     return path
 
 

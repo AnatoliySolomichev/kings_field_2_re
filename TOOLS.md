@@ -630,6 +630,19 @@ python3 tools/doors.py --check      the counts alone
 ./emu/run.sh debug bp27.lua         a lift door frame by frame, into out/lua_bp27.log
 ```
 
+**Chests in the port.** `chests.py` is the small chest's lid (opcode 6), the
+big chest (opcode 7) and `object_give`'s frames in Python; `godot/loot.gd` the
+same in the port, with object_interact's arms for them, and
+`godot/messages.gd` the banners (FORMATS.md, "Chests, and picking things
+up" and "The banners"). The chests and the things to take are nodes of their
+own, `kNNN` in `objectsNN.gltf`, with `lootNN.json` beside; `hud.py` writes
+the banners' page (`msgpage.png`) and records (`messages.json`).
+
+```
+python3 tools/chests.py             the lid's path against every opened lid in the snapshots
+python3 tools/chests.py --check     the counts alone
+```
+
 `tools/doors.py lift_step` is the arm, and `godot/selftest.gd` holds the
 port to it (273 of 273 frames). Against the bp27 recording: 867 of 867
 steps, and 35 frames held by a creature the log did not carry.

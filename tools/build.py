@@ -142,6 +142,9 @@ def main(quick=False, only_check=False):
         "the swinging and the lift doors, against what was played",
         keep=["steps of a moving door", "steps of a lift door", "more at 0x14",
               "no out/lua_bp27"])
+    run(["tools/chests.py", "--check"],
+        "the chests' lids, against every snapshot",
+        keep=["opened lids"])
     run(["tools/weapon.py", "--check"],
         "the creatures' HP and the player's weapon, against snapshots and bp25",
         keep=["awake creatures", "frames of the weapon", "blows landed"])

@@ -196,11 +196,15 @@ var attack_latch := false
 var character := {}
 var strong_hits := 0
 # Dying (player state 0x11): the frames counted at 0x801b261e, and the fade
-# 0x8003d624 darkens the screen with; the inventory, when the port keeps one,
-# for the crystal (item 107) that revives.
+# 0x8003d624 darkens the screen with; the inventory (inventory_a and _b,
+# KFItems), whose crystal (item 107) revives, and the gold (player_gold).
 var death_frames := 0
 var fade := 0
-var inventory = null
+var inventory := KFItems.new()
+var gold := 0
+# object_give writes the view's pitch (0x801b2608) itself while it runs:
+# -1 when camera_pose's own goes, else the angle the view is drawn at.
+var view_pitch := -1
 # The USE button held (player_turn, 0x8003002c): both meters drain, and
 # damage_scale (0x801b24f8), the K the stat's share of the defence is scaled
 # by in damage_of_type, falls; the magic meter's pause is 0x801b24f4.
@@ -233,6 +237,10 @@ func _ready() -> void:
 	gy = int(-position.y * UNIT)
 	gz = int(-position.z * UNIT)
 	facing = int(rotation.y / TAU * 4096.0) & 0xFFF
+	if carried is Array:            # the crystal kept what the player had
+		inventory = carried[0]
+		gold = int(carried[1])
+	carried = null
 	if respawn is Array:
 		flying = false              # back on foot after a death
 		if respawn.size() == 4:     # the crystal's spot (0x80031d60)
@@ -324,6 +332,9 @@ func _process(dt: float) -> void:
 	KFPad.poll()
 	# player_turn reads the attack button's edge once a game frame; the pad is
 	# read once a rendered frame here, so the edge is kept until a tick takes it.
+	if KFGame.modal:                  # object_give's own frames: nothing moves
+		_to_godot()
+		return
 	if KFPad.hit(KFPad.ATTACK):
 		attack_latch = true
 	var dir := Vector3.ZERO
@@ -774,7 +785,7 @@ func _throw(pv) -> void:
 # with item 107 the crystal revives -- a fixed spot on level 0, the item taken,
 # HP and MP full (0x8002b3a8) -- else a new character (0x8002b468) and the
 # story flags cleared, and level 0 loaded either way (level_state_writer).
-# @orig game:0x80031c54 player_controller+0xc88  status:transcribed -- a label inside player_controller; the revive needs an inventory the port does not keep
+# @orig game:0x80031c54 player_controller+0xc88  status:transcribed -- a label inside player_controller; the inventory and the gold kept across the revive's reload are the port's way of keeping them
 func _dying() -> void:
 	hp = 0
 	tilt_vel[0] = coll._s16(_spring_to(-0x400, coll._s16(int(tilt[0])), int(tilt_vel[0]), 8, 4))
@@ -789,10 +800,11 @@ func _dying() -> void:
 		fade = (0xFF * ((death_frames - 0x20) << 7)) >> 12
 		_fade()
 		return
-	var revive: bool = inventory != null and inventory.has_item(REVIVE_ITEM)
+	var revive: bool = inventory.has_item(REVIVE_ITEM)
 	if revive:
 		inventory.take_item(REVIVE_ITEM)
 		respawn = [REVIVE_POS.x, REVIVE_POS.y, REVIVE_POS.z, REVIVE_FACING]
+		carried = [inventory, gold]
 	else:
 		# a new character (0x8002b468), where it puts a new game: bp25's session
 		# began at (0x1f000, -0x3c00, 0x4000) too
@@ -800,6 +812,9 @@ func _dying() -> void:
 		var an := get_node_or_null("../Actors")
 		if an:
 			an.saved.clear()        # the story flags and the levels' records
+		var lt := get_node_or_null("../Loot")
+		if lt:
+			lt.saved.clear()
 	fade = 0
 	get_tree().reload_current_scene()
 
@@ -807,6 +822,9 @@ func _dying() -> void:
 # Where _ready puts the player after a death reloads the level: the crystal's
 # spot, or [] for a new game's start.
 static var respawn = null
+# What the player carries across that reload when the crystal revives them:
+# [the inventory, the gold].
+static var carried = null
 
 
 # @port engine -- the black the dying fades to, as a layer; its value is _dying's
@@ -846,7 +864,7 @@ func _view() -> void:
 		return
 	cam.position.y = (EYE_UNITS - float(bob) - float(crouch)) / UNIT
 	var k := TAU / 4096.0
-	var p := float(_signed(pitch + int(tilt[0]) + dip)) * k
+	var p := float(_signed(view_pitch if view_pitch >= 0 else view_pitch_now())) * k
 	var y := float(_signed(int(tilt[1]))) * k
 	var r := float(_signed(int(tilt[2]))) * k
 	var f := float(facing) * k
@@ -1125,6 +1143,24 @@ func _look() -> void:
 # @port engine -- the camera after a change of pitch
 func _aim() -> void:
 	_view()
+
+
+# The view's pitch as camera_pose leaves it in 0x801b2608: the player's,
+# the knock-back's tilt and the landing's nod.
+# @port helper -- the pitch _view draws at, for object_give to start from
+func view_pitch_now() -> int:
+	return (pitch + int(tilt[0]) + dip) & 0xFFF
+
+
+# clear_movement_state (0x8002b6f0): the speeds, the turn rate and the pitch
+# rate zeroed. Its other half, buttons_now masked down to the attack, action,
+# use and map buttons, the port's pad does not need.
+# @orig game:0x8002b6f0 clear_movement_state  status:partial -- the five speeds; not the button mask
+func clear_movement() -> void:
+	fwd_speed = 0
+	stf_speed = 0
+	turn_rate = 0
+	pitch_rate = 0
 
 
 # @port helper -- an angle, 0x1000 to the turn, as -0x800..0x7ff

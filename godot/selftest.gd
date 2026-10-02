@@ -281,6 +281,9 @@ func _init() -> void:
 	if not _lifts():
 		quit(1)
 		return
+	if not _chests():
+		quit(1)
+		return
 	if not _equip():
 		quit(1)
 		return
@@ -557,6 +560,77 @@ func _lifts() -> bool:
 				if first == "":
 					first = "frame %d: godot %s python %s" % [n, str(got), str(w)]
 	print("lift doors: %d of %d frames match tools/doors.py" % [n - bad, n])
+	if bad > 0:
+		print("  first difference: " + first)
+	return bad == 0
+
+
+# The chests and object_give, loot.gd against tools/chests.py: the lid's 82
+# frames from USE to rest -- a path seven lids in the snapshots lie on -- the
+# big chest's, and three of object_give's sequences: taken after the spin,
+# put back, and taken mid-flight.
+func _chests() -> bool:
+	if not FileAccess.file_exists("res://chestcheck.json"):
+		print("chests: no cases to check against")
+		return true
+	var doc = JSON.parse_string(FileAccess.get_file_as_string("res://chestcheck.json"))
+	var script = load("res://loot.gd")
+	var n := 0
+	var bad := 0
+	var first := ""
+	for which in ["lid", "big"]:
+		var d := {"state": 0, "angles": [0, 0, 0], "vel": 0, "counter": 0, "lock": 0xFF}
+		var c := {"present": 0, "free": 0}
+		var mode := func(m: int, v: int) -> void:
+			if m == 0:
+				c["present"] = 0
+				c["free"] = 0
+			elif m == 1:
+				c["present"] = v
+			elif m == 2:
+				c["free"] = 1
+		var step: Callable = script.lid_step if which == "lid" else script.big_step
+		step.call(d, mode)
+		d["lock"] = 0xFE
+		for want in doc[which]:
+			step.call(d, mode)
+			var a: int = int(d["angles"][0]) if which == "lid" else int(d["counter"])
+			var got := [int(d["state"]), a, int(d["vel"]), int(c["present"]), int(c["free"])]
+			var w := []
+			for v in want:
+				w.append(int(v))
+			n += 1
+			if got != w:
+				bad += 1
+				if first == "":
+					first = "%s frame %d: godot %s python %s" % [which, n, str(got), str(w)]
+	var flights := 0
+	for f in doc["flights"]:
+		var args: Dictionary = f["args"]
+		var r := {"pos": Vector3i(int(args["pos"][0]), int(args["pos"][1]), int(args["pos"][2])),
+			"angles": [int(args["angles"][0]), int(args["angles"][1]), int(args["angles"][2])],
+			"c": int(args["c"]), "e": int(args["e"]), "type": 0x33}
+		var p := Vector3i(int(args["player"][0]), int(args["player"][1]), int(args["player"][2]))
+		var g: Dictionary = script.give_start(r, p, int(args["pitch"]), int(args["facing"]), coll)
+		g["take"] = bool(args["take"])
+		var i := 0
+		for want in f["frames"]:
+			var pressed: bool = i == int(args["press"])
+			script.give_step(g, 1 if bool(args["take"]) else 0, pressed)
+			var q: Vector3i = r["pos"]
+			var got := [q.x, q.y, q.z, int(r["angles"][0]), int(r["angles"][1]),
+				int(r["angles"][2]), int(g["pitch"])]
+			var w := []
+			for v in want:
+				w.append(int(v))
+			n += 1
+			if got != w:
+				bad += 1
+				if first == "":
+					first = "flight %d frame %d: godot %s python %s" % [flights, i, str(got), str(w)]
+			i += 1
+		flights += 1
+	print("chests: %d of %d frames match tools/chests.py (the lid, the big chest, %d flights of object_give)" % [n - bad, n, flights])
 	if bad > 0:
 		print("  first difference: " + first)
 	return bad == 0

@@ -147,6 +147,8 @@ func _ready() -> void:
 func _process(dt: float) -> void:
 	if doors.is_empty() and lifts.is_empty():
 		return
+	if KFGame.modal:                  # object_give's frames: they stand still
+		return
 	if KFPad.hit(KFPad.USE):
 		_interact()
 	acc = minf(acc + dt, 0.25)

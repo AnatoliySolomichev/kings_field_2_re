@@ -41,6 +41,8 @@ func _ready() -> void:
 
 # @port engine -- runs _pass at the game's 15 frames a second
 func _process(dt: float) -> void:
+	if KFGame.modal:                  # object_give's frames: they stand still
+		return
 	acc = minf(acc + dt, 0.25)
 	while acc >= 1.0 / TICK_HZ:
 		acc -= 1.0 / TICK_HZ

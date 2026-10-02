@@ -753,7 +753,10 @@ def build_objects_gltf(lv, out="out/godot"):
     groups = {}
     placed = missing = hidden = 0
     doors, door_rows = [], []
+    loot = loot_slots(load)
     for _k, o in sorted(load.recs.items()):
+        if o["slot"] in loot:
+            continue                    # a node of its own: build_loot
         # The game's own rule, read off load_object_placement and render_walk:
         # the opcode, the record's +0 against the view byte, and the scale.
         if not load.drawn(o):
@@ -827,6 +830,10 @@ def build_objects_gltf(lv, out="out/godot"):
     items = [(f"objects{lv}", prims, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))]
     lifts = build_lifts(lv, load, grid, look, prims_of, door_rows)
     items += lifts
+    loot_rows = []
+    items += build_loot(lv, load, grid, look, prims_of, loot_rows, loot)
+    with open(f"{out}/loot{lv:02d}.json", "w") as f:
+        json.dump(loot_rows, f, separators=(",", ":"))
     for o, bags in doors:
         dp, dn = prims_of(bags)
         ntri += dn
@@ -844,9 +851,82 @@ def build_objects_gltf(lv, out="out/godot"):
     with open(f"{out}/doors{lv:02d}.json", "w") as f:
         json.dump(door_rows, f, separators=(",", ":"))
     print(f"objects: {placed} placed, {len(doors)} of them doors on their own "
-          f"node, {len(lifts)} lift doors, {missing} without a model, {hidden} "
-          f"the game does not draw, {ntri} triangles, {len(mats)} materials -> {path}")
+          f"node, {len(lifts)} lift doors, {len(loot_rows)} chests and things to "
+          f"pick up, {missing} without a model, {hidden} the game does not draw, "
+          f"{ntri} triangles, {len(mats)} materials -> {path}")
     return path
+
+
+LOOT_OPS = (6, 7)        # the small chest's lid and the big chest (tools/chests.py)
+ITEM_CLASS = 0x40        # what object_give hands over
+
+
+def loot_slots(load):
+    """The objects that are nodes of their own for godot/loot.gd: every chest
+    (opcodes 6 and 7), every class-0x40 thing the game draws, and what the
+    chests hide -- the slot each one's +0x3a names, hidden on their first
+    frame and shown when they open."""
+    out = set()
+    for k, o in load.recs.items():
+        if o["op"] in LOOT_OPS:
+            out.add(k)
+            inside = struct.unpack_from("<H", o["tail"], 2)[0]
+            if inside in load.recs and load.recs[inside]["cls"] == ITEM_CLASS:
+                out.add(inside)
+        elif o["cls"] == ITEM_CLASS and load.drawn(o):
+            out.add(k)
+    return out
+
+
+def build_loot(lv, load, grid, look, prims_of, rows, slots):
+    """The chests and the things to take, one node each, `kNNN` by slot, and
+    their rows for lootNN.json.
+
+    The vertices are the model's own, scaled but not turned, and the node
+    carries the place and the turn: a lid turns about its hinge as it opens
+    (its X angle, +0x24), a thing taken flies to the eye and spins, and a big
+    chest's model is posed by its counter (godot/anim.gd), which needs the
+    vertices unturned to match its poses to."""
+    items = []
+    for k in sorted(slots):
+        o = load.recs[k]
+        try:
+            _flags, objs = tmd.load(*tmd.model_of(o["type"], lv))
+        except Exception:
+            continue
+        cx, cz = o["x"] >> 11, o["z"] >> 11
+        if not (0 <= cx < W and 0 <= cz < W):
+            continue
+        c = grid[(cz * W + cx) * CELLB:(cz * W + cx) * CELLB + CELLB]
+        llm, lcm, bk = light_class(look, c[9] & 0x3F, c[7] & 3)
+        sx, sy, sz = (v / 4096.0 for v in o["scale"])
+        own = {}
+        emit_object(objs, lambda v, sx=sx, sy=sy, sz=sz: (v[0] * sx / UNIT,
+                                                         -v[1] * sy / UNIT,
+                                                         -v[2] * sz / UNIT),
+                    lambda raw: shade(raw, llm, lcm, bk), own,
+                    fog=fog_of(look, c[9] & 0x3F))
+        dp, _dn = prims_of(own)
+        if not dp:
+            continue
+        rx, ry, rz = o["angles"]
+        items.append((f"k{k:03d}", dp, (o["x"] / UNIT, -o["y"] / UNIT, -o["z"] / UNIT),
+                      quaternion(_rot3(rx, ry + 0x800, rz))))
+        tr = load.rows[o["type"]]
+        tail = o["tail"]
+        rows.append({
+            "slot": k, "cls": o["cls"], "op": o["op"], "type": o["type"],
+            "x": o["x"], "y": o["y"], "z": o["z"], "angles": list(o["angles"]),
+            "b0": o["b0"], "b1": o.get("b1", 0x80),
+            "lock": tail[0], "inside": struct.unpack_from("<H", tail, 2)[0],
+            "trap": tail[4],
+            "reach": struct.unpack_from("<H", tr, 6)[0],
+            "top": struct.unpack_from("<H", tr, 8)[0],
+            # object_give's row: +1 0x20 for gold, the flight's +0xc and +0xe
+            "kind": tr[1], "c": struct.unpack_from("<h", tr, 0xC)[0],
+            "e": struct.unpack_from("<h", tr, 0xE)[0],
+            "model": lift_model(o["type"], lv)})
+    return items
 
 
 def quaternion(m):
@@ -1056,6 +1136,8 @@ SCENE = """[gd_scene load_steps={load_steps} format=3]
 [ext_resource type="Script" path="res://effects.gd" id="23"]
 [ext_resource type="PackedScene" path="res://held{lv:02d}.gltf" id="24"]
 [ext_resource type="Script" path="res://held.gd" id="25"]
+[ext_resource type="Script" path="res://loot.gd" id="26"]
+[ext_resource type="Script" path="res://messages.gd" id="27"]
 {gallery_res}
 
 [sub_resource type="Environment" id="Env"]
@@ -1105,6 +1187,9 @@ script = ExtResource("23")
 [node name="Doors" type="Node" parent="."]
 script = ExtResource("18")
 
+[node name="Loot" type="Node" parent="."]
+script = ExtResource("26")
+
 [node name="Scroll" type="Node" parent="."]
 script = ExtResource("17")
 
@@ -1133,6 +1218,13 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
 script = ExtResource("20")
+
+[node name="Messages" type="Control" parent="UI"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+script = ExtResource("27")
 
 [node name="Compass" type="Control" parent="UI"]
 anchors_preset = 15
@@ -1292,7 +1384,7 @@ def project(lv, out="out/godot", start=(57, 4)):
                        for i in range(len(pieces)))
     open(f"{out}/world.tscn", "w").write(
         SCENE.format(lv=lv, px=px, py=py, pz=pz, gallery_res=res,
-                     gallery_nodes=nodes, load_steps=18 + len(pieces)))
+                     gallery_nodes=nodes, load_steps=20 + len(pieces)))
     # The boot chain: the shell, the opening and the pad, which is where the
     # project now starts. world.tscn is still the level and boot.gd hands over
     # to it the way SLUS_002.55 hands over to GAME.EXE.
@@ -1303,7 +1395,8 @@ def project(lv, out="out/godot", start=(57, 4)):
                  "game.gd", "objects.gd", "escript.gd", "items.gd",
                  "damage.gd", "equip.gd", "objcoll.gd", "scroll.gd",
                  "doors.gd", "sky.gd", "hud.gd", "compass.gd", "ai.gd",
-                 "weapon.gd", "anim.gd", "effects.gd", "held.gd"):
+                 "weapon.gd", "anim.gd", "effects.gd", "held.gd",
+                 "loot.gd", "messages.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening
@@ -1356,6 +1449,11 @@ def project(lv, out="out/godot", start=(57, 4)):
         doors.export(out)
     except Exception as e:
         print(f"lift door cases skipped: {e}")
+    try:
+        import chests
+        chests.export(out)
+    except Exception as e:
+        print(f"chest cases skipped: {e}")
     try:
         import escript
         escript.export(out)
@@ -1475,7 +1573,7 @@ def verify(out="out/godot"):
                             "fences:",
                             "creature run:",
                             "levels:", "angles:",
-                            "scripts:", "damage:", "knock-back:", "weapon:", "animation:", "spores:", "lift doors:", "FAIL", "  first",
+                            "scripts:", "damage:", "knock-back:", "weapon:", "animation:", "spores:", "lift doors:", "chests:", "FAIL", "  first",
                             "  level case", "  angle (", "  script level",
                             "  hit ")):
             print("   " + line.strip())
