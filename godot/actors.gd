@@ -553,6 +553,25 @@ func _in_range(ax: int, ay: int, az: int, x: int, y: int, z: int, r: int,
 	return -1 if r < dist else dist
 
 
+# actor_in_range (0x8004d838), collide_query's flag 0x40: the first awake
+# creature, dying or not, in_range of the point at its radius + r, with its
+# height as the top and `own` the point's; -1 for none. It skips model 0x6e --
+# actor +1 is the model, 696 of 696 in the level-0 snapshots, and 110 is kind
+# 15 there -- and whatever actor_skip_mask names, which is 0 outside
+# player_controller. An actor carrying entity flag 0x10 or 0x400000 is asked
+# at another point; none on level 0 does.
+# @orig game:0x8004d838 actor_in_range  status:transcribed -- the plain creature; flags 0x10 and 0x400000 not here
+func in_range_of(x: int, y: int, z: int, r: int, own: int) -> int:
+	for k in SLOTS:
+		var a = actors[k]
+		if a == null or a["st"] != ACTIVE or int(a["model"]) == 0x6E:
+			continue
+		if _in_range(a["px"], a["py"], a["pz"], x, y, z, int(a["radius"]) + r,
+				a["height"], own) != -1:
+			return k
+	return -1
+
+
 # The creatures the player can run into: every awake one (the game's +9 is 1),
 # in slot order, as [x, y, z, radius, height, flags] -- flags the entity's
 # +0x34, which the actor carries at +0x28. player.gd asks them as

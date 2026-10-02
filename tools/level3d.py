@@ -228,14 +228,43 @@ def build(lv, limit=None):
     return verts, uvs, norms, faces, mats, vram, n
 
 
+def lift_tiles(lv):
+    """{(cx, cz): slot} for the cells whose drawn tile a lift door rewrites.
+
+    A lift door (opcodes 3 to 5, tools/doors.py) is drawn by the grid while it
+    is shut -- its tile table writes the wall tile into layer 1 of its two
+    cells at load -- and by its own model while it moves, when the same table
+    writes 0xfc there, which draw_terrain skips. So those cells cannot be part of
+    the one level mesh: each door's go into a node of their own, `tNNN` by
+    the door's slot, that godot/doors.gd hides and shows as the stamps do.
+    """
+    import objload
+    import doors
+    ld = objload.Load(lv)
+    out = {}
+    for k, r in sorted(ld.recs.items()):
+        if r["op"] not in doors.LIFT_OPS:
+            continue
+        drawn = 2 if r["b0"] != 1 else 3       # the byte that lands in cell[+5]
+        for cx, cz, q in doors.lift_stamps(ld, r)[1]:
+            if q[drawn] != 0xFF or q[4 + drawn] != 0xFF:
+                out.setdefault((cx, cz), k)
+    return out
+
+
 def build_gltf(lv, out="out/godot", limit=None):
-    """The level as glTF: baked lighting, nearest sampling, no engine lights."""
+    """The level as glTF: baked lighting, nearest sampling, no engine lights.
+
+    One node, `level<lv>`, for the grid; and one, `tNNN`, for the cells each
+    lift door draws over (lift_tiles)."""
     grid = grid_of(lv)
     _flags, objs = tmd.load("RTMD", lv)
     vram = object_vram(lv)
     look = lighting.table()
     g = gltf.Gltf()
-    groups = {}
+    whole = {}
+    lifts = lift_tiles(lv)
+    apart = {}                                   # door slot -> its own groups
     span = range(min(limit, W)) if limit else range(W)
     ncell = 0
     for cz in span:
@@ -246,6 +275,8 @@ def build_gltf(lv, out="out/godot", limit=None):
                 continue
             obj = objs[sid]
             ncell += 1
+            groups = (apart.setdefault(lifts[(cx, cz)], {})
+                      if (cx, cz) in lifts else whole)
             rot = c[7] & 3
             llm, lcm, bk = light_class(look, c[9] & 0x3F, rot)
             fog = fog_of(look, c[9] & 0x3F)
@@ -286,19 +317,28 @@ def build_gltf(lv, out="out/godot", limit=None):
                         bag[3].append((rgb[0], rgb[1], rgb[2], 1.0))
                         bag[4].append(fog)
 
-    prims, ntri, mats = [], 0, {}
-    for key, (pos, nrm, uv, col, fogs) in groups.items():
-        m = material_for(g, mats, out, lv, key, vram, double=False)
-        p = g.primitive(pos, nrm, uv, col, fogs)
-        p["material"] = m
-        prims.append(p)
-        ntri += len(pos) // 3
+    ntri, mats = 0, {}
+
+    def prims_of(groups):
+        nonlocal ntri
+        prims = []
+        for key, (pos, nrm, uv, col, fogs) in groups.items():
+            m = material_for(g, mats, out, lv, key, vram, double=False)
+            p = g.primitive(pos, nrm, uv, col, fogs)
+            p["material"] = m
+            prims.append(p)
+            ntri += len(pos) // 3
+        return prims
     # No `-col` suffix: the level is not handed to a physics engine at all.
     # Movement runs the game's own collision (godot/collision.gd), which is the
     # only way ramps, stairs, steppable walls and drowning come out right.
-    path, nbytes = g.write(f"{out}/level{lv:02d}.gltf", prims, f"level{lv}")
-    print(f"level {lv}: {ncell} cells, {ntri} triangles, {len(prims)} materials, "
-          f"{nbytes // 1024} KB of buffer -> {path}")
+    items = [(f"level{lv}", prims_of(whole), (0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))]
+    for slot, groups in sorted(apart.items()):
+        items.append((f"t{slot:03d}", prims_of(groups), (0.0, 0.0, 0.0),
+                      (0.0, 0.0, 0.0, 1.0)))
+    path, nbytes = g.write_nodes(f"{out}/level{lv:02d}.gltf", items)
+    print(f"level {lv}: {ncell} cells, {ntri} triangles, {len(mats)} materials, "
+          f"{len(apart)} lift doors' cells apart -> {path}")
     return path
 
 
@@ -785,6 +825,8 @@ def build_objects_gltf(lv, out="out/godot"):
         print("no objects placed")
         return None
     items = [(f"objects{lv}", prims, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))]
+    lifts = build_lifts(lv, load, grid, look, prims_of, door_rows)
+    items += lifts
     for o, bags in doors:
         dp, dn = prims_of(bags)
         ntri += dn
@@ -802,9 +844,88 @@ def build_objects_gltf(lv, out="out/godot"):
     with open(f"{out}/doors{lv:02d}.json", "w") as f:
         json.dump(door_rows, f, separators=(",", ":"))
     print(f"objects: {placed} placed, {len(doors)} of them doors on their own "
-          f"node, {missing} without a model, {hidden} the game does not draw, "
-          f"{ntri} triangles, {len(mats)} materials -> {path}")
+          f"node, {len(lifts)} lift doors, {missing} without a model, {hidden} "
+          f"the game does not draw, {ntri} triangles, {len(mats)} materials -> {path}")
     return path
+
+
+def quaternion(m):
+    """The game's rotation matrix `m` (_rot3), as a Godot quaternion (x, y, z,
+    w): with x kept and y and z negated, M becomes F M F, F = diag(1, -1, -1)."""
+    f = (1.0, -1.0, -1.0)
+    r = [[f[i] * m[i][j] * f[j] for j in range(3)] for i in range(3)]
+    tr = r[0][0] + r[1][1] + r[2][2]
+    if tr > 0:
+        k = math.sqrt(tr + 1.0) * 2
+        return ((r[2][1] - r[1][2]) / k, (r[0][2] - r[2][0]) / k,
+                (r[1][0] - r[0][1]) / k, k / 4)
+    i = max(range(3), key=lambda a: r[a][a])
+    j, k_ = (i + 1) % 3, (i + 2) % 3
+    k = math.sqrt(1.0 + r[i][i] - r[j][j] - r[k_][k_]) * 2
+    q = [0.0, 0.0, 0.0, (r[k_][j] - r[j][k_]) / k]
+    q[i] = k / 4
+    q[j] = (r[j][i] + r[i][j]) / k
+    q[k_] = (r[k_][i] + r[i][k_]) / k
+    return tuple(q)
+
+
+def lift_model(type_id, lv):
+    """The key godot/anim.gd files a lift door's model under: its MO.T entry,
+    or MO_COUNT on for MOF.T -- the numbering tools/anim.py load takes."""
+    arch, entry = tmd.model_of(type_id, lv)
+    return entry if arch == "MO" else tmd.MO_COUNT + entry
+
+
+def build_lifts(lv, load, grid, look, prims_of, rows):
+    """The lift doors' models, one node each, `lNNN` by slot, and their rows
+    in doorsNN.json.
+
+    The loader leaves a lift door's scale at 0, so render_walk draws nothing
+    of it while it is shut; the arm sets the scale to 0x1000 when it starts to
+    lift and draws the model through draw_model_plain (its +3 is 3, no 0x40 or
+    8), animated -- the animation the record's +1 names, 0, at the clock of
+    its counter +0xa (the stack arguments 0x1c and 0x20 of the call at
+    0x800414a4). So the vertices here are the model's own, unturned and at
+    scale 1, which is what godot/anim.gd matches its poses to, and the node
+    carries the turn: the angles with 0x800 on the yaw, as for every object.
+    """
+    import doors
+    items = []
+    for k, o in sorted(load.recs.items()):
+        if o["op"] not in doors.LIFT_OPS:
+            continue
+        try:
+            _flags, objs = tmd.load(*tmd.model_of(o["type"], lv))
+        except Exception:
+            continue
+        cx, cz = o["x"] >> 11, o["z"] >> 11
+        c = grid[(cz * W + cx) * CELLB:(cz * W + cx) * CELLB + CELLB]
+        llm, lcm, bk = light_class(look, c[9] & 0x3F, c[7] & 3)
+        rx, ry, rz = o["angles"]
+        m = _rot3(rx, ry + 0x800, rz)
+        # vertices and normals both unturned: the node turns them
+        own = {}
+        emit_object(objs, lambda v: (v[0] / UNIT, -v[1] / UNIT, -v[2] / UNIT),
+                    lambda raw: shade(raw, llm, lcm, bk), own,
+                    fog=fog_of(look, c[9] & 0x3F))
+        dp, _dn = prims_of(own)
+        items.append((f"l{k:03d}", dp, (o["x"] / UNIT, -o["y"] / UNIT, -o["z"] / UNIT),
+                      quaternion(m)))
+        tr = load.rows[o["type"]]
+        shape, tile = doors.lift_stamps(load, o)
+        rows.append({
+            "slot": k, "type": o["type"], "op": o["op"],
+            "x": o["x"], "y": o["y"], "z": o["z"], "yaw": o["angles"][1],
+            "b0": o["b0"], "height": o["height"], "tail": list(o["tail"][:8]),
+            "reach": struct.unpack_from("<H", tr, 6)[0],
+            "top": struct.unpack_from("<H", tr, 8)[0],
+            "model": lift_model(o["type"], lv), "anim": o.get("b1", 0),
+            # stamp_table's two tables: cells and each entry's eight bytes,
+            # and which layer of the port's collision cells (0 or 3) is the
+            # upper one the entry's first and third bytes go to
+            "stamps": [[[x, z, list(q)] for x, z, q in t] for t in (shape, tile)],
+            "hi": 3 if o["b0"] != 1 else 0})
+    return items
 
 
 # The sky. render_walk (0x80040ae4) gives an object of class 0xf0 a path of its
@@ -1231,6 +1352,11 @@ def project(lv, out="out/godot", start=(57, 4)):
     except Exception as e:
         print(f"effect cases skipped: {e}")
     try:
+        import doors
+        doors.export(out)
+    except Exception as e:
+        print(f"lift door cases skipped: {e}")
+    try:
         import escript
         escript.export(out)
     except Exception as e:                       # no disc, no scripts
@@ -1349,7 +1475,7 @@ def verify(out="out/godot"):
                             "fences:",
                             "creature run:",
                             "levels:", "angles:",
-                            "scripts:", "damage:", "knock-back:", "weapon:", "animation:", "spores:", "FAIL", "  first",
+                            "scripts:", "damage:", "knock-back:", "weapon:", "animation:", "spores:", "lift doors:", "FAIL", "  first",
                             "  level case", "  angle (", "  script level",
                             "  hit ")):
             print("   " + line.strip())

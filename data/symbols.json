@@ -2762,5 +2762,30 @@
   "name": "model_install",
   "kind": "code",
   "evidence": "(slot, data): model_table[slot] = data, then its preparation (0x80042b70); the weapon goes in slot 0x20"
+ },
+ "0x800828dc": {
+  "name": "lift_shape_table",
+  "kind": "data",
+  "evidence": "stamp_table's table for the lift doors of classes 3 and 4: two entries, the door's cell and the one behind ((0,0), (0,-1) turned by the yaw); sel 0 writes layer 1's shape 0x81 (solid), sel 1 0xb2 (passable). load_object_placement stamps sel 0; the arm (0x800470c4) stamps sel 1 at counter 0xc18 and sel 0 when the doorway is clear. tools/doors.py lift_stamps"
+ },
+ "0x800828fc": {
+  "name": "lift_tile_table_3",
+  "kind": "data",
+  "evidence": "stamp_table's tile table for class 3's lift doors: sel 0 writes layer 1's tile 0x7d, the half-cell wall, sel 1 0xfc, which draw_terrain skips (a tile at or above 0xf0, 0x8003c1b8) -- the arm lifts the tile away at counter 0 while the scale of 0x1000 makes the model show, and puts it back at the bottom"
+ },
+ "0x8008291c": {
+  "name": "lift_tile_table_4",
+  "kind": "data",
+  "evidence": "class 4's lift door tile table: tile 0x7f shut, 0xfc open; as lift_tile_table_3"
+ },
+ "0x8008293c": {
+  "name": "lift_shape_table_5",
+  "kind": "data",
+  "evidence": "class 5's lift door shape table: shape 0xc1 shut, 0xdf open"
+ },
+ "0x8008295c": {
+  "name": "lift_tile_table_5",
+  "kind": "data",
+  "evidence": "class 5's lift door tile table: tile 0x1a shut, 0xfc open"
  }
 }

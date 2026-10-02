@@ -2486,6 +2486,77 @@ record's `+0xe` the log carries is the arm's other write: while the door is
 drawn (+3 bit 0x80) it holds -0x30 or 0xf0 by which side of the door the player
 is on, and `render_walk` hands it to `draw_model_plain`.
 
+### A door that lifts: opcodes 3, 4 and 5
+
+Reported from play as walls that open when pressed, and that is what they are.
+Classes `0x03`, `0x04` and `0x05` -- five on level 0, type `0xab` in slots 20,
+51, 74, 86 and 123, one of `0x133` on level 8 -- get their class as the opcode,
+`+1` = 0 and a scale of 0, and `load_object_placement` stamps two tables into
+the grid with `stamp_table` at `sel` 0. Each names two cells, the door's own
+and the one behind it (`(0, 0)` and `(0, -1)` turned by the yaw), and writes
+layer 1 (the upper layer, since `b0` is 2):
+
+| op | shape table | shut | open | tile table | shut | open |
+|----|-------------|------|------|------------|------|------|
+| 3  | `0x800828dc` | `0x81` | `0xb2` | `0x800828fc` | `0x7d` | `0xfc` |
+| 4  | `0x800828dc` | `0x81` | `0xb2` | `0x8008291c` | `0x7f` | `0xfc` |
+| 5  | `0x8008293c` | `0xc1` | `0xdf` | `0x8008295c` | `0x1a` | `0xfc` |
+
+Tile `0x7d` is half a cell of wall, `0x40a` thick and two cells high, and the
+cells either side of a level-0 door carry the same tile and shape: shut, the
+door is a stretch of the wall, drawn by the grid, and its model is not drawn
+at all. Tile `0xfc` is one `draw_terrain` skips: it calls `draw_tile` only
+for a tile under `0xf0` (`0x8003c1b8`).
+
+**Opening.** `object_interact` takes it through `find_object`'s plain test for
+any class past 2 (`0x80045f30`): `in_range(the door, the player 0x1f4 up, the
+type's +6 plus 0x320, the type's +8 as the door's top, 0x9c4 as the point's)`,
+then the door within `0x200` of the facing -- type `0xab` has `+6` = `0x5dc`
+and `+8` = `0xe00`. Its arm for classes 3 to 5 opens a door whose state is 0
+and whose lock byte `+0x38` is `0xff` (state 1); any other lock is "locked".
+
+**The lift** is one arm written out three times (`0x800470c4`, `0x80047290`,
+`0x80047444`), each with its pair of tables:
+
+```
+state 1         counter 0: sound, the tile table at sel 1 -- the wall tile
+                goes -- and the scale 0x1000, so the model is drawn instead;
+                counter += 0x48; at 0xc18 the shape table at sel 1 (passable);
+                from 0x1000 on, counter 0xfff and state 2
+state 2..0x13   state += 1: eighteen frames standing open
+state 0x14      collide_query(x, y, z, 0x700, 0xc80, 0xc0) clear: the shape
+                table at sel 0 (solid), state 0x15, sound; else wait
+state 0x15      counter -= 0x48; at 0 or under: the tile table at sel 0, the
+                counter, the state and the scale 0
+```
+
+57 frames up, the doorway passable from the 43rd; eighteen standing; 57 down,
+solid from the first. `collide_query` with 0xc0 asks `actor_in_range`
+(`0x8004d838`: the first awake creature, but for model `0x6e`, in range at its
+radius + `0x700`) and `player_in_range` (`0x700 + 0x320`, the body `0x6a4` as
+its top), and only where the door's cell has an occupancy count -- which it
+has whenever either answer could be yes, since the player marks every cell
+within `0x320 + 0x800` of itself and a creature within its radius + `0x800`.
+
+**The model moves by animation.** `render_walk` draws the record through
+`draw_model_plain` (its `+3` is 3: neither `0x40` nor `8`) and hands it the
+record's `+1` as the animation and the counter `+0xa` as the clock -- the
+stack arguments `0x1c` and `0x20` of the call at `0x800414a4`, which the
+routine passes on to `0x800431e8` exactly as it does a creature's. Model 299
+(MO.T, type `0xab + 0x80`) has one animation, a single segment of `0x1000`
+blending towards pose 0, which names vertices 0 to 11 -- the slab -- `0xf80`
+higher and skips the frame. So the counter is how far up the slab is.
+
+**In the port** (`godot/doors.gd`): the cells each door's tile table rewrites
+are left out of the level mesh and built as a node of their own, `tNNN`
+(`tools/level3d.py lift_tiles`), shown while their tile is one `draw_terrain`
+draws; the model is `lNNN` in the objects, with the vertices unturned so
+`godot/anim.gd` can pose them, shown while the scale is not 0; and the shapes
+go into the collision cells. `tools/doors.py lift_step` is the arm in Python;
+`godot/selftest.gd` holds the port to it (273 of 273 frames, a door let drop
+at once and one held open), and `emu/bp27.lua` records the real thing for
+`tools/doors.py` to replay -- not yet recorded.
+
 ### What makes an object solid — found
 
 `collide_query` takes a mask, and bit `0x20` of it means "test the objects".

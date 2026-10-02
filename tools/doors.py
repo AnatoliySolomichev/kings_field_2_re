@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """The swinging door's arm, and the recording it is checked against.
 
-    python3 tools/doors.py            the check, with the frames that differ
-    python3 tools/doors.py --check    the check alone
+    python3 tools/doors.py            the checks, with the frames that differ
+    python3 tools/doors.py --check    the checks alone
+
+The swinging doors against emu/bp24.lua, and the lift doors (opcodes 3 to 5,
+lift_step) against emu/bp27.lua.
 
 `object_interpreter`'s arm for opcode 1 (`0x8004814c`) runs once a frame for
 every class-1 door, and `godot/doors.gd` is its port; this is the same arm in
@@ -82,6 +85,215 @@ def step(d, player, grid_stamp):
     d["state"] = 0
 
 
+# -- the doors that lift ----------------------------------------------------
+#
+# Opcodes 3, 4 and 5 are one arm written out three times (0x800470c4,
+# 0x80047290, 0x80047444), each with its own pair of stamp_table tables -- the
+# ones load_object_placement stamps shut at load (objload.DOOR_TABLES): the
+# first sets the doorway's collision shape, the second its drawn tile. Both
+# name two cells, the door's own and the one behind it, (0, 0) and (0, -1)
+# turned by the yaw, and write layer 1 -- the drawn one -- when the record's
+# b0 is not 1:
+#
+#   op 3   shape 0x81 shut, 0xb2 open (0x800828dc)   tile 0x7d (0x800828fc)
+#   op 4   the same shapes                           tile 0x7f (0x8008291c)
+#   op 5   shape 0xc1 shut, 0xdf open (0x8008293c)   tile 0x1a (0x8008295c)
+#
+# and the open tile is 0xfc, which draw_terrain does not draw. So a lift door is a
+# piece of wall until it moves: the grid draws it, and the model only takes
+# over while it moves or stands open.
+LIFT_OPS = (3, 4, 5)
+LIFT_RATE = 0x48          # the counter a frame, up and down
+LIFT_PASSABLE = 0xC18     # the counter at which the doorway is stamped open
+LIFT_OPEN = 0xFFF         # where it stops
+LIFT_WAIT = 0x14          # the state it counts up to while standing open
+LIFT_CLEAR = (0x700, 0xC80)   # collide_query's radius and height, flags 0xc0
+
+
+def lift_stamps(ld, r):
+    """(shape table, tile table), each [(cx, cz, the entry's 8 bytes)], for a
+    lift door -- stamp_table's cells worked out once, as objload does them."""
+    import objload
+    c, s = movement.game_cos(r["angles"][1]), movement.game_sin(r["angles"][1])
+    out = []
+    for tb in objload.DOOR_TABLES[r["op"]]:
+        rows, e = [], tb
+        while ld.exe.bytes(e, 1)[0] != 0xFF:
+            ent = ld.exe.bytes(e, 10)
+            ddx, ddz = objload.s8(ent[8]), objload.s8(ent[9])
+            rows.append((((ddx * c - ddz * s) >> 12) + (r["x"] >> 11),
+                         ((ddz * c + ddx * s) >> 12) + (r["z"] >> 11),
+                         bytes(ent[:8])))
+            e += 10
+        out.append(rows)
+    return out
+
+
+def lift_step(d, clear, stamp):
+    """One frame of the arm (0x800470c4) on `d` (state, counter, scale);
+    `clear()` is collide_query's answer about the doorway, `stamp(table, sel)`
+    lays table 0 (the shape) or 1 (the tile) down at `sel`."""
+    st = d["state"]
+    if st == 0:
+        return
+    if st == 1:
+        if d["counter"] == 0:
+            stamp(1, 1)                        # the tile away: the model shows
+            d["scale"] = 0x1000
+        d["counter"] = (d["counter"] + LIFT_RATE) & 0xFFFF
+        if d["counter"] == LIFT_PASSABLE:
+            stamp(0, 1)
+        if d["counter"] >= 0x1000:
+            d["counter"], d["state"] = LIFT_OPEN, 2
+        return
+    if st == LIFT_WAIT:
+        if clear():
+            stamp(0, 0)                        # solid again, before it drops
+            d["state"] = 0x15
+        return
+    if st == 0x15:
+        d["counter"] = (d["counter"] - LIFT_RATE) & 0xFFFF
+        if d["counter"] and d["counter"] < 0x8000:
+            return
+        stamp(1, 0)                            # the tile back, the model gone
+        d["counter"] = d["state"] = d["scale"] = 0
+        return
+    d["state"] = (st + 1) & 0xFFFF
+
+
+def lift_clear(d, player, creatures=()):
+    """collide_query(x, y, z, 0x700, 0xc80, 0xc0) is 0: no awake creature
+    in_range of the doorway at its radius + 0x700 (actor_in_range, 0x8004d838)
+    and the player not within 0x700 + 0x320 (player_in_range). The cell's
+    occupancy count, which the query looks at first, needs no asking: the
+    player marks every cell within 0x320 + 0x800 of itself and a creature
+    within its radius + 0x800, which covers every point either can be in range
+    from."""
+    r, own = LIFT_CLEAR
+    for a in creatures:
+        if movement.in_range(a[:3], d["x"], d["y"], d["z"], a[3] + r, a[4],
+                             own) != -1:
+            return False
+    return player is None or movement.in_range(
+        player, d["x"], d["y"], d["z"], r + PLAYER_R, PLAYER_BODY, own) == -1
+
+
+def lift_cycle(wait=0, frames=None):
+    """A lift door's run from USE, as [(state, counter, scale, shape, tile)]
+    after each frame, with the doorway taken for `wait` frames of state 0x14:
+    the cases godot/selftest.gd holds doors.gd to."""
+    d = {"state": 1, "counter": 0, "scale": 0}
+    sel = [0, 0]
+    rows = []
+    held = [wait]
+
+    def clear():
+        if held[0] > 0:
+            held[0] -= 1
+            return False
+        return True
+
+    def stamp(t, v):
+        sel[t] = v
+    for _ in range(frames or 200):
+        lift_step(d, clear, stamp)
+        rows.append((d["state"], d["counter"], d["scale"], sel[0], sel[1]))
+        if d["state"] == 0:
+            break
+    return rows
+
+
+LIFT_LINE = re.compile(r"vb=(\d+) slot=(\d+) op=(\d+) st=(\d+) ctr=(\d+) "
+                       r"scale=(\d+) pos=(-?\d+) (-?\d+) (-?\d+) "
+                       r"cells=(-?\d+),(-?\d+) (-?\d+),(-?\d+)")
+
+
+def lift_load(path=None):
+    path = path or os.path.join(ROOT, "out", "lua_bp27.log")
+    rows = []
+    if not os.path.exists(path):
+        return rows
+    for line in open(path):
+        m = LIFT_LINE.match(line)
+        if m:
+            g = [int(x) for x in m.groups()]
+            rows.append({"vb": g[0], "slot": g[1], "op": g[2], "st": g[3],
+                         "ctr": g[4], "scale": g[5], "p": (g[6], g[7], g[8]),
+                         "cells": ((g[9], g[10]), (g[11], g[12]))})
+    return rows
+
+
+def lift_check(out=sys.stdout, verbose=False):
+    """emu/bp27.lua's lines, a step at a time: the logged door and player
+    through lift_step, against the next line of the same slot -- state,
+    counter, scale, and the tile and shape of the door's two cells."""
+    rows = lift_load()
+    if not rows:
+        print("  no out/lua_bp27.log: ./emu/run.sh debug bp27.lua, open a lift door",
+              file=out)
+        return True
+    import objload
+    ld = objload.Load(0)
+    by = {}
+    for r in rows:
+        by.setdefault(r["slot"], []).append(r)
+    ok = bad = used = 0
+    for slot, rs in sorted(by.items()):
+        rec = ld.recs.get(slot)
+        if rec is None or rec["op"] not in LIFT_OPS:
+            continue
+        tables = lift_stamps(ld, rec)
+        # the entry's first shape and tile bytes go to layer 1 unless b0 is 1;
+        # the log carries layer 1's tile and shape
+        k1 = 0 if rec["b0"] != 1 else 1
+        order = [(x, z) for x, z, _q in tables[0]]
+        for a, b in zip(rs, rs[1:]):
+            if a["st"] == 0:
+                used += b["st"] == 1            # object_interact, on USE
+                continue
+            d = {"state": a["st"], "counter": a["ctr"], "scale": a["scale"],
+                 "x": rec["x"], "y": rec["y"], "z": rec["z"]}
+            cells = {xz: list(v) for xz, v in zip(order, a["cells"])}
+
+            def stamp(t, sel, cells=cells, tables=tables):
+                for x, z, q in tables[t]:
+                    c = cells.get((x, z))
+                    if c is None:
+                        continue
+                    k = sel * 4 + k1
+                    if q[k] != 0xFC:
+                        c[1] = q[k]
+                    if q[k + 2] != 0xFF:
+                        c[0] = q[k + 2]
+            lift_step(d, lambda d=d, a=a: lift_clear(d, a["p"]), stamp)
+            got = (d["state"], d["counter"], d["scale"],
+                   tuple(tuple(cells[xz]) for xz in order))
+            want = (b["st"], b["ctr"], b["scale"], b["cells"])
+            if got == want:
+                ok += 1
+            else:
+                bad += 1
+                if verbose:
+                    print(f"  slot {slot} vb {a['vb']}: model {got}, game {want}",
+                          file=out)
+    print(f"  {ok} of {ok + bad} steps of a lift door reproduced -- state, counter, "
+          f"scale and its two cells' tile and shape; opened {used} times by USE",
+          file=out)
+    return bad == 0
+
+
+def export(out_dir):
+    """liftcheck.json: lift_cycle's frames for godot/selftest.gd, a door let
+    shut at once and one kept open by something in its doorway."""
+    import json
+    runs = [{"wait": w, "frames": [list(f) for f in lift_cycle(w)]}
+            for w in (0, 7)]
+    path = os.path.join(out_dir, "liftcheck.json")
+    with open(path, "w") as fh:
+        json.dump({"runs": runs}, fh, separators=(",", ":"))
+    return path
+
+
 def load(path=None):
     path = path or os.path.join(ROOT, "out", "lua_bp24.log")
     rows = []
@@ -156,4 +368,7 @@ def check(out=sys.stdout, verbose=False):
 
 
 if __name__ == "__main__":
-    sys.exit(0 if check(verbose="--check" not in sys.argv) else 1)
+    v = "--check" not in sys.argv
+    a = check(verbose=v)
+    b = lift_check(verbose=v)
+    sys.exit(0 if a and b else 1)

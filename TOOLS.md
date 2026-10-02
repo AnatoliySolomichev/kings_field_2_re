@@ -616,6 +616,23 @@ and close again once nobody is in the doorway (`godot/doors.gd`). Each is its
 own node in `objectsNN.gltf`, `dNNN` by slot, and `doorsNN.json` carries what
 the swing needs. `emu/bp24.lua` records a door frame by frame for checking it.
 
+The five lift doors of level 0 (opcodes 3 to 5, FORMATS.md "A door that
+lifts") open with USE too: the wall drawn by the grid gives way to the door's
+model, which rises by its animation, the doorway's collision opens at counter
+0xc18, and after eighteen frames standing it drops once the doorway is clear.
+The cells each door's tile table rewrites are a node of their own in
+`levelNN.gltf`, `tNNN` by slot; the model is `lNNN` in `objectsNN.gltf`; both
+sit in `doorsNN.json` with the cells and bytes of the two stamp tables.
+
+```
+python3 tools/doors.py              both kinds against the recordings, with what differs
+python3 tools/doors.py --check      the counts alone
+./emu/run.sh debug bp27.lua         a lift door frame by frame, into out/lua_bp27.log
+```
+
+`tools/doors.py lift_step` is the arm, and `godot/selftest.gd` holds the
+port to it (273 of 273 frames). Against the game it waits on a bp27 log.
+
 **The sky in the port.** `level3d.py` writes the level's class-0xf0 object --
 the dome, model 44 of the resident bank -- as `skyNN.gltf`, and its class-0xe3
 zones as `skyNN.json`; `godot/sky.gd` keeps the dome on the camera, behind

@@ -58,6 +58,15 @@ def export(lv, out="out/godot"):
             # the creatures (tools/ai.py fenced); bit 0 layer 0, bit 1 layer 5
             fence.append((1 if c[4] & 0x40 else 0) | (2 if c[9] & 0x40 else 0))
 
+    # The shapes a lift door stamps when it opens are nowhere in the grid until
+    # it does (tools/doors.py): 0xb2 and 0xdf.
+    import objload
+    import doors
+    ld = objload.Load(lv)
+    for r in ld.recs.values():
+        if r["op"] in doors.LIFT_OPS:
+            for _cx, _cz, q in doors.lift_stamps(ld, r)[0] + doors.lift_stamps(ld, r)[1]:
+                used.update(b for b in (q[0], q[1], q[4], q[5]) if b != 0xFC)
     shapes = {}
     tail, offs = tiles.table(lv)
     for sid in sorted(used):

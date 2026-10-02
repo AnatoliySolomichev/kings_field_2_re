@@ -413,10 +413,12 @@ What is left of movement:
    the other 129 arms of actor_animation_effects and of effect_tick, and the
    lighting class an effect is drawn with.
    **The player hits back too** (tools/weapon.py, godot/weapon.gd): the swing,
-   the probe, the damage, the flinch, the dying and the push -- read, not yet
-   recorded; `emu/bp25.lua` records it. Left: the bows (0x1b, 0x1c), the
-   spells a swing can carry (+3, +4), phase 1, the drops a death leaves, and a
-   visible weapon.
+   the probe, the damage, the flinch, the dying and the push -- checked against
+   `emu/bp25.lua`'s recording (817 of 817 frames). The weapon in the hand is
+   drawn too (`godot/held.gd`, FDAT entry 0x62 + the weapon, animated by the
+   swing). Left: the bows (0x1b, 0x1c), the spells a swing can carry (+3, +4),
+   phase 1, the drops a death leaves, and the lighting class the hand is drawn
+   with.
 4. **The door shoves the player — found.** The X writes `emu/bp15.lua` caught
    at `0x800482e4` are the swinging door (opcode 1, `0x8004814c`): while it
    opens and the player is in its sweep it adds (0, 0, -0x4c) turned by its
@@ -518,20 +520,16 @@ it would open:
 
 * **class 0x02, 128 objects** -- `stamp_rect` from `p[+0x13] + 2w`, marked with
   radius 0x1130; its arm is not read.
-* **the grid-drawn doors, classes 0x03 to 0x05 (82) and 0x54 (7)** --
-  `stamp_table` writes their walls and tiles at load; opening one is their arms
-  writing the table's other half (`sel` 1), which means the level geometry has
-  to change at run time too, not only the collision. **Opcode 3's arm is read**
-  (`0x800470c4`, five on level 0): state 1 counts +0xa up by 0x48 a frame; at 0
-  it stamps table `0x800828fc` open, sounds, and sets the scale to 0x1000 so
-  the door's model shows; at 0xc18 it stamps `0x800828dc` open; past 0xfff it
-  is open (state 2), counts to 0x14, then waits for `collide_query(.., 0x700,
-  0xc80, 0xc0)` to be clear, stamps `0x800828dc` shut and counts back down by
-  0x48, stamping `0x800828fc` shut and zeroing the scale at the bottom. The
-  counter goes to `draw_model_plain` as an animation frame, through
-  `sub_800431e8` -- the model animation system, unread and the next thing
-  this needs, with the tiles changing under a door the port draws as one
-  static mesh.
+* **the lift doors, classes 0x03 to 0x05 -- read and in the port** (FORMATS.md,
+  "A door that lifts"): five on level 0 and one on level 8, all six in the game
+  as `tools/objload.py` reads the twelve levels. Shut, each is a stretch of
+  wall the grid draws; its arm swaps the wall tile for its animated model,
+  lifts it 57 frames, stamps the doorway passable at 0xc18, stands eighteen
+  frames, waits for the doorway to clear and drops. `godot/doors.gd` does all
+  of it, with the door's cells as a node of their own. **Not yet recorded**:
+  `emu/bp27.lua` is written and `tools/doors.py` replays its log.
+* **class 0x54 (one on level 0)** -- `stamp_table` from `0x8008288c + 40 *
+  (2 * tr[+0xe] + (p[+0x16] & 1))` at load; its arm is not read.
 * **classes 0x00 (12) and 0x1b (23)**, `find_object` points 0x700 in front of or
   behind them; 11 of the 12 class-0 doors carry lock byte `0x8c`, a key.
 * **keys and messages**: a lock byte other than 0xff, 0xfd or 0xfe is either an
@@ -655,6 +653,8 @@ each one is also in its function's marker, as `partial` and what differs:
   `view_bits_at`), so a spore in a cell the game would not draw is drawn.
 * **The "Program Loading" card's rectangle** in `opening.gd` was not checked
   against the primitive `open_main+0x3e4` fills.
+* **The lift doors' "drawn" test** is `draw_terrain`'s (`0x8003c1b8`), not
+  `draw_tile`'s as the comment on `DRAWN` in `doors.gd` says.
 * **One routine, several copies.** `in_range` is written three times
   (`collision.gd`, `doors.gd`, `actors.gd`), `facing_test` and
   `kind_behaviour_with_op` twice. Each copy is marked, and the self-test would

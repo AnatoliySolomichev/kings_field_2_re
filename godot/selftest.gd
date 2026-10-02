@@ -278,6 +278,9 @@ func _init() -> void:
 	if not _spores():
 		quit(1)
 		return
+	if not _lifts():
+		quit(1)
+		return
 	if not _equip():
 		quit(1)
 		return
@@ -514,6 +517,46 @@ func _spores() -> bool:
 				break
 	fx.free()
 	print("spores: %d of %d frames of bp26's spores match tools/effects.py" % [n - bad, n])
+	if bad > 0:
+		print("  first difference: " + first)
+	return bad == 0
+
+
+# The lift doors' arm, doors.gd's lift_step against tools/doors.py
+# lift_cycle: state, counter, scale and which half of each table is down,
+# frame by frame from USE, shut at once and kept open seven frames.
+func _lifts() -> bool:
+	if not FileAccess.file_exists("res://liftcheck.json"):
+		print("lift doors: no cases to check against")
+		return true
+	var doc = JSON.parse_string(FileAccess.get_file_as_string("res://liftcheck.json"))
+	var script = load("res://doors.gd")
+	var n := 0
+	var bad := 0
+	var first := ""
+	for run in doc["runs"]:
+		var d := {"state": 1, "counter": 0, "scale": 0}
+		var sel := [0, 0]
+		var held := [int(run["wait"])]
+		var clear := func() -> bool:
+			if held[0] > 0:
+				held[0] -= 1
+				return false
+			return true
+		var stamp := func(t: int, v: int) -> void:
+			sel[t] = v
+		for want in run["frames"]:
+			script.lift_step(d, clear, stamp)
+			var got := [int(d["state"]), int(d["counter"]), int(d["scale"]), sel[0], sel[1]]
+			var w := []
+			for v in want:
+				w.append(int(v))
+			n += 1
+			if got != w:
+				bad += 1
+				if first == "":
+					first = "frame %d: godot %s python %s" % [n, str(got), str(w)]
+	print("lift doors: %d of %d frames match tools/doors.py" % [n - bad, n])
 	if bad > 0:
 		print("  first difference: " + first)
 	return bad == 0

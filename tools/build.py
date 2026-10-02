@@ -139,8 +139,8 @@ def main(quick=False, only_check=False):
         "the creatures' behaviours, against every snapshot's RAM",
         keep=["bytes of the kinds", "runs of one behaviour", "creature frames stepped"])
     run(["tools/doors.py", "--check"],
-        "the swinging door, against what was played",
-        keep=["steps of a moving door"])
+        "the swinging and the lift doors, against what was played",
+        keep=["steps of a moving door", "steps of a lift door", "no out/lua_bp27"])
     run(["tools/weapon.py", "--check"],
         "the creatures' HP and the player's weapon, against snapshots and bp25",
         keep=["awake creatures", "frames of the weapon", "blows landed"])

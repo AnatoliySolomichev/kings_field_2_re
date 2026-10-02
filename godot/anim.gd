@@ -142,8 +142,10 @@ static func skin(node: Node3D, model: int) -> Dictionary:
 				var key := Vector3i(roundi(v.x * 1000.0), roundi(-v.y * 1000.0),
 					roundi(-v.z * 1000.0))
 				idx[i] = where.get(key, -1)
+			# the active material: scroll.gd may have put its shader over the
+			# imported one, and a new mesh on the node drops the override
 			surfaces.append({"arrays": arrays, "idx": idx,
-				"material": mesh.surface_get_material(s)})
+				"material": (mi as MeshInstance3D).get_active_material(s)})
 		(mi as MeshInstance3D).mesh = own
 		parts.append({"mesh": own, "surfaces": surfaces})
 	return {"model": model, "parts": parts, "anim": -1, "clock": -1}

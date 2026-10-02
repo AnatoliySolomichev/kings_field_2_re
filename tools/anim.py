@@ -251,13 +251,27 @@ def check(out=sys.stdout):
 
 def export(out_dir, lv=0):
     """animNN.json for godot/anim.gd: each animated model the level's creatures
-    use -- its vertices, animations and poses -- and cases for selftest.gd."""
+    and lift doors use, and the weapon's -- its vertices, animations and poses
+    -- and cases for selftest.gd."""
     import json
     import actors
     doc = {"_note": "MO.T entries as 0x800431e8 reads them; tools/anim.py",
            "models": {}, "cases": []}
     wanted = [(m, None) for m in sorted({a["model"] for a in actors.table(lv) if a})]
     wanted.append((WEAPON_KEY + 0, 0))          # the weapon a new character holds
+    # and the lift doors' models, which draw_model_plain animates by the
+    # door's counter (tools/doors.py, level3d.build_lifts)
+    try:
+        import objload
+        import doors
+        import level3d
+        ld = objload.Load(lv)
+        for m in sorted({level3d.lift_model(r["type"], lv) for r in ld.recs.values()
+                         if r["op"] in doors.LIFT_OPS}):
+            if (m, None) not in wanted:
+                wanted.append((m, None))
+    except Exception:
+        pass
     for m, w in wanted:
         try:
             mo = load(m) if w is None else load_weapon(w)
