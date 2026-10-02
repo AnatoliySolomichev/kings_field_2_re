@@ -16,7 +16,9 @@ The three numbers at the end are the ones that say whether anything is broken:
 
   * every logged call `tile_collision` made, reproduced;
   * every frame of the movement recording, reproduced by the GDScript copy;
-  * every marker in the port resolving to a routine the walk found.
+  * every function in the port placed against the game -- an `@orig` that
+    resolves under the symbol table's own name, or an `@port` -- and every
+    address the port cites carrying its executable.
 
 A step that cannot run -- no disc, no Godot -- says so and does not stop the
 rest, because most of this works from the disc alone and some of it does not
@@ -164,8 +166,8 @@ def main(quick=False, only_check=False):
     run(["tools/quest.py", "--check"],
         "the conversation hooks, two readings of the same table",
         keep=["agree"])
-    run(["tools/portmap.py"], "the port's markers",
-        keep=["markers", "resolve", "broken"])
+    run(["tools/portmap.py"], "the port, function by function, against the game",
+        keep=["functions in", "markers,", "every function", "problems", "godot/"])
     if not quick and not only_check:
         print("\nThe Godot build")
         run(["tools/level3d.py", "0"], "level 0",

@@ -555,9 +555,13 @@ def render(w, fn, out=sys.stdout, const_names=None, raw=False, portmap=None):
     ent = syms.table(fn.nick).get(fn.addr)
     if ent and ent.get("evidence"):
         print(f"   {ent['evidence']}", file=out)
-    p = (portmap or {}).get(f"{fn.nick}:{fn.addr:#010x}")
-    if p:
-        print(f"   port: {p}", file=out)
+    try:
+        import portmap as _pm
+        head, _inline = _pm.listing_notes(portmap, fn.nick, fn.addr, fn.end)
+    except Exception:
+        head = []
+    for h in head:
+        print(f"   {h}", file=out)
     print(f"   frame {size:#x}"
           + (f", saves {' '.join('$' + s for s in saved)}" if saved else "")
           + " */", file=out)
@@ -596,7 +600,7 @@ if __name__ == "__main__":
         pass
     try:
         import portmap as _p
-        pm = _p.by_address()
+        pm = _p.listing_index()
     except Exception:
         pass
     w = rdis.build(nick)

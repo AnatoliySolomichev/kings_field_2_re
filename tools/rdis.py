@@ -958,9 +958,13 @@ def render(w, fn, out=sys.stdout, const_names=None, portmap=None):
     for tb in fn.tables:
         print(f"; switch at {tb['at']:#010x}: {len(tb['targets'])} arms from "
               f"{tb['base']:#010x}, bound read off the {tb['bound']}", file=out)
-    p = (portmap or {}).get(f"{fn.nick}:{fn.addr:#010x}")
-    if p:
-        print(f"; port: {p}", file=out)
+    try:
+        import portmap as _pm
+        head, inline = _pm.listing_notes(portmap, fn.nick, fn.addr, fn.end)
+    except Exception:
+        head, inline = [], {}
+    for h in head:
+        print(f"; {h}", file=out)
     print(line, file=out)
 
     def sym(a):
@@ -981,6 +985,8 @@ def render(w, fn, out=sys.stdout, const_names=None, portmap=None):
         c = comment(w, fn, i, refs, consts, None)
         if a in chains:
             c = (c + "  " if c else "; ") + ", ".join(chains[a])
+        if a in inline:
+            c = (c + "  " if c else "; ") + inline[a]
         txt = i.fmt(sym)
         print(f"  {a:#010x}  {txt:<38s}{c}".rstrip(), file=out)
         prev = a
@@ -1242,7 +1248,7 @@ if __name__ == "__main__":
         pass
     try:
         import portmap as _p
-        pm = _p.by_address()
+        pm = _p.listing_index()
     except Exception:
         pass
 
