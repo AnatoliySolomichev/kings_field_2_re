@@ -2755,6 +2755,58 @@ several heights end the same way, and the snapshot does not say which creature
 it was. In the port, killing creature 27 leaves 18 gold in slot 350 and the key
 in 370, at rest with 75 and 68 on its floor.
 
+### The menus, as they are drawn
+
+Every menu screen is built out of a few routines that file sprites and
+POLY_FT4s into the ordering table, against static descriptors at `0x8007e564`
+onwards -- 12 bytes each: texture page, CLUT, u, v, width, height. GAME.EXE's
+`$gp`, which its header leaves 0, is **`0x8009c214`**: the menu snapshots hold
+the colours their frames carry at gp + 0x58 (0x78, the boxes), + 0x5c..0x64
+(0x80, the text) and + 0x68 (0x30, the shadow).
+
+```
+ui_draw_label    a DR_TPAGE at depth 4; each glyph g twice, at (x - 1, y - 1)
+                 in the text colour at depth 2 and at (x, y) in the shadow's
+                 at depth 3; 7 apart, 7 x 15 cells of page 29, u = (g & 15) * 8,
+                 v = (g >> 4) * 15. The glyphs are the game's alphabet, a..z 0..25
+ui_draw_number   the same from a column at u 238: codes under 11 at v = 15 * c,
+                 the rest at u 245 (0x13 is the 'x' of "x 2")
+ui_label_plate   a quad of the record's size at (x - 6, y - 6), depth 50
+ui_frame         pieces 9..17 of 0x8007e588: 33-square corners, edges in 28s
+                 and what is left; top row, bottom row, middle rows 28 high --
+                 a frame lower than 66 draws one middle row at a negative
+                 height, flipped, over the top row's foot. Depth 50
+ui_panel         a list: the title and its plate, the rows from (x + 13,
+                 y + 8 + 16 * row), the mode's columns (1: "x N" at x + 0xe9),
+                 the frame of 0x10a by rows * 16 + 12, the selected row's bar
+                 (piece 8, depth 49) pulsing with gp + 0x4c, and the legend --
+                 ui_button (16-square, page 28) and ui_small_text (8 x 8 ASCII)
+```
+
+Order is the ordering table's: the deeper drawn first, and within a depth the
+one filed last first. **`tools/ui.py` draws the "use item" screen this way and
+reproduces its 116 2D primitives in both buffers of `inv1` and `inv2` exactly**
+-- read back by `tools/gpuframe.py`.
+
+**Using a thing.** The menu (`pause_menu`, on the menu button while no swing
+is under way) offers use item, use magic, equipment, status/records, storage
+and system. "Use item" (`0x8001aa84`) lists the things 95..149 in inventory_a
+(`item_list`); choosing one of 104..120 eats it (`item_consume`, `0x8001b254`):
+
+| thing | |
+|---|---|
+| earth herb | HP + 50 |
+| antidote | the poison gone, HP + 15 |
+| herbal liquid | HP to the full |
+| dragon crystal | HP and MP to the full |
+| blood stone | clears 0x801b2568, holds turn_slow_timer to 0x40 |
+| moon stone | MP + 40 |
+| blue potion | HP + 100, a crystal flask back |
+| gold potion | HP + 200, MP + 100, a crystal flask back |
+
+and then `use_item` runs for it, whose last step is the level's own entry 2
+and, when nothing has answered, "Nothing Happens".
+
 ### The banners
 
 `announce` (`0x80041eec`) queues a code under `0xf0` in a ring of eight

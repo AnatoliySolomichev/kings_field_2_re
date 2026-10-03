@@ -142,6 +142,9 @@ def main(quick=False, only_check=False):
         "the swinging and the lift doors, against what was played",
         keep=["steps of a moving door", "steps of a lift door", "more at 0x14",
               "held by a creature", "doorway answers", "no out/lua_bp27"])
+    run(["tools/ui.py", "--check"],
+        "the menus' drawing, against the menu snapshots' frames",
+        keep=["primitive for primitive"])
     run(["tools/talk.py", "--check"],
         "the conversations a USE at a time, against what was played",
         keep=["recorded conversations", "calls bp21 caught"])

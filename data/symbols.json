@@ -1986,7 +1986,7 @@
  "0x80025468": {
   "name": "ui_panel",
   "kind": "code",
-  "evidence": "sixteen callers, every menu screen among them shop_buy and shop_sell; draws through ui_prim_begin/quad/add and 0x800261dc/0x8002636c against static descriptors at 0x8007e564 and 0x8007e570 -- the panel every screen is built out of"
+  "evidence": "(list, mode): the list every menu screen is built of -- its title (ui_label_plate and the label), its rows' names from x + 13 and y + 8 + 16 * row, the columns the mode asks for (mode 1 the count at x + 0xe9 as 'x N'), ui_frame(x, y, 0x10a, rows * 16 + 12), the selected row's bar (record 8, depth 49, its colour pulsing with gp+0x4c) and the button legend (ui_button, ui_small_text: select, guide, return -- or select and return for modes 3, 8, 9, 12 and the 0x8000 flag). tools/ui.py reproduces the use-item screen's 116 primitives in inv1 and inv2"
  },
  "0x800222fc": {
   "name": "ui_menu_chrome",
@@ -2141,7 +2141,7 @@
  "0x80027688": {
   "name": "ui_menu_label",
   "kind": "code",
-  "evidence": "(dest, page, line): copies 16 bytes from 0x8007e67c + 252*page + 28*line + 4 into dest+4 and writes 31 and 32 as two halfwords at dest+0 and dest+2. The table is 28-byte records -- u16 x, u16 y, then a 0x7f-terminated string in the game’s own glyph alphabet, not ASCII. Fifteen callers"
+  "evidence": "(dest, page, line): writes 31 and 32 at dest+0 and +2, copies 16 bytes of the label from 0x8007e67c + 252*page + 28*line + 4 to dest+4, and sets the list the label heads: x 27 (+0x1c), y 147 (+0x1d), 3 rows (+0x1f), 24-letter names (+0x23), the count, first, selected index and row (+0x1e, +0x20..+0x22) 0, and the quantity gp+0x48 to 1. tools/ui.py"
  },
  "0x8007e67c": {
   "name": "ui_label_table",
@@ -2867,5 +2867,50 @@
   "name": "drop_count_carried",
   "kind": "data",
   "evidence": "spawn_thing's count for ring 0 (slots 370..379), what a category-1 creature carried"
+ },
+ "0x8002636c": {
+  "kind": "code",
+  "name": "ui_draw_number",
+  "evidence": "(style, label): ui_draw_label for numbers -- a code under 11 from the style's column at v = 15 * code, the rest 7 to the right at v = 15 * (code - 11); the 'x' of number_digits' mode 1 is 0x13. tools/ui.py"
+ },
+ "0x80025f38": {
+  "kind": "code",
+  "name": "ui_label_plate",
+  "evidence": "(record, label): the plate under a label -- a POLY_FT4 of the record's size at (x - 6, y - 6), in the boxes' colour gp+0x58, semi-transparent by 0x801b25e4, at depth 50"
+ },
+ "0x80026acc": {
+  "kind": "code",
+  "name": "ui_frame",
+  "evidence": "(x, y, w, h): a frame out of the pieces 9..17 at 0x8007e588 -- 33-square corners, 28-long edges, the last piece of a run cut to what is left -- top row, bottom row, then middle rows 28 high; a frame lower than 66 draws one middle row at a negative height, h - 66, flipped. Depth 50. tools/ui.py"
+ },
+ "0x800269c0": {
+  "kind": "code",
+  "name": "ui_button",
+  "evidence": "(x, y, button): a 16-square button out of page 28 (record 3 at 0x8007e588), u = 16 * button, coloured 0x70 plus half the brightness above 0x80, at depth 6"
+ },
+ "0x80026570": {
+  "kind": "code",
+  "name": "ui_small_text",
+  "evidence": "(x, y, ascii, shadow, row): lower-case ASCII in 8x8 letters of page 28 (0x8007e57c), u = 8 * (c - 'a'), at depth 5 -- with a shadow at depth 6 when shadow is set"
+ },
+ "0x8001aea4": {
+  "kind": "code",
+  "name": "item_list",
+  "evidence": "(inventory, names, counts, ids; first, last on the stack): the things first..last with a count in the inventory -- their 24-byte names from 0x8007f620, their counts and ids. The use-item screen asks for 95..149"
+ },
+ "0x8001aa84": {
+  "kind": "code",
+  "name": "menu_use_item",
+  "evidence": "the 'use item' screen: item_list of inventory_a 95..149 under ui_menu_label(0, 0), ui_menu_chrome for the pad, ui_panel(list, 1) with the counts, the selected thing's model through 0x80025be8; maps and notes (95..100) open a view of their own, the healing things 104..120 are eaten by 0x8001b254, and the id goes back to pause_menu for use_item. tools/ui.py draws its 2D part as the game does, inv1 and inv2"
+ },
+ "0x8001b254": {
+  "kind": "code",
+  "name": "item_consume",
+  "evidence": "(id): eats a thing out of inventory_a: earth herb HP +50, antidote the poison and HP +15, herbal liquid HP to the full, the dragon crystal HP and MP to the full, the blood stone clears 0x801b2568 and holds turn_slow_timer to 0x40, the moon stone MP +40, the blue potion HP +100, the gold potion HP +200 and MP +100 -- held to the maxima; one less of it, a crystal flask back for a potion, ui_sound(9). Verdite and the crystals are not eaten here"
+ },
+ "0x8009c214": {
+  "name": "gp_base",
+  "kind": "data",
+  "evidence": "GAME.EXE's $gp, which its header leaves 0: found in the menu snapshots, where gp+0x58..0x68 hold the colours the frame's primitives carry (0x78 the boxes, 0x80 the text, 0x30 the shadow) and gp+0x38..0x44 what the menu's opening (0x80027198) wrote for the brightness option; load_entry's rectangles at 0x8009c2d0 are gp+0xbc"
  }
 }

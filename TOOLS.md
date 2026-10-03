@@ -642,6 +642,17 @@ python3 tools/gpuframe.py inv1           both buffers, by kind
 python3 tools/gpuframe.py inv1 sprites   every sprite in drawing order
 ```
 
+**`ui.py`** -- the menus' drawing in Python, routine for routine: labels and
+numbers in the 7-wide font, the plates and the frames out of the pieces at
+`0x8007e588`, `ui_panel`'s lists, the button legend. It draws the "use item"
+screen's 116 2D primitives exactly as the game filed them in `inv1` and `inv2`
+(positions, UVs, CLUTs, pages, colours, depths and order), which is what the
+port's menu is held to.
+
+```
+python3 tools/ui.py            the use-item screen against both snapshots, both buffers
+```
+
 **The info window.** The port's own text -- the cell and the player's
 state, the buttons, the comparison with the emulator, and a log of what
 happens (creatures waking and struck, doors, chests, things taken, gold,
