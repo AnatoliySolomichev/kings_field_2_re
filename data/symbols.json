@@ -1796,12 +1796,12 @@
  "0x80081884": {
   "name": "skill_thresholds",
   "kind": "data",
-  "evidence": "five skills of six halfwords: 20, 35, 50, 65, 80, 0 for the first four and 10, 35, 50, 85, 115, 0 for the fifth. skill_unlock reads them"
+  "evidence": "five rows of six s16: 20, 35, 50, 65, 80 for skills 0..3, 10, 35, 50, 85, 115 for skill 4, each ended by a 0; skill_unlock reads them"
  },
  "0x800818c0": {
   "name": "skill_unlock_list",
   "kind": "data",
-  "evidence": "seven bytes per skill, each an index into spell_table, ended by 0xff. skill_unlock walks it to find what a threshold makes available"
+  "evidence": "five rows of seven spell numbers, 0xff ending each: what skill_unlock unlocks in turn -- skill 0 fire ball.., skill 4 light (29) first"
  },
  "0x8002deec": {
   "name": "cast_spell",
@@ -2927,5 +2927,10 @@
   "name": "status_labels",
   "kind": "data",
   "evidence": "ui_status_page copies its labels from here: EXPERIENCE (0x8007f350), LEVEL (+0x18), OFFENSE, DEFENSE, CONDITION (+0x60), the six conditions PARALYZE..NORMAL 24 apart from 0x8007f3c8, GOLD (0x8007f458) -- glyph codes, 0xff ending each"
+ },
+ "0x8002a10c": {
+  "name": "skill_practice",
+  "kind": "code",
+  "evidence": "(spell record): for k from 4 down with a bit from 0x10 down, where the spell's +5 has the bit, adds its +3 to a count at 0x801b250a + 2k; at 400 the count is 0 again and skill k rises: announce(0x12 + k), skill_unlock(k), player_recalc_stats. So group bit 1 << k is skill k"
  }
 }

@@ -1102,4 +1102,30 @@ func _levels() -> bool:
 				break
 	print("levels: %d of %d cases match tools/levelup.py exactly" % [
 		cases.size() - bad_l, cases.size()])
-	return bad_l == 0
+	var arms_ok := 0
+	var arms: Array = []
+	if FileAccess.file_exists("res://skillcheck.json"):
+		arms = JSON.parse_string(FileAccess.get_file_as_string("res://skillcheck.json"))["arms"]
+	for c in arms:
+		var st: Dictionary = (c["state"] as Dictionary).duplicate(true)
+		var flags := []
+		flags.resize(KFTalk.FLAG_COUNT)
+		flags.fill(0)
+		for k in 4:
+			flags[KFLevels.SKILL_FLAG + k] = int(c["flags"])
+		var r := KFLevels.use_arm(int(c["item"]), st, flags)
+		var spells := []
+		for i in st["spells"].size():
+			if int(st["spells"][i]) != 0:
+				spells.append(i)
+		var got := {"grow": st["grow"], "stat36": st["stat36"], "wis": st["wis"],
+			"spells": spells, "unlocked": flags.slice(KFLevels.SKILL_UNLOCKED, KFLevels.SKILL_UNLOCKED + 5),
+			"banners": r["banners"], "answered": r["answered"], "took": r["took"]}
+		if JSON.stringify(_norm(got)) == JSON.stringify(_norm(c["want"])):
+			arms_ok += 1
+		elif arms_ok == 0:
+			print("  first difference: item %d: godot %s python %s" % [int(c["item"]),
+				str(got), str(c["want"])])
+	print("skills: %d of %d uses of verdite, the fruits and the crystals match tools/levelup.py" % [
+		arms_ok, arms.size()])
+	return bad_l == 0 and arms_ok == arms.size()

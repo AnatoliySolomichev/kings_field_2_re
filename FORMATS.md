@@ -3295,10 +3295,34 @@ that fourth field is what all five are set to. And `award_exp` **tests a stat
 before it rolls for it**: a stat at zero is skipped.
 
 A level-1 snapshot has `[0, 0, 0, 0, 10]`, so one of the five is non-zero and
-the other four are not. Whatever sets that one — `sub_8002a10c` and `use_item`
-both write it — the consequence is that **the game has five skills and only ever
-grows one of them** — and since a skill that never grows never crosses a
-threshold, four fifths of the spell list is unreachable by levelling.
+the other four are not. `new_character` sets that one itself: `+10` on skill
+4 after the table's zero (`0x8002b56c`). So levelling only ever grows one of
+them -- and the others grow two other ways, both read now:
+
+* **Casting.** `skill_practice` (`sub_8002a10c`, given the spell's record)
+  goes through the five from 4 down with a bit from `0x10` down: where the
+  spell's group (`+5`) has bit `1 << k`, its `+3` is added to a practice
+  count at `0x801b250a + 2k`, and at 400 the count goes back to 0 and skill k
+  rises by one -- a banner (`0x12 + k`), `skill_unlock`, the stats again. So
+  **group bit `1 << k` is skill k**, and with the status page's icons: 1 fire,
+  2 earth, 4 water, 8 wind, `0x10` light. The unlock lists agree: skill 0's
+  is fire ball, fire wall, fire storm, flame, thedek; skill 2's has haze and
+  bortecth; skill 3's wind cutter, tornado, walwind; skill 4's light first.
+* **Things.** `use_item`: **verdite** (110) raises every skill by one, the
+  five **crystals** (113..117: fire, earth, water, wind, light) their own by
+  three, each step with `skill_unlock` and the stats again; the **power fruit**
+  (111) raises stat 36 by three, the **wise fruit** (112) `0x801b2530` -- the
+  status page's second figure on the "PWR·WIS" line, shown plus one -- by one,
+  to 4. A banner the first time each answers: `0xd`, `1`, `2`, `0x12 + k`.
+
+And `skill_unlock` (`0x80029f1c`) does nothing for skills 0..3 until story
+flag `0x6d + k` (`0x801ba9f5`) is set; it sets `0x7b + k` when one of k's
+spells unlocks. For each threshold reached it unlocks the first spell not yet
+unlocked among the first (index + 1) of the skill's list, `announce(3)` each.
+13 of 13 snapshots hold exactly the spells it leaves a new character with
+their skills (`tools/levelup.py`); the port has all of it (`godot/levelup.gd`
+`skill_unlock`, `use_arm`; `award` calls it after each level, as
+`award_exp` does at `0x8002a574`).
 
 ### Experience, and the table that is not in the executable
 

@@ -1681,7 +1681,7 @@ def verify(out="out/godot"):
         if line.startswith(("loaded:", "movement:", "steps:", "creature steps:",
                             "fences:",
                             "creature run:",
-                            "levels:", "angles:",
+                            "levels:", "skills:", "angles:",
                             "scripts:", "damage:", "equipment:", "player_recalc_stats:", "knock-back:", "weapon:", "animation:", "spores:", "lift doors:", "chests:", "inscriptions:", "conversations:", "menus:", "FAIL", "  first",
                             "  level case", "  angle (", "  script level",
                             "  hit ")):

@@ -612,8 +612,11 @@ func _blow(rec: PackedByteArray, strength: int, push_back: bool) -> void:
 			recalc_stats()
 	if int(r.get("exp", 0)) > 0:
 		var before := int(character["level"])
-		character = KFLevels.award(character, int(r["exp"]))
+		character = KFLevels.award(character, int(r["exp"]), KFTalk.flags)
 		hp_max = int(character["hp_max"])
+		for b in character.get("banners", []):
+			KFMessages.announce(int(b))          # "level up", "new spell"
+		character.erase("banners")
 		recalc_stats()
 		KFInfo.note("player: %d experience, %d of %d, level %d" % [int(r["exp"]),
 			int(character["exp"]), int(character["exp_next"]), int(character["level"])])

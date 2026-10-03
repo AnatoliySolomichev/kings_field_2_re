@@ -682,7 +682,7 @@ func _step(press: int) -> void:
 # and use_item runs, whose last word is the level's entry 2 and, if nothing
 # has answered, "Nothing Happens".
 # @orig game:0x8001b254 item_consume  status:transcribed
-# @orig game:0x8005d748 use_item+0xb68  status:partial -- the tail: the level's entry 2 not called; the eaten things and the keys (loot.gd try_key) answer, the rest say "Nothing Happens"
+# @orig game:0x8005d748 use_item+0xb68  status:partial -- the tail: the level's entry 2 not called (level 0's is empty, 0x801e8704); the eaten things, the keys (loot.gd try_key) and the arms that raise a figure (levelup.gd use_arm) answer, the rest say "Nothing Happens"
 func _use(id: int) -> void:
 	var inv: KFItems = player.inventory
 	var eaten := false
@@ -717,6 +717,18 @@ func _use(id: int) -> void:
 	KFInfo.note("use: item %d%s" % [id, " eaten" if eaten else ""])
 	_close()
 	var answered := eaten
+	if id >= KFLevels.VERDITE and id < KFLevels.FIRST_CRYSTAL + 5:
+		# use_item's arms that raise a figure, then player_recalc_stats
+		var r := KFLevels.use_arm(id, player.character, KFTalk.flags)
+		if bool(r["took"]):
+			inv.take_item(id)
+		for b in r["banners"]:
+			KFMessages.announce(int(b))
+		player.recalc_stats()
+		answered = bool(r["answered"])
+		KFInfo.note("use: item %d -- skills %s, stat 36 %d, 0x801b2530 %d" % [id,
+			str(player.character["grow"]), int(player.character["stat36"]),
+			int(player.character.get("wis", 0))])
 	if id in KEYS:
 		var lt := get_node_or_null("../../Loot")
 		if lt and int(lt.try_key(id)) != 0:

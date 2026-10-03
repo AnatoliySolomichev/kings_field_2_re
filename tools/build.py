@@ -100,14 +100,14 @@ def main(quick=False, only_check=False):
     run(["tools/collision.py"], "the collision, against the game's own answers",
         keep=["reproduced"])
     run(["tools/levelup.py"], "the level table, against the snapshots",
-        keep=["snapshots match"])
+        keep=["snapshots match", "snapshots have unlocked"])
     run(["tools/movement.py", "bp15"], "the movement, against the watchpoint",
         keep=["of 48", "of 15"])
     run(["tools/escript.py", "check"], "the conversations, against what was played",
         keep=["reproduced"])
     run(["tools/equip.py", "--check", "out/ram.bin"],
         "the equipment tables, against a RAM snapshot",
-        keep=["match RAM", "reproduced"])
+        keep=["match RAM", "reproduced", "player_recalc_stats over"])
     run(["tools/actors.py", "0", "--check"],
         "the creatures of level 0, against a RAM snapshot",
         keep=["of 200", "match", "slots"])

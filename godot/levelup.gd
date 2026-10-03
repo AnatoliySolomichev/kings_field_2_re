@@ -31,7 +31,22 @@ const GROW_ODDS := 0x6665            # 0x8002a420
 const LEVEL_CAP := 0xFF              # 0x8002a3a8
 const TABLE_LEVELS := 0x63           # above 99 the routine extrapolates
 
+# skill_unlock's data, GAME.EXE's: five skills' thresholds (s16, a 0 ends them,
+# 0x80081884) and the spells each unlocks in turn (0xff ends them, 0x800818c0)
+const SKILL_FLAG := 0x6D             # story_flags + 0x6d + k (0x801ba9f5): skills 0..3 unlock only once set
+const SKILL_UNLOCKED := 0x7B         # story_flags + 0x7b + k (0x801baa03): set when one of k's spells is
+const SPELLS := 96
+const FIRST_SPELL := 29              # light: new_character sets its flag by hand (0x801b7aa4)
+const LEVEL_UP := 0                  # the banners
+const NEW_SPELL := 3
+const VERDITE := 0x6E
+const POWER_FRUIT := 0x6F
+const WISE_FRUIT := 0x70
+const FIRST_CRYSTAL := 0x71          # fire, earth, water, wind, light
+const WIS_CAP := 5
+
 static var levels: Array = []
+static var skills := {}
 
 
 # @port data -- reads levels.json, the 99 records tools/levelup.py takes off FDAT entry 97
@@ -44,6 +59,7 @@ static func load_from(path := "res://levels.json") -> bool:
 	if typeof(d) != TYPE_DICTIONARY:
 		return false
 	levels = d.get("levels", [])
+	skills = d.get("skills", {})
 	return not levels.is_empty()
 
 
@@ -56,11 +72,12 @@ static func _roll() -> int:
 	return randi() & 0x7FFF
 
 
-# @orig game:0x8002a310 award_exp  status:transcribed -- award_exp; checked against 13 of 13 snapshots
-static func award(state: Dictionary, delta: int) -> Dictionary:
+# @orig game:0x8002a310 award_exp  status:transcribed -- award_exp; checked against 13 of 13 snapshots; the banners land in "banners" for the caller to raise
+static func award(state: Dictionary, delta: int, flags: Array = []) -> Dictionary:
 	if not load_from():
 		return state
 	var s := state.duplicate(true)
+	s["banners"] = []
 	s["exp"] = mini(int(s["exp"]) + delta, EXP_CAP)
 	while int(s["exp"]) >= int(s["exp_next"]) and int(s["level"]) < LEVEL_CAP:
 		var lv := int(s["level"])
@@ -86,18 +103,118 @@ static func award(state: Dictionary, delta: int) -> Dictionary:
 			# it rolls (0x8002a410).
 			if int(grow[k]) != 0 and _roll() < GROW_ODDS:
 				grow[k] = int(grow[k]) + 1
+		s["banners"].append(LEVEL_UP)
 		s["hp_max"] = mini(int(s["hp_max"]), STAT_CAP)
 		s["mp_max"] = mini(int(s["mp_max"]), STAT_CAP)
 		s["stat36"] = mini(int(s["stat36"]), STAT_CAP)
+		s["grow"] = grow
+		# 0x8002a574: skill_unlock for each, from 4 down, and its clamp
+		if s.has("spells"):
+			for k in range(4, -1, -1):
+				s["banners"] += skill_unlock(s, k, flags)
 		for k in range(grow.size()):
 			grow[k] = mini(int(grow[k]), STAT_CAP)
-		s["grow"] = grow
 	return s
+
+
+# For each threshold of skill k the skill has reached, the first spell not yet
+# unlocked among the first (index + 1) of the skill's list is, with a "new
+# spell" banner and story flag 0x7b + k. Skills 0..3 do nothing until story
+# flag 0x6d + k is set. `s["spells"]` and `flags` change in place.
+# @orig game:0x80029f1c skill_unlock  status:verified -- 13 of 13 snapshots hold the spells it leaves a new character with their skills (tools/levelup.py); the banners returned, not raised
+static func skill_unlock(s: Dictionary, k: int, flags: Array) -> Array:
+	var out := []
+	if k >= 5 or skills.is_empty():
+		return out
+	while flags.size() < KFTalk.FLAG_COUNT:       # the story flags, all clear
+		flags.append(0)
+	if k != 4 and int(flags[SKILL_FLAG + k]) == 0:
+		return out
+	var th: Array = skills["thresholds"][k]
+	var lst: Array = skills["unlock"][k]
+	var skill := int(s["grow"][k])
+	var spells: Array = s["spells"]
+	for i in th.size():
+		var t := int(th[i])
+		if skill < t or t == 0:
+			break
+		for j in range(i + 1):
+			var sp := int(lst[j])
+			if sp == 0xFF:
+				return out
+			if int(spells[sp]) == 0:
+				spells[sp] = 1
+				out.append(NEW_SPELL)
+				flags[SKILL_UNLOCKED + k] = 1
+				break
+	return out
+
+
+# use_item's arms for the things that raise a figure: verdite every skill
+# once (0x8005cd04), the power fruit stat 36 three times (0x8005cd90), the wise
+# fruit 0x801b2530 once, up to 4 (0x8005ce10), a crystal its own skill three
+# times (0x8005cc4c..0x8005cc70). A banner the first time anything answers --
+# 0xd, 1, 2, or 0x12 + the skill -- with skill_unlock's between. The answer:
+# the banners, whether it answered (0x801ba984), whether it took the thing
+# itself (verdite and the crystals; item_consume has the fruits).
+# @orig game:0x8005cc4c use_item+0x6c  status:transcribed -- the crystals' arm, as tools/levelup.py use_arm; player_recalc_stats is the caller's
+# @orig game:0x8005cd04 use_item+0x124  status:transcribed -- verdite's arm
+# @orig game:0x8005cd90 use_item+0x1b0  status:transcribed -- the power fruit's arm
+# @orig game:0x8005ce10 use_item+0x230  status:transcribed -- the wise fruit's arm
+static func use_arm(item: int, s: Dictionary, flags: Array) -> Dictionary:
+	var banners := []
+	var answered := false
+	var took := false
+	var grow: Array = s["grow"]
+	if item == VERDITE or (item >= FIRST_CRYSTAL and item < FIRST_CRYSTAL + 5):
+		took = true
+		var ks := [4, 3, 2, 1, 0]
+		if item != VERDITE:
+			var k := item - FIRST_CRYSTAL
+			ks = [k, k, k]
+		for k in ks:
+			grow[k] = int(grow[k]) + 1
+			if int(grow[k]) >= 1000:
+				grow[k] = STAT_CAP
+				continue
+			var got := skill_unlock(s, k, flags)
+			banners += got
+			answered = answered or not got.is_empty()
+			if not answered:
+				answered = true
+				banners.append(0xD if item == VERDITE else 0x12 + k)
+	elif item == POWER_FRUIT:
+		for _i in 3:
+			s["stat36"] = int(s["stat36"]) + 1
+			if int(s["stat36"]) >= 1000:
+				s["stat36"] = STAT_CAP
+				continue
+			if not answered:
+				answered = true
+				banners.append(1)
+	elif item == WISE_FRUIT:
+		s["wis"] = int(s.get("wis", 0)) + 1
+		if int(s["wis"]) >= WIS_CAP:
+			s["wis"] = WIS_CAP - 1
+		else:
+			answered = true
+			banners.append(2)
+	return {"banners": banners, "answered": answered, "took": took}
+
+
+# new_character's spell flags (0x8002b618): all clear, then light's set.
+# @port helper -- the spells' +0 flags of a new character
+static func new_spells() -> Array:
+	var sp := []
+	sp.resize(SPELLS)
+	sp.fill(0)
+	sp[FIRST_SPELL] = 1
+	return sp
 
 
 # What a fresh character is, out of the table's first record rather than out of
 # a constant: 0x8002b468 seeds the block at level 1 the same way.
-# @orig game:0x8002b468 new_character  status:partial -- the level, the experience, HP and MP, stat 36 and the five that grow; not the gold, the equipment, the place or the spells
+# @orig game:0x8002b468 new_character  status:partial -- the level, the experience, HP and MP, stat 36, the five that grow, 0x801b2530 and the spells' flags; the equipment is player.gd's (worn, weapon_id); not the gold or the place
 static func fresh() -> Dictionary:
 	load_from()
 	var r: Dictionary = levels[0] if not levels.is_empty() else {}
@@ -105,4 +222,6 @@ static func fresh() -> Dictionary:
 		"hp_max": int(r.get("hp", 50)), "mp_max": int(r.get("mp", 30)),
 		# new_character (0x8002b468): the five from the table's +6, which is
 		# zero, and 10 more on the fifth -- [0, 0, 0, 0, 10] in every snapshot
-		"stat36": int(r.get("gain", 20)), "grow": [0, 0, 0, 0, 10]}
+		"stat36": int(r.get("gain", 20)), "grow": [0, 0, 0, 0, 10],
+		# 0x801b2530 zeroed, and the spells' flags: light only
+		"wis": 0, "spells": new_spells()}
