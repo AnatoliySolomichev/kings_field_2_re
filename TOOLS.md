@@ -630,6 +630,18 @@ python3 tools/doors.py --check      the counts alone
 ./emu/run.sh debug bp27.lua         a lift door frame by frame, into out/lua_bp27.log
 ```
 
+**`gpuframe.py`** -- a frame's GPU primitives read back out of a RAM
+snapshot: the ordering table `frame_begin` cleared and every packet linked
+into it, decoded -- sprites, textured and flat quads and triangles, the
+texture page set before each. A snapshot holds one buffer being filled and the
+other as it was sent, so whatever a screen shows can be had as the game drew
+it: `inv1` and `inv2` are the "use item" menu, 84 sprites and 32 quads.
+
+```
+python3 tools/gpuframe.py inv1           both buffers, by kind
+python3 tools/gpuframe.py inv1 sprites   every sprite in drawing order
+```
+
 **The info window.** The port's own text -- the cell and the player's
 state, the buttons, the comparison with the emulator, and a log of what
 happens (creatures waking and struck, doors, chests, things taken, gold,
