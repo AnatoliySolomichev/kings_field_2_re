@@ -62,7 +62,7 @@ static func is_line(op: int) -> bool:
 
 
 # The start of a call: the speaker, script_prescan and the retry scan.
-# @orig game:0x8005c308 script_interpreter  status:transcribed -- the entry; not the talking animation (+1, +8 and +0x11, +0xe), the voice (seq_lookup) or the services of +0x12
+# @orig game:0x8005c308 script_interpreter  status:verified -- the entry: 21 of 21 calls bp21 caught start at the game's pc (tools/talk.py); not the talking animation (+1, +8 and +0x11, +0xe), the voice (seq_lookup) or the services of +0x12
 static func begin(level: int, entity: int, sc: Dictionary, model: int) -> Dictionary:
 	var key := "%d/%d" % [level, entity]
 	if not states.has(key):
@@ -90,7 +90,7 @@ static func begin(level: int, entity: int, sc: Dictionary, model: int) -> Dictio
 
 
 # Ops until a line -- its TALK.T entry -- or the end of the call (-1).
-# @orig game:0x8005c3f8 script_interpreter+0xf0  status:transcribed -- the ops and the lines; tools/talk.py against bp21, and the self-test
+# @orig game:0x8005c3f8 script_interpreter+0xf0  status:verified -- the ops and the lines: 21 of 21 calls bp21 caught, op for op (tools/talk.py), and the self-test
 static func advance(c: Dictionary, hook: Callable = Callable()) -> int:
 	if bool(c["done"]):
 		return -1
@@ -150,7 +150,7 @@ static func advance(c: Dictionary, hook: Callable = Callable()) -> int:
 
 # After a line: one more step when USE closed it and +0x12 is 0xff, then the
 # step test.
-# @orig game:0x8005c604 script_interpreter+0x2fc  status:transcribed -- the line's tail: the USE test and .L18's step
+# @orig game:0x8005c604 script_interpreter+0x2fc  status:verified -- the line's tail, the USE test and .L18's step: where the 21 calls bp21 caught end and go on
 static func closed(c: Dictionary, use: bool) -> void:
 	if use and int(c["sc"]["header"]["service"]) == NO_SERVICE:
 		c["s3"] = int(c["s3"]) + 1

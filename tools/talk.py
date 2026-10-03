@@ -43,6 +43,7 @@ brings the next, and anything else stops the call until the next USE on the
 talker. `godot/talk.gd` is the port; the self-test holds it to `call`.
 """
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -57,7 +58,8 @@ def is_line(op):
     return op < 0xF0 or op in LINE_OPS
 
 
-def call(sc, state, flags, speaker, model, use, hook=None, limit=1000):
+def call(sc, state, flags, speaker, model, use, hook=None, limit=1000,
+         fetches=None):
     """One call of script_interpreter for an actor whose +1 is `model`.
 
     `sc` is escript.json's script (its code and header), `state` the block's
@@ -91,6 +93,8 @@ def call(sc, state, flags, speaker, model, use, hook=None, limit=1000):
             why = "off"
             break
         op = code[pc]
+        if fetches is not None:
+            fetches.append((pc, op))
         step = False                    # whether the op goes to the step test
         if is_line(op):
             shown.append(h["talk"] + op)
@@ -199,6 +203,85 @@ def check(out=sys.stdout, verbose=False):
     return bad == 0
 
 
+LOG_ENTER = re.compile(r"ENTER rec=([0-9a-f]+) slot=(\d+) entity=(\d+)")
+LOG_FETCH = re.compile(r"FETCH pc=\s*(\d+) op=([0-9a-f]{2})")
+LOG_TEXT = re.compile(r"TEXT TALK\.T\[(\d+)\]")
+
+
+def bp21_calls(path=None):
+    """emu/bp21.lua's log as [[call]] by session (each `armed` line starts
+    one): a call is {slot, entity, fetch [(pc, op)], text [n]}."""
+    path = path or os.path.join(ROOT, "out", "lua_bp21.log")
+    sessions = []
+    if not os.path.exists(path):
+        return sessions
+    cur = None
+    for line in open(path):
+        if line.startswith("=== bp21") and "armed" in line:
+            sessions.append([])
+            cur = None
+            continue
+        if not sessions:
+            continue
+        m = LOG_ENTER.match(line)
+        if m:
+            cur = {"slot": int(m.group(2)), "entity": int(m.group(3)),
+                   "fetch": [], "text": []}
+            sessions[-1].append(cur)
+            continue
+        if cur is None:
+            continue
+        m = LOG_FETCH.match(line)
+        if m:
+            cur["fetch"].append((int(m.group(1)), int(m.group(2), 16)))
+            continue
+        m = LOG_TEXT.match(line)
+        if m:
+            cur["text"].append(int(m.group(1)))
+    return sessions
+
+
+def check_calls(out=sys.stdout, verbose=False):
+    """Every call bp21 caught, op for op: the pcs and opcodes it fetched and the
+    lines it showed, against `call` from the state the calls before it left.
+    Which button closed a line the log does not say, so it is read off the
+    call itself: a line after which the call went on was closed with USE,
+    the last one -- the call ending there -- with something else."""
+    import json
+    rows = {a["slot"]: a for a in json.load(open(os.path.join(
+        ROOT, "out", "godot", "actors00.json")))}
+    scripts = talkers(0)
+    ok = bad = 0
+    for calls in bp21_calls():
+        states, flags, speaker = {}, [0] * 256, -1
+        for c in calls:
+            sc = scripts.get(c["entity"])
+            if sc is None or c["slot"] not in rows:
+                continue
+            st = states.setdefault(c["entity"], {"pc": 0, "retry": 0})
+            n = len(c["text"])
+            # the last line closed with USE only if the call fetched past it
+            last_line = max((i for i, (_pc, op) in enumerate(c["fetch"]) if is_line(op)),
+                            default=-1)
+            went_on = last_line >= 0 and last_line < len(c["fetch"]) - 1
+            fetched = []
+            shown, _hooks, speaker, why = call(
+                sc, st, flags, speaker, rows[c["slot"]]["model"],
+                lambda i, n=n, w=went_on: i < n - 1 or w, fetches=fetched)
+            # the game's call can be cut off by the log ending
+            want_f, got_f = c["fetch"], fetched[:len(c["fetch"])]
+            good = got_f == want_f and shown[:len(c["text"])] == c["text"]
+            ok += good
+            bad += not good
+            if verbose or not good:
+                print(f"  entity {c['entity']}: game {c['fetch']} {c['text']}, model "
+                      f"{fetched} {shown} ({why}) -- {'agrees' if good else 'DIFFERS'}",
+                      file=out)
+    print(f"  {ok} of {ok + bad} calls bp21 caught fetch the game's pcs and opcodes "
+          f"and show its lines, from the state the calls before them left", file=out)
+    return bad == 0
+
+
 def export(out_dir, lv=0):
     """talk/<n>.png for every TALK.T entry level `lv`'s talkers can show, and
     talkcheck.json: a run of calls per talker for godot/selftest.gd."""
@@ -243,7 +326,9 @@ def export(out_dir, lv=0):
 
 if __name__ == "__main__":
     if "--check" in sys.argv:
-        sys.exit(0 if check() else 1)
+        a = check()
+        b = check_calls()
+        sys.exit(0 if a and b else 1)
     lv = int(sys.argv[1]) if len(sys.argv) > 1 else 0
     for ent, sc in sorted(talkers(lv).items()):
         state, flags, speaker = {"pc": 0, "retry": 0}, [0] * 256, -1

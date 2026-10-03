@@ -1311,9 +1311,14 @@ every USE that closes a line brings the next, and the last line before an
 `0xf0` comes back for as long as USE closes it; any other button ends the
 call, and the next USE on the talker starts there again. Talking to somebody
 else first moves it past the `0xf0`. Successive calls show bp21's four
-recorded conversations line for line (`tools/talk.py`, 4 of 4), and the port
-(`godot/talk.gd`, through `godot/document.gd`) is held to the model, 96 of 96
-calls. Level 0's entry 4 arms 0, 1 and 5 are in it: whether the player holds
+recorded conversations line for line (`tools/talk.py`, 4 of 4), and a second
+bp21 session -- entity 8 a line a call, then three in one, entity 6 and 7's
+single lines, entity 8 again from past its `0xf0` after the others -- is held
+op for op: **21 of 21 calls** fetch the game's pcs and opcodes and show its
+lines from the state the calls before them left. Which button closed a line
+bp21 does not log, so that is read off the call (one that went on after a line
+was closed with USE). The port (`godot/talk.gd`, through `godot/document.gd`)
+is held to the model, 96 of 96 calls. Level 0's entry 4 arms 0, 1 and 5 are in it: whether the player holds
 Ichrius' eye, wings and crown (130, 131, 132) and the sword (2), and the
 trade; arms 2 and 4 read the play clock and are not.
 
@@ -2600,15 +2605,25 @@ at once and one held open).
 **Checked against a recording.** `emu/bp27.lua` stops at the head of the arm
 for every lift door not at rest and logs its state, counter and scale, the
 player, and the tile and shape of its two cells; `tools/doors.py` replays it
-locked, one step from each line against the next. Three lifts, of doors 51
-and 123: **867 of 867** steps -- the 57 frames up with both stamps, the
-eighteen standing, 468 frames held while the player stood in the doorway,
-three let go, and the drops. 35 more frames in state `0x14` were held with the
-player out of reach -- at 3400 units from door 51 for twelve frames, then let
-go with the player not having moved -- which leaves the creatures, the other
-thing the query asks; kind 4 lives beside both doors (slots 15 and 7). That
-log did not carry them, so bp27 now also logs the query's answer and the
-creature it found.
+locked, one step from each line against the next. Seven lifts, of doors 51
+and 123: **2016 of 2016** steps -- the 57 frames up with both stamps, the
+eighteen standing, the waits and the drops. A second recording also stopped
+after each arm's `collide_query` and logged the mask it returned: in **621 of
+621** of those answers bit `0x80` is set exactly when `player_in_range` --
+the player within `0x700 + 0x320` of the door, the body `0x6a4` as its top --
+puts the player in reach (177 up to 2488 units away, none from 2608).
+
+The other bit is the creatures': **140 frames** the game held the doorway on
+bit `0x10` alone or with the player's, with the player 1736 to 2960 away --
+at door 51 for 24 frames with the player standing still at 2960, then let go
+where they stood. Which creature, the log could not say: `collide_query`
+writes `actor_in_range`'s answer to `0x801e648c` and then, on its way to the
+objects, **writes -1 over it** (`0x800340a8`), so whoever asks after it never
+learns who. bp27 now lists the awake creatures within `0x2000` of the door
+with each answer, and `tools/doors.py` asks `actor_in_range`'s question of
+them; on level 0 the creatures of kind 4 live a few cells behind both doors.
+The replay takes the game's bit for them meanwhile; the 35 frames of the first
+recording, which logged no answers, are counted apart.
 
 ### Chests, and picking things up
 

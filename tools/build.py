@@ -141,10 +141,10 @@ def main(quick=False, only_check=False):
     run(["tools/doors.py", "--check"],
         "the swinging and the lift doors, against what was played",
         keep=["steps of a moving door", "steps of a lift door", "more at 0x14",
-              "no out/lua_bp27"])
+              "held by a creature", "doorway answers", "no out/lua_bp27"])
     run(["tools/talk.py", "--check"],
         "the conversations a USE at a time, against what was played",
-        keep=["recorded conversations"])
+        keep=["recorded conversations", "calls bp21 caught"])
     run(["tools/chests.py", "--check"],
         "the chests' lids and the drops, against every snapshot",
         keep=["opened lids", "things lying"])

@@ -213,6 +213,10 @@ LIFT_QUERY = re.compile(r"Q vb=(\d+) slot=(\d+) op=\d+ mask=(\d+) actor=(-?\d+)"
                         r"r=(\d+) h=(\d+) flags=(-?\d+))?")
 
 
+LIFT_ACTOR = re.compile(r"A vb=(\d+) slot=(\d+) actor=(\d+) model=(\d+) "
+                        r"at=(-?\d+) (-?\d+) (-?\d+) r=(\d+) h=(\d+) flags=(-?\d+)")
+
+
 def lift_load(path=None):
     """bp27's door lines, each with the doorway test's answer that frame when
     the log has one: q = (mask, the creature as [x, y, z, radius, height] or
@@ -221,7 +225,7 @@ def lift_load(path=None):
     rows = []
     if not os.path.exists(path):
         return rows
-    queries = {}
+    queries, near = {}, {}
     for line in open(path):
         m = LIFT_LINE.match(line)
         if m:
@@ -235,9 +239,31 @@ def lift_load(path=None):
             g = [None if x is None else int(x) for x in m.groups()]
             who = None if g[3] < 0 else [g[6], g[7], g[8], g[9], g[10]]
             queries[(g[0], g[1])] = (g[2], who)
+            continue
+        m = LIFT_ACTOR.match(line)
+        if m:
+            g = [int(x) for x in m.groups()]
+            near.setdefault((g[0], g[1]), []).append(
+                {"actor": g[2], "model": g[3], "pos": (g[4], g[5], g[6]),
+                 "r": g[7], "h": g[8], "flags": g[9]})
     for r in rows:
         r["q"] = queries.get((r["vb"], r["slot"]))
+        r["near"] = near.get((r["vb"], r["slot"]), [])
     return rows
+
+
+def actor_in_range(near, d):
+    """actor_in_range (0x8004d838) on bp27's A lines: the first awake creature,
+    model 0x6e aside, in range of the door at its radius + 0x700, its height as
+    the top and 0xc80 the door's. The skip mask is 0 in object_interpreter.
+    Flags 0x10 and 0x400000 move the point it is asked at, and are not here."""
+    for a in sorted(near, key=lambda a: a["actor"]):
+        if a["model"] == 0x6E:
+            continue
+        if movement.in_range(a["pos"], d["x"], d["y"], d["z"], a["r"] + LIFT_CLEAR[0],
+                             a["h"], LIFT_CLEAR[1]) != -1:
+            return a
+    return None
 
 
 def lift_check(out=sys.stdout, verbose=False):
@@ -254,7 +280,7 @@ def lift_check(out=sys.stdout, verbose=False):
     by = {}
     for r in rows:
         by.setdefault(r["slot"], []).append(r)
-    ok = bad = used = unseen = held = freed = 0
+    ok = bad = used = unseen = held = freed = held_by = 0
     for slot, rs in sorted(by.items()):
         rec = ld.recs.get(slot)
         if rec is None or rec["op"] not in LIFT_OPS:
@@ -282,9 +308,19 @@ def lift_check(out=sys.stdout, verbose=False):
                         c[1] = q[k]
                     if q[k + 2] != 0xFF:
                         c[0] = q[k + 2]
-            # the creature the game found in the doorway, when the log says
-            creatures = [a["q"][1]] if a["q"] and a["q"][1] else []
-            lift_step(d, lambda d=d, a=a, cr=creatures: lift_clear(d, a["p"], cr), stamp)
+            # The creatures: collide_query's own bit 0x10 when the log has its
+            # answer -- the slot it found is overwritten before it returns, so
+            # that is all it can say -- the player by player_in_range here.
+            if a["q"] is not None:
+                by_creature = bool(a["q"][0] & 0x10)
+                held_by += by_creature and a["st"] == LIFT_WAIT
+
+                def clear(d=d, a=a, cr=by_creature):
+                    return not cr and lift_clear(d, a["p"])
+            else:
+                def clear(d=d, a=a):
+                    return lift_clear(d, a["p"])
+            lift_step(d, clear, stamp)
             got = (d["state"], d["counter"], d["scale"],
                    tuple(tuple(cells[xz]) for xz in order))
             want = (b["st"], b["ctr"], b["scale"], b["cells"])
@@ -306,13 +342,55 @@ def lift_check(out=sys.stdout, verbose=False):
                           file=out)
     print(f"  {ok} of {ok + bad} steps of a lift door reproduced -- state, counter, "
           f"scale and its two cells' tile and shape; {used} lifts from USE, "
-          f"{held} frames held with the player in the doorway, {freed} let go",
+          f"{held} frames held, {freed} let go",
           file=out)
+    if held_by:
+        print(f"  {held_by} of the waiting frames held by a creature by the game's "
+              f"own answer (bit 0x10 of collide_query); which one, the log cannot "
+              f"say", file=out)
     if unseen:
         print(f"  {unseen} more at 0x14 where the game held the doorway with the "
               f"player out of reach: a creature, which a log without Q lines does "
               f"not carry", file=out)
-    return bad == 0
+    # The Q lines: collide_query's own answer. Its bit 0x80 is
+    # player_in_range's, so it must say what lift_clear's player test says, frame
+    # by frame; bit 0x10 is actor_in_range's, which overwrites the creature's
+    # slot with -1 before it returns (0x800340a8), so the log cannot name it.
+    pq = pbad = creature = listed = agree = 0
+    holders = {}
+    for r in rows:
+        if r["q"] is None or r["slot"] not in ld.recs:
+            continue
+        d = ld.recs[r["slot"]]
+        mask = r["q"][0]
+        near = movement.in_range(r["p"], d["x"], d["y"], d["z"],
+                                 LIFT_CLEAR[0] + PLAYER_R, PLAYER_BODY,
+                                 LIFT_CLEAR[1]) != -1
+        pq += 1
+        if near != bool(mask & 0x80):
+            pbad += 1
+            if verbose:
+                print(f"  slot {r['slot']} vb {r['vb']}: player {r['p']}, the game "
+                      f"says {mask:#x}", file=out)
+        creature += bool(mask & 0x10)
+        if r["near"] or mask & 0x10:
+            named = actor_in_range(r["near"], d)
+            if r["near"]:
+                listed += 1
+                agree += bool(named) == bool(mask & 0x10)
+                if named:
+                    holders[(named["actor"], named["model"])] = \
+                        holders.get((named["actor"], named["model"]), 0) + 1
+    if listed:
+        print(f"  {agree} of {listed} answers with the creatures listed: actor_in_range "
+              f"on them finds one exactly when the game's bit 0x10 is set; held by "
+              + ", ".join(f"slot {k} (model {m}) {n} times"
+                          for (k, m), n in sorted(holders.items())), file=out)
+    if pq:
+        print(f"  {pq - pbad} of {pq} of the game's doorway answers have the player "
+              f"in reach exactly when player_in_range does; {creature} also "
+              f"name a creature", file=out)
+    return bad == 0 and pbad == 0
 
 
 def export(out_dir):

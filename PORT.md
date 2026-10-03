@@ -587,9 +587,9 @@ The whole file is the port's own: **check** — the self-test; it runs the port'
 | [`load_level`](godot/talk.gd#L38) | — port's own, *data*: escript.json's conversations for the level, keyed by entity | |
 | [`script_for`](godot/talk.gd#L54) | — port's own, *helper*: the conversation for an actor's kind (its +2, the entity), or {} | |
 | [`is_line`](godot/talk.gd#L60) | — port's own, *helper*: below 0xf0, and 0xf1, 0xfa..0xfe | |
-| [`begin`](godot/talk.gd#L66) | `game:0x8005c308` script_interpreter | transcribed |
-| [`advance`](godot/talk.gd#L94) | `game:0x8005c3f8` script_interpreter+0xf0 | transcribed |
-| [`closed`](godot/talk.gd#L154) | `game:0x8005c604` script_interpreter+0x2fc | transcribed |
+| [`begin`](godot/talk.gd#L66) | `game:0x8005c308` script_interpreter | verified |
+| [`advance`](godot/talk.gd#L94) | `game:0x8005c3f8` script_interpreter+0xf0 | verified |
+| [`closed`](godot/talk.gd#L154) | `game:0x8005c604` script_interpreter+0x2fc | verified |
 | [`_step`](godot/talk.gd#L162) | — port's own, *helper*: false when the call has ended | |
 | [`_end`](godot/talk.gd#L173) | `game:0x8005c654` script_interpreter+0x34c | partial |
 | [`hook`](godot/talk.gd#L186) | `game:0x8005c4c0` script_interpreter+0x1b8 | partial |
@@ -831,13 +831,13 @@ The whole file is the port's own: **check** — a model browser for naming thing
 | `game:0x8005c18c` script_find_label | [`godot/escript.gd:75`](godot/escript.gd#L75) | `func find_label` | verified |
 | `game:0x8005c1e8` script_prescan | [`godot/escript.gd:90`](godot/escript.gd#L90) | `func start_pc` | verified |
 | `game:0x8005c308` script_interpreter | [`godot/escript.gd:105`](godot/escript.gd#L105) | `func run` | partial |
-| `game:0x8005c308` script_interpreter | [`godot/talk.gd:65`](godot/talk.gd#L65) | `func begin` | transcribed |
+| `game:0x8005c308` script_interpreter | [`godot/talk.gd:65`](godot/talk.gd#L65) | `func begin` | verified |
 | `game:0x8005c390` script_interpreter+0x88 | [`godot/escript.gd:175`](godot/escript.gd#L175) | `func visits` | verified |
 | `game:0x8005c3f8` script_interpreter+0xf0 | [`godot/escript.gd:70`](godot/escript.gd#L70) | `func is_line` | verified |
-| `game:0x8005c3f8` script_interpreter+0xf0 | [`godot/talk.gd:93`](godot/talk.gd#L93) | `func advance` | transcribed |
+| `game:0x8005c3f8` script_interpreter+0xf0 | [`godot/talk.gd:93`](godot/talk.gd#L93) | `func advance` | verified |
 | `game:0x8005c42c` script_interpreter+0x124 | [`godot/escript.gd:176`](godot/escript.gd#L176) | `func visits` | verified |
 | `game:0x8005c4c0` script_interpreter+0x1b8 | [`godot/talk.gd:185`](godot/talk.gd#L185) | `func hook` | partial |
-| `game:0x8005c604` script_interpreter+0x2fc | [`godot/talk.gd:153`](godot/talk.gd#L153) | `func closed` | transcribed |
+| `game:0x8005c604` script_interpreter+0x2fc | [`godot/talk.gd:153`](godot/talk.gd#L153) | `func closed` | verified |
 | `game:0x8005c654` script_interpreter+0x34c | [`godot/talk.gd:172`](godot/talk.gd#L172) | `func _end` | partial |
 | `game:0x8005d7bc` has_item | [`godot/items.gd:44`](godot/items.gd#L44) | `func has_item` | transcribed |
 | `game:0x8005d7f8` take_item | [`godot/items.gd:51`](godot/items.gd#L51) | `func take_item` | partial |

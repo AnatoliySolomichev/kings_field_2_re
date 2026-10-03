@@ -98,10 +98,12 @@ end
 
 -- And the doorway test's answer, in state 0x14: a breakpoint on the branch
 -- right after each arm's collide_query returns (0x800471f4, 0x800473a8,
--- 0x8004755c), where $v0 is the mask -- 0x80 the player, 0x10 a creature --
--- and 0x801e648c the creature actor_in_range found, -1 for none. For that
--- creature: its slot, model (+1), state (+9), position (+0x2c), radius (+0x1c),
--- height (+0x1e) and flags (+0x28), so tools/doors.py can ask in_range itself.
+-- 0x8004755c), where $v0 is the mask -- 0x80 the player, 0x10 a creature.
+-- 0x801e648c would be the creature, but collide_query writes -1 over it on its
+-- way out (0x800340a8), so the A lines after each Q line list every awake
+-- creature within 0x2000 of the door instead -- its slot, model (+1),
+-- position (+0x2c), radius (+0x1c), height (+0x1e) and flags (+0x28) -- and
+-- tools/doors.py asks actor_in_range's question of each.
 local ACTORS, ASTRIDE = 0x80185da8, 0x88
 local COLLIDE_ACTOR = 0x801e648c
 
@@ -122,6 +124,21 @@ local function query(op)
         end
         log(string.format('Q vb=%d slot=%d op=%d mask=%d %s', s32(VBLANKS), slot, op,
             mask, who))
+        -- collide_query writes -1 over the creature actor_in_range found
+        -- (0x800340a8) before it returns, so name the candidates instead: every
+        -- awake creature within 0x2000 of the door, as actor_in_range reads it
+        local dx0, dz0 = s32(rec + 0x14), s32(rec + 0x1c)
+        for k = 0, 199 do
+            local a = ACTORS + k * ASTRIDE
+            if u8(a + 9) == 1 then
+                local ax, az = s32(a + 0x2c), s32(a + 0x34)
+                if math.abs(ax - dx0) < 0x2000 and math.abs(az - dz0) < 0x2000 then
+                    log(string.format('A vb=%d slot=%d actor=%d model=%d at=%d %d %d r=%d h=%d flags=%d',
+                        s32(VBLANKS), slot, k, u8(a + 1), ax, s32(a + 0x30), az,
+                        u16(a + 0x1c), u16(a + 0x1e), s32(a + 0x28)))
+                end
+            end
+        end
     end
 end
 

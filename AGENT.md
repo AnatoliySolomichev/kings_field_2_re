@@ -212,12 +212,12 @@ the lighting table, against every snapshot             89 856 of 89 856 bytes
 the panel's sprite table, against every snapshot       520 of 520 fields
 the compass's records, against every snapshot          65 of 65 fields
 the swinging door, against the bp24 recording          226 of 226 steps
-the lift doors, against the bp27 recording             867 of 867 steps; 35 held by
-                                                       a creature the log lacks
+the lift doors, against the bp27 recording             2016 of 2016 steps; 621 of 621
+                                                       doorway answers for the player
 the chests' lids, against the snapshots                7 of 7 opened lids on the
                                                        lid's path, one moving
-the conversations a USE at a time, bp21                4 of 4 recorded conversations,
-                                                       line for line
+the conversations a USE at a time, bp21                4 of 4 recorded conversations;
+                                                       21 of 21 calls op for op
 the drops, against the snapshots                       3 of 3 lying as the fall leaves
                                                        them (consistent, not a proof)
 the creatures' behaviour tables, against snapshots     168 896 of 168 896 bytes,
