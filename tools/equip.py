@@ -23,10 +23,21 @@ does, in order:
 4. add each of the seven equipped **pieces of armour**, `0x801b25d4` through
    `0x801b25da`: the record is 32 bytes at `armour_table + 32 * (id - 34)`,
    and the eight `u16` from `+2` to `+0x12` go one per defense rating;
-5. add the flat bonuses: `[0x801b256a]` gives `+0x32` to offense rating 5,
-   `[0x801b256e]` gives `+0x1e` to defense ratings 0, 1 and 2,
-   `[0x801b2578]` gives `+5` to every working skill, and holding item `0x20`
-   or `0x21` gives `+0x14` to `0x801b252a`.
+5. add the flat bonuses: `[0x801b256a]` gives `+0x32` to defense rating 4
+   (`0x801b2552` -- this said offense 5 until the listing was read again),
+   `[0x801b256e]` gives `+0x1e` to defense ratings 0, 1 and 2, and
+   `[0x801b2578]` gives `+5` to every working skill;
+6. what thirteen things add by id when worn (`SPECIALS` and `RINGS` below:
+   the weapons 0x20 and 0x21, the groundal crown's `+0x14` to the stat, the
+   rings 0x51 to 0x5b...), and `+0x32` to skill 3 on level 0x1a while the
+   story byte `0x801ba9e9` is 1;
+7. clamp: a u16 over `0x7fff` (under zero) is 0, and the stat and the
+   working skills stop at 999.
+
+All of it is `recalc()`, held against every snapshot: **299 of 299** values,
+the sixteen ratings, the resistance (the armour's `+8`, the hole in the eight
+it adds, goes to a ninth defense half, `0x801b255a`), five working skills and
+the effective stat of 13.
 
 `0xff` in a slot means nothing is worn, and the routine skips it.
 
@@ -56,9 +67,10 @@ the player put things on and took them off: **80 of 80**, and between them
 they exercise what one snapshot could not -- nothing worn, no weapon, one
 piece, the other, and both at once.
 
-**Still unexercised**: the four flat bonuses. None of the five states had the
-byte at `0x801b255e`, `0x801b256a`, `0x801b256e` or `0x801b2578` set, so the
-curse, the `+0x32`, the `+0x1e` and the `+5` are read and unseen.
+**Still unexercised**: the four flat bonuses and the thirteen things. No state
+recorded had the byte at `0x801b255e`, `0x801b256a`, `0x801b256e` or
+`0x801b2578` set, or one of the things on, so the curse, the `+0x32`, the
+`+0x1e`, the `+5` and the specials are read and unseen.
 """
 import json
 import os
@@ -78,6 +90,7 @@ ARMOUR_FIRST = 34          # 0x801e64b8 - 0x801e6078, over 32 bytes a record
 RATINGS = 8                # eight offense and eight defense
 WEAPON_AT = 6              # the first of the weapon's eight u16
 ARMOUR_AT = (2, 4, 6, 0xA, 0xC, 0xE, 0x10, 0x12)   # the armour's, with a hole
+RESIST_AT = 8              # the hole: the ninth defense half, the resistance
 
 OFFENSE = 0x801B2538
 DEFENSE = 0x801B254A
@@ -127,6 +140,200 @@ def weapon_values(rec):
 def armour_values(rec):
     """The eight defense values a piece of armour adds."""
     return [struct.unpack_from("<H", rec, o)[0] for o in ARMOUR_AT]
+
+
+STAT_36 = 0x801B2516
+STAT_EFFECTIVE = 0x801B2524
+WORKING_FIRST = 0x801B2526  # the five working skills, 0x801b2526..0x801b252e
+STORY_9E9 = 0x801BA9E9     # a story byte: with it 1 on level 0x1a, +0x32 to skill 3
+LEVEL_NOW = 0x8018FAD8
+CAP = 0x3E7
+
+# The worn things player_recalc_stats knows by id, after the ratings and the
+# flat bonuses: (slot address, id, what it adds). "w0".."w4" are the working
+# skills, "stat" the effective stat, "o4" an offense rating, "o*" all eight.
+SPECIALS = (
+    (WEAPON_SLOT, 0x20, (("w2", 0x14),)),
+    (WEAPON_SLOT, 0x21, (("w0", 0x14),)),
+    (0x801B25D4, 0x26, (("stat", 0x14),)),
+    (0x801B25D4, 0x29, (("w4", 0x14),)),
+    (0x801B25D5, 0x31, (("w1", 0x14),)),
+    (0x801B25D6, 0x39, (("w4", 0x1E),)),
+    (0x801B25D6, 0x3C, (("w2", 0x14),)),
+    (0x801B25D7, 0x43, (("o4", 0x14),)),
+    (0x801B25D7, 0x44, (("o*", 0xA),)),
+    (0x801B25D7, 0x46, (("w0", 0x14),)),
+    (0x801B25D8, 0x4F, (("w3", 0x14),)),
+    (0x801B25D9, 0x51, (("stat", 5),)),
+    (0x801B25DA, 0x51, (("stat", 5),)),
+)
+# and the two ring slots asked together: either one holding the id
+RINGS = (
+    (0x52, (("w*", 8), ("stat", -0x1E))),
+    (0x55, (("o4", 0xC), ("o5", 0xC), ("o6", 0xC), ("o7", 0xC))),
+    (0x59, (("w3", 0x14),)),
+    (0x5A, (("w1", 0x14),)),
+    (0x5B, (("w4", 0x14),)),
+)
+
+
+def recalc(st, weapons=None, armour=None):
+    """`player_recalc_stats` (`0x80029500`), all of it but the word it copies
+    from 0x801b2584 to 0x801c12f0. `st` holds what it reads -- "stat36",
+    "skills" (five), "curse" (0x801b255e), "b56a", "b56e", "b578" (the three
+    flat bonuses' timers), "weapon", "worn" (the seven at 0x801b25d4),
+    "story" (0x801ba9e9) and "level" -- and the answer is what it writes:
+    "offense", "defense", "working" and "stat"."""
+    if weapons is None or armour is None:
+        weapons, armour = tables()
+    off = [0] * RATINGS
+    dfn = [0] * RATINGS
+    stat = st["stat36"] & 0xFFFF
+    work = [v & 0xFFFF for v in st["skills"]]
+    if st.get("curse", 0):
+        stat >>= 1
+        work = [v >> 1 for v in work]
+    weapon = st["weapon"]
+    if weapon != NONE and weapon < len(weapons):
+        for i, v in enumerate(weapon_values(weapons[weapon])):
+            off[i] = (off[i] + v) & 0xFFFF
+    resist = 0
+    for slot in st["worn"]:
+        if slot == NONE:
+            continue
+        i = slot - ARMOUR_FIRST
+        if 0 <= i < len(armour):
+            for k, v in enumerate(armour_values(armour[i])):
+                dfn[k] = (dfn[k] + v) & 0xFFFF
+            # the hole in ARMOUR_AT: +8 goes to the ninth half, 0x801b255a,
+            # the resistance player_take_hit rolls against
+            resist = (resist + struct.unpack_from("<H", armour[i], RESIST_AT)[0]) & 0xFFFF
+    if st.get("b56a", 0):
+        dfn[4] = (dfn[4] + 0x32) & 0xFFFF
+    if st.get("b56e", 0):
+        for k in (0, 1, 2):
+            dfn[k] = (dfn[k] + 0x1E) & 0xFFFF
+    if st.get("b578", 0):
+        work = [(v + 5) & 0xFFFF for v in work]
+    slots = {WEAPON_SLOT: weapon}
+    for k, a in enumerate(ARMOUR_SLOTS):
+        slots[a] = st["worn"][k]
+
+    def give(what):
+        nonlocal stat
+        for key, n in what:
+            if key == "stat":
+                stat = (stat + n) & 0xFFFF
+            elif key == "w*":
+                for k in range(5):
+                    work[k] = (work[k] + n) & 0xFFFF
+            elif key[0] == "w":
+                work[int(key[1])] = (work[int(key[1])] + n) & 0xFFFF
+            elif key == "o*":
+                for k in range(RATINGS):
+                    off[k] = (off[k] + n) & 0xFFFF
+            else:
+                off[int(key[1])] = (off[int(key[1])] + n) & 0xFFFF
+    for addr, ident, what in SPECIALS:
+        if slots[addr] == ident:
+            give(what)
+    for ident, what in RINGS:
+        if slots[0x801B25D9] == ident or slots[0x801B25DA] == ident:
+            give(what)
+    if st.get("story", 0) == 1 and st.get("level", 0) == 0x1A:
+        work[3] = (work[3] + 0x32) & 0xFFFF
+    # under zero (as a u16, over 0x7fff) is 0, over 999 is 999
+    stat = 0 if stat > 0x7FFF else min(stat, CAP)
+    work = [0 if v > 0x7FFF else min(v, CAP) for v in work]
+    off = [0 if v > 0x7FFF else v for v in off]
+    dfn = [0 if v > 0x7FFF else v for v in dfn]
+    resist = 0 if resist > 0x7FFF else resist
+    return {"offense": off, "defense": dfn, "working": work, "stat": stat,
+            "resist": resist}
+
+
+def state_of(ram):
+    """What player_recalc_stats reads, out of a RAM snapshot."""
+    def u16(a):
+        return struct.unpack_from("<H", ram, a & 0x1FFFFF)[0]
+    def s16(a):
+        return struct.unpack_from("<h", ram, a & 0x1FFFFF)[0]
+    return {"stat36": u16(STAT_36), "skills": [u16(SKILLS + 2 * k) for k in range(5)],
+            "curse": s16(CURSE), "b56a": s16(BONUS_OFFENSE), "b56e": s16(BONUS_DEFENSE),
+            "b578": s16(BONUS_SKILLS), "weapon": ram[WEAPON_SLOT & 0x1FFFFF],
+            "worn": list(ram[ARMOUR_SLOTS.start & 0x1FFFFF:ARMOUR_SLOTS.stop & 0x1FFFFF]),
+            "story": ram[STORY_9E9 & 0x1FFFFF], "level": ram[LEVEL_NOW & 0x1FFFFF]}
+
+
+def written_of(ram):
+    """What player_recalc_stats last wrote, out of the same snapshot."""
+    def u16s(a, n):
+        return list(struct.unpack_from(f"<{n}H", ram, a & 0x1FFFFF))
+    return {"offense": u16s(OFFENSE, RATINGS), "defense": u16s(DEFENSE, RATINGS),
+            "working": u16s(WORKING_FIRST, 5), "stat": u16s(STAT_EFFECTIVE, 1)[0],
+            "resist": u16s(DEFENSE + 2 * RATINGS, 1)[0]}
+
+
+def check_snapshots(out=sys.stdout, verbose=False):
+    """recalc() against every snapshot with a game in it: the sixteen
+    ratings, the five working skills and the effective stat it leaves."""
+    import glob
+    weapons, armour = tables()
+    ok = n = 0
+    seen = 0
+    for path in sorted(glob.glob(os.path.join(ROOT, "out", "snap", "*.ram"))):
+        ram = open(path, "rb").read()
+        st = state_of(ram)
+        if st["weapon"] == 0 and not any(st["skills"]) and st["stat36"] == 0:
+            continue                       # not a running game
+        got = recalc(st, weapons, armour)
+        want = written_of(ram)
+        seen += 1
+        flat = lambda d: d["offense"] + d["defense"] + d["working"] + [d["stat"], d["resist"]]  # noqa: E731
+        g, w = flat(got), flat(want)
+        same = sum(1 for a, b in zip(g, w) if a == b)
+        ok += same
+        n += len(w)
+        if verbose or same != len(w):
+            print(f"  {os.path.basename(path)}: weapon {st['weapon']}, worn {st['worn']}, "
+                  f"skills {st['skills']}, stat {st['stat36']} -- {same} of {len(w)}"
+                  + ("" if same == len(w) else f"\n    model {got}\n    RAM   {want}"),
+                  file=out)
+    print(f"  player_recalc_stats over {seen} snapshots: {ok} of {n} values -- the "
+          f"sixteen ratings, the resistance, the five working skills and the "
+          f"effective stat", file=out)
+    return ok == n
+
+
+def recalc_cases():
+    """States that take every branch of recalc(), and its answers, for the
+    port's copy (godot/selftest.gd)."""
+    weapons, armour = tables()
+    base = {"stat36": 20, "skills": [0, 0, 0, 0, 10], "curse": 0, "b56a": 0,
+            "b56e": 0, "b578": 0, "weapon": 0, "worn": [0xFF, 42] + [0xFF] * 5,
+            "story": 0, "level": 0}
+    cases = [dict(base)]
+    for key in ("curse", "b56a", "b56e", "b578"):
+        cases.append(dict(base, **{key: 1}))
+    for addr, ident, _w in SPECIALS:
+        if addr == WEAPON_SLOT:
+            cases.append(dict(base, weapon=ident))
+        else:
+            worn = list(base["worn"])
+            worn[addr - ARMOUR_SLOTS.start] = ident
+            cases.append(dict(base, worn=worn))
+    for ident, _w in RINGS:
+        for k in (5, 6):
+            worn = list(base["worn"])
+            worn[k] = ident
+            cases.append(dict(base, worn=worn))
+    cases.append(dict(base, story=1, level=0x1A))
+    cases.append(dict(base, stat36=10, worn=[0xFF, 42, 0xFF, 0xFF, 0xFF, 0x52, 0xFF]))
+    cases.append(dict(base, stat36=995, skills=[995, 990, 0, 7, 999],
+                      worn=[0x26, 0x31, 0x39, 0x44, 0x4F, 0x52, 0x5B], b578=1))
+    cases.append(dict(base, weapon=0xFF, worn=[0xFF] * 7, curse=1, stat36=1,
+                      skills=[1, 2, 3, 4, 5]))
+    return [{"state": c, "want": recalc(c, weapons, armour)} for c in cases]
 
 
 def ratings(weapon, worn, weapons=None, armour=None,
@@ -225,7 +432,7 @@ def check(ram_path):
         if o != r["offense"] or f != r["defense"]:
             print(f"  RECORDED disagrees: {o} {f}")
             bad += 1
-    return bad == 0 and n == 2 * RATINGS
+    return bad == 0 and n == 2 * RATINGS and check_snapshots()
 
 
 # The equipped ids and the sixteen ratings `player_recalc_stats` left, from a
@@ -267,7 +474,8 @@ def export(out_dir):
             "armour_first": ARMOUR_FIRST,
             "weapons": [weapon_values(r) for r in weapons],
             "armour": [armour_values(r) for r in armour],
-            "recorded": RECORDED}
+            "resist": [struct.unpack_from("<H", r, RESIST_AT)[0] for r in armour],
+            "recorded": RECORDED, "recalc": recalc_cases()}
     path = os.path.join(out_dir, "equip.json")
     with open(path, "w") as fh:
         json.dump(rows, fh, separators=(",", ":"))

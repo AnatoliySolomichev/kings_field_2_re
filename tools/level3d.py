@@ -1682,7 +1682,7 @@ def verify(out="out/godot"):
                             "fences:",
                             "creature run:",
                             "levels:", "angles:",
-                            "scripts:", "damage:", "knock-back:", "weapon:", "animation:", "spores:", "lift doors:", "chests:", "inscriptions:", "conversations:", "menus:", "FAIL", "  first",
+                            "scripts:", "damage:", "equipment:", "player_recalc_stats:", "knock-back:", "weapon:", "animation:", "spores:", "lift doors:", "chests:", "inscriptions:", "conversations:", "menus:", "FAIL", "  first",
                             "  level case", "  angle (", "  script level",
                             "  hit ")):
             print("   " + line.strip())

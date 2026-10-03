@@ -3427,7 +3427,16 @@ Two corrections to the published list, both of which it had no way to notice:
   `0x801b254a..0x801b255b` back to back. The list names a "dark" entry on the
   defensive side but not the offensive one, which puts every magic label it
   gives for offence one slot low. Untested: no snapshot we hold has a character
-  with any magic rating at all (*unverified*).
+  with any magic rating at all (*unverified*). What the code says:
+  `player_recalc_stats` (`0x80029500`) writes **eight** offense halves and
+  **nine** defense halves, and the ninth defense half (`0x801b255a`) is filled
+  from the armour record's `+8` -- the hole in the eight `+2..+0x12` it adds
+  one per rating -- and is the **poison resistance** `player_take_hit` rolls
+  against. Five pieces carry one (ids 74, 76, 79, 83, 86: 25, 50, 75, 75, 5).
+  The routine whole -- the curse halving, the three bonus timers, thirteen
+  things worn by id, the clamps -- is `tools/equip.py recalc()`, 299 of 299
+  values over the 13 snapshots, and `godot/equip.gd recalc()`, which the
+  player now calls where the game does: on a level, a strong blow, an item.
 
 ### The level index
 

@@ -180,10 +180,19 @@ var tilt_vel := [0, 0, 0]
 var crouch := 0
 var dip := 0
 var flash := 0
-# The fresh character's defence and stat, which damagecheck.json carries --
-# the port does not follow the character's stats yet.
+# What player_recalc_stats leaves (KFEquip.recalc, recalc_stats below): the
+# eight offense ratings a blow carries (0x801b2538), the eight defence ones a
+# hit meets (0x801b254a), the effective stat (0x801b2524) both scale by, and
+# the five working skills (0x801b2526) the magic meter refills by. A fresh
+# character's: the dagger's offense, the leather plate's [13, 6, 4] and 20.
+var offense: Array = [39, 32, 9, 0, 0, 0, 0, 0]
 var defence: Array = [13, 6, 4, 0, 0, 0, 0, 0]
 var stat := 20
+var working: Array = [0, 0, 0, 0, 10]
+# What is worn, 0x801b25d4..0x801b25da, 0xff for nothing: new_character puts
+# the leather plate (42) in the second (0x8002bb84(0x2a, 1)).
+var worn: Array = [0xFF, 42, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
+var equip := KFEquip.new()
 # The weapon in hand (0x801b25af) and its swing (tools/weapon.py): the clock
 # 0x801b25a4, the pause 0x801b24f3, the hit and sound times 0x801b25a6 and
 # 0x801b25a8, the strength 0x801b2504; the meter is weapon_meter. The
@@ -226,13 +235,9 @@ var creatures: Array = []
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	have_coll = coll.load_from("res://coll%02d.json" % _level())
-	if FileAccess.file_exists("res://damagecheck.json"):
-		var dc = JSON.parse_string(FileAccess.get_file_as_string("res://damagecheck.json"))
-		if typeof(dc) == TYPE_DICTIONARY:
-			defence = Array(dc.get("defence", defence)).slice(0, KFDamage.TYPES)
-			stat = int(dc.get("stat", stat))
 	KFWeapon.load_from()
 	character = KFLevels.fresh()
+	equip.load_tables()
 	gx = int(position.x * UNIT)
 	gy = int(-position.y * UNIT)
 	gz = int(-position.z * UNIT)
@@ -240,7 +245,11 @@ func _ready() -> void:
 	if carried is Array:            # the crystal kept what the player had
 		inventory = carried[0]
 		gold = int(carried[1])
+		character = carried[2]
+		weapon_id = int(carried[3])
+		worn = carried[4]
 	carried = null
+	recalc_stats()
 	if respawn is Array:
 		flying = false              # back on foot after a death
 		if respawn.size() == 4:     # the crystal's spot (0x80031d60)
@@ -252,6 +261,24 @@ func _ready() -> void:
 			_to_godot()
 	respawn = null
 	_refresh()
+
+
+# player_recalc_stats is the game's after anything that changes what it reads:
+# a level, a strong blow, something put on or eaten. This gathers what it
+# reads -- the character's stat 36 and five skills, the weapon and the worn
+# things; the curse (0x801b255e), the three bonus timers and the story byte
+# 0x801ba9e9 are not in the port and read 0 -- and keeps what it writes.
+# @port helper -- what KFEquip.recalc reads, out of the player, and what it writes, back
+func recalc_stats() -> void:
+	var r := equip.recalc({"stat36": int(character.get("stat36", 20)),
+		"skills": character.get("grow", [0, 0, 0, 0, 10]), "curse": 0, "b56a": 0,
+		"b56e": 0, "b578": 0, "weapon": weapon_id, "worn": worn, "story": 0,
+		"level": _level()})
+	offense = r["offense"]
+	defence = r["defense"]
+	working = r["working"]
+	stat = int(r["stat"])
+	resist = int(r["resist"])
 
 
 # The level out/godot was built for: tools/level3d.py names the project
@@ -537,7 +564,7 @@ func _use() -> void:
 		if magic_pause > 0:
 			magic_pause -= 1
 		else:
-			var g: Array = character.get("grow", [0, 0, 0, 0, 10])
+			var g: Array = working
 			var avg := (int(g[0]) + int(g[1]) + int(g[2]) + int(g[3]) + int(g[4])) / 5
 			magic_meter = mini(magic_meter + KFWeapon.gain(avg, 0), 5000)
 		damage_k = mini(damage_k + 0x80, 0x1000)
@@ -571,11 +598,10 @@ func _blow(rec: PackedByteArray, strength: int, push_back: bool) -> void:
 	if an == null or not an.has_method("strike"):
 		return
 	var step := KFWeapon.probe(coll, pitch, facing, KFWeapon.u16(rec, 0x1A))
-	var attacks := []
-	for i in 8:
-		attacks.append(KFWeapon.u16(rec, 6 + 2 * i))
+	# held_item_tick hands actor_take_hit the effective stat and the eight
+	# offense ratings (0x8002db64)
 	var r: Dictionary = an.strike(Vector3i(gx, gy, gz), step,
-		coll._s16(facing + int(tilt[1])), stat, attacks, strength, push_back)
+		coll._s16(facing + int(tilt[1])), stat, offense, strength, push_back)
 	if r.is_empty():
 		return
 	if bool(r.get("strong", false)):
@@ -583,12 +609,12 @@ func _blow(rec: PackedByteArray, strength: int, push_back: bool) -> void:
 		if strong_hits >= 100:           # 0x8002a074
 			strong_hits = 0
 			character["stat36"] = mini(int(character["stat36"]) + 1, 999)
-			stat = int(character["stat36"])
+			recalc_stats()
 	if int(r.get("exp", 0)) > 0:
 		var before := int(character["level"])
 		character = KFLevels.award(character, int(r["exp"]))
 		hp_max = int(character["hp_max"])
-		stat = int(character["stat36"])
+		recalc_stats()
 		KFInfo.note("player: %d experience, %d of %d, level %d" % [int(r["exp"]),
 			int(character["exp"]), int(character["exp_next"]), int(character["level"])])
 		if int(character["level"]) != before:
@@ -808,7 +834,7 @@ func _dying() -> void:
 	if revive:
 		inventory.take_item(REVIVE_ITEM)
 		respawn = [REVIVE_POS.x, REVIVE_POS.y, REVIVE_POS.z, REVIVE_FACING]
-		carried = [inventory, gold]
+		carried = [inventory, gold, character, weapon_id, worn]
 	else:
 		# a new character (0x8002b468), where it puts a new game: bp25's session
 		# began at (0x1f000, -0x3c00, 0x4000) too
@@ -827,7 +853,7 @@ func _dying() -> void:
 # spot, or [] for a new game's start.
 static var respawn = null
 # What the player carries across that reload when the crystal revives them:
-# [the inventory, the gold].
+# [the inventory, the gold, the character, the weapon, what is worn].
 static var carried = null
 
 

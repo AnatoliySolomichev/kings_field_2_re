@@ -715,6 +715,10 @@ and the game, one to one"; PORT.md the table). The pass that put the markers on
 read each function against the code it names, and this is what it left open --
 each one is also in its function's marker, as `partial` and what differs:
 
+* **`player_recalc_stats` reads four things the port does not keep**: the
+  curse (`0x801b255e`), the bonus timers `0x801b256a`, `0x801b256e` and
+  `0x801b2578`, and the story byte `0x801ba9e9`; `player.gd` passes 0 for
+  each. The routine itself is whole (`equip.gd recalc`, 299 of 299 values).
 * **`give_item` and `take_item` call the level's own hook** after the count
   changes (`level_hooks+0x18`, `+0x2c`); `godot/items.gd` does not.
 * **`new_character` does much more than `KFLevels.fresh`**: the gold, the

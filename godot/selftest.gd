@@ -968,7 +968,17 @@ func _equip() -> bool:
 			if int(got["defense"][k]) == int(r["defense"][k]):
 				ok += 1
 	print("equipment: %d of %d ratings match what the game had in memory" % [ok, want])
-	return ok == want
+	var cases: Array = d.get("recalc", [])
+	var same := 0
+	for c in cases:
+		var got := e.recalc(c["state"])
+		if JSON.stringify(_norm(got)) == JSON.stringify(_norm(c["want"])):
+			same += 1
+		elif same == 0:
+			print("  first difference: %s: godot %s python %s" % [str(c["state"]),
+				str(got), str(c["want"])])
+	print("player_recalc_stats: %d of %d states as tools/equip.py answers them" % [same, cases.size()])
+	return ok == want and same == cases.size()
 
 
 # The collision shape every object type gives, against what the game did.
