@@ -75,6 +75,13 @@ var talking := {}                  # script_interpreter's call while it runs (KF
 # What was opened and taken, by level, across the reload a revive makes:
 # {level: {slot: [type, lock, +0]}} -- the game keeps it in level_state.
 static var saved := {}
+# What a creature can leave when it dies (lootNN.json's "spawn"): type ->
+# {the type row's fields, the hidden tNNN node a drop is copied from}.
+var templates := {}
+# The three rings of ten slots drops go to, and the count each keeps:
+# 0x8019839a for the gold (350..359), 0x8019839c for a dying behaviour's thing
+# (360..369), 0x8019839e for what a category-1 creature carried (370..379).
+var counters := {0x15E: 0, 0x168: 0, 0x172: 0}
 
 
 # @port data -- reads lootNN.json, tools/level3d.py build_loot's rows, and finds their nodes
@@ -85,11 +92,17 @@ func _ready() -> void:
 	var path := "res://loot%02d.json" % player._level()
 	if not FileAccess.file_exists(path):
 		return
-	var d = JSON.parse_string(FileAccess.get_file_as_string(path))
-	if typeof(d) != TYPE_ARRAY:
+	var doc = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if typeof(doc) != TYPE_DICTIONARY:
 		return
 	var objs := get_node_or_null("../Objects")
-	for row in d:
+	for key in doc.get("spawn", {}):
+		var t: Dictionary = doc["spawn"][key]
+		var tn: Node3D = objs.find_child("t%03d" % int(key), true, false) if objs else null
+		if tn:
+			tn.visible = false
+		templates[int(key)] = {"row": t, "node": tn}
+	for row in doc["rows"]:
 		var r := {}
 		for key in row:
 			var v = row[key]
@@ -169,11 +182,162 @@ func _process(dt: float) -> void:
 			continue
 		for k in slots:
 			var r: Dictionary = rows[k]
-			if int(r["op"]) == 6:
+			var op := int(r["op"])
+			if op == 6:
 				lid_step(r, func(m: int, v: int) -> void: _mode(r, m, v))
-			elif int(r["op"]) == 7:
+			elif op == 7:
 				big_step(r, func(m: int, v: int) -> void: _mode(r, m, v))
+			elif op >= 0x60 and op <= 0x62 and int(r["state"]) != 0x63:
+				var p: Vector3i = r["pos"]
+				fall_step(r, player.coll.surface(p.x, p.y, p.z))
 	_draw()
+
+
+# spawn_gold (0x80046294) and spawn_thing (0x800460bc), for a drop tools/ai.py's way --
+# ai.gd's drops: an object in the next slot from 350, the type's model copied
+# from its template, +0x38 0xff so it can be taken as it falls, and the fall
+# its type row's +1 picks; the gold falls by 0x62 from a velocity of -0x78.
+# @orig game:0x80046294 spawn_gold  status:transcribed -- the object in the ring from 350
+# @orig game:0x800460bc spawn_thing  status:transcribed -- the thing a creature leaves: the fall by the type row's +1, the angle 0x62 brings it to, the doubled scale (in the template)
+func spawn(d: Dictionary) -> void:
+	var typ := int(d["type"])
+	if not templates.has(typ):
+		return
+	var t: Dictionary = templates[typ]["row"]
+	var ring := int(d.get("ring", 0x15E))
+	var made := free_slot(ring, int(counters[ring]))
+	if made < 0:
+		return
+	counters[ring] = (int(counters[ring]) + 1) & 0xFFFF
+	if rows.has(made):                  # a thing taken, or the oldest: gone now
+		var old = rows[made].get("node")
+		if old:
+			(old as Node).queue_free()
+		slots.erase(made)
+	var r := {"slot": made, "cls": 0x40, "type": typ, "kind": int(t["kind"]),
+		"count": int(counters[ring]),
+		"reach": int(t["reach"]), "top": int(t["top"]), "c": int(t["c"]),
+		"e": int(t["e"]), "lock": FREE, "b0": 2, "b1": 0x80,
+		"inside": int(d["amount"]), "op": int(t["op"]), "state": 0,
+		"vel": -0x78 if typ == 0x95 else 0, "rest": int(t["rest"]),
+		"angles": [0, int(d["yaw"]), 0], "skin": {}, "model": 0,
+		"pos": Vector3i(int(d["pos"][0]), int(d["pos"][1]), int(d["pos"][2]))}
+	var tn: Node3D = templates[typ]["node"]
+	if tn:
+		var nd := tn.duplicate() as Node3D
+		nd.name = "k%03d" % made
+		tn.get_parent().add_child(nd)
+		r["node"] = nd
+	else:
+		r["node"] = null
+	rows[made] = r
+	slots.append(made)
+	slots.sort()
+
+
+# find_free_slot (0x80046034): of the ten slots from `start`, the first whose
+# type is 0xff -- never used, or taken -- else the oldest by the count at its
+# +0x3c, `count` minus it, mod 0x10000. -1 when every one is as new as now.
+# @orig game:0x80046034 find_free_slot  status:transcribed
+func free_slot(start: int, count: int) -> int:
+	var oldest := -1
+	var age := 0
+	for i in 10:
+		var k := start + i
+		if not rows.has(k) or int(rows[k]["type"]) == GONE:
+			return k
+		var dv := count - int(rows[k].get("count", 0))
+		if dv < 0:
+			dv += 0x10000
+		if age < dv:
+			age = dv
+			oldest = k
+	return oldest
+
+
+# Opcodes 0x60, 0x61 and 0x62 (0x8004b228, 0x8004b300, 0x8004b388): a thing
+# made where a creature died, falling to `floor` -- collide_surface under it.
+#   0x60  y += velocity, velocity += 0x14; at the floor a velocity of 0x10 for
+#         the X angle, += 0x10 a frame, to 0x400: lying flat
+#   0x61  y += 0x14 and the yaw += 0x100 a frame, to the floor
+#   0x62  y += velocity, the X angle 0xa0 one way or the other, velocity +=
+#         0x1e; at the floor under 0x50 it lies, else it bounces with half the
+#         velocity and the turn reversed; lying, its X angle goes to the rest
+#         by 0xa0 a frame (0x80015f18)
+# State 0x63 is at rest. tools/chests.py fall_step; three things lying in the
+# snapshots rest with the velocity it gives.
+# @orig game:0x8004b228 object_interpreter+0x4218  status:transcribed -- opcode 0x60
+# @orig game:0x8004b300 object_interpreter+0x42f0  status:transcribed -- opcode 0x61
+# @orig game:0x8004b388 object_interpreter+0x4378  status:transcribed -- opcode 0x62; not the splash where it crosses the water (sub_80056268), nor the layer it writes to +0
+static func fall_step(o: Dictionary, floor_y: int) -> void:
+	var op := int(o["op"])
+	var st := int(o["state"])
+	var p: Vector3i = o["pos"]
+	var ang: Array = o["angles"]
+	if op == 0x60:
+		if st == 0:
+			p.y += int(o["vel"])
+			o["vel"] = KFWeapon.s16(int(o["vel"]) + 0x14)
+			if p.y >= floor_y:
+				p.y = floor_y
+				o["vel"] = 0x10
+				o["state"] = 1
+		elif st == 1:
+			ang[0] = (int(ang[0]) + int(o["vel"])) & 0xFFFF
+			o["vel"] = KFWeapon.s16(int(o["vel"]) + 0x10)
+			if KFWeapon.s16(int(ang[0])) >= 0x400:
+				ang[0] = 0x400
+				o["state"] = 0x63
+	elif op == 0x61:
+		if st == 0:
+			p.y += 0x14
+			ang[1] = (int(ang[1]) + 0x100) & 0xFFF
+			if p.y >= floor_y:
+				p.y = floor_y
+				o["state"] = 0x63
+	elif op == 0x62:
+		if st < 2:
+			p.y += int(o["vel"])
+			ang[0] = (int(ang[0]) + (0xA0 if st == 0 else -0xA0)) & 0xFFF
+			var v := KFWeapon.s16(int(o["vel"]) + 0x1E)
+			o["vel"] = v
+			if v >= 0 and p.y >= floor_y:
+				if v < 0x50:
+					p.y = floor_y
+					o["state"] = 2
+				else:
+					o["vel"] = -(v >> 1)
+					o["state"] = 1 if st == 0 else 0
+		elif st == 2:
+			ang[0] = approach_angle(int(ang[0]), int(o["rest"]), 0xA0) & 0xFFFF
+			if KFWeapon.s16(int(ang[0])) == KFWeapon.s16(int(o["rest"])):
+				o["state"] = 0x63
+	o["pos"] = p
+
+
+# 0x80015f18: a towards b by step the short way round, onto b when the step
+# would pass it. tools/chests.py approach_angle.
+# @orig game:0x80015f18 angle_approach  status:transcribed
+static func approach_angle(a: int, b: int, step: int) -> int:
+	a &= 0xFFF
+	b &= 0xFFF
+	if a == b:
+		return b
+	if a < b:
+		if b - a < 0x801:
+			var n := KFWeapon.s16(a + step)
+			return b if b < n else n
+		var n2 := (a - step) & 0xFFF
+		if n2 < 0x800:
+			return n2
+		return n2 if b < n2 else b
+	if a - b < 0x801:
+		var n3 := KFWeapon.s16(a - step)
+		return b if n3 < b else n3
+	var n4 := (a + step) & 0xFFF
+	if n4 >= 0x801:
+		return n4
+	return n4 if n4 < b else b
 
 
 # object_mode (0x80044900) on what a chest holds: 0 takes it away, its +0

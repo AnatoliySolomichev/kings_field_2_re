@@ -832,8 +832,10 @@ def build_objects_gltf(lv, out="out/godot"):
     items += lifts
     loot_rows = []
     items += build_loot(lv, load, grid, look, prims_of, loot_rows, loot)
+    spawn = {}
+    items += build_drops(lv, load, look, prims_of, spawn)
     with open(f"{out}/loot{lv:02d}.json", "w") as f:
-        json.dump(loot_rows, f, separators=(",", ":"))
+        json.dump({"rows": loot_rows, "spawn": spawn}, f, separators=(",", ":"))
     for o, bags in doors:
         dp, dn = prims_of(bags)
         ntri += dn
@@ -876,6 +878,62 @@ def loot_slots(load):
         elif o["cls"] == ITEM_CLASS and load.drawn(o):
             out.add(k)
     return out
+
+
+def droppable(lv, load):
+    """The types a creature on level `lv` can leave when it dies: the gold
+    (0x95), what each category-1 creature was placed with (its +0xb), and the
+    thing each kind's dying behaviour names at its +0xc (tools/ai.py drops)."""
+    import actors as act
+    import ai
+    out = {0x95}
+    for a in act.table(lv):
+        if a and a["cat"] == 1 and a["b6"] != 0xFF:
+            out.add(a["b6"])
+    for k in sorted({a["kind"] for a in act.table(lv) if a}):
+        try:
+            kd = ai.kind_of(lv, k)
+        except Exception:
+            continue
+        for b in kd.get("behaviours", []):
+            raw = b["raw"]
+            if b["op"] == 3 and raw[0xC] != 0xFF:
+                out.add(raw[0xC])
+    return sorted(t for t in out if t < len(load.rows))
+
+
+def build_drops(lv, load, look, prims_of, spawn):
+    """A hidden node, `tNNN` by type, for everything droppable(): godot/loot.gd
+    copies it when a creature leaves one. Its rows go to lootNN.json's
+    "spawn": what object_give and the falls (tools/chests.py) need of the type
+    row. Lit by class 0, as the held weapon is."""
+    import chests
+    items = []
+    llm, lcm, bk = light_class(look, 0, 0)
+    for t in droppable(lv, load):
+        try:
+            _flags, objs = tmd.load(*tmd.model_of(t, lv))
+        except Exception:
+            continue
+        tr = load.rows[t]
+        k = 2.0 if tr[3] & 0x10 else 1.0              # spawn_thing doubles the scale
+        own = {}
+        emit_object(objs, lambda v, k=k: (v[0] * k / UNIT, -v[1] * k / UNIT,
+                                          -v[2] * k / UNIT),
+                    lambda raw: shade(raw, llm, lcm, bk), own)
+        dp, _dn = prims_of(own)
+        if not dp:
+            continue
+        items.append((f"t{t:03d}", dp, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)))
+        spawn[str(t)] = {
+            "type": t, "kind": tr[1], "flags": tr[3],
+            "reach": struct.unpack_from("<H", tr, 6)[0],
+            "top": struct.unpack_from("<H", tr, 8)[0],
+            "c": struct.unpack_from("<h", tr, 0xC)[0],
+            "e": struct.unpack_from("<h", tr, 0xE)[0],
+            "op": 0x62 if t == chests.GOLD_TYPE else chests.DROP_OP.get(tr[1], 0xFF),
+            "rest": 0 if (t == chests.GOLD_TYPE or t in chests.LIE_FLAT) else 0x400}
+    return items
 
 
 def build_loot(lv, load, grid, look, prims_of, rows, slots):

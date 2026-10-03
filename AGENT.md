@@ -218,6 +218,8 @@ the chests' lids, against the snapshots                7 of 7 opened lids on the
                                                        lid's path, one moving
 the conversations a USE at a time, bp21                4 of 4 recorded conversations,
                                                        line for line
+the drops, against the snapshots                       3 of 3 lying as the fall leaves
+                                                       them (consistent, not a proof)
 the creatures' behaviour tables, against snapshots     168 896 of 168 896 bytes,
                                                        69 of 69 awake actors
 the creatures' machine, against the bp16 act= log      181 of 181 behaviour runs;

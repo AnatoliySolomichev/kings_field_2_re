@@ -618,6 +618,8 @@ func tick(a: Dictionary, kind: Dictionary, player: Vector3i, others: Array) -> D
 			var s3: int = int(a["sub"])
 			if s3 == 0:
 				clock(a, s16f(raw, 8))
+				if clock_passed(a, 0x800):  # 0x800506c0: what it leaves
+					a["drop"] = drops(a, kind, raw)
 				if int(a["clock"]) >= 0xFFF or s16f(raw, 8) == 0:
 					a["sub"] = 0xF
 			else:
@@ -628,6 +630,40 @@ func tick(a: Dictionary, kind: Dictionary, player: Vector3i, others: Array) -> D
 			brake(a, int(kind["accel"]) << 1, 0xA, others, player)
 	move_vertical(a, kind)
 	return blow
+
+
+# What a dying creature leaves when its clock crosses 0x800: the gold -- its
+# kind's +0x30 and the spread, two rolls made whatever the gold -- when it
+# comes to more than 0, and a thing: for categories 0 and 4 the dying
+# behaviour's +0xc if not 0xff and rand() >> 7 is under its +0xd, for
+# category 1 the one it was placed with (+0xb). tools/ai.py drops.
+# @orig game:0x800506c0 actor_tick+0x618  status:transcribed -- the gold (random_spread, spawn_gold) and the thing (spawn_thing), as drops for loot.gd to make; checked as tools/ai.py's, whose replay keeps 336 of 336 dying frames with the rolls in
+func drops(a: Dictionary, kind: Dictionary, raw: Array) -> Array:
+	var out := []
+	var g := int(kind.get("gold", 0))
+	var r := int(rand.call()) + int(rand.call()) - 0x8000
+	var amount := (g + ((r * g) >> 15)) & 0xFFFF
+	if amount != 0:
+		var ang := (int(rand.call()) >> 3) & 0xFFFF
+		out.append({"type": 0x95, "amount": amount, "ring": 0x15E,
+			"pos": [int(a["px"]) + ((600 * coll.game_sin(ang)) >> 12),
+				int(a["py"]) - (int(a["height"]) >> 1),
+				int(a["pz"]) + ((600 * coll.game_cos(ang)) >> 12)],
+			"yaw": (int(rand.call()) >> 3) & 0xFFFF})
+	var cat := int(a.get("cat", 0))
+	var thing := -1
+	var ring := 0x172                 # what a category-1 creature carried: 370 up
+	if cat == 0 or cat == 4:
+		if int(raw[0xC]) != 0xFF and (int(rand.call()) >> 7) < int(raw[0xD]):
+			thing = int(raw[0xC])
+			ring = 0x168              # a dying behaviour's: 360 up
+	elif cat == 1 and int(a.get("b6", 0xFF)) != 0xFF:
+		thing = int(a["b6"])
+	if thing >= 0:
+		out.append({"type": thing, "amount": 0, "ring": ring,
+			"pos": [int(a["px"]), int(a["py"]) - (int(a["height"]) >> 1), int(a["pz"])],
+			"yaw": (int(rand.call()) >> 3) & 0xFFFF})
+	return out
 
 
 # @orig game:0x80051cf8 actor_tick+0x1c50  status:transcribed -- the tail the arms share: clock at 0xfff, actor_finish

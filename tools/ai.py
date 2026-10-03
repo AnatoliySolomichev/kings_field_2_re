@@ -677,7 +677,9 @@ def tick(a, kind, lvl, player, others, rand):
             start_anim(a, raw[1])
         s = a["sub"]
         if s == 0:
-            clock(a, s16f(raw, 8))                      # the drops at 0x800 are not here
+            clock(a, s16f(raw, 8))
+            if clock_passed(a, 0x800):                  # 0x800506c0: what it leaves
+                a["drop"] = drops(a, kind, raw, rand)
             if a["clock"] >= 0xFFF or s16f(raw, 8) == 0:
                 a["sub"] = 0xF                          # 0x800507b0
         else:
@@ -688,6 +690,59 @@ def tick(a, kind, lvl, player, others, rand):
         brake(a, lvl, kind["accel"] << 1, 0xA, others, player)
     move_vertical(a, lvl, kind)
     return blow
+
+
+def gold_spread(gold, rand):
+    """random_spread (0x80017108): ((rand() + rand() - 0x8000) * gold) >> 15 -- the two rolls
+    are made whatever the gold, a dying creature's at the clock's 0x800."""
+    r = rand() + rand() - 0x8000
+    v = (r * gold) & 0xFFFFFFFF
+    v = v - 0x100000000 if v & 0x80000000 else v
+    return v >> 15
+
+
+def drops(a, kind, raw, rand):
+    """What a dying creature leaves when its clock crosses 0x800 (0x800506c0..
+    0x80050784): the gold -- its kind's +0x30 and the spread, two rolls made
+    whatever the gold is -- through spawn_gold when it comes to more than 0;
+    then a thing: for categories 0 and 4 the dying behaviour's +0xc, if it is
+    not 0xff and rand() >> 7 is under its +0xd, and for category 1 the one
+    the creature was placed with (+0xb, the placement's byte 6)."""
+    out = []
+    g = kind.get("gold", 0)
+    amount = (g + gold_spread(g, rand)) & 0xFFFF
+    if amount:
+        out.append(drop_gold(a, amount, rand))
+    cat = a.get("cat", 0)
+    if cat in (0, 4):
+        if raw[0xC] != 0xFF and (rand() >> 7) < raw[0xD]:
+            out.append(drop_item(a, raw[0xC], rand, 0x168))
+    elif cat == 1 and a.get("b6", 0xFF) != 0xFF:
+        out.append(drop_item(a, a["b6"], rand, 0x172))
+    return out
+
+
+def drop_gold(a, amount, rand):
+    """spawn_gold (0x80046294) as the dying arm calls it: the amount, at the
+    creature's place half its height up, moved 600 along an angle rand() >> 3,
+    turned by rand() >> 3; tools/chests.py's gold falls from there."""
+    import movement
+    ang = (rand() >> 3) & 0xFFFF
+    x = a["x"] + ((600 * movement.game_sin(ang)) >> 12)
+    z = a["z"] + ((600 * movement.game_cos(ang)) >> 12)
+    y = a["y"] - (a["height"] >> 1)
+    return {"type": 0x95, "amount": amount, "pos": [x, y, z], "ring": 0x15E,
+            "yaw": (rand() >> 3) & 0xFFFF}
+
+
+def drop_item(a, typ, rand, ring):
+    """spawn_thing (0x800460bc) as the dying arm calls it: the thing at the creature's
+    place half its height up, turned by rand() >> 3; `ring` the first of the
+    ten slots it takes one of -- 360 for a dying behaviour's, 370 for what a
+    category-1 creature carried (the gold's are 350)."""
+    return {"type": typ, "amount": 0, "ring": ring,
+            "pos": [a["x"], a["y"] - (a["height"] >> 1), a["z"]],
+            "yaw": (rand() >> 3) & 0xFFFF}
 
 
 def _dist(a, player):

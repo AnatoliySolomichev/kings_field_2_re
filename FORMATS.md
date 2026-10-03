@@ -2691,6 +2691,55 @@ The row's `+0xe` -- the record's `+0xe` approaches `row[+0x10]` during the
 flight, and the big chest adds `0xc8` to it -- reaches `draw_model_plain` as
 its argument `0x30`; it is not read further, and the port leaves it.
 
+### What a dying creature leaves
+
+A creature dying is its kind's opcode-3 behaviour; in its first part, the
+frame its animation clock crosses `0x800` (`actor_clock_passed`, `0x800506c0`):
+
+```
+gold    the kind's +0x30 + random_spread(it) -- ((rand() + rand() - 0x8000) * n)
+        >> 15, two rolls whatever the gold -- and, if that is not 0, spawn_gold:
+        a coin, type 0x95, 600 from the creature along rand() >> 3, half its
+        height up, turned by rand() >> 3, the amount at +0x3a
+a thing categories 0 and 4: the dying behaviour's +0xc, when not 0xff and
+        rand() >> 7 is under its +0xd; category 1: what the creature was placed
+        with, its +0xb (the placement's byte 6). spawn_thing (0x800460bc): at the
+        creature's place, half its height up, turned by rand() >> 3
+```
+
+Each goes to a ring of ten object slots -- the gold to 350, a dying
+behaviour's thing to 360, a carried thing to 370 -- through `find_free_slot`
+(`0x80046034`): the first slot whose type is `0xff`, else the oldest by a count
+the ring keeps (`0x8019839a`, `c`, `e`) and writes to `+0x3c`. Its `+0x38` is
+`0xff` at once, so it can be taken while it falls, and it falls by an opcode:
+
+```
+0x60  (things whose row +1 is 0x10, 0x13, 0x16) y += v, v += 0x14; on the
+      floor v = 0x10 turns the X angle, += 0x10 a frame, to 0x400: it tips over
+0x61  (0x17) y += 0x14 and the yaw += 0x100 a frame, to the floor
+0x62  (the gold; 0x11 0x12 0x14 0x15 0x18 0x19 0x20) y += v, the X angle
+      +-0xa0, v += 0x1e; on the floor under 0x50 it lies, else it bounces with
+      -(v >> 1) and turns the other way; lying, the X angle goes to its +0x2a --
+      0 for types 0x5c, 0x86, 0x88, 0x8d, 0x8f and the gold, else 0x400 -- by
+      0xa0 a frame (angle_approach), then state 0x63
+```
+
+the gold starting at `v = -0x78`, a thing at 0, and the floor `collide_surface`
+under it. On level 0 no dying behaviour names a thing; seven category-1
+creatures carry one: earth herbs, leather gloves, a blood stone, the dragon
+crystal and creature 27's Silviera's key (141, `0x8d`).
+
+**Against the snapshots.** Three things lie at rest in the rings of level 0's
+snapshots: gold of 8 in slot 350 (`chest1`, `chest2`), gold of 14 in slot 350
+(`door1`, `door2`) and the key `0x8d` in slot 370 -- the ring a carried thing
+goes to, and creature 27's. Their resting velocities, 75, 75 and 68, are the
+last of the fall the model gives from half a creature's height -- 1625, kinds 0
+and 1, whose gold is 15 -- the gold from `-0x78` and the key from 0, both with
+an X angle of 0 (`tools/chests.py`, 3 of 3). It is a consistency, not a proof:
+several heights end the same way, and the snapshot does not say which creature
+it was. In the port, killing creature 27 leaves 18 gold in slot 350 and the key
+in 370, at rest with 75 and 68 on its floor.
+
 ### The banners
 
 `announce` (`0x80041eec`) queues a code under `0xf0` in a ring of eight

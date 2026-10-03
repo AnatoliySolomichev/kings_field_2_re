@@ -636,7 +636,26 @@ func _chests() -> bool:
 					first = "flight %d frame %d: godot %s python %s" % [flights, i, str(got), str(w)]
 			i += 1
 		flights += 1
-	print("chests: %d of %d frames match tools/chests.py (the lid, the big chest, %d flights of object_give)" % [n - bad, n, flights])
+	var falls := 0
+	for f in doc.get("falls", []):
+		var o := {"op": int(f["op"]), "state": 0, "pos": Vector3i(0, -int(f["drop"]), 0),
+			"angles": [0, 0, 0], "vel": int(f["vel"]), "rest": int(f["rest"])}
+		var i := 0
+		for want in f["frames"]:
+			script.fall_step(o, 0)
+			var q: Vector3i = o["pos"]
+			var got := [int(o["state"]), q.y, int(o["vel"]), int(o["angles"][0]), int(o["angles"][1])]
+			var w := []
+			for v in want:
+				w.append(int(v))
+			n += 1
+			if got != w:
+				bad += 1
+				if first == "":
+					first = "fall %d frame %d: godot %s python %s" % [falls, i, str(got), str(w)]
+			i += 1
+		falls += 1
+	print("chests: %d of %d frames match tools/chests.py (the lid, the big chest, %d flights of object_give, %d falls)" % [n - bad, n, flights, falls])
 	if bad > 0:
 		print("  first difference: " + first)
 	return bad == 0

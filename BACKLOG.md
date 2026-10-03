@@ -416,9 +416,11 @@ What is left of movement:
    the probe, the damage, the flinch, the dying and the push -- checked against
    `emu/bp25.lua`'s recording (817 of 817 frames). The weapon in the hand is
    drawn too (`godot/held.gd`, FDAT entry 0x62 + the weapon, animated by the
-   swing). Left: the bows (0x1b, 0x1c), the spells a swing can carry (+3, +4),
-   phase 1, the drops a death leaves, and the lighting class the hand is drawn
-   with.
+   swing), and a death leaves its gold and its thing, which fall and can be
+   taken (FORMATS.md, "What a dying creature leaves"). Left: the bows (0x1b,
+   0x1c), the spells a swing can carry (+3, +4), phase 1, the lighting class
+   the hand is drawn with, and the dying creature's fade (+0x16, which the
+   dying arm moves by 0x200 a frame either side of the clock's 0x800).
 4. **The door shoves the player — found.** The X writes `emu/bp15.lua` caught
    at `0x800482e4` are the swinging door (opcode 1, `0x8004814c`): while it
    opens and the player is in its sweep it adds (0, 0, -0x4c) turned by its
@@ -532,7 +534,11 @@ on the lid's path. Left:
   frame by opcode 9, and nothing in GAME.EXE calls `object_mode` to bring
   them back -- the level's own code, or a creature's death, presumably;
 * **a recording**: nothing here has been checked frame by frame against the
-  game; a bp script on the lid's arm and on `object_give`'s loop would.
+  game; a bp script on the lid's arm and on `object_give`'s loop would. The
+  drops (FORMATS.md, "What a dying creature leaves") lie in three snapshots as
+  the model leaves them, which is consistent but not a frame-by-frame check;
+  the splash a falling thing makes where it crosses the water
+  (`sub_80056268`) and the layer it writes to its `+0` are not in the port.
 
 The signs (classes `0x0d` and `0x14`) are read with USE too: `load_entry`
 shows the ITEM.T page as the game does (`godot/document.gd`), and so are the

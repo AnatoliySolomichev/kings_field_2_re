@@ -591,12 +591,12 @@
  "0x80046034": {
   "name": "find_free_slot",
   "kind": "code",
-  "evidence": "scans the object array from a0 for count a1; returns the first record whose u16 at +0x06 is 0xff, else evicts the oldest by the counter at +0x3c"
+  "evidence": "(start, count, counter): of `count` object slots from `start`, the first whose type (+6) is 0xff, else the one whose +0x3c is oldest by counter minus it mod 0x10000. spawn_gold uses 350..359, spawn_thing 360..369 and 370..379"
  },
  "0x80046294": {
   "name": "spawn_gold",
   "kind": "code",
-  "evidence": "allocates a slot, initialises it, writes type 0x95 (149) at +0x06 and the amount from a0 at +0x3a"
+  "evidence": "(amount, position, dy): a gold coin -- type 0x95 in the ring of ten slots from 350 (find_free_slot, counter 0x8019839a written to +0x3c), the amount at +0x3a, 600 from the position along rand() >> 3 and dy higher, turned by rand() >> 3, +0x38 0xff, falling by opcode 0x62 from a velocity (+0x3e) of -0x78. The dying arm calls it when the creature's clock crosses 0x800 with its kind's gold plus random_spread. tools/ai.py drops, godot/loot.gd"
  },
  "0x80044d9c": {
   "name": "load_object_placement",
@@ -2832,5 +2832,40 @@
   "name": "message_state",
   "kind": "data",
   "evidence": "message_tick's state: 0 waiting, 1 fading in (0x801aeaf9 += 0x14 to 0x64), 2 holding (0x801aeaf8 from 15 to 0), 3 fading out"
+ },
+ "0x800460bc": {
+  "kind": "code",
+  "name": "spawn_thing",
+  "evidence": "(ring, type, position, dy): what a dying creature leaves besides gold -- an object of `type` in a ring of ten slots, 360 up (ring 1, a dying behaviour's +0xc, counter 0x8019839c) or 370 up (ring 0, what a category-1 creature was placed with, counter 0x8019839e) through find_free_slot; at the position dy higher, turned by rand() >> 3, +0x38 0xff; the fall by the type row's +1 (0x10, 0x13, 0x16: opcode 0x60; 0x17: 0x61; 0x11, 0x12, 0x14, 0x15, 0x18, 0x19, 0x20: 0x62, its +0x2a 0 for types 0x5c, 0x86, 0x88, 0x8d, 0x8f and 0x400 else); a row with flag 0x10 drawn at twice the size. tools/chests.py, godot/loot.gd"
+ },
+ "0x80046014": {
+  "kind": "code",
+  "name": "object_start_op",
+  "evidence": "(record, op): the opcode +4 and the state +8 = 0, only if the record's +4 is 0xff -- how spawn_gold and spawn_thing set their objects falling"
+ },
+ "0x80017108": {
+  "kind": "code",
+  "name": "random_spread",
+  "evidence": "(n): ((rand() + rand() - 0x8000) * n) >> 15 -- within n either way, two rolls whatever n is; the dying arm adds it to a kind's gold"
+ },
+ "0x80015f18": {
+  "kind": "code",
+  "name": "angle_approach",
+  "evidence": "(a, b, step): a towards b by step the short way round the circle, onto b when the step would pass it; opcode 0x62 lays a fallen thing to its +0x2a with it. tools/chests.py approach_angle"
+ },
+ "0x8019839a": {
+  "name": "drop_count_gold",
+  "kind": "data",
+  "evidence": "spawn_gold's count, written to each coin's +0x3c: find_free_slot evicts the oldest coin of the ten by it"
+ },
+ "0x8019839c": {
+  "name": "drop_count_dying",
+  "kind": "data",
+  "evidence": "spawn_thing's count for ring 1 (slots 360..369), a dying behaviour's thing"
+ },
+ "0x8019839e": {
+  "name": "drop_count_carried",
+  "kind": "data",
+  "evidence": "spawn_thing's count for ring 0 (slots 370..379), what a category-1 creature carried"
  }
 }

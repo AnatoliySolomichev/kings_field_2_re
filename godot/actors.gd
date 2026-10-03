@@ -195,6 +195,12 @@ func _pass(px: int, pz: int) -> void:
 		if a.has("fired"):
 			_launch(a, kind, a["fired"])
 			a.erase("fired")
+		if a.has("drop"):
+			var lt := get_node_or_null("../Loot")
+			if lt:
+				for d in a["drop"]:
+					lt.spawn(d)
+			a.erase("drop")
 		if a.get("retire", false):
 			a.erase("retire")
 			_kill(k)

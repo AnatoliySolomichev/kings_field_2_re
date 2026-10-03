@@ -244,6 +244,124 @@ def give_frames(pos, angles, row_c, row_e, player, view_pitch, facing,
     return out
 
 
+# -- what falls -----------------------------------------------------------
+#
+# A dying creature's gold (spawn_gold, 0x80046294) and its thing
+# (spawn_thing, 0x800460bc) are objects made on the spot, in rings of slots from 350, with
+# their +0x38 0xff -- free to take as they fall. The gold falls by opcode
+# 0x62; a thing by its type row's +1:
+#
+#   0x10, 0x13, 0x16           0x60  falls, then tips over to lie flat
+#   0x17                       0x61  sinks at 20 a frame, spinning
+#   0x11 0x12 0x14 0x15 0x18
+#   0x19 0x20                  0x62  falls and bounces
+#   0x1a .. 0x1f               none: it stays where it was made
+#
+# and a type whose row's +3 has 0x10 is drawn at twice the size.
+
+DROP_OP = {0x10: 0x60, 0x13: 0x60, 0x16: 0x60, 0x17: 0x61,
+           0x11: 0x62, 0x12: 0x62, 0x14: 0x62, 0x15: 0x62, 0x18: 0x62,
+           0x19: 0x62, 0x20: 0x62}
+LIE_FLAT = (0x5C, 0x86, 0x88, 0x8D, 0x8F)   # 0x62 brings these to an X angle of 0
+GOLD_TYPE = 0x95
+
+
+def drop_object(d, kind):
+    """The object a drop makes: spawn_thing's, or spawn_gold's for the gold.
+    `d` is tools/ai.py's drop, `kind` the type row's +1."""
+    o = {"type": d["type"], "pos": list(d["pos"]), "angles": [0, d["yaw"], 0],
+         "state": 0, "vel": 0, "rest": 0, "amount": d["amount"]}
+    if d["type"] == GOLD_TYPE:
+        o["op"], o["vel"] = 0x62, -0x78          # and +0x2a left at 0
+    else:
+        o["op"] = DROP_OP.get(kind, 0xFF)
+        if o["op"] == 0x62 and d["type"] not in LIE_FLAT:
+            o["rest"] = 0x400
+    return o
+
+
+def approach_angle(a, b, step):
+    """0x80015f18: a towards b by step the short way round, onto b when the
+    step would pass it -- read branch by branch, delay slots included."""
+    a &= 0xFFF
+    b &= 0xFFF
+    if a == b:
+        return b
+    if a < b:
+        if b - a < 0x801:                        # up, without wrapping
+            n = s16(a + step)
+            return b if b < n else n
+        n = (a - step) & 0xFFF                   # down through 0
+        if n < 0x800:
+            return n
+        return n if b < n else b
+    if a - b < 0x801:                            # down, without wrapping
+        n = s16(a - step)
+        return b if n < b else n
+    n = (a + step) & 0xFFF                       # up through 0xfff
+    if n >= 0x801:
+        return n
+    return n if n < b else b
+
+
+def fall_step(o, floor):
+    """One frame of opcodes 0x60, 0x61 and 0x62 (0x8004b228, 0x8004b300,
+    0x8004b388) on `o` -- state, y (pos[1]), the vertical velocity +0x3e, the
+    angles -- `floor` what collide_surface answers under it."""
+    op, st = o["op"], o["state"]
+    p, ang = o["pos"], o["angles"]
+    if op == 0x60:
+        if st == 0:
+            p[1] += o["vel"]
+            o["vel"] = s16(o["vel"] + 0x14)
+            if p[1] < floor:
+                return
+            p[1], o["vel"], o["state"] = floor, 0x10, 1
+        elif st == 1:
+            ang[0] = (ang[0] + o["vel"]) & 0xFFFF
+            o["vel"] = s16(o["vel"] + 0x10)
+            if s16(ang[0]) < 0x400:
+                return
+            ang[0], o["state"] = 0x400, 0x63
+    elif op == 0x61:
+        if st == 0:
+            p[1] += 0x14
+            ang[1] = (ang[1] + 0x100) & 0xFFF
+            if p[1] < floor:
+                return
+            p[1], o["state"] = floor, 0x63
+    elif op == 0x62:
+        if st < 2:
+            p[1] += o["vel"]
+            ang[0] = (ang[0] + (0xA0 if st == 0 else -0xA0)) & 0xFFF
+            o["vel"] = s16(o["vel"] + 0x1E)
+            if o["vel"] < 0 or p[1] < floor:
+                return
+            if o["vel"] < 0x50:
+                p[1], o["state"] = floor, 2
+            else:
+                o["vel"] = -(o["vel"] >> 1)
+                o["state"] = 1 if st == 0 else 0
+        elif st == 2:
+            ang[0] = approach_angle(ang[0], o["rest"], 0xA0) & 0xFFFF
+            if s16(ang[0]) == s16(o["rest"]):
+                o["state"] = 0x63
+
+
+def fall_path(op, drop=0x600, vel=0, rest=0, frames=120):
+    """[(state, y, vel, x angle, yaw)] of a fall from `drop` above a flat floor
+    at 0, for godot/selftest.gd."""
+    o = {"op": op, "state": 0, "pos": [0, -drop, 0], "angles": [0, 0, 0],
+         "vel": vel, "rest": rest}
+    out = []
+    for _ in range(frames):
+        fall_step(o, 0)
+        out.append((o["state"], o["pos"][1], o["vel"], o["angles"][0], o["angles"][1]))
+        if o["state"] == 0x63:
+            break
+    return out
+
+
 # -- against the game ----------------------------------------------------
 
 def snapshot_chests():
@@ -298,6 +416,48 @@ def check(out=sys.stdout, verbose=False):
                   f"{'agrees' if good else 'DIFFERS'}", file=out)
     print(f"  {ok} of {ok + bad} opened lids in the snapshots on the path "
           f"tools/chests.py takes ({len(path)} frames from USE to rest)", file=out)
+    lying = check_drops(out, verbose)
+    return bad == 0 and lying
+
+
+def check_drops(out=sys.stdout, verbose=False):
+    """The things lying in the drop rings of the snapshots (slots 350..379),
+    at rest: the velocity each keeps is the last of its fall, which the fall
+    from half a level-0 creature's height gives -- gold from -0x78, a thing
+    from 0 -- if the creature stood on the floor the thing lands on. Which
+    creature it was the snapshot does not say, so any kind will do."""
+    import json
+    import objload
+    kinds = json.load(open(os.path.join(ROOT, "out", "godot", "ai00.json")))["kinds"]
+    heights = sorted({kd["height"] for kd in kinds.values()})
+    ot, rec = objload.OBJECT_TABLE & 0x1FFFFF, objload.REC
+    seen, ok, bad = set(), 0, 0
+    for path, lv in objload.snapshots():
+        if lv != 0:
+            continue
+        ram = open(path, "rb").read()
+        for slot in range(350, 380):
+            b = ot + slot * rec
+            if ram[b + 4] != 0x62 or struct.unpack_from("<H", ram, b + 8)[0] != 0x63:
+                continue
+            vel = struct.unpack_from("<h", ram, b + 0x3E)[0]
+            xa = struct.unpack_from("<h", ram, b + 0x24)[0]
+            key = (slot, struct.unpack_from("<i", ram, b + 0x14)[0], vel)
+            if key in seen:
+                continue
+            seen.add(key)
+            v0 = -0x78 if slot < 360 else 0
+            fits = [h for h in heights
+                    if fall_path(0x62, h >> 1, v0, 0)[-1][2] == vel]
+            good = bool(fits) and xa == 0
+            ok += good
+            bad += not good
+            if verbose or not good:
+                print(f"  {os.path.basename(path)} slot {slot}: at rest, velocity {vel}, "
+                      f"X angle {xa} -- the fall from half of height {fits} "
+                      f"{'gives it' if good else 'does not'}", file=out)
+    print(f"  {ok} of {ok + bad} things lying in the drop rings rest as a fall "
+          f"from half a creature's height leaves them", file=out)
     return bad == 0
 
 
@@ -314,8 +474,15 @@ def export(out_dir):
                              args["player"], args["pitch"], args["facing"],
                              press, take)
         flights.append({"args": args, "frames": [list(f) for f in frames]})
+    falls = []
+    for op, drop, vel, rest in ((0x60, 0x600, 0, 0), (0x61, 0x600, 0, 0),
+                                (0x62, 812, -0x78, 0), (0x62, 812, 0, 0x400),
+                                (0x62, 2000, -0x78, 0)):
+        falls.append({"op": op, "drop": drop, "vel": vel, "rest": rest,
+                      "frames": [list(f) for f in fall_path(op, drop, vel, rest)]})
     doc = {"lid": [list(r) for r in lid_cycle()],
-           "big": [list(r) for r in big_cycle()], "flights": flights}
+           "big": [list(r) for r in big_cycle()], "flights": flights,
+           "falls": falls}
     path = os.path.join(out_dir, "chestcheck.json")
     with open(path, "w") as fh:
         json.dump(doc, fh, separators=(",", ":"))

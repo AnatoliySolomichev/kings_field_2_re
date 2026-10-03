@@ -631,7 +631,8 @@ python3 tools/doors.py --check      the counts alone
 ```
 
 **Chests in the port.** `chests.py` is the small chest's lid (opcode 6), the
-big chest (opcode 7) and `object_give`'s frames in Python; `godot/loot.gd` the
+big chest (opcode 7), `object_give`'s frames and the falls of what a dying
+creature leaves (opcodes 0x60 to 0x62) in Python; `godot/loot.gd` the
 same in the port, with object_interact's arms for them, and
 `godot/messages.gd` the banners (FORMATS.md, "Chests, and picking things
 up" and "The banners"). The chests and the things to take are nodes of their
@@ -639,7 +640,8 @@ own, `kNNN` in `objectsNN.gltf`, with `lootNN.json` beside; `hud.py` writes
 the banners' page (`msgpage.png`) and records (`messages.json`).
 
 ```
-python3 tools/chests.py             the lid's path against every opened lid in the snapshots
+python3 tools/chests.py             the lid's path against every opened lid in the snapshots,
+                                    and the drops lying in them against the falls
 python3 tools/chests.py --check     the counts alone
 ```
 
