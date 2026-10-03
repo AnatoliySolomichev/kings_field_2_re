@@ -520,8 +520,9 @@ game's frames of the screen primitive for primitive (`inv1`, `inv2`, read by
 `tools/gpuframe.py`), and `godot/menu.gd` draws what `tools/ui.py` draws.
 Eating heals. Left, roughly in order:
 
-* `ui_status_page` (`0x800227ec`, 709 instructions), drawn behind the main
-  page every frame -- a snapshot of the main page would check it;
+* `ui_status_page` (`0x800227ec`) is in, transcribed: a snapshot with the
+  menu open on its main page would hold it to the game's frame
+  (`tools/ui.py` can then compare it as it does `inv1`);
 * `use_item`'s arms (`0x8005cbe0`, 61 of them): the seven keys of the shared
   arm are in (`godot/loot.gd` `try_key`, transcribed: no recording has a key
   used yet -- a bp session using the copper key on level 0's slot 9 would

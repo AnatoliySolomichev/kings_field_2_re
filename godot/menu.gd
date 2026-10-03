@@ -39,6 +39,14 @@ const NOTHING_HAPPENS := 0xA
 # The keys use_item's arm at 0x8005d188 takes: royal, copper, silver,
 # magician's, jail, dwarves', Lyn's.
 const KEYS := [135, 137, 138, 139, 140, 142, 144]
+# ui_status_page's five icons: (working skill, u, CLUT) in the order drawn --
+# light, fire, earth, wind, water -- 14 square at v 0xc0 of page 0x1d, depth 0x1e
+const SKILL_ICONS := [[4, 0x00, 0x7D04], [0, 0x10, 0x7D44], [1, 0x20, 0x7D84],
+	[3, 0x30, 0x7DC4], [2, 0x40, 0x7E04]]
+const ICON_PAGE := 0x1D
+const ICON_V := 0xC0
+const ICON_SIZE := 0xE
+const ICON_DEPTH := 0x1E
 
 static var data := {}
 var tex := {}                       # "tpage_clut" -> [solid, semi]
@@ -448,6 +456,98 @@ static func menu_page(o: Dictionary, lk: Dictionary, page: int, n: int, sel: int
 	legend(o, lk, true)
 
 
+# ui_status_page (0x800227ec), behind the main page every frame: experience,
+# level, HP and MP over their maxima, the effective stat and 0x801b2530 + 1,
+# the five working skills under their icons -- light, fire, earth, wind,
+# water -- the condition and the gold, in a frame. Two records on the stack
+# carry it, a label's (x, y, glyphs) and a number's, each moved and
+# overwritten in place as the routine goes; `ps` holds the values.
+# @orig game:0x800227ec ui_status_page  status:transcribed -- as tools/ui.py draws it; no snapshot of the main page yet
+static func status_page(o: Dictionary, lk: Dictionary, ps: Dictionary) -> void:
+	var style: Array = rec(LABEL_STYLE)
+	var nstyle: Array = rec(NUMBER_STYLE)
+	var words: Dictionary = data["status"]["labels"]
+	var lx := 0xA3
+	var ly := 0x24
+	var lg: Array = (words["experience"] as Array).duplicate()
+	draw_label(o, lk, style, lx, ly, lg)
+	var nx := lx + 0x4D
+	var ny := ly
+	draw_number(o, lk, nstyle, nx, ny, number_digits(int(ps["exp"]), 7, 0, 0))
+	ly += 0x11
+	_put(lg, words["level"])
+	draw_label(o, lk, style, lx, ly, lg)
+	ny += 0x11
+	draw_number(o, lk, nstyle, nx, ny, number_digits(int(ps["level"]), 7, 0, 0))
+	for which in ["hp", "mp"]:
+		if which == "hp":
+			_put(lg, [0x07, 0x0F, 0xFF])                 # "HP"
+		else:
+			lg[0] = 0x0C                                # and "MP" off it
+		ly += 0x11
+		draw_label(o, lk, style, lx, ly, lg)
+		nx = lx + 0x3F
+		ny += 0x11
+		draw_number(o, lk, nstyle, nx, ny, number_digits(int(ps[which]), 4, 0, 0))
+		nx += 0x1C
+		draw_number(o, lk, nstyle, nx, ny, [0x14, 0xFF])            # the stroke
+		nx += 7
+		draw_number(o, lk, nstyle, nx, ny, number_digits(int(ps[which + "_max"]), 4, 0, 0))
+	_put(lg, [0x0F, 0x16, 0x11, 0x3B, 0x16, 0x08, 0x12, 0xFF])
+	ly += 0x11
+	draw_label(o, lk, style, lx, ly, lg)
+	nx = lx + 0x46
+	ny = ly
+	draw_number(o, lk, nstyle, nx, ny, number_digits(int(ps["stat"]), 5, 0, 0))
+	nx = lx + 0x62
+	draw_number(o, lk, nstyle, nx, ny, number_digits(int(ps["wis"]) + 1, 4, 0, 0))
+	_put(lg, [0x3B, 0xFF])
+	lx += 0x69
+	draw_label(o, lk, style, lx, ly, lg)
+	lx = 0xA3
+	_put(lg, [0x0C, 0x00, 0x06, 0xFF])
+	ly += 0x11
+	draw_label(o, lk, style, lx, ly, lg)
+	lx += 0x23
+	for i in SKILL_ICONS.size():
+		var ic: Array = SKILL_ICONS[i]
+		if i == 2 or i == 4:
+			lx = 0xC6
+			ly += 0xF
+		elif i > 0:
+			lx += 0x31
+		add(o, ICON_DEPTH, quad(lx, ly - 1, ICON_SIZE, ICON_SIZE, int(ic[1]), ICON_V,
+			ICON_SIZE, ICON_SIZE, ICON_PAGE, int(ic[2]), grey(0x80), 0))
+		nx = lx
+		ny = ly
+		draw_number(o, lk, nstyle, nx, ny, number_digits(int(ps["working"][int(ic[0])]), 6, 0, 0))
+	lx = 0xA3
+	ly += 0x11
+	_put(lg, words["condition"])
+	draw_label(o, lk, style, lx, ly, lg)
+	nx = lx + 0x38
+	ny += 0x11
+	var text: Array = []
+	for c in data["status"]["conditions"]:
+		if str(c[0]) == "" or int(ps.get(str(c[0]), 0)) != 0:
+			text = c[1]
+			break
+	draw_label(o, lk, style, nx, ny, text)
+	ly += 0x11
+	_put(lg, words["gold"])
+	draw_label(o, lk, style, lx, ly, lg)
+	nx = lx + 0x4D
+	ny += 0x11
+	draw_number(o, lk, nstyle, nx, ny, number_digits(int(ps["gold"]), 7, 0, 0))
+	frame(o, lk, 0x9B, 0x1A, 0x8D, 0xB4)
+
+
+# @port helper -- bytes copied over the front of a record on the stack, as lwl/lwr and sb do
+static func _put(dst: Array, src: Array) -> void:
+	for i in src.size():
+		dst[i] = int(src[i])
+
+
 # @port helper -- the ordering table in the order the GPU draws it, each sprite with its page
 static func order(o: Dictionary) -> Array:
 	var depths := o.keys()
@@ -625,11 +725,22 @@ func _use(id: int) -> void:
 		KFMessages.announce(NOTHING_HAPPENS)
 
 
+# @port helper -- what ui_status_page reads, out of the player: the paralysis, the curse, the slowing and the dark are not in the port
+func _status() -> Dictionary:
+	var ch: Dictionary = player.character
+	return {"exp": int(ch.get("exp", 0)), "level": int(ch.get("level", 1)),
+		"hp": player.hp, "hp_max": player.hp_max, "mp": player.mp,
+		"mp_max": int(ch.get("mp_max", player.mp)), "stat": player.stat,
+		"wis": int(ch.get("wis", 0)), "working": player.working,
+		"poison": player.poison, "gold": player.gold}
+
+
 # @port engine -- the screen up now, as primitives
 func _build() -> void:
 	ot = {}
 	match state:
 		"main":
+			status_page(ot, look, _status())
 			menu_page(ot, look, 0, 6, main_sel)
 		"use_item":
 			panel(ot, look, list, 1)

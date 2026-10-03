@@ -757,6 +757,9 @@ func _menus() -> bool:
 				KFMenu.options(o, lk, int(case["sel"]))
 			"menu":
 				KFMenu.menu_page(o, lk, 0, 6, int(case["sel"]))
+			"main":
+				KFMenu.status_page(o, lk, case["status"])
+				KFMenu.menu_page(o, lk, 0, 6, int(case["sel"]))
 		var got := JSON.stringify(_norm(KFMenu.order(o)))
 		var want := JSON.stringify(_norm(case["prims"]))
 		n += 1

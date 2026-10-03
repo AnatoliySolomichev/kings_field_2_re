@@ -2859,13 +2859,34 @@ goes round 0..0x5f one a frame, and back to 0x30 when the choice moves. The
 main page is `sub_800252f4`: the six lines of page 0 on 118-wide plates, the
 chosen one lit, the two-button legend.
 
-**In the port** (`godot/menu.gd`) the menu button opens the main page; "use
-item", its list, the prompt and eating are there, drawn by a transcription of
-the same routines -- 11 of 11 screens give `tools/ui.py`'s primitive lists, and
-those give the game's own frames. The other five lines, the status page behind
-the main one (`ui_status_page`, 709 instructions), the chosen thing's model
-turning in "use item" (`0x80025be8`) and `use_item`'s other arms (crystals,
-fruits, Orladin's and Silviera's keys...) are not yet there. The seven keys
+Behind it, every frame, **`ui_status_page`** (`0x800227ec`): two records on
+the stack, a label's (x, y, glyphs) and a number's, moved down and written
+over in place as it goes. At x `0xa3` from y `0x24`, 17 lines apart:
+"EXPERIENCE" and `player_exp` in seven digits at `+0x4d`; "LEVEL" and the
+level; "HP" (glyphs 7, 15 written over the record) and HP, a stroke (number
+code `0x14`) and the maximum at `+0x3f`, `+0x5b`, `+0x62`; "MP" the same;
+"PWR·WIS" (the immediates `0f 16 11 3b 16 08 12`), the effective stat in five
+digits at `+0x46` and `0x801b2530 + 1` -- which only the wise fruit raises,
+to 4 -- in four at `+0x62`, with a dot (`0x3b`) at `+0x69`; "MAG", and from x
+`0xc6` the five working skills in six digits, 15 lines apart in pairs `0x31`
+across, each over a 14-square icon of page `0x1d` at v `0xc0` (`ui_prim_*`,
+depth `0x1e`): u 0, `0x10`, `0x20`, `0x30`, `0x40` under the CLUTs `0x7d04`
+to `0x7e04`, for skills 4, 0, 1, 3, 2. Drawn, the icons are a sun, a flame, a
+rock, a whirlwind and a drop -- so skill 4, the one a new character has, is
+light, and 0 fire, 1 earth, 2 water, 3 wind. Then "CONDITION" and, at
+`+0x38`, the first of paralyse (`0x801b2568`), curse (`0x801b255e`), slow
+(`turn_slow_timer`), poison (`poison_frames`), dark (`0x801b2562`) that is
+set, or "NORMAL"; "GOLD" and the gold; and `ui_frame(0x9b, 0x1a, 0x8d, 0xb4)`
+round it all. `tools/ui.py status_page` draws it; no snapshot of the main page
+is there yet to hold it to.
+
+**In the port** (`godot/menu.gd`) the menu button opens the main page, the
+status page behind it; "use item", its list, the prompt and eating are there,
+drawn by a transcription of the same routines -- 17 of 17 screens give
+`tools/ui.py`'s primitive lists, and the use-item ones give the game's own
+frames. The other five lines, the chosen thing's model turning in "use item"
+(`0x80025be8`) and `use_item`'s other arms (crystals, fruits, Orladin's and
+Silviera's keys...) are not yet there. The seven keys
 of the shared arm are (`godot/loot.gd`, `try_key`, "Keys" above); anything
 else that is not eaten says "Nothing Happens".
 
@@ -3220,7 +3241,11 @@ line up one for one:
 **Which element each group bit is, is not settled.** 1 is fire and 2 is earth
 from the names, and the other three do not line up with a guess: bit 4 holds
 *haze* and *bortecth* while bit 8 holds *wind cutter*, *tornado* and *walwind*,
-so calling 4 "wind" would be wrong in the obvious direction.
+so calling 4 "wind" would be wrong in the obvious direction. The status page's
+icons (below, "The menus, as they are drawn") name the five skills -- 0 fire,
+1 earth, 2 water, 3 wind, 4 light -- and that order would make bit 4 water
+(*haze*) and 8 wind; how a skill's thresholds reach a group is
+`skill_unlock_list`'s, not yet read against the bits.
 
 Six of the 31 have no name, at 3, 10, 14, 18, 22 and 24 — the end of each group,
 so the elements have room for more spells than the game ships with.

@@ -400,6 +400,115 @@ def menu_page(f, look, e, page, n, sel, legend_mode=0):
         legend(f, look, e, 0, two=True)
 
 
+STATUS_LABELS = {"experience": 0x8007F350, "level": 0x8007F368,
+                 "condition": 0x8007F3B0, "gold": 0x8007F458}
+# the condition line, the first that holds: paralysed (0x801b2568), cursed
+# (0x801b255e), slowed (turn_slow_timer), poisoned (poison_frames), in the
+# dark (0x801b2562), and otherwise normal
+CONDITIONS = (("paralyze", 0x8007F3C8), ("curse", 0x8007F3E0), ("slow", 0x8007F3F8),
+              ("poison", 0x8007F410), ("dark", 0x8007F428), (None, 0x8007F440))
+# the five skills' icons: (working skill, u, CLUT), in the order drawn
+SKILL_ICONS = ((4, 0x00, 0x7D04), (0, 0x10, 0x7D44), (1, 0x20, 0x7D84),
+               (3, 0x30, 0x7DC4), (2, 0x40, 0x7E04))
+ICON_PAGE, ICON_V, ICON_SIZE, ICON_DEPTH = 0x1D, 0xC0, 0xE, 0x1E
+
+
+def status_page(f, look, e, ps):
+    """ui_status_page (0x800227ec), behind the menu's main page every frame:
+    experience, level, HP and MP over their maxima, the effective stat and
+    0x801b2530 + 1, the five working skills under their icons, the condition
+    and the gold, in a frame. `ps` holds the values: "exp", "level", "hp",
+    "hp_max", "mp", "mp_max", "stat", "wis" (0x801b2530), "working" (five),
+    the conditions by name, "gold"."""
+    style, nstyle = record(e, LABEL_STYLE), record(e, NUMBER_STYLE)
+    # the two records on the stack: a label at sp+0x20, a number at sp+0x40
+    lx, ly = 0xA3, 0x24
+    lg = list(e.bytes(STATUS_LABELS["experience"], 20))
+    draw_label(f, look, style, lx, ly, lg)
+    nx, ny = lx + 0x4D, ly
+    draw_number(f, look, nstyle, nx, ny, number_digits(ps["exp"], 7, 0, 0))
+    ly += 0x11
+    lg[:20] = list(e.bytes(STATUS_LABELS["level"], 20))
+    draw_label(f, look, style, lx, ly, lg)
+    ny += 0x11
+    draw_number(f, look, nstyle, nx, ny, number_digits(ps["level"], 7, 0, 0))
+    for which, first in (("hp", 0x07), ("mp", 0x0C)):
+        lg[0] = first
+        if which == "hp":
+            lg[1], lg[2] = 0x0F, 0xFF                  # "HP", then "MP" off it
+        ly += 0x11
+        draw_label(f, look, style, lx, ly, lg)
+        nx, ny = lx + 0x3F, ny + 0x11
+        draw_number(f, look, nstyle, nx, ny, number_digits(ps[which], 4, 0, 0))
+        nx += 0x1C
+        draw_number(f, look, nstyle, nx, ny, [0x14, 0xFF])         # the stroke
+        nx += 7
+        draw_number(f, look, nstyle, nx, ny, number_digits(ps[which + "_max"], 4, 0, 0))
+    lg[:8] = [0x0F, 0x16, 0x11, 0x3B, 0x16, 0x08, 0x12, 0xFF]
+    ly += 0x11
+    draw_label(f, look, style, lx, ly, lg)
+    nx, ny = lx + 0x46, ly
+    draw_number(f, look, nstyle, nx, ny, number_digits(ps["stat"], 5, 0, 0))
+    nx = lx + 0x62
+    draw_number(f, look, nstyle, nx, ny, number_digits(ps["wis"] + 1, 4, 0, 0))
+    lg[0], lg[1] = 0x3B, 0xFF
+    lx += 0x69
+    draw_label(f, look, style, lx, ly, lg)
+    lx = 0xA3
+    lg[:4] = [0x0C, 0x00, 0x06, 0xFF]
+    ly += 0x11
+    draw_label(f, look, style, lx, ly, lg)
+    lx += 0x23
+    for i, (k, u, clut) in enumerate(SKILL_ICONS):
+        if i in (2, 4):
+            lx, ly = 0xC6, ly + 0xF
+        elif i:
+            lx += 0x31
+        f.add(ICON_DEPTH, quad(lx, ly - 1, ICON_SIZE, ICON_SIZE, u, ICON_V, ICON_SIZE,
+                               ICON_SIZE, ICON_PAGE, clut, rgb(0x80), False))
+        nx, ny = lx, ly
+        draw_number(f, look, nstyle, nx, ny, number_digits(ps["working"][k], 6, 0, 0))
+    lx = 0xA3
+    ly += 0x11
+    lg[:12] = list(e.bytes(STATUS_LABELS["condition"], 12))
+    draw_label(f, look, style, lx, ly, lg)
+    nx, ny = lx + 0x38, ny + 0x11
+    text = next(a for name, a in CONDITIONS if name is None or ps.get(name))
+    draw_label(f, look, style, nx, ny, list(e.bytes(text, 12)))
+    ly += 0x11
+    lg[:10] = list(e.bytes(STATUS_LABELS["gold"], 10))
+    draw_label(f, look, style, lx, ly, lg)
+    nx, ny = lx + 0x4D, ny + 0x11
+    draw_number(f, look, nstyle, nx, ny, number_digits(ps["gold"], 7, 0, 0))
+    frame(f, look, e, 0x9B, 0x1A, 0x8D, 0xB4)
+
+
+def status_of(ram):
+    """What ui_status_page reads, out of a RAM snapshot."""
+    def u16(a):
+        return struct.unpack_from("<H", ram, a & 0x1FFFFF)[0]
+    def s16(a):
+        return struct.unpack_from("<h", ram, a & 0x1FFFFF)[0]
+    def u32(a):
+        return struct.unpack_from("<I", ram, a & 0x1FFFFF)[0]
+    return {"exp": u32(0x801B24E4), "level": ram[0x801B24F0 & 0x1FFFFF],
+            "hp": u16(0x801B24FC), "hp_max": u16(0x801B24FA), "mp": u16(0x801B2500),
+            "mp_max": u16(0x801B24FE), "stat": u16(0x801B2524), "wis": u16(0x801B2530),
+            "working": [u16(0x801B2526 + 2 * k) for k in range(5)],
+            "paralyze": s16(0x801B2568), "curse": s16(0x801B255E),
+            "slow": s16(0x801B2566), "poison": s16(0x801B255C), "dark": s16(0x801B2562),
+            "gold": u32(0x801B2534)}
+
+
+def main_page(e, look, ps, sel):
+    """pause_menu's frame on its main page: the status page, then the six
+    lines of page 0 (sub_800252f4(0, 6, sel, 0))."""
+    f = Frame()
+    status_page(f, look, e, ps)
+    menu_page(f, look, e, 0, 6, sel)
+    return f.order()
+
+
 def item_list(e, inventory, first=0x5F, last=0x95):
     """0x8001aea4: (names, counts, ids) of the things first..last carried."""
     names, counts, ids = [], [], []
@@ -441,6 +550,8 @@ def pages_used(e):
     for a in (LABEL_STYLE, NUMBER_STYLE, SMALL_STYLE):
         t, c = record(e, a)[:2]
         out.add((t, c))
+    for _k, _u, clut in SKILL_ICONS:                     # ui_status_page's icons
+        out.add((ICON_PAGE, clut))
     for k in range(18):
         t, c = record(e, RECORDS + 12 * k)[:2]
         if t:
@@ -488,6 +599,12 @@ def export(out_dir):
            "words": {"select": gp_string(e, 0x7C), "guide": gp_string(e, 0xA4),
                      "return": gp_string(e, 0x74)},
            "pages": pages,
+           # ui_status_page's words: its four labels and the six conditions
+           "status": {"labels": {k: list(e.bytes(a, {"experience": 20, "level": 20,
+                                                       "condition": 12, "gold": 10}[k]))
+                                 for k, a in STATUS_LABELS.items()},
+                      "conditions": [[name or "", list(e.bytes(a, 12))]
+                                     for name, a in CONDITIONS]},
            # what the snapshots hold at gp + 0x58..0x68 and + 0x40, + 0x44
            "look": {"box": 0x78, "text": 0x80, "shadow": 0x30, "confirm": 3,
                     "cancel": 1, "semi": 1, "bright": 0x80},
@@ -522,7 +639,30 @@ def export_cases(e):
         menu_page(f, look, e, 0, 6, sel)
         cases.append({"screen": "menu", "sel": sel, "pulse": 0x44,
                       "prims": [[d, p] for d, p in f.order()]})
+    for ps in STATUS_CASES:
+        look.pulse = 0x2A
+        cases.append({"screen": "main", "sel": 2, "pulse": 0x2A, "status": ps,
+                      "prims": [[d, p] for d, p in main_page(e, look, ps, 2)]})
     return cases
+
+
+# A fresh character (as the snapshots hold one), and one with everything up
+# and each condition in turn, for the port's copy to draw alike.
+STATUS_CASES = [
+    {"exp": 0, "level": 1, "hp": 50, "hp_max": 50, "mp": 30, "mp_max": 30, "stat": 20,
+     "wis": 0, "working": [0, 0, 0, 0, 10], "gold": 0},
+    {"exp": 123456, "level": 27, "hp": 7, "hp_max": 412, "mp": 999, "mp_max": 999,
+     "stat": 123, "wis": 3, "working": [999, 1, 22, 333, 45], "gold": 9876543,
+     "poison": 1},
+    {"exp": 48, "level": 2, "hp": 57, "hp_max": 57, "mp": 34, "mp_max": 34, "stat": 21,
+     "wis": 4, "working": [0, 0, 0, 0, 11], "gold": 51, "paralyze": 1, "dark": 1},
+    {"exp": 5, "level": 1, "hp": 1, "hp_max": 50, "mp": 0, "mp_max": 30, "stat": 10,
+     "wis": 0, "working": [0, 0, 0, 0, 5], "gold": 0, "curse": 1},
+    {"exp": 5, "level": 1, "hp": 1, "hp_max": 50, "mp": 0, "mp_max": 30, "stat": 10,
+     "wis": 0, "working": [0, 0, 0, 0, 5], "gold": 0, "slow": 1},
+    {"exp": 5, "level": 1, "hp": 1, "hp_max": 50, "mp": 0, "mp_max": 30, "stat": 10,
+     "wis": 1, "working": [0, 0, 0, 0, 5], "gold": 0, "dark": 1},
+]
 
 
 def snapshot_ui(name):

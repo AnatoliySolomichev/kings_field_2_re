@@ -2922,5 +2922,10 @@
   "name": "sound_key_fits",
   "kind": "code",
   "evidence": "use_item's keys arm calls it when key_test answers 1; it is 0x8001576c(0x10, 0x64) and nothing else"
+ },
+ "0x8007f350": {
+  "name": "status_labels",
+  "kind": "data",
+  "evidence": "ui_status_page copies its labels from here: EXPERIENCE (0x8007f350), LEVEL (+0x18), OFFENSE, DEFENSE, CONDITION (+0x60), the six conditions PARALYZE..NORMAL 24 apart from 0x8007f3c8, GOLD (0x8007f458) -- glyph codes, 0xff ending each"
  }
 }
