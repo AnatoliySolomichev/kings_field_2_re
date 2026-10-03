@@ -2329,7 +2329,9 @@ in that order. **After every `give_item` the game asks `has_item(0)` and
 `has_item(133)`**, the first sword and the key of Ichrius.
 
 Two corrections the same log forced: `use_item`'s `a0` is a **pointer** —
-`0x80195ff0`, inside `object_table` — and not an item id, and
+`2149262832`, which is `0x801b25f0`, `player_pos` (both callers pass it; it
+was once misconverted to `0x80195ff0`, inside `object_table`) — and not an
+item id, and
 `script_interpreter` is given an **actor** record, `0x80185da8` and
 `0x80186d10` being slots 0 and 58 of `actor_table`.
 
@@ -2643,7 +2645,7 @@ the lock byte `+0x38` (`.L28`): `0xff` becomes `0xfe`, the arm's signal; an
 opened chest (`0xfe`) whose contents are gone says "Empty" (`announce(0x1a)`);
 `0xf1` "Sealed" (5), `0xf0` "Spell is Cast" (`0x17`), and anything else
 "Locked" (6) -- level 0's locks of 135, 137 and 138 are the royal, copper and
-silver keys, which `use_item` takes.
+silver keys, which `use_item` tries on them (below).
 
 **The lid** is `object_interpreter`'s arm for opcode 6 (`0x80048790`), on the
 state `+8`, the lid's X angle `+0x24` and an angular velocity `+0x40`:
@@ -2705,6 +2707,47 @@ then clear_movement_state, and object_interact goes on with the next object
 The row's `+0xe` -- the record's `+0xe` approaches `row[+0x10]` during the
 flight, and the big chest adds `0xc8` to it -- reaches `draw_model_plain` as
 its argument `0x30`; it is not read further, and the port leaves it.
+
+**Keys.** A lock is a number, and the key that opens it is the item of that
+number. Seven keys share one arm of `use_item` (`0x8005d188`): royal (135),
+copper (137), silver (138), magician's (139), jail (140), dwarves' (142) and
+Lyn's (144). It asks `find_object` for each object in front of `player_pos`
+itself -- not the point `0x1f4` up that USE asks from: `0x320` past the type's
+reach, `0x6a4` as the point's height, within `0x200` of the facing, the
+doors' points moved as for USE -- and tries the key on it (`key_test`,
+`0x80046608`), by the object's opcode:
+
+```
+0x0f, 0x11, 0xa7                  4, whatever the key
+0..5 and 0x1b, while +8 is not 0  0 -- a door on the move is not asked
+0..5, 0x1b; 6, 7, 8, 0x17, 0x18, 0x1a: the lock +0x38 --
+    0xfe or 0xff                  2, open already
+    the key's own number          1, and the lock 0xff
+    anything else                 3
+anything else                     0
+```
+
+1 is a sound (`0x8005bd34`: `0x8001576c(0x10, 0x64)`) and the end; 3 or 4
+"Wrong key!" (`announce(7)`) and the end; 0 or 2 the next object; none left,
+"Nothing Happens". The key is kept, and nothing opens: the lock is `0xff`, so
+the next USE opens it as it would any other. Two keys have arms of their own.
+Orladin's key (136, `0x8005d300`) goes through every object in front: a
+type-`0xa2` lock (opcode `0x17`) reading 136 becomes `0xfe` at once -- opened
+-- and a key is spent on each; a type-`0x102` pedestal (opcode `0x1a`) whose
+lock is `0xff` takes the key -- its lock 136, its state 0 -- and a new object
+of type 136 in the gold ring (`find_free_slot(350, 10)`) shows it lying
+there, the pedestal's `+0x39` its place in the ring; anything else gets the
+test above, and "Wrong key!" on a 3 without ending the walk. Silviera's key
+(141, `0x8005d244`) asks for the first object only: a type-`0x101` pedestal
+with its lock `0xff` takes it (`0x8005c7e8` next); anything else, the test.
+
+`python3 tools/chests.py --keys` lists every lock on the disc a key is asked
+about: 169 of them on 23 levels. Level 0 has seven -- slot 9 the copper key,
+202 the silver, 204 (the big chest) the royal; 33, 116 and the door 70 read
+200 and 344 reads 241, which no key is, so every key there is "Wrong key!".
+Eleven of level 12's and 22's twelve class-0 doors take the jail key, level
+3's three opcode-2 doors the dwarves', and level 14's, 16's and 17's
+type-`0xa2` locks Orladin's.
 
 ### What a dying creature leaves
 
@@ -2821,8 +2864,10 @@ item", its list, the prompt and eating are there, drawn by a transcription of
 the same routines -- 11 of 11 screens give `tools/ui.py`'s primitive lists, and
 those give the game's own frames. The other five lines, the status page behind
 the main one (`ui_status_page`, 709 instructions), the chosen thing's model
-turning in "use item" (`0x80025be8`) and `use_item`'s own arms (keys, crystals,
-fruits...) are not yet there; a thing that is not eaten says "Nothing Happens".
+turning in "use item" (`0x80025be8`) and `use_item`'s other arms (crystals,
+fruits, Orladin's and Silviera's keys...) are not yet there. The seven keys
+of the shared arm are (`godot/loot.gd`, `try_key`, "Keys" above); anything
+else that is not eaten says "Nothing Happens".
 
 ### The banners
 

@@ -534,6 +534,85 @@ func _talk_next() -> void:
 	_interact(0, true)
 
 
+# use_item's arm for the keys (0x8005d188): royal, copper, silver, magician's,
+# jail, dwarves' and Lyn's. find_object offers each object in front of the
+# player -- from the player's own place this time, 0x320 more than the type's
+# reach, 0x6a4 as the point's height, within 0x200 of the facing -- and the key
+# is tried on it (0x80046608): 1 it fitted and the lock is 0xff now, open to
+# USE; 3 or 4 "Wrong key!"; anything else the next object. The key is kept.
+# The chests here and the doors in doors.gd are offered in slot order.
+# @orig game:0x8005d188 use_item+0x5a8  status:transcribed -- the keys' arm; not the sound when one fits (sound_key_fits)
+func try_key(key: int) -> int:
+	var c: KFCollision = player.coll
+	var offered := []
+	for k in slots:
+		offered.append([int(k), rows[k], "lock"])
+	var dn := get_node_or_null("../Doors")
+	if dn:
+		for d in dn.doors:
+			offered.append([int(d["slot"]), d, "door"])
+		for d in dn.lifts:
+			offered.append([int(d["slot"]), d, "lift"])
+	offered.sort_custom(func(a, b): return int(a[0]) < int(b[0]))
+	for o in offered:
+		var r: Dictionary = o[1]
+		if int(r.get("type", 0)) == GONE:
+			continue
+		var p: Vector3i = r["pos"] if r.has("pos") else Vector3i(int(r["x"]), int(r["y"]), int(r["z"]))
+		var px: int = player.gx
+		var pz: int = player.gz
+		var top := int(r.get("top", r.get("height", 0)))
+		if str(o[2]) == "door":
+			# find_object's point for a class-1 door: 0x400 back along its yaw
+			var yaw := int(r["yaw"])
+			px += (c.game_cos(yaw) * -0x400) >> 12
+			pz += (c.game_sin(yaw) * -0x400) >> 12
+			top = int(r["height"])
+		if c.in_range(p.x, p.y, p.z, px, player.gy, pz, int(r["reach"]) + 0x320, top, 0x6A4) < 0:
+			continue
+		if int(r.get("type", 0)) != NO_FACING and not _facing(player.facing,
+				c.vec_angle(p.x - px, p.z - pz), 0x200):
+			continue
+		var got := key_test(r, str(o[2]), key)
+		if got == 1:
+			KFInfo.note("key: item %d opens the lock of slot %d" % [key, int(o[0])])
+			return 1
+		if got == 3 or got == 4:
+			KFMessages.announce(7)                     # "Wrong key!"
+			KFInfo.note("key: item %d does not fit slot %d" % [key, int(o[0])])
+			return got
+	return 0
+
+
+# 0x80046608: a key tried on an object, by its opcode -- the doors 0..5 and
+# 0x1b while they stand still, the chests 6..8 and 0x17, 0x18, 0x1a ask their
+# lock: 0xfe or 0xff already open (2), the key's own number opens it (1, the
+# lock 0xff), anything else wrong (3); 0xf, 0x11 and 0xa7 are wrong whatever
+# the key (4); the rest are not for keys (0).
+# @orig game:0x80046608 key_test  status:transcribed
+static func key_test(r: Dictionary, kind: String, key: int) -> int:
+	var op := int(r["op"])
+	if op == 0x11 or op == 0xF or op == 0xA7:
+		return 4
+	var asks := op in [6, 7, 8, 0x17, 0x18, 0x1A]
+	if op <= 5 or op == 0x1B:
+		if int(r.get("state", 0)) != 0:
+			return 0
+		asks = true
+	if not asks:
+		return 0
+	var lock := int(r["tail"][0]) if kind != "lock" else int(r["lock"])
+	if lock >= 0xFE:
+		return 2
+	if lock != key:
+		return 3
+	if kind != "lock":
+		r["tail"][0] = 0xFF
+	else:
+		r["lock"] = 0xFF
+	return 1
+
+
 # object_interact's .L28: what a chest's lock says to USE.
 # @orig game:0x8005e704 object_interact+0x434  status:transcribed
 func _lock(r: Dictionary) -> void:

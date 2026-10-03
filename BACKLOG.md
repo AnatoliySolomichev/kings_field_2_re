@@ -522,9 +522,12 @@ Eating heals. Left, roughly in order:
 
 * `ui_status_page` (`0x800227ec`, 709 instructions), drawn behind the main
   page every frame -- a snapshot of the main page would check it;
-* `use_item`'s arms (`0x8005cbe0`, 61 of them): the keys -- seven share one
-  arm, which must be what opens a locked chest -- the crystals and the
-  fruits, and the level's entry 2;
+* `use_item`'s arms (`0x8005cbe0`, 61 of them): the seven keys of the shared
+  arm are in (`godot/loot.gd` `try_key`, transcribed: no recording has a key
+  used yet -- a bp session using the copper key on level 0's slot 9 would
+  check it); Orladin's key (`0x8005d300`, the pedestals of type 0x102 and the
+  type-0xa2 locks) and Silviera's (`0x8005d244`, type 0x101, `0x8005c7e8`)
+  are not, nor the crystals, the fruits, and the level's entry 2;
 * the chosen thing's model turning in "use item" (`0x80025be8`), the guide
   (triangle: the thing's description), the maps and notes (95..100);
 * "use magic", "equipment" (`ui_equip_page`), "status/records"
@@ -603,10 +606,10 @@ it would open:
   (2 * tr[+0xe] + (p[+0x16] & 1))` at load; its arm is not read.
 * **classes 0x00 (12) and 0x1b (23)**, `find_object` points 0x700 in front of or
   behind them; 11 of the 12 class-0 doors carry lock byte `0x8c`, a key.
-* **keys**: a lock byte other than 0xff, 0xfd or 0xfe is either an item
-  `use_item` takes or an `announce` code. The banners are in the port now
-  (`godot/messages.gd`, FORMATS.md "The banners"), so a locked chest says
-  "Locked"; `use_item`, which opens it with its key, is not.
+* **keys -- in**: a lock byte other than 0xff, 0xfd or 0xfe is either the
+  number of the key that opens it or a code no key is. A locked chest says
+  "Locked", and the right key from the menu sets its lock to 0xff
+  (FORMATS.md, "Keys"; `python3 tools/chests.py --keys`).
 * **a frame-by-frame check -- done**: `emu/bp24.lua` recorded two cycles of the
   door at (41,10) and `tools/doors.py` reproduces 226 of 226 steps. What it
   cannot see is the shove, which moves the player in the same frame the player

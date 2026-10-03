@@ -36,6 +36,9 @@ const CANCEL_WORD := [0x02, 0x00, 0x0D, 0x02, 0x04, 0x0B, 0xFF]   # "cancel"
 const FIRST_THING := 0x5F
 const LAST_THING := 0x95
 const NOTHING_HAPPENS := 0xA
+# The keys use_item's arm at 0x8005d188 takes: royal, copper, silver,
+# magician's, jail, dwarves', Lyn's.
+const KEYS := [135, 137, 138, 139, 140, 142, 144]
 
 static var data := {}
 var tex := {}                       # "tpage_clut" -> [solid, semi]
@@ -579,7 +582,7 @@ func _step(press: int) -> void:
 # and use_item runs, whose last word is the level's entry 2 and, if nothing
 # has answered, "Nothing Happens".
 # @orig game:0x8001b254 item_consume  status:transcribed
-# @orig game:0x8005d748 use_item+0xb68  status:partial -- the tail: the level's entry 2 not called; the eaten things answer, the rest say "Nothing Happens"
+# @orig game:0x8005d748 use_item+0xb68  status:partial -- the tail: the level's entry 2 not called; the eaten things and the keys (loot.gd try_key) answer, the rest say "Nothing Happens"
 func _use(id: int) -> void:
 	var inv: KFItems = player.inventory
 	var eaten := false
@@ -613,7 +616,12 @@ func _use(id: int) -> void:
 			inv.a[0x76] = int(inv.a[0x76]) + 1       # the crystal flask back
 	KFInfo.note("use: item %d%s" % [id, " eaten" if eaten else ""])
 	_close()
-	if not eaten:
+	var answered := eaten
+	if id in KEYS:
+		var lt := get_node_or_null("../../Loot")
+		if lt and int(lt.try_key(id)) != 0:
+			answered = true
+	if not answered:
 		KFMessages.announce(NOTHING_HAPPENS)
 
 

@@ -163,7 +163,7 @@
  "0x8005cbe0": {
   "name": "use_item",
   "kind": "code",
-  "evidence": "selected item in $s5, branches on the faced object type. **a0 is a pointer, not an item id**: emu/bp20.lua logged 0x80195ff0, which is object_table + 261*0x44 + 0x40"
+  "evidence": "selected item in $s5, branches on the faced object type. **a0 is a pointer, not an item id**: player_pos (0x801b25f0) from both callers -- emu/bp20.lua logged 2149262832, which is that (once misconverted to 0x80195ff0)"
  },
  "0x8005d5f8": {
   "name": "load_area_name",
@@ -2912,5 +2912,15 @@
   "name": "gp_base",
   "kind": "data",
   "evidence": "GAME.EXE's $gp, which its header leaves 0: found in the menu snapshots, where gp+0x58..0x68 hold the colours the frame's primitives carry (0x78 the boxes, 0x80 the text, 0x30 the shadow) and gp+0x38..0x44 what the menu's opening (0x80027198) wrote for the brightness option; load_entry's rectangles at 0x8009c2d0 are gp+0xbc"
+ },
+ "0x80046608": {
+  "name": "key_test",
+  "kind": "code",
+  "evidence": "use_item's key arms call it with an object and a key: by the opcode +4, 4 for 0xf/0x11/0xa7, the lock +0x38 asked for 0..8, 0x17, 0x18, 0x1a, 0x1b (0..5 and 0x1b only while +8 is 0): >= 0xfe 2, the key's number 1 and the lock 0xff, else 3; anything else 0"
+ },
+ "0x8005bd34": {
+  "name": "sound_key_fits",
+  "kind": "code",
+  "evidence": "use_item's keys arm calls it when key_test answers 1; it is 0x8001576c(0x10, 0x64) and nothing else"
  }
 }

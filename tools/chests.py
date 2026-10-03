@@ -45,6 +45,15 @@ is 0x20) is counted at once: `announce(0x19, +0x3a)`, the gold, the type
     a frame to within 0x80 of facing the player, and fly back in nine
     frames. If it took: (arrows 0x93 add 4..9 more, light arrows 0x94 four)
     fly to 0x1f4 left of and below the eye in nine frames, and the type 0xff.
+
+**A key** -- `use_item`'s arm for the royal, copper, silver, magician's, jail,
+dwarves' and Lyn's keys (`0x8005d188`) asks `find_object` for each object in
+front of `player_pos` itself (0x320 past the type's reach, 0x6a4 as the
+point's height, within 0x200 of the facing) and tries the key on it
+(`0x80046608`, `key_test` below): 1 the lock was the key's own number and is
+0xff now, so USE opens it as any other -- a sound, and that is all; 3 or 4
+"Wrong key!"; 0 or 2 the next object; none left, "Nothing Happens". The key
+is kept. `python3 tools/chests.py --keys` lists which lock takes which key.
 """
 import os
 import struct
@@ -388,6 +397,91 @@ def snapshot_chests():
     return out
 
 
+KEY_ITEMS = (135, 137, 138, 139, 140, 142, 144)   # use_item's arm at 0x8005d188
+LOCK_OPS = (6, 7, 8, 0x17, 0x18, 0x1A)             # the lock asked whatever the state
+STILL_OPS = (0, 1, 2, 3, 4, 5, 0x1B)               # asked while the state (+8) is 0
+WRONG_OPS = (0xF, 0x11, 0xA7)                      # wrong whatever the key
+ORLADIN_KEY, ORLADIN_LOCK = 136, 0xA2              # 0x8005d300's own lock, by type
+
+
+def key_test(op, state, lock, key):
+    """`0x80046608`: (what it returns, the lock after) for a key tried on an
+    object of opcode `op`, state (+8) `state` and lock (+0x38) `lock`."""
+    if op in WRONG_OPS:
+        return 4, lock
+    if op in STILL_OPS and state != 0:
+        return 0, lock
+    if op not in LOCK_OPS and op not in STILL_OPS:
+        return 0, lock
+    if lock >= 0xFE:
+        return 2, lock
+    if lock != key:
+        return 3, lock
+    return 1, LOCK_FREE
+
+
+def locks(levels=range(28)):
+    """[(level, slot, type, opcode, lock)] of every object on the disc whose
+    lock a key is asked about and is not already open."""
+    import objload
+    out = []
+    for lv in levels:
+        load = objload.Load(lv)
+        for slot, r in sorted(load.recs.items()):
+            if r["type"] == 0xFF:
+                continue
+            if r["op"] in WRONG_OPS or ((r["op"] in LOCK_OPS or r["op"] in STILL_OPS)
+                                        and r["tail"][0] < 0xFE):
+                out.append((lv, slot, r["type"], r["op"], r["tail"][0]))
+    return out
+
+
+def item_name(e, n):
+    """An item's name off its 24-byte row of glyphs (a..z 0..25, 0x7f a
+    space, 0x32 an apostrophe, 0xff the end)."""
+    import ui
+    s = ""
+    for g in e.bytes(ui.NAMES + 24 * n, 24):
+        if g == 0xFF:
+            break
+        s += chr(97 + g) if g < 26 else " " if g == 0x7F else "'" if g == 0x32 else "?"
+    return s
+
+
+def key_report(out=sys.stdout):
+    import ui
+    e = ui.exe()
+    name = lambda n: item_name(e, n)                                  # noqa: E731
+    for lv, slot, typ, op, lock in locks():
+        if op in WRONG_OPS:
+            what = "no key: wrong whatever is tried"
+        elif typ == ORLADIN_LOCK and lock == ORLADIN_KEY:
+            # use_item's arm for it (0x8005d300) asks the type before the test
+            what = f"the {name(lock)} ({lock}), by its own arm: opened at once, the key spent"
+        elif lock in KEY_ITEMS:
+            what = f"the {name(lock)} ({lock})"
+        else:
+            what = f"no key: lock {lock}, \"Wrong key!\" to any"
+        print(f"  level {lv:2d} slot {slot:3d} type {typ:3d} opcode {op:#04x}: {what}",
+              file=out)
+
+
+def key_cases():
+    """[op, state, lock, key, result, lock after] for every opcode the test
+    tells apart, both states and every lock on the disc, under each key."""
+    ops = sorted(set(LOCK_OPS) | set(STILL_OPS) | set(WRONG_OPS)
+                 | {9, 0xE, 0x10, 0x12, 0x16, 0x19, 0x1C, 0xA6, 0xA8, 0xFF})
+    lock_set = sorted({lk for *_x, lk in locks()} | {0xFD, 0xFE, 0xFF})
+    cases = []
+    for op in ops:
+        for state in (0, 1):
+            for lock in lock_set:
+                for key in KEY_ITEMS + (136, 141):
+                    got, after = key_test(op, state, lock, key)
+                    cases.append([op, state, lock, key, got, after])
+    return cases
+
+
 def check(out=sys.stdout, verbose=False):
     """The lid's path against every chest the snapshots caught after USE:
     one still moving has to be a frame of it, one at rest its end, and what
@@ -482,7 +576,7 @@ def export(out_dir):
                       "frames": [list(f) for f in fall_path(op, drop, vel, rest)]})
     doc = {"lid": [list(r) for r in lid_cycle()],
            "big": [list(r) for r in big_cycle()], "flights": flights,
-           "falls": falls}
+           "falls": falls, "keys": key_cases()}
     path = os.path.join(out_dir, "chestcheck.json")
     with open(path, "w") as fh:
         json.dump(doc, fh, separators=(",", ":"))
@@ -490,4 +584,7 @@ def export(out_dir):
 
 
 if __name__ == "__main__":
+    if "--keys" in sys.argv:
+        key_report()
+        sys.exit(0)
     sys.exit(0 if check(verbose="--check" not in sys.argv) else 1)

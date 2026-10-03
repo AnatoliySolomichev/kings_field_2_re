@@ -658,7 +658,23 @@ func _chests() -> bool:
 					first = "fall %d frame %d: godot %s python %s" % [falls, i, str(got), str(w)]
 			i += 1
 		falls += 1
-	print("chests: %d of %d frames match tools/chests.py (the lid, the big chest, %d flights of object_give, %d falls)" % [n - bad, n, flights, falls])
+	var keys := 0
+	for k in doc.get("keys", []):
+		# [op, state, lock, key, result, lock after], on a chest's lock and on
+		# a door's tail alike
+		var want := [int(k[4]), int(k[5])]
+		var chest := {"op": int(k[0]), "state": int(k[1]), "lock": int(k[2])}
+		var door := {"op": int(k[0]), "state": int(k[1]), "tail": [int(k[2])]}
+		var got_c := [script.key_test(chest, "lock", int(k[3])), int(chest["lock"])]
+		var got_d := [script.key_test(door, "door", int(k[3])), int(door["tail"][0])]
+		n += 2
+		keys += 1
+		for got in [got_c, got_d]:
+			if got != want:
+				bad += 1
+				if first == "":
+					first = "key case %s: godot %s python %s" % [str(k), str(got), str(want)]
+	print("chests: %d of %d frames match tools/chests.py (the lid, the big chest, %d flights of object_give, %d falls, %d keys tried on locks twice over)" % [n - bad, n, flights, falls, keys])
 	if bad > 0:
 		print("  first difference: " + first)
 	return bad == 0
