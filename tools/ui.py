@@ -324,6 +324,82 @@ def legend(f, look, e, mode, two=None):
     small_text(f, look, e, 0xC6, 0xD6, gp_string(e, 0x74))
 
 
+def lit_plate(f, look, rec, x, y):
+    """sub_80026020: a plate in the selection's pulsing colour."""
+    c0, c1 = bar_colour(look)
+    tpage, clut, u, v, w, h = rec
+    f.add(50, quad(x - 6, y - 6, w, h, u, v, w, h, tpage, clut,
+                   c0 | (c0 << 8) | (c1 << 16), look.semi))
+
+
+def dim_label(f, look, style, x, y, glyphs):
+    """sub_80026158: a label not chosen -- the text colour 0x57 (0x47 and 0x57
+    with the boxes opaque) while it is drawn."""
+    keep = look.text
+    tpage, clut, _u, _v, w, h = style
+    f.tpage(3, tpage)
+    if look.semi:
+        col = 0x57 | (0x57 << 8) | (keep << 16)
+    else:
+        col = 0x47 | (0x47 << 8) | (0x57 << 16)
+    for i, g in enumerate(glyphs):
+        if g == 0xFF:
+            break
+        u, v = (g & 0xF) << 3, (g >> 4) * 15
+        f.add(2, sprite(x + 7 * i - 1, y - 1, w, h, u, v, clut, col))
+        f.add(3, sprite(x + 7 * i, y, w, h, u, v, clut, rgb(look.shadow)))
+
+
+def options(f, look, e, one, two, sel):
+    """sub_80025b24: a prompt's two answers, (x, y, glyphs) each -- the chosen
+    one on a lit plate in the text colour, the other on a plain plate dimmed."""
+    rec = record(e, RECORDS + 12 * 1)
+    style = record(e, LABEL_STYLE)
+    if sel == 0:
+        lit_plate(f, look, rec, one[0], one[1])
+        title_plate(f, look, rec, two[0], two[1])
+        draw_label(f, look, style, *one)
+        dim_label(f, look, style, *two)
+    else:
+        title_plate(f, look, rec, one[0], one[1])
+        lit_plate(f, look, rec, two[0], two[1])
+        dim_label(f, look, style, *one)
+        draw_label(f, look, style, *two)
+
+
+PROMPT_WORDS = {0: [0x14, 0x12, 0x04], 1: [0x12, 0x13, 0x0E, 0x11, 0x04]}   # use, store
+CANCEL = [0x02, 0x00, 0x0D, 0x02, 0x04, 0x0B]                              # cancel
+
+
+def menu_page(f, look, e, page, n, sel, legend_mode=0):
+    """sub_800252f4: a page of the menu's labels -- its title (the line 8 of
+    the page before, if it has a place), its n lines on plates, the chosen one
+    lit, the others dimmed -- and the two-button legend."""
+    style = record(e, LABEL_STYLE)
+    plate = record(e, RECORDS + 12 * 2)
+    base = 0x8007E660 + 252 * page
+
+    def line(a):
+        x, y = struct.unpack("<hh", e.bytes(a, 4))
+        return x, y, list(e.bytes(a + 4, 16))
+    tx, ty, tg = line(base)
+    if tx != 0:
+        title_plate(f, look, plate, tx, ty)
+        draw_label(f, look, style, tx, ty, tg)
+    for i in range(n):
+        # ui_menu_label writes 31 and 32 whatever the record says; the menu's
+        # lines are drawn where the record says
+        x, y, g = line(base + 0x1C * (i + 1))
+        if i == sel:
+            lit_plate(f, look, plate, x, y)
+            draw_label(f, look, style, x, y, g)
+        else:
+            title_plate(f, look, plate, x, y)
+            dim_label(f, look, style, x, y, g)
+    if legend_mode in (0, 1):
+        legend(f, look, e, 0, two=True)
+
+
 def item_list(e, inventory, first=0x5F, last=0x95):
     """0x8001aea4: (names, counts, ids) of the things first..last carried."""
     names, counts, ids = [], [], []
@@ -357,6 +433,96 @@ def use_item_screen(e, look, inventory, selected=0):
     f = Frame()
     panel(f, look, e, s, 1)
     return f.order()
+
+
+def pages_used(e):
+    """The (texture page, CLUT) pairs the menus draw from."""
+    out = set()
+    for a in (LABEL_STYLE, NUMBER_STYLE, SMALL_STYLE):
+        t, c = record(e, a)[:2]
+        out.add((t, c))
+    for k in range(18):
+        t, c = record(e, RECORDS + 12 * k)[:2]
+        if t:
+            out.add((t, c))
+    return sorted(out)
+
+
+def export(out_dir):
+    """ui.json and ui/ for godot/menu.gd: the descriptors, the label table,
+    the item names, the legend's words, and every page the menus draw from
+    under each CLUT, split as hud.py splits them: the texels drawn solid, and
+    the ones with STP that a semi-transparent primitive blends."""
+    import json
+    import rtim
+    import tim
+    e = exe()
+    vram = rtim.level_vram(0)
+    os.makedirs(os.path.join(out_dir, "ui"), exist_ok=True)
+    pages = {}
+    for tpage, clut in pages_used(e):
+        key = f"{tpage}_{clut:04x}"
+        stp = [q[3] == 128 for q in rtim.page4(vram, tpage & ~0x60, clut, semi=True)]
+        plain = rtim.page4(vram, tpage & ~0x60, clut, semi=False)
+        clear = (0, 0, 0, 0)
+        solid = [clear if t else p for p, t in zip(plain, stp)]
+        blend = [p if t else clear for p, t in zip(plain, stp)]
+        tim.write_png(os.path.join(out_dir, "ui", key + "_solid.png"), 256, 256, solid)
+        tim.write_png(os.path.join(out_dir, "ui", key + "_semi.png"), 256, 256, blend)
+        pages[key] = {"tpage": tpage, "clut": clut, "abr": (tpage >> 5) & 3}
+    recs = {hex(a): list(record(e, a)) for a in
+            [LABEL_STYLE, NUMBER_STYLE, SMALL_STYLE, 0x8007E778, 0x8007E794] +
+            [RECORDS + 12 * k for k in range(18)]}
+    labels = []
+    for page in range(10):
+        rows = []
+        for line in range(9):
+            a = 0x8007E67C + 252 * page + 28 * line
+            x, y = struct.unpack("<hh", e.bytes(a, 4))
+            rows.append([x, y, list(e.bytes(a + 4, 16))])
+        labels.append(rows)
+    doc = {"_note": "the menus' descriptors, labels and pages; tools/ui.py",
+           "records": recs, "labels": labels, "page_minus": list(
+               struct.unpack("<hh", e.bytes(0x8007E660, 4))),
+           "names": [list(e.bytes(NAMES + 24 * i, 24)) for i in range(150)],
+           "words": {"select": gp_string(e, 0x7C), "guide": gp_string(e, 0xA4),
+                     "return": gp_string(e, 0x74)},
+           "pages": pages,
+           # what the snapshots hold at gp + 0x58..0x68 and + 0x40, + 0x44
+           "look": {"box": 0x78, "text": 0x80, "shadow": 0x30, "confirm": 3,
+                    "cancel": 1, "semi": 1, "bright": 0x80},
+           "cases": export_cases(e)}
+    path = os.path.join(out_dir, "ui.json")
+    with open(path, "w") as fh:
+        json.dump(doc, fh, separators=(",", ":"))
+    return path
+
+
+def export_cases(e):
+    """The primitive lists of a few screens, for godot/selftest.gd to match."""
+    look = Look()
+    inv = [0] * 150
+    inv[104], inv[105], inv[107], inv[147] = 2, 1, 1, 12
+    cases = []
+    for sel in (0, 1, 3):
+        for pulse in (0x10, 0x39):
+            look.pulse = pulse
+            cases.append({"screen": "use_item", "inventory": {"104": 2, "105": 1,
+                          "107": 1, "147": 12}, "sel": sel, "pulse": pulse,
+                          "prims": [[d, p] for d, p in use_item_screen(e, look, inv, sel)]})
+    for sel in (0, 1):
+        look.pulse = 0x22
+        f = Frame()
+        options(f, look, e, (45, 58, PROMPT_WORDS[0] + [0xFF]), (45, 84, CANCEL + [0xFF]), sel)
+        cases.append({"screen": "prompt", "sel": sel, "pulse": 0x22,
+                      "prims": [[d, p] for d, p in f.order()]})
+    for sel in (0, 3, 5):
+        look.pulse = 0x44
+        f = Frame()
+        menu_page(f, look, e, 0, 6, sel)
+        cases.append({"screen": "menu", "sel": sel, "pulse": 0x44,
+                      "prims": [[d, p] for d, p in f.order()]})
+    return cases
 
 
 def snapshot_ui(name):

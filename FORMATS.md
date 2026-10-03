@@ -2807,6 +2807,23 @@ and system. "Use item" (`0x8001aa84`) lists the things 95..149 in inventory_a
 and then `use_item` runs for it, whose last step is the level's own entry 2
 and, when nothing has answered, "Nothing Happens".
 
+The choice itself goes through `ui_prompt` (`0x80024c70`) of kind 0: two
+answers, "use" at (45, 58) and "cancel" at (45, 84), each on a 54-wide plate
+(piece 1), the chosen one lit with the pulse and the other dimmed
+(`sub_80026158`: the text colour 0x57) -- over the list, drawn again with the
+two-button legend (mode 1 | 0x8000). The pulse is `frame_begin`'s: gp + 0x4c
+goes round 0..0x5f one a frame, and back to 0x30 when the choice moves. The
+main page is `sub_800252f4`: the six lines of page 0 on 118-wide plates, the
+chosen one lit, the two-button legend.
+
+**In the port** (`godot/menu.gd`) the menu button opens the main page; "use
+item", its list, the prompt and eating are there, drawn by a transcription of
+the same routines -- 11 of 11 screens give `tools/ui.py`'s primitive lists, and
+those give the game's own frames. The other five lines, the status page behind
+the main one (`ui_status_page`, 709 instructions), the chosen thing's model
+turning in "use item" (`0x80025be8`) and `use_item`'s own arms (keys, crystals,
+fruits...) are not yet there; a thing that is not eaten says "Nothing Happens".
+
 ### The banners
 
 `announce` (`0x80041eec`) queues a code under `0xf0` in a ring of eight

@@ -1214,6 +1214,7 @@ SCENE = """[gd_scene load_steps={load_steps} format=3]
 [ext_resource type="Script" path="res://messages.gd" id="27"]
 [ext_resource type="Script" path="res://document.gd" id="28"]
 [ext_resource type="Script" path="res://info.gd" id="29"]
+[ext_resource type="Script" path="res://menu.gd" id="30"]
 {gallery_res}
 
 [sub_resource type="Environment" id="Env"]
@@ -1304,6 +1305,13 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
 script = ExtResource("27")
+
+[node name="Menu" type="Control" parent="UI"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+script = ExtResource("30")
 
 [node name="Document" type="Control" parent="UI"]
 anchors_preset = 15
@@ -1470,7 +1478,7 @@ def project(lv, out="out/godot", start=(57, 4)):
                        for i in range(len(pieces)))
     open(f"{out}/world.tscn", "w").write(
         SCENE.format(lv=lv, px=px, py=py, pz=pz, gallery_res=res,
-                     gallery_nodes=nodes, load_steps=22 + len(pieces)))
+                     gallery_nodes=nodes, load_steps=23 + len(pieces)))
     # The boot chain: the shell, the opening and the pad, which is where the
     # project now starts. world.tscn is still the level and boot.gd hands over
     # to it the way SLUS_002.55 hands over to GAME.EXE.
@@ -1482,7 +1490,7 @@ def project(lv, out="out/godot", start=(57, 4)):
                  "damage.gd", "equip.gd", "objcoll.gd", "scroll.gd",
                  "doors.gd", "sky.gd", "hud.gd", "compass.gd", "ai.gd",
                  "weapon.gd", "anim.gd", "effects.gd", "held.gd",
-                 "loot.gd", "messages.gd", "document.gd", "talk.gd", "info.gd"):
+                 "loot.gd", "messages.gd", "document.gd", "talk.gd", "info.gd", "menu.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening
@@ -1550,6 +1558,11 @@ def project(lv, out="out/godot", start=(57, 4)):
         talk.export(out, lv)
     except Exception as e:
         print(f"conversations skipped: {e}")
+    try:
+        import ui
+        ui.export(out)
+    except Exception as e:
+        print(f"menu pages skipped: {e}")
     try:
         import escript
         escript.export(out)
@@ -1669,7 +1682,7 @@ def verify(out="out/godot"):
                             "fences:",
                             "creature run:",
                             "levels:", "angles:",
-                            "scripts:", "damage:", "knock-back:", "weapon:", "animation:", "spores:", "lift doors:", "chests:", "inscriptions:", "conversations:", "FAIL", "  first",
+                            "scripts:", "damage:", "knock-back:", "weapon:", "animation:", "spores:", "lift doors:", "chests:", "inscriptions:", "conversations:", "menus:", "FAIL", "  first",
                             "  level case", "  angle (", "  script level",
                             "  hit ")):
             print("   " + line.strip())

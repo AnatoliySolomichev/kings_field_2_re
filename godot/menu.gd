@@ -1,0 +1,672 @@
+class_name KFMenu
+extends Control
+# The menu: pause_menu (0x8001a774) on the menu button, its six lines, and the
+# "use item" screen with its prompt -- drawn the way the game draws them,
+# primitive for primitive (tools/ui.py, FORMATS.md "The menus, as they are
+# drawn"), out of the pages ui.json and ui/ hold.
+#
+# Every screen files sprites and quads into an ordering table: a deeper one is
+# drawn first, and within a depth the one filed last first. Here a screen is a
+# Dictionary depth -> [primitive], and _draw walks it in that order.
+#
+#   ui_draw_label   each glyph twice: at (x - 1, y - 1) in the text colour at
+#                   depth 2, at (x, y) in the shadow's at depth 3, 7 apart
+#   ui_frame        33-square corners and 28-long edges at depth 50 -- a frame
+#                   lower than 66 has a middle row of negative height, flipped
+#   ui_panel        a list: the rows, the mode's numbers, the frame, the
+#                   chosen row's pulsing bar, the button legend
+#
+# The world stands still while it is up (KFGame.modal). Not here yet: the
+# status page drawn behind the main menu (ui_status_page), the chosen thing's
+# model turning in the "use item" screen (0x80025be8), the other five screens.
+#
+# @exe game
+
+const SCREEN_W := 320.0
+const SCREEN_H := 240.0
+const FRAME_HZ := 60.0              # the menu's own frames: frame_begin/frame_end, no frame_limit
+const LABEL_STYLE := "0x8007e570"
+const NUMBER_STYLE := "0x8007e564"
+const SMALL_STYLE := "0x8007e57c"
+const RECORDS := 0x8007E588
+const UP := 0x1000
+const DOWN := 0x4000
+const USE_WORD := [0x14, 0x12, 0x04, 0xFF]                    # "use"
+const CANCEL_WORD := [0x02, 0x00, 0x0D, 0x02, 0x04, 0x0B, 0xFF]   # "cancel"
+const FIRST_THING := 0x5F
+const LAST_THING := 0x95
+const NOTHING_HAPPENS := 0xA
+
+static var data := {}
+var tex := {}                       # "tpage_clut" -> [solid, semi]
+var ot := {}                        # the screen being drawn: depth -> [prim]
+var look := {"box": 0x78, "text": 0x80, "shadow": 0x30, "pulse": 0,
+	"confirm": 3, "cancel": 1, "semi": 1, "bright": 0x80}
+var state := ""                     # "", "main", "use_item", "prompt"
+var main_sel := 0
+var list := {}                      # the use-item screen's list
+var prompt_sel := 0
+var player: Node
+var acc := 0.0
+var frames := 0                     # the pad is read every second frame
+var latch := 0                      # the buttons newly down since it was
+var moved := false                  # gp+0x54: the choice moved this frame
+
+
+# @port data -- ui.json and the pages under ui/, tools/ui.py export
+static func load_data() -> bool:
+	if not data.is_empty():
+		return true
+	if not FileAccess.file_exists("res://ui.json"):
+		return false
+	var d = JSON.parse_string(FileAccess.get_file_as_string("res://ui.json"))
+	if typeof(d) != TYPE_DICTIONARY:
+		return false
+	data = d
+	return true
+
+
+# @port engine -- the pages, and the player for the inventory
+func _ready() -> void:
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	player = get_node_or_null("../../Player")
+	if not load_data():
+		return
+	for key in data["pages"]:
+		var pair := []
+		for part in ["_solid", "_semi"]:
+			var path := "res://ui/%s%s.png" % [key, part]
+			pair.append(load(path) if ResourceLoader.exists(path) else null)
+		tex[key] = pair
+	visible = false
+
+
+# -- the drawing, as tools/ui.py has it ---------------------------------------
+
+# @port helper -- a descriptor of 0x8007e588 and its neighbours: tpage, clut, u, v, w, h
+static func rec(addr) -> Array:
+	var key: String = addr if addr is String else "0x%x" % int(addr)
+	return data["records"][key]
+
+
+# @port helper -- grey: the colour byte in all three channels
+static func grey(v: int) -> int:
+	return v | (v << 8) | (v << 16)
+
+
+# @port helper -- AddPrim: at the head of the depth's list
+static func add(o: Dictionary, depth: int, p: Dictionary) -> void:
+	if not o.has(depth):
+		o[depth] = []
+	(o[depth] as Array).append(p)
+
+
+# ui_set_tpage (0x80027610): the page, filed one deeper than what uses it.
+# @orig game:0x80027610 ui_set_tpage  status:transcribed
+static func set_tpage(o: Dictionary, depth: int, tpage: int) -> void:
+	add(o, depth + 1, {"kind": "tpage", "tpage": tpage})
+
+
+# @port helper -- SetSprt's fields as tools/gpuframe.py reads them back
+static func sprite(x: int, y: int, w: int, h: int, u: int, v: int, clut: int, col: int) -> Dictionary:
+	return {"kind": "sprite", "x": x, "y": y, "w": w, "h": h, "u": u & 0xFF,
+		"v": v & 0xFF, "clut": clut, "rgb": col}
+
+
+# ui_prim_quad (0x80027494): (x, y) (x+w, y) (x, y+h) (x+w, y+h), a height
+# below 0 flipping it.
+# @orig game:0x80027494 ui_prim_quad  status:verified -- tools/ui.py, 116 of 116 primitives of inv1 and inv2
+static func quad(x: int, y: int, w: int, h: int, u: int, v: int, uw: int, vh: int,
+		tpage: int, clut: int, col: int, semi: int) -> Dictionary:
+	return {"kind": "quad", "pts": [[x, y], [x + w, y], [x, y + h], [x + w, y + h]],
+		"uvs": [[u & 0xFF, v & 0xFF], [(u + uw) & 0xFF, v & 0xFF],
+			[u & 0xFF, (v + vh) & 0xFF], [(u + uw) & 0xFF, (v + vh) & 0xFF]],
+		"tpage": tpage, "clut": clut, "rgb": col, "semi": semi != 0}
+
+
+# @orig game:0x800261dc ui_draw_label  status:verified -- tools/ui.py against inv1 and inv2
+static func draw_label(o: Dictionary, lk: Dictionary, style: Array, x: int, y: int,
+		glyphs: Array, text := -1) -> void:
+	set_tpage(o, 3, int(style[0]))
+	var col := grey(int(lk["text"])) if text < 0 else text
+	var i := 0
+	for g in glyphs:
+		if int(g) == 0xFF:
+			break
+		var u := (int(g) & 0xF) << 3
+		var v := (int(g) >> 4) * 15
+		add(o, 2, sprite(x + 7 * i - 1, y - 1, int(style[4]), int(style[5]), u, v, int(style[1]), col))
+		add(o, 3, sprite(x + 7 * i, y, int(style[4]), int(style[5]), u, v, int(style[1]), grey(int(lk["shadow"]))))
+		i += 1
+
+
+# @orig game:0x8002636c ui_draw_number  status:verified -- tools/ui.py against inv1 and inv2
+static func draw_number(o: Dictionary, lk: Dictionary, style: Array, x: int, y: int, chars: Array) -> void:
+	set_tpage(o, 3, int(style[0]))
+	var i := 0
+	for c in chars:
+		if int(c) == 0xFF:
+			break
+		var u := int(style[2]) if int(c) < 0xB else int(style[2]) + 7
+		var v := int(c) * 15 if int(c) < 0xB else (int(c) - 0xB) * 15
+		add(o, 2, sprite(x + 7 * i - 1, y - 1, int(style[4]), int(style[5]), u, v, int(style[1]), grey(int(lk["text"]))))
+		add(o, 3, sprite(x + 7 * i, y, int(style[4]), int(style[5]), u, v, int(style[1]), grey(int(lk["shadow"]))))
+		i += 1
+
+
+# @orig game:0x800277c0 number_digits  status:transcribed
+static func number_digits(value: int, n: int, fill: int, mode: int) -> Array:
+	var ln := n + int({1: 1, 2: 1, 3: 2, 5: 2, 4: 3}.get(mode, 0))
+	var out := []
+	for _i in ln:
+		out.append(0xA if fill == 0 else 0)
+	out.append(0xFF)
+	var last := ln - 1
+	match mode:
+		1:
+			out[0] = 0x13
+		2:
+			out[ln - 1] = 0xD
+			last = ln - 2
+		3:
+			out[0] = 0xF
+			out[1] = 0x10
+		4:
+			out[0] = 0xC
+			out[1] = 0x12
+			out[2] = 0x10
+		5:
+			out[0] = 0xE
+			out[1] = 0x11
+	var i := last
+	while i >= 0:
+		out[i] = value % 10
+		value /= 10
+		if value == 0:
+			break
+		i -= 1
+	return out
+
+
+# @orig game:0x80025f38 ui_label_plate  status:verified -- tools/ui.py against inv1 and inv2
+static func label_plate(o: Dictionary, lk: Dictionary, r: Array, x: int, y: int) -> void:
+	add(o, 50, quad(x - 6, y - 6, int(r[4]), int(r[5]), int(r[2]), int(r[3]), int(r[4]), int(r[5]),
+		int(r[0]), int(r[1]), grey(int(lk["box"])), int(lk["semi"])))
+
+
+# @port helper -- ui_panel's pulse: the chosen row's colours from gp+0x4c
+static func bar_colour(lk: Dictionary) -> Array:
+	var a := int(lk["pulse"])
+	var b := int(lk["box"])
+	if a < 0x30:
+		return [a + b, (a >> 1) + b]
+	return [b + 0x5F - a, b + 0x2F - (a >> 1)]
+
+
+# @orig game:0x80026020 sub_80026020  status:transcribed
+static func lit_plate(o: Dictionary, lk: Dictionary, r: Array, x: int, y: int) -> void:
+	var c: Array = bar_colour(lk)
+	add(o, 50, quad(x - 6, y - 6, int(r[4]), int(r[5]), int(r[2]), int(r[3]), int(r[4]), int(r[5]),
+		int(r[0]), int(r[1]), int(c[0]) | (int(c[0]) << 8) | (int(c[1]) << 16), int(lk["semi"])))
+
+
+# @orig game:0x80026158 sub_80026158  status:transcribed
+static func dim_label(o: Dictionary, lk: Dictionary, style: Array, x: int, y: int, glyphs: Array) -> void:
+	var col := 0x57 | (0x57 << 8) | (int(lk["text"]) << 16)
+	if int(lk["semi"]) == 0:
+		col = 0x47 | (0x47 << 8) | (0x57 << 16)
+	draw_label(o, lk, style, x, y, glyphs, col)
+
+
+# @orig game:0x80026acc ui_frame  status:verified -- tools/ui.py, the list's 30 pieces in inv1 and inv2
+static func frame(o: Dictionary, lk: Dictionary, x: int, y: int, w: int, h: int) -> void:
+	var col := grey(int(lk["box"]))
+	var semi := int(lk["semi"])
+	var s5 := x
+	var s6 := y
+	var t0 := h - 0x42
+	var k := 9
+	for s4 in 6:
+		if s4 == 3:
+			s5 = x
+			k += 3
+			s6 = s6 + 0x21 + (t0 if t0 >= 0 else 0)
+		var r: Array = rec(RECORDS + 12 * k)
+		var s3: int
+		var fv: int
+		if s4 >= 3 and t0 < 0:
+			s3 = h - 0x21
+			fv = int(r[3]) + 0x42 - h
+		else:
+			s3 = int(r[5])
+			fv = int(r[3])
+		var s0 := int(r[4])
+		var s2 := w - 0x42
+		while true:
+			add(o, 50, quad(s5, s6, s0, s3, int(r[2]), fv, s0, s3, int(r[0]), int(r[1]), col, semi))
+			s5 += s0
+			if s4 != 1 and s4 != 4:
+				break
+			s2 -= s0
+			if s2 == 0:
+				break
+			if s2 < s0:
+				s0 = s2
+		k += 1
+	var left := t0
+	s6 = y + 0x21
+	while true:
+		var s3 := 0
+		for kk in [12, 13, 14]:
+			var r: Array = rec(RECORDS + 12 * kk)
+			s3 = int(r[5]) if not left < int(r[5]) else left
+			var s0 := int(r[4])
+			var s2 := w - 0x42
+			if kk == 12:
+				s5 = x
+			while true:
+				add(o, 50, quad(s5, s6, s0, s3, int(r[2]), int(r[3]), s0, s3, int(r[0]), int(r[1]), col, semi))
+				s5 += s0
+				if kk != 13:
+					break
+				s2 -= s0
+				if s2 == 0:
+					break
+				if s2 < s0:
+					s0 = s2
+		s6 += 0x1C
+		left -= s3
+		if left == 0:
+			break
+
+
+# @orig game:0x800269c0 ui_button  status:verified -- tools/ui.py against inv1 and inv2
+static func button(o: Dictionary, lk: Dictionary, x: int, y: int, b: int) -> void:
+	var r: Array = rec(RECORDS + 12 * 3)
+	set_tpage(o, 6, int(r[0]))
+	var s0 := (int(lk["bright"]) - 0x80) >> 1 if int(lk["bright"]) > 0x80 else 0
+	add(o, 6, sprite(x, y, int(r[4]), int(r[5]), int(r[2]) + (b << 4), int(r[3]), int(r[1]), grey(s0 + 0x70)))
+
+
+# @orig game:0x80026570 ui_small_text  status:verified -- tools/ui.py against inv1 and inv2; the shadowed form not checked
+static func small_text(o: Dictionary, lk: Dictionary, x: int, y: int, text: Array) -> void:
+	var r: Array = rec(SMALL_STYLE)
+	set_tpage(o, 6, int(r[0]))
+	var s0 := ((int(lk["bright"]) - 0x80) >> 1 if int(lk["bright"]) > 0x80 else 0) + 0x70
+	var i := 0
+	for ch in text:
+		var u := int(r[2]) + (int(ch) - 0x61) * int(r[4])
+		add(o, 5, sprite(x + 8 * i, y, int(r[4]), int(r[5]), u, int(r[3]), int(r[1]), grey(s0)))
+		i += 1
+
+
+# The legend under a list (ui_panel's tail, 0x80025a2c).
+# @orig game:0x80025a2c ui_panel+0x5c4  status:verified -- the three-button legend of inv1 and inv2; the two-button one transcribed
+static func legend(o: Dictionary, lk: Dictionary, two: bool) -> void:
+	var words: Dictionary = data["words"]
+	if two:
+		button(o, lk, 0x5F, 0xD6, int(lk["confirm"]))
+		small_text(o, lk, 0x69, 0xD6, words["select"])
+		button(o, lk, 0xA0, 0xD6, int(lk["cancel"]))
+		small_text(o, lk, 0xAA, 0xD6, words["return"])
+		return
+	button(o, lk, 0x42, 0xD6, int(lk["confirm"]))
+	small_text(o, lk, 0x4C, 0xD6, words["select"])
+	button(o, lk, 0x83, 0xD6, 0)
+	small_text(o, lk, 0x8D, 0xD6, words["guide"])
+	button(o, lk, 0xBC, 0xD6, int(lk["cancel"]))
+	small_text(o, lk, 0xC6, 0xD6, words["return"])
+
+
+# ui_panel (0x80025468) in mode 1: the title, the rows with their counts, the
+# frame, the chosen row's bar and the legend (two buttons with flag 0x8000).
+# @orig game:0x80025468 ui_panel  status:partial -- mode 1 and its 0x8000 form; tools/ui.py, 116 of 116 primitives of inv1 and inv2; the other modes' columns not here
+static func panel(o: Dictionary, lk: Dictionary, s: Dictionary, mode: int) -> void:
+	var style: Array = rec(LABEL_STYLE)
+	if not (s["title"] as Array).is_empty():
+		label_plate(o, lk, rec(RECORDS + 12 * 2), int(s["tx"]), int(s["ty"]))
+		draw_label(o, lk, style, int(s["tx"]), int(s["ty"]), s["title"])
+	for row in int(s["rows"]):
+		if row >= int(s["count"]):
+			break
+		var k := int(s["first"]) + row
+		var x := int(s["x"]) + 0xD
+		var y := int(s["y"]) + 8 + (row << 4)
+		draw_label(o, lk, style, x, y, (s["names"][k] as Array).slice(0, int(s["length"])))
+		if (mode & 0xFFF) == 1 and int(s["counts"][k]) != 0xFF:
+			draw_number(o, lk, rec(NUMBER_STYLE), int(s["x"]) + 0xE9, y,
+				number_digits(int(s["counts"][k]), 2, 0, 1))
+	frame(o, lk, int(s["x"]), int(s["y"]), 0x10A, (int(s["rows"]) << 4) | 0xC)
+	for row in int(s["rows"]):
+		if row != int(s["sel_row"]):
+			continue
+		var c: Array = bar_colour(lk)
+		var r: Array = rec(RECORDS + 12 * 8)
+		add(o, 49, quad(int(s["x"]) + 6, int(s["y"]) + (row << 4) + 5, int(r[4]), int(r[5]),
+			int(r[2]), int(r[3]), int(r[4]), int(r[5]), int(r[0]), int(r[1]),
+			int(c[0]) | (int(c[0]) << 8) | (int(c[1]) << 16), 1))
+	legend(o, lk, (mode & 0x8000) != 0)
+
+
+# item_list (0x8001aea4): the things 95..149 carried in inventory_a.
+# @orig game:0x8001aea4 item_list  status:transcribed
+static func item_list(inv: PackedByteArray) -> Dictionary:
+	var names := []
+	var counts := []
+	var ids := []
+	for i in range(FIRST_THING, LAST_THING + 1):
+		if int(inv[i]) != 0:
+			names.append(data["names"][i])
+			counts.append(int(inv[i]))
+			ids.append(i)
+	counts.append(0xFF)
+	return {"names": names, "counts": counts, "ids": ids}
+
+
+# ui_menu_label(0, 0) and sub_80027728: the list under "use item" -- x 27,
+# y 147, three rows -- its selection held to it, the first row and the bar.
+# @orig game:0x80027688 ui_menu_label  status:verified -- the list's place in inv1 and inv2
+# @orig game:0x80027728 sub_80027728  status:transcribed
+static func use_item_list(inv: PackedByteArray, selected: int) -> Dictionary:
+	var l := item_list(inv)
+	var title: Array = data["labels"][0][0][2]
+	var s := {"tx": 0x1F, "ty": 0x20, "title": title, "x": 0x1B, "y": 0x93, "rows": 3,
+		"length": 0x18, "count": (l["ids"] as Array).size(), "names": l["names"],
+		"counts": l["counts"], "ids": l["ids"], "sel": 0, "first": 0, "sel_row": 0}
+	place(s, selected)
+	return s
+
+
+# @port helper -- sub_80027728's arithmetic: the selection, the first row shown, the bar's row
+static func place(s: Dictionary, selected: int) -> void:
+	var n := int(s["count"])
+	var sel := mini(selected, n - 1) if n > 0 else 0
+	s["sel"] = sel
+	if n - sel < int(s["rows"]):
+		if n < int(s["rows"]):
+			s["first"] = 0
+			s["sel_row"] = sel
+		else:
+			s["first"] = n - int(s["rows"])
+			s["sel_row"] = sel - int(s["first"])
+	else:
+		s["first"] = sel
+		s["sel_row"] = 0
+
+
+# The "use item" screen's 2D part, as tools/ui.py draws it.
+# @orig game:0x8001aa84 menu_use_item  status:partial -- the list, its pad and the prompt; not the thing's model (0x80025be8), the maps and notes (95..100) or the guide
+static func use_item_screen(lk: Dictionary, s: Dictionary) -> Dictionary:
+	var o := {}
+	panel(o, lk, s, 1)
+	return o
+
+
+# sub_80025b24: the prompt's two answers, the chosen one lit.
+# @orig game:0x80025b24 sub_80025b24  status:transcribed
+static func options(o: Dictionary, lk: Dictionary, sel: int) -> void:
+	var r: Array = rec(RECORDS + 12 * 1)
+	var style: Array = rec(LABEL_STYLE)
+	var one: Array = rec("0x8007e778")
+	var two: Array = rec("0x8007e794")
+	if sel == 0:
+		lit_plate(o, lk, r, int(one[0]), int(one[1]))
+		label_plate(o, lk, r, int(two[0]), int(two[1]))
+		draw_label(o, lk, style, int(one[0]), int(one[1]), USE_WORD)
+		dim_label(o, lk, style, int(two[0]), int(two[1]), CANCEL_WORD)
+	else:
+		label_plate(o, lk, r, int(one[0]), int(one[1]))
+		lit_plate(o, lk, r, int(two[0]), int(two[1]))
+		dim_label(o, lk, style, int(one[0]), int(one[1]), USE_WORD)
+		draw_label(o, lk, style, int(two[0]), int(two[1]), CANCEL_WORD)
+
+
+# sub_800252f4: a page of the menu's lines on their plates, the chosen one lit,
+# and the two-button legend. Page 0 is the menu itself, with no title.
+# @orig game:0x800252f4 sub_800252f4  status:transcribed
+static func menu_page(o: Dictionary, lk: Dictionary, page: int, n: int, sel: int) -> void:
+	var style: Array = rec(LABEL_STYLE)
+	var plate: Array = rec(RECORDS + 12 * 2)
+	var title: Array = data["page_minus"] if page == 0 else data["labels"][page - 1][8]
+	if page != 0 and int(title[0]) != 0:
+		label_plate(o, lk, plate, int(title[0]), int(title[1]))
+		draw_label(o, lk, style, int(title[0]), int(title[1]), title[2])
+	for i in n:
+		var line: Array = data["labels"][page][i]
+		var x := int(line[0])
+		var y := int(line[1])
+		if i == sel:
+			lit_plate(o, lk, plate, x, y)
+			draw_label(o, lk, style, x, y, line[2])
+		else:
+			label_plate(o, lk, plate, x, y)
+			dim_label(o, lk, style, x, y, line[2])
+	legend(o, lk, true)
+
+
+# @port helper -- the ordering table in the order the GPU draws it, each sprite with its page
+static func order(o: Dictionary) -> Array:
+	var depths := o.keys()
+	depths.sort()
+	depths.reverse()
+	var out := []
+	var tp = null
+	for d in depths:
+		var lst: Array = o[d]
+		for i in range(lst.size() - 1, -1, -1):
+			var p: Dictionary = lst[i]
+			if p["kind"] == "tpage":
+				tp = p["tpage"]
+				continue
+			var q := p.duplicate()
+			if q["kind"] == "sprite":
+				q["tpage"] = tp
+			out.append([d, q])
+	return out
+
+
+# -- the menu's flow ----------------------------------------------------------
+
+# @port engine -- the menu button opens it; its own frames at 15 a second while it is up
+func _process(dt: float) -> void:
+	if data.is_empty() or player == null:
+		return
+	if state == "":
+		if KFPad.hit(KFPad.MENU_SLOT) and not KFGame.modal and _may_open():
+			_open()
+		return
+	acc = minf(acc + dt, 0.25)
+	while acc >= 1.0 / FRAME_HZ and state != "":
+		acc -= 1.0 / FRAME_HZ
+		pulse_step()
+		frames += 1
+		if frames & 1 == 0:
+			_step(latch)
+			latch = 0
+	latch |= KFPad.now & ~KFPad.prev
+	_build()
+	queue_redraw()
+
+
+# frame_begin (0x80026fe4): the chosen row's pulse goes round 0..0x5f, one a
+# frame, and starts again from 0x30 when the choice has just moved (gp+0x54).
+# @orig game:0x80027090 frame_begin+0xac  status:transcribed
+func pulse_step() -> void:
+	look["pulse"] = (int(look["pulse"]) + 1) % 0x60
+	if moved:
+		look["pulse"] = 0x30
+		moved = false
+
+
+# sub_800305d8: the menu button, newly down, with no swing under way and the
+# player not dying.
+# @orig game:0x80030640 sub_800305d8+0x68  status:transcribed
+func _may_open() -> bool:
+	return int(player.wstate["clock"]) == -1 and int(player.pstate) != 0x11
+
+
+# pause_menu's start (0x80027198 and its first frames): the world held, the
+# main page up.
+# @orig game:0x8001a774 pause_menu  status:partial -- the six lines and the "use item" screen; the others answer nothing yet, and the status page is not drawn
+func _open() -> void:
+	KFGame.modal = true
+	state = "main"
+	visible = true
+	acc = 0.0
+	KFInfo.note("menu: open")
+
+
+# @port helper -- the menu closed, the world going again
+func _close() -> void:
+	state = ""
+	visible = false
+	KFGame.modal = false
+	player.clear_movement()
+	KFInfo.note("menu: closed")
+
+
+# One frame of whichever screen is up, on the buttons newly down.
+# @orig game:0x800221e8 sub_800221e8  status:transcribed -- the main page's choice: up and down round the six, the confirm and the cancel
+# @orig game:0x800222fc ui_menu_chrome  status:partial -- the list's up and down, the confirm and the cancel; not the quantity or the model's turning
+# @orig game:0x80024c70 ui_prompt  status:partial -- kind 0, "use" and "cancel"
+func _step(press: int) -> void:
+	var confirm := 0x40 if int(look["confirm"]) == 3 else 0x20
+	var cancel := 0x20 if int(look["confirm"]) == 3 else 0x40
+	match state:
+		"main":
+			if press & UP:
+				main_sel = 5 if main_sel == 0 else main_sel - 1
+				moved = true
+			elif press & DOWN:
+				main_sel = 0 if main_sel == 5 else main_sel + 1
+				moved = true
+			elif press & confirm:
+				if main_sel == 0:
+					list = use_item_list(player.inventory.a, int(list.get("sel", 0)))
+					state = "use_item"
+				else:
+					KFInfo.note("menu: line %d is not ported yet" % main_sel)
+			elif press & cancel:
+				_close()
+		"use_item":
+			var n := int(list["count"])
+			if press & UP and n > 0:
+				var sel := int(list["sel"]) - 1
+				place(list, sel if sel >= 0 else n - 1)
+			elif press & DOWN and n > 0:
+				var sel2 := int(list["sel"]) + 1
+				place(list, sel2 if sel2 < n else 0)
+			elif press & confirm and n > 0:
+				prompt_sel = 0
+				state = "prompt"
+			elif press & cancel:
+				state = "main"
+		"prompt":
+			if press & (UP | DOWN):
+				prompt_sel = 1 - prompt_sel
+				moved = true
+			elif press & confirm:
+				if prompt_sel == 0:
+					_use(int(list["ids"][int(list["sel"])]))
+				else:
+					state = "use_item"
+			elif press & cancel:
+				state = "use_item"
+
+
+# The thing chosen: 104..120 are eaten (item_consume), then the menu closes
+# and use_item runs, whose last word is the level's entry 2 and, if nothing
+# has answered, "Nothing Happens".
+# @orig game:0x8001b254 item_consume  status:transcribed
+# @orig game:0x8005d748 use_item+0xb68  status:partial -- the tail: the level's entry 2 not called; the eaten things answer, the rest say "Nothing Happens"
+func _use(id: int) -> void:
+	var inv: KFItems = player.inventory
+	var eaten := false
+	if id >= 0x68 and id <= 0x78 and not (id == 0x6E or (id >= 0x71 and id <= 0x76)) \
+			and int(inv.a[id]) != 0:
+		eaten = true
+		match id:
+			0x68:
+				player.hp += 0x32
+			0x69:
+				player.poison = 0
+				player.hp += 0xF
+			0x6A:
+				player.hp = player.hp_max
+			0x6B:
+				player.hp = player.hp_max
+				player.mp = int(player.character.get("mp_max", player.mp))
+			0x6C:
+				pass                                    # 0x801b2568 and turn_slow_timer: not in the port
+			0x6D:
+				player.mp += 0x28
+				player.mp = mini(player.mp, int(player.character.get("mp_max", player.mp)))
+			0x77:
+				player.hp += 0x64
+			0x78:
+				player.hp += 0xC8
+				player.mp = mini(player.mp + 0x64, int(player.character.get("mp_max", player.mp + 0x64)))
+		player.hp = mini(player.hp, player.hp_max)
+		inv.a[id] = int(inv.a[id]) - 1
+		if id == 0x77 or id == 0x78:
+			inv.a[0x76] = int(inv.a[0x76]) + 1       # the crystal flask back
+	KFInfo.note("use: item %d%s" % [id, " eaten" if eaten else ""])
+	_close()
+	if not eaten:
+		KFMessages.announce(NOTHING_HAPPENS)
+
+
+# @port engine -- the screen up now, as primitives
+func _build() -> void:
+	ot = {}
+	match state:
+		"main":
+			menu_page(ot, look, 0, 6, main_sel)
+		"use_item":
+			panel(ot, look, list, 1)
+		"prompt":
+			panel(ot, look, list, 1 | 0x8000)
+			options(ot, look, prompt_sel)
+
+
+# The primitives, in the order the GPU draws them: sprites and quads out of the
+# pages, coloured as the GPU colours a texel (x / 0x80), a semi-transparent
+# quad's STP texels half and half with what is under them.
+# @port engine -- the GPU's drawing of SPRT and POLY_FT4, on a 320 x 240 screen centred in the window
+func _draw() -> void:
+	if state == "":
+		return
+	var vs := get_viewport_rect().size
+	var k := vs.y / SCREEN_H
+	var left := (vs.x - SCREEN_W * k) * 0.5
+	for e in order(ot):
+		var p: Dictionary = e[1]
+		var key := "%d_%04x" % [int(p.get("tpage", 0)) & 0x7FF, int(p["clut"])]
+		if not tex.has(key):
+			continue
+		var c := int(p["rgb"])
+		var col := Color(float(c & 0xFF) / 128.0, float((c >> 8) & 0xFF) / 128.0,
+			float((c >> 16) & 0xFF) / 128.0, 1.0)
+		var pair: Array = tex[key]
+		if p["kind"] == "sprite":
+			var dst := Rect2(left + int(p["x"]) * k, int(p["y"]) * k, int(p["w"]) * k, int(p["h"]) * k)
+			var src := Rect2(int(p["u"]), int(p["v"]), int(p["w"]), int(p["h"]))
+			for t in pair:
+				if t:
+					draw_texture_rect_region(t, dst, src, col)
+		else:
+			var pts := PackedVector2Array()
+			var uvs := PackedVector2Array()
+			if int(p["pts"][0][1]) == int(p["pts"][2][1]) or int(p["pts"][0][0]) == int(p["pts"][1][0]):
+				continue                                # no area: the GPU draws nothing either
+			for i in [0, 1, 3, 2]:
+				pts.append(Vector2(left + int(p["pts"][i][0]) * k, int(p["pts"][i][1]) * k))
+				uvs.append(Vector2(int(p["uvs"][i][0]), int(p["uvs"][i][1])) / 256.0)
+			if pair[0]:
+				draw_polygon(pts, PackedColorArray([col, col, col, col]), uvs, pair[0])
+			if pair[1]:
+				var c2 := col
+				if bool(p["semi"]):
+					c2.a = 0.5
+				draw_polygon(pts, PackedColorArray([c2, c2, c2, c2]), uvs, pair[1])

@@ -290,6 +290,9 @@ func _init() -> void:
 	if not _conversations():
 		quit(1)
 		return
+	if not _menus():
+		quit(1)
+		return
 	if not _equip():
 		quit(1)
 		return
@@ -708,6 +711,67 @@ func _conversations() -> bool:
 	if bad > 0:
 		print("  first difference: " + first)
 	return bad == 0
+
+
+# The menus' drawing, menu.gd against tools/ui.py -- which reproduces the
+# game's own frames of the "use item" screen: the screens' primitive lists,
+# position, UV, CLUT, page, colour, depth and order, for a few states.
+func _menus() -> bool:
+	if not FileAccess.file_exists("res://ui.json"):
+		print("menus: no cases to check against")
+		return true
+	if not KFMenu.load_data():
+		print("menus: ui.json does not read")
+		return false
+	var n := 0
+	var bad := 0
+	var first := ""
+	for case in KFMenu.data["cases"]:
+		var lk := {"box": 0x78, "text": 0x80, "shadow": 0x30, "pulse": int(case["pulse"]),
+			"confirm": 3, "cancel": 1, "semi": 1, "bright": 0x80}
+		var o := {}
+		match str(case["screen"]):
+			"use_item":
+				var inv := PackedByteArray()
+				inv.resize(150)
+				for key in case["inventory"]:
+					inv[int(key)] = int(case["inventory"][key])
+				KFMenu.panel(o, lk, KFMenu.use_item_list(inv, int(case["sel"])), 1)
+			"prompt":
+				KFMenu.options(o, lk, int(case["sel"]))
+			"menu":
+				KFMenu.menu_page(o, lk, 0, 6, int(case["sel"]))
+		var got := JSON.stringify(_norm(KFMenu.order(o)))
+		var want := JSON.stringify(_norm(case["prims"]))
+		n += 1
+		if got != want:
+			bad += 1
+			if first == "":
+				first = "%s sel %d: godot %s ... python %s ..." % [case["screen"], int(case["sel"]),
+					got.substr(0, 300), want.substr(0, 300)]
+	print("menus: %d of %d screens drawn as tools/ui.py draws them" % [n - bad, n])
+	if bad > 0:
+		print("  first difference: " + first)
+	return bad == 0
+
+
+# @port check -- a primitive list with every number an int and every pair an array, for comparing
+func _norm(v):
+	if v is Array:
+		var out := []
+		for x in v:
+			out.append(_norm(x))
+		return out
+	if v is Dictionary:
+		var out := {}
+		var keys: Array = v.keys()
+		keys.sort()
+		for key in keys:
+			out[str(key)] = _norm(v[key])
+		return out
+	if v is float:
+		return int(v)
+	return v
 
 
 # load_entry's frames, document.gd against tools/readables.py: for two pad

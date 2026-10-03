@@ -653,6 +653,12 @@ port's menu is held to.
 python3 tools/ui.py            the use-item screen against both snapshots, both buffers
 ```
 
+Its `export` writes `ui.json` and `ui/` for `godot/menu.gd`: the descriptors,
+the label table, the item names, and every page the menus draw from under each
+CLUT, split into the texels drawn solid and the STP ones a semi-transparent
+primitive blends; and the primitive lists of a few screens, which the
+self-test holds the port to.
+
 **The info window.** The port's own text -- the cell and the player's
 state, the buttons, the comparison with the emulator, and a log of what
 happens (creatures waking and struck, doors, chests, things taken, gold,

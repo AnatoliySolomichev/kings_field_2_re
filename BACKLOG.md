@@ -512,6 +512,26 @@ movement model is being finished:
 
 Neither has been looked for. Recorded so the observation is not lost.
 
+## 5a'. The menu -- begun
+
+`pause_menu` and its "use item" screen are read and in the port
+(FORMATS.md, "The menus, as they are drawn"): `tools/ui.py` reproduces the
+game's frames of the screen primitive for primitive (`inv1`, `inv2`, read by
+`tools/gpuframe.py`), and `godot/menu.gd` draws what `tools/ui.py` draws.
+Eating heals. Left, roughly in order:
+
+* `ui_status_page` (`0x800227ec`, 709 instructions), drawn behind the main
+  page every frame -- a snapshot of the main page would check it;
+* `use_item`'s arms (`0x8005cbe0`, 61 of them): the keys -- seven share one
+  arm, which must be what opens a locked chest -- the crystals and the
+  fruits, and the level's entry 2;
+* the chosen thing's model turning in "use item" (`0x80025be8`), the guide
+  (triangle: the thing's description), the maps and notes (95..100);
+* "use magic", "equipment" (`ui_equip_page`), "status/records"
+  (`ui_ratings_page`), "storage" and "system";
+* `pad_read_latch`'s repeat while a direction is held -- the port reads new
+  presses only.
+
 ## 5b'. Chests, and what is in them -- in the port
 
 The lids (opcode 6), the big chests (opcode 7) and `object_give` are read and
