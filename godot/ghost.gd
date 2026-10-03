@@ -73,6 +73,7 @@ const MARKERS := 64
 # stopped. The file's time is kept to the second, hence not 1.
 const STALE := 3
 
+var scratch := Label.new()          # _hud_text's text when the screen has no label
 var player: Node3D
 var marker: MeshInstance3D
 var flags: MeshInstance3D
@@ -430,9 +431,16 @@ func _ago(s: int) -> String:
 
 
 func _hud(note: String) -> void:
+	_hud_text(note)
+	var lab := get_node_or_null("../UI/Compare") as Label
+	KFInfo.compare = lab.text if lab else scratch.text
+
+
+# @port check -- the comparison's lines, on the screen's label
+func _hud_text(note: String) -> void:
 	var hud := get_node_or_null("../UI/Compare")
 	if hud == null:
-		return
+		hud = scratch                      # the text still goes to the info window
 	feed = _why_not(_read()) if (compare or live_input) else ""
 	if feed != "":
 		hud.text = ("%s is on, but it has nothing to go on.\n%s\n" +
@@ -473,3 +481,8 @@ func _hud(note: String) -> void:
 		int(drift.x), int(drift.y), int(drift.z), worst,
 		matched, checked, pct,
 		("%.1f frames/s" % game_fps) if game_fps > 0.0 else "rate not logged", note]
+
+
+# @port engine -- the scratch label goes with the node
+func _exit_tree() -> void:
+	scratch.free()

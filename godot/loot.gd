@@ -233,6 +233,8 @@ func spawn(d: Dictionary) -> void:
 	rows[made] = r
 	slots.append(made)
 	slots.sort()
+	KFInfo.note("drop: type %d%s in slot %d" % [typ,
+		(" (%d gold)" % int(d["amount"])) if typ == 0x95 else "", made])
 
 
 # find_free_slot (0x80046034): of the ten slots from `start`, the first whose
@@ -492,6 +494,7 @@ func _read(r: Dictionary, at: int) -> bool:
 	reading = d
 	resume = at + 1
 	KFGame.modal = true
+	KFInfo.note("read: slot %d, ITEM.T %d" % [int(r["slot"]), 0x96 + int(r["text"])])
 	return true
 
 
@@ -522,6 +525,7 @@ func _talk_next() -> void:
 		if entry < 0:
 			break
 		if doc != null and doc.open_path("res://talk/%d.png" % entry):
+			KFInfo.note("talk: TALK.T %d, pc %d" % [entry, int(talking["pc"])])
 			return
 		KFTalk.closed(talking, false)       # no page: as if closed without USE
 	talking = {}
@@ -544,8 +548,10 @@ func _lock(r: Dictionary) -> void:
 			KFMessages.announce(EMPTY)
 	elif lock == FREE:
 		r["lock"] = OPENED
+		KFInfo.note("chest: slot %d opens" % int(r["slot"]))
 	else:
 		KFMessages.announce(LOCKED)
+		KFInfo.note("chest: slot %d is locked, lock byte %d" % [int(r["slot"]), lock])
 
 
 # object_give (0x8005db30) up to its own frames: not a thing whose +0x38 is
@@ -559,12 +565,15 @@ func _give(r: Dictionary, at: int) -> bool:
 		KFMessages.announce(GOLD, int(r["inside"]))
 		r["type"] = GONE
 		player.gold += int(r["inside"])
+		KFInfo.note("gold: %d from slot %d, %d in all" % [int(r["inside"]), int(r["slot"]), player.gold])
 		return false
 	var view: int = player.view_pitch_now()
 	give = give_start(r, Vector3i(player.gx, player.gy, player.gz), view,
 		int(player.facing), player.coll)
 	give["resume"] = at + 1
 	give["items"] = player.inventory
+	KFInfo.note("take: item %d from slot %d flies to the eye -- USE takes it" % [
+		int(r["type"]), int(r["slot"])])
 	press = 0
 	KFGame.modal = true
 	return true
@@ -719,6 +728,7 @@ func _give_done() -> void:
 	var r: Dictionary = give["row"]
 	var taken := bool(give["taken"])
 	var resume := int(give["resume"])
+	KFInfo.note("take: slot %d %s" % [int(r["slot"]), "taken" if taken else "put back"])
 	if taken:
 		r["type"] = GONE
 	give = {}

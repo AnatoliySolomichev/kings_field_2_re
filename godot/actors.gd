@@ -409,7 +409,7 @@ func _take_hit(k: int, dmg: int, strength: int, point) -> Dictionary:
 			a["vz"] = v[2]
 	a["vst"] = 0x10
 	out["hp"] = int(a["hp"])
-	print("actors: f%d  slot %d  model %d  struck for %d, %d HP left%s" % [
+	KFInfo.note("actors: f%d  slot %d  model %d  struck for %d, %d HP left%s" % [
 		frame, k, a["model"], dmg, int(a["hp"]), "  -- dying" if int(a["hp"]) == 0 else ""])
 	return out
 
@@ -654,7 +654,7 @@ func _state(k: int, st: int, why: String) -> void:
 	last.append(line)
 	if last.size() > 5:
 		last.remove_at(0)
-	print("actors: " + line)
+	KFInfo.note("actors: " + line)
 
 
 # @port check -- the nearest awake creature, for F10

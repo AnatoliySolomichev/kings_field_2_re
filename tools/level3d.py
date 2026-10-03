@@ -1213,6 +1213,7 @@ SCENE = """[gd_scene load_steps={load_steps} format=3]
 [ext_resource type="Script" path="res://loot.gd" id="26"]
 [ext_resource type="Script" path="res://messages.gd" id="27"]
 [ext_resource type="Script" path="res://document.gd" id="28"]
+[ext_resource type="Script" path="res://info.gd" id="29"]
 {gallery_res}
 
 [sub_resource type="Environment" id="Env"]
@@ -1264,6 +1265,9 @@ script = ExtResource("18")
 
 [node name="Loot" type="Node" parent="."]
 script = ExtResource("26")
+
+[node name="Info" type="Node" parent="."]
+script = ExtResource("29")
 
 [node name="Scroll" type="Node" parent="."]
 script = ExtResource("17")
@@ -1466,7 +1470,7 @@ def project(lv, out="out/godot", start=(57, 4)):
                        for i in range(len(pieces)))
     open(f"{out}/world.tscn", "w").write(
         SCENE.format(lv=lv, px=px, py=py, pz=pz, gallery_res=res,
-                     gallery_nodes=nodes, load_steps=21 + len(pieces)))
+                     gallery_nodes=nodes, load_steps=22 + len(pieces)))
     # The boot chain: the shell, the opening and the pad, which is where the
     # project now starts. world.tscn is still the level and boot.gd hands over
     # to it the way SLUS_002.55 hands over to GAME.EXE.
@@ -1478,7 +1482,7 @@ def project(lv, out="out/godot", start=(57, 4)):
                  "damage.gd", "equip.gd", "objcoll.gd", "scroll.gd",
                  "doors.gd", "sky.gd", "hud.gd", "compass.gd", "ai.gd",
                  "weapon.gd", "anim.gd", "effects.gd", "held.gd",
-                 "loot.gd", "messages.gd", "document.gd", "talk.gd"):
+                 "loot.gd", "messages.gd", "document.gd", "talk.gd", "info.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening

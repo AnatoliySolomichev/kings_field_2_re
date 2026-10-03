@@ -68,6 +68,7 @@ static func announce(code: int, value := 0) -> void:
 	if code == GOLD:
 		amounts[put] = value
 	put = (put + 1) & 7
+	KFInfo.note("banner: %d%s" % [code, (" (%d)" % value) if code == GOLD else ""])
 
 
 # number_digits(value, 4, 0, 0): four digits, right-aligned, the rest 0xa.

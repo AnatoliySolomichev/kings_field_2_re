@@ -630,6 +630,14 @@ python3 tools/doors.py --check      the counts alone
 ./emu/run.sh debug bp27.lua         a lift door frame by frame, into out/lua_bp27.log
 ```
 
+**The info window.** The port's own text -- the cell and the player's
+state, the buttons, the comparison with the emulator, and a log of what
+happens (creatures waking and struck, doors, chests, things taken, gold,
+lines said, banners) -- goes to a window of its own beside the game's
+(`godot/info.gd`, F12 to show and hide it), so the game's screen holds only
+what the game draws. With no display there is no window and the text goes
+back onto the screen.
+
 **Chests in the port.** `chests.py` is the small chest's lid (opcode 6), the
 big chest (opcode 7), `object_give`'s frames and the falls of what a dying
 creature leaves (opcodes 0x60 to 0x62) in Python; `godot/loot.gd` the

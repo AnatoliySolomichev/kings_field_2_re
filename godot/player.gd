@@ -269,11 +269,9 @@ func _to_godot() -> void:
 	position = Vector3(float(gx) / UNIT, float(-gy) / UNIT, float(-gz) / UNIT)
 
 
-# @port check -- the readout's lines
+# @port check -- the readout's lines, for the info window (info.gd) or the screen
 func _refresh() -> void:
 	var hud := get_node_or_null("../UI/Hud")
-	if hud == null:
-		return
 	if KFPad.binding.is_empty():
 		KFPad.apply()
 	var cx := int(floor(float(gx) / CELL))
@@ -284,7 +282,7 @@ func _refresh() -> void:
 	var above := "-"
 	if last_surface != KFCollision.NO_SURFACE:
 		above = str(last_surface - gy)
-	hud.text = ("%s   cell (%d, %d)   height %d\n" +
+	var text := ("%s   cell (%d, %d)   height %d\n" +
 		"state %d   vy %d   speed %d/%d   %s above the surface\n" +
 		"F1 walk/fly   F2 darkening   G collision   Esc mouse   PgUp/PgDn fly up/down\n" +
 		"forward %s   strafe %s/%s   turn %s/%s   attack %s   use %s   menu %s   pause %s\n") % [
@@ -294,6 +292,12 @@ func _refresh() -> void:
 		KFPad.slot_key(KFPad.RIGHT_SLOT), KFPad.slot_key(KFPad.ATTACK),
 		KFPad.slot_key(KFPad.USE), KFPad.slot_key(KFPad.MENU_SLOT),
 		KFPad.slot_key(KFPad.PAUSE)]
+	if hud:
+		hud.text = text
+	KFInfo.status = text + ("position %d %d %d   facing %03x   pitch %03x\n" +
+		"HP %d/%d   MP %d   gold %d   weapon meter %d   magic meter %d   poison %d") % [
+		gx, gy, gz, facing, pitch, hp, hp_max, mp, gold, weapon_meter,
+		magic_meter, poison]
 
 
 # @port engine -- the mouse turns the facing and the pitch; F1, G, Esc and Tab are the port's keys
@@ -585,10 +589,10 @@ func _blow(rec: PackedByteArray, strength: int, push_back: bool) -> void:
 		character = KFLevels.award(character, int(r["exp"]))
 		hp_max = int(character["hp_max"])
 		stat = int(character["stat36"])
-		print("player: %d experience, %d of %d, level %d" % [int(r["exp"]),
+		KFInfo.note("player: %d experience, %d of %d, level %d" % [int(r["exp"]),
 			int(character["exp"]), int(character["exp_next"]), int(character["level"])])
 		if int(character["level"]) != before:
-			print("player: level %d, HP max %d" % [int(character["level"]), hp_max])
+			KFInfo.note("player: level %d, HP max %d" % [int(character["level"]), hp_max])
 
 
 # 0x8002ef80: a landing at 0x1e0 or faster hurts, t^3 / 118000 with t the

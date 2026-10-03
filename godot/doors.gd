@@ -189,6 +189,7 @@ func _interact() -> void:
 				c.vec_angle(int(d["x"]) - player.gx, int(d["z"]) - player.gz), USE_FACING):
 			continue
 		d["state"] = 1
+		KFInfo.note("door: the lift door in slot %d opens" % int(d["slot"]))
 	for d in doors:
 		if int(d["state"]) != 0:
 			continue
@@ -206,6 +207,7 @@ func _interact() -> void:
 		if not _facing(player.facing, ang, 0x200):
 			continue
 		d["state"] = 1
+		KFInfo.note("door: the door in slot %d swings" % int(d["slot"]))
 
 
 # @orig game:0x8004814c object_interpreter+0x113c  status:verified -- opcode 1's arm: the swing, the shove, the stamps and the wait; 226 of 226 recorded steps (emu/bp24.lua, tools/doors.py)
