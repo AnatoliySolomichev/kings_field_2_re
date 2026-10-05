@@ -2745,7 +2745,17 @@ of type 136 in the gold ring (`find_free_slot(350, 10)`) shows it lying
 there, the pedestal's `+0x39` its place in the ring; anything else gets the
 test above, and "Wrong key!" on a 3 without ending the walk. Silviera's key
 (141, `0x8005d244`) asks for the first object only: a type-`0x101` pedestal
-with its lock `0xff` takes it (`0x8005c7e8` next); anything else, the test.
+with its lock `0xff` takes it -- the lock the key's number, the state 0, the
+key out of the pack -- and **`pedestal_put_key`** (`0x8005c7e8`) stands it
+there: `find_free_slot(380, 16)` gives a slot of the ring 380..395, whose
+type becomes the key's, and the pedestal's `+0x39` its place in the ring;
+anything else, the test. **Checked**: the snapshots `silv1` and `silv2`, either
+side of the key used at level 4's pedestal in cell (33,23) (slot 108), hold
+7 of 7 of it -- the lock `0xff` to 141, the key gone from the pack, slot 380
+free and then of type 141 at the pedestal's x and z, standing on it, its
+`+0x40` the pedestal's slot and the pedestal's `+0x39` 0 (`tools/chests.py`).
+By then the pedestal's own opcode (`0x18`) has its state at 99 and the key's
+(`0x70`) its lock at `0xff`; neither arm is read.
 
 `python3 tools/chests.py --keys` lists every lock on the disc a key is asked
 about: 169 of them on 23 levels. Level 0 has seven -- slot 9 the copper key,
@@ -3402,7 +3412,7 @@ And `skill_unlock` (`0x80029f1c`) does nothing for skills 0..3 until story
 flag `0x6d + k` (`0x801ba9f5`) is set; it sets `0x7b + k` when one of k's
 spells unlocks. For each threshold reached it unlocks the first spell not yet
 unlocked among the first (index + 1) of the skill's list, `announce(3)` each.
-19 of 19 snapshots hold exactly the spells it leaves a new character with
+21 of 21 snapshots hold exactly the spells it leaves a new character with
 their skills (`tools/levelup.py`); the port has all of it (`godot/levelup.gd`
 `skill_unlock`, `use_arm`; `award` calls it after each level, as
 `award_exp` does at `0x8002a574`).
@@ -3566,8 +3576,8 @@ Two corrections to the published list, both of which it had no way to notice:
   one per rating -- and is the **poison resistance** `player_take_hit` rolls
   against. Five pieces carry one (ids 74, 76, 79, 83, 86: 25, 50, 75, 75, 5).
   The routine whole -- the curse halving, the three bonus timers, thirteen
-  things worn by id, the clamps -- is `tools/equip.py recalc()`, 437 of 437
-  values over 19 snapshots (one, `equip4`, with nothing worn or wielded),
+  things worn by id, the clamps -- is `tools/equip.py recalc()`, 483 of 483
+  values over 21 snapshots (one, `equip4`, with nothing worn or wielded),
   and `godot/equip.gd recalc()`, which the
   player now calls where the game does: on a level, a strong blow, an item.
 

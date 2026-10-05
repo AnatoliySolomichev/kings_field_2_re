@@ -528,7 +528,9 @@ Eating heals. Left, roughly in order:
   check it); so are verdite, the fruits and the crystals, with
   `skill_unlock` (FORMATS.md, "Four of the five skills never grow" -- which
   they now do). Orladin's key (`0x8005d300`, the pedestals of type 0x102 and
-  the type-0xa2 locks), Silviera's (`0x8005d244`, type 0x101, `0x8005c7e8`),
+  the type-0xa2 locks), Silviera's (`0x8005d244`, read and held to the
+  snapshots silv1 and silv2, 7 of 7 -- but its pedestals, opcode 0x18, and
+  the key it stands there, opcode 0x70, are level 4's and not read),
   the flask, the truth glass, Ichrius' things and the spell books are not,
   nor the level's entry 2 (level 0's is empty);
 * the chosen thing's model turning in "use item" (`0x80025be8`), the guide

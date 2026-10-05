@@ -34,10 +34,10 @@ does, in order:
 7. clamp: a u16 over `0x7fff` (under zero) is 0, and the stat and the
    working skills stop at 999.
 
-All of it is `recalc()`, held against every snapshot: **437 of 437** values,
+All of it is `recalc()`, held against every snapshot: **483 of 483** values,
 the sixteen ratings, the resistance (the armour's `+8`, the hole in the eight
 it adds, goes to a ninth defense half, `0x801b255a`), five working skills and
-the effective stat of 19 -- one of them, `equip4`, with nothing worn or
+the effective stat of 21 -- one of them, `equip4`, with nothing worn or
 wielded, every rating 0.
 
 `0xff` in a slot means nothing is worn, and the routine skips it.

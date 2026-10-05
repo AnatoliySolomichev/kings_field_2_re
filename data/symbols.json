@@ -2982,5 +2982,10 @@
   "name": "spell_names",
   "kind": "data",
   "evidence": "31 rows of 24 glyph bytes, the spells' names in spell_table order: FIRE BALL .. LIGHT (29), BLESSINGS (30)"
+ },
+ "0x8005c7e8": {
+  "name": "pedestal_put_key",
+  "kind": "code",
+  "evidence": "(pedestal, key): find_free_slot(0x17c, 0x10) -- the ring of slots 380..395 -- the new object's type the key and +0x38 0, the pedestal's +0x39 its place in the ring. silv1/silv2: slot 380 of type 141 stands on level 4's pedestal 108"
  }
 }

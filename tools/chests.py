@@ -482,6 +482,59 @@ def key_cases():
     return cases
 
 
+SILVIERA_KEY, PEDESTAL = 141, 0x101
+KEY_RING, KEY_RING_SIZE = 380, 16       # pedestal_put_key's find_free_slot(0x17c, 0x10)
+
+
+def check_pedestal(out=sys.stdout, before="silv1", after="silv2"):
+    """use_item's arm for Silviera's key (0x8005d244) on a pedestal, against a
+    snapshot before and one after: the pedestal's lock 0xff becomes the key,
+    the key leaves the pack, and pedestal_put_key (0x8005c7e8) puts it in the
+    ring of slots 380..395 -- the new object of the key's type, its +0x40 the
+    pedestal's slot, the pedestal's +0x39 the ring index -- standing on it."""
+    paths = [os.path.join(ROOT, "out", "snap", n + ".ram") for n in (before, after)]
+    if not all(os.path.exists(p) for p in paths):
+        return True
+    import objload
+    a, b = (open(p, "rb").read() for p in paths)
+    ot, rec = objload.OBJECT_TABLE & 0x1FFFFF, objload.REC
+
+    def obj(r, k):
+        o = r[ot + k * rec:ot + (k + 1) * rec]
+        return {"type": struct.unpack_from("<H", o, 6)[0], "op": o[4],
+                "state": struct.unpack_from("<H", o, 8)[0], "lock": o[0x38],
+                "ring": o[0x39], "x": struct.unpack_from("<i", o, 0x14)[0],
+                "y": struct.unpack_from("<i", o, 0x18)[0],
+                "z": struct.unpack_from("<i", o, 0x1C)[0], "link": o[0x40]}
+    pedestals = [k for k in range(396) if obj(b, k)["type"] == PEDESTAL
+                 and obj(a, k)["lock"] == 0xFF and obj(b, k)["lock"] == SILVIERA_KEY]
+    claims = []
+    have = (a[0xC85E8 + SILVIERA_KEY], b[0xC85E8 + SILVIERA_KEY])    # inventory_a
+    claims.append(("the key leaves the pack", have[1] == have[0] - 1))
+    claims.append(("one pedestal's lock goes from 0xff to the key", len(pedestals) == 1))
+    if pedestals:
+        k = pedestals[0]
+        p = obj(b, k)
+        slot = KEY_RING + p["ring"]
+        o = obj(b, slot)
+        claims += [
+            ("its +0x39 is a place in the ring of 16", p["ring"] < KEY_RING_SIZE),
+            ("the object there has the key's type", o["type"] == SILVIERA_KEY),
+            ("and was free before", obj(a, slot)["type"] == 0xFF),
+            ("its +0x40 is the pedestal's slot", o["link"] == k),
+            ("it stands on the pedestal", (o["x"], o["z"]) == (p["x"], p["z"]) and o["y"] < p["y"]),
+        ]
+    ok = sum(1 for _w, c in claims if c)
+    for what, c in claims:
+        if not c:
+            print(f"  {before} -> {after}: not so: {what}", file=out)
+    print(f"  {ok} of {len(claims)} of what Silviera's key does to a pedestal hold "
+          f"between {before} and {after}"
+          + (f" (slot {pedestals[0]}, the key put in slot {KEY_RING + obj(b, pedestals[0])['ring']})"
+             if pedestals else ""), file=out)
+    return ok == len(claims)
+
+
 def check(out=sys.stdout, verbose=False):
     """The lid's path against every chest the snapshots caught after USE:
     one still moving has to be a frame of it, one at rest its end, and what
@@ -511,7 +564,8 @@ def check(out=sys.stdout, verbose=False):
     print(f"  {ok} of {ok + bad} opened lids in the snapshots on the path "
           f"tools/chests.py takes ({len(path)} frames from USE to rest)", file=out)
     lying = check_drops(out, verbose)
-    return bad == 0 and lying
+    put = check_pedestal(out)
+    return bad == 0 and lying and put
 
 
 def check_drops(out=sys.stdout, verbose=False):

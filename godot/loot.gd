@@ -363,7 +363,7 @@ func _mode(chest: Dictionary, mode: int, value: int) -> void:
 
 # One frame of opcode 6's arm on d (state, angles, vel, lock); `mode` is
 # object_mode on what is inside. tools/chests.py lid_step.
-# @orig game:0x80048790 object_interpreter+0x1780  status:verified -- opcode 6's arm: 7 of 7 opened lids in the snapshots on its path, one of them moving (tools/chests.py); not the trap, +0x3c
+# @orig game:0x80048790 object_interpreter+0x1780  status:verified -- opcode 6's arm: 8 of 8 opened lids in the snapshots on its path, one of them moving (tools/chests.py); not the trap, +0x3c
 static func lid_step(d: Dictionary, mode: Callable) -> void:
 	var st := int(d["state"])
 	var ang: Array = d["angles"]
