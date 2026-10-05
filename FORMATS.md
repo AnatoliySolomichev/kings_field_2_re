@@ -2703,6 +2703,78 @@ gate_game_check`). Left for a recording: who holds a doorway in play -- in
 would -- and the sound; a bp27 session on level 4 opening gate 96 (cell
 (38,23)) would show both.
 
+### A hidden wall: opcode 0x54
+
+Class `0x54` -- seven in the game, one on level 0, slot 323 in cell (7,2) --
+is a piece of wall that goes when the player comes near it from one side.
+`load_object_placement` keeps the record's `+0` at `+0x40`, sets `+0` to 2,
+zeroes the scale and lays its table down at `sel` 0 with `stamp_table`: the
+table at `0x8008288c + 40 * (2 * type[+0xe] + (p[+0x16] & 1))`, three cells
+(its own and one either side along the yaw), each entry's first half a wall
+tile and a solid shape, its second the tile `0xfc` and a passable one. The
+arm (`0x80048ecc`):
+
+```
+state 0       the player in player_in_rect(p[+0x11] - (p[+0x13] - 1) / 2,
+              p[+0x12] - (p[+0x14] - 1) / 2, p[+0x13], p[+0x14],
+              -(p[+0x15] << 7)) -- or the lock (+0x38) 0xff: the table at
+              sel 1 with the flag 0x80, state 1, the scale 0x1000
+state 1       the counter += 0x100; at 0x400: with p[+0x16] & 2 state 0x63
+              and the lock 0xff, else state 2
+2..0x1f       state += 1
+state 0x20    the counter += 0x80; at 0xfff the counter, +1 and the state
+              0, the table at sel 0 with the flag 0, the scale 0
+state 0x63    nothing
+```
+
+The model is drawn while the scale is not 0, the counter its clock, as a lift
+door's. Level 0's: the strip of cells x 5, z 0..2 at the height -8832, two
+cells west of the wall; tiles 35 and 125 give way to `0xfc`, shapes 76 and 77
+to 78 and 79, and with `p[+0x16]` `0xff` it stays open. The flag is the cell
+byte's bit 7 (`+4`, `+9`), which the drawing reads, not the collision.
+
+**Checked against the game's own code**: `tools/mipsrun.py` runs the arm over
+`a1`'s RAM with the player put into the strip on the third frame -- and again
+with `p[+0x16]`'s bit 2 cleared and the player gone on the fifth -- beside
+`tools/doors.py wall_step` and the loader's `stamp_table`: **140 of 140**
+frames, the state, counter, scale, `+1` and the three cells' tile, shape and
+`+9`. **In the port** it is a lift door with one table (`godot/doors.gd`
+`wall_step`): its cells are a node of their own, `t323`, its model `l323`.
+
+### What else levels 0 and 4 place
+
+* **Opcode `0x51`, level 0's four of type 219** (slots 209 to 212): a trap
+  that swings its model and tests two of its vertices (the type's `+0xc` and
+  `+0xd`, through `0x80046760`, the vertex at the animation's clock, scaled,
+  turned and placed) against the player and the creatures, striking through
+  `actor_attack_player` with the type's `+0x12..+0x15`. Level 0's never run:
+  their `+0x3b` is `0xfe`, which state 0 takes for "nothing", and the loader
+  has already taken them away (`object_set_present` 0, the scale 0) because
+  it is not `0xff`; `sub_800463bc`, which toggles a trap's `+0x38` by the
+  group at its `+0x3d`, finds none (`0xff`). They are drawn nowhere.
+* **Opcode `0xe6`** (28 on level 0, 4 on level 4): while the player is in its
+  rectangle, `+0x3d` is added to the `+0xe` of `+0x3c` objects from the slot at
+  `+0x3a`, and taken off again when they leave. `+0xe` is what
+  `draw_model_plain` adds to each triangle's mean depth before it files it in
+  the ordering table (`model_prims_semi`, `0x80037f54`) -- a **depth bias**,
+  127 for all of level 0's: the PS1's painter's order put right from where the
+  player stands. Nothing for a port that draws with a depth buffer.
+* **Opcode `0x1f`** (5 on level 0): handed to `level_hooks + 0x24`, which on
+  levels 0 and 4 is `jr $ra`; what reads them is `render_walk`, which plays a
+  sound for the rectangle the player is in, louder further in -- an
+  **ambient sound**. The port has no sound.
+* **Opcode `0xe1`** (3 on each): when the player steps into its rectangle,
+  once (or every frame with `+0x3a`'s bit 7), by `+0x3a & 0xf`: the level's
+  entry 3 with the record, `sub_800463bc(+0x3b)`, or a byte at
+  `0x801baa2f + +0x3b` set to `+0x3c`. All six here call the entry. Level 4's
+  moves gate 115's x to the trigger's less `0x400` or plus `0x3ff`, by which of
+  the two the player crossed (`+0x3b` 0 and 1), and with `+0x3b` 10 swaps a
+  strip of three cells at (55,12) between two templates by whether the player
+  stands there having arrived by a warp (`0x801b25ee`, which the warp routine
+  `0x8005c864` sets); level 0's does the same strip at (9,55), and its case 0
+  also wakes three creatures and changes four objects once two story bytes
+  (`0x801ba98e`, `0x801ba98f`) say so. Not in the port.
+
 ### Chests, and picking things up
 
 A **small chest** is three objects in one cell: the body (type 155, class

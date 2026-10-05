@@ -243,7 +243,7 @@ def lift_tiles(lv):
     ld = objload.Load(lv)
     out = {}
     for k, r in sorted(ld.recs.items()):
-        if r["op"] not in doors.LIFT_OPS:
+        if r["op"] not in doors.LIFT_OPS + doors.WALL_OPS:
             continue
         drawn = 2 if r["b0"] != 1 else 3       # the byte that lands in cell[+5]
         for cx, cz, q in doors.lift_stamps(ld, r)[1]:
@@ -1118,7 +1118,7 @@ def build_lifts(lv, load, grid, look, prims_of, rows):
     import doors
     items = []
     for k, o in sorted(load.recs.items()):
-        if o["op"] not in doors.LIFT_OPS + doors.GATE_OPS:
+        if o["op"] not in doors.LIFT_OPS + doors.GATE_OPS + doors.WALL_OPS:
             continue
         try:
             _flags, objs = tmd.load(*tmd.model_of(o["type"], lv))
@@ -1150,7 +1150,7 @@ def build_lifts(lv, load, grid, look, prims_of, rows):
                 "model": lift_model(o["type"], lv), "anim": o.get("b1", 0)})
             continue
         shape, tile = doors.lift_stamps(load, o)
-        rows.append({
+        row = {
             "slot": k, "type": o["type"], "op": o["op"],
             "x": o["x"], "y": o["y"], "z": o["z"], "yaw": o["angles"][1],
             "b0": o["b0"], "height": o["height"], "tail": list(o["tail"][:8]),
@@ -1161,7 +1161,14 @@ def build_lifts(lv, load, grid, look, prims_of, rows):
             # and which layer of the port's collision cells (0 or 3) is the
             # upper one the entry's first and third bytes go to
             "stamps": [[[x, z, list(q)] for x, z, q in t] for t in (shape, tile)],
-            "hi": 3 if o["b0"] != 1 else 0})
+            "hi": 3 if o["b0"] != 1 else 0}
+        if o["op"] in doors.WALL_OPS:
+            # a hidden wall: one table for both, laid with the +0 the loader
+            # kept at +0x40; the rectangle the player opens it from
+            row["hi"] = 3 if o["tail"][8] != 1 else 0
+            row["rect"] = list(doors.wall_rect(o["tail"]))
+            row["stay"] = bool(o["tail"][6] & 2)
+        rows.append(row)
     return items
 
 

@@ -30,6 +30,7 @@ The step, as read (FORMATS.md, "A door that swings"):
 """
 import os
 import re
+import struct
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -112,11 +113,16 @@ LIFT_CLEAR = (0x700, 0xC80)   # collide_query's radius and height, flags 0xc0
 
 def lift_stamps(ld, r):
     """(shape table, tile table), each [(cx, cz, the entry's 8 bytes)], for a
-    lift door -- stamp_table's cells worked out once, as objload does them."""
+    lift door -- stamp_table's cells worked out once, as objload does them. A
+    hidden wall (opcode 0x54) has one table for both."""
     import objload
     c, s = movement.game_cos(r["angles"][1]), movement.game_sin(r["angles"][1])
     out = []
-    for tb in objload.DOOR_TABLES[r["op"]]:
+    if r["op"] in WALL_OPS:
+        tables = (wall_table(ld, r),) * 2
+    else:
+        tables = objload.DOOR_TABLES[r["op"]]
+    for tb in tables:
         rows, e = [], tb
         while ld.exe.bytes(e, 1)[0] != 0xFF:
             ent = ld.exe.bytes(e, 10)
@@ -127,6 +133,86 @@ def lift_stamps(ld, r):
             e += 10
         out.append(rows)
     return out
+
+
+# The hidden walls: opcode 0x54 (0x80048ecc), one on level 0 in cell (7,2).
+# load_object_placement stamps its table -- 0x8008288c + 40 * (2 * the type's
+# +0xe + (p[+0x16] & 1)) -- at sel 0, a wall the grid draws, and zeroes the
+# scale. The arm:
+#
+#   state 0     the player in the rectangle of p[+0x13] by p[+0x14] cells
+#               centred on (p[+0x11], p[+0x12]), at the height -(p[+0x15] <<
+#               7) -- or the lock 0xff: the table at sel 1 (the wall's tiles
+#               0xfc, not drawn; its shapes passable), state 1, the scale
+#               0x1000 -- its model drawn
+#   state 1     the counter (the model's clock) += 0x100; at 0x400, with
+#               p[+0x16] & 2 state 0x63 and the lock 0xff -- open for good --
+#               else state 2
+#   2..0x1f     state += 1
+#   state 0x20  the counter += 0x80; at 0xfff the counter, +1 and the state
+#               0, the table at sel 0, the scale 0
+#   state 0x63  nothing
+WALL_OPS = (0x54,)
+WALL_TABLE = 0x8008288C
+
+
+def wall_table(ld, r):
+    """The hidden wall's stamp table."""
+    tr = ld.rows[r["type"]]
+    return WALL_TABLE + 40 * (2 * tr[0xE] + (r["tail"][6] & 1))
+
+
+def wall_rect(t):
+    """player_in_rect's arguments for the arm: (cx, cz, w, h, y)."""
+    w, h = t[3], t[4]
+    return t[1] - ((w - 1) >> 1), t[2] - ((h - 1) >> 1), w, h, -(t[5] << 7)
+
+
+def wall_step(d, inside, stamp):
+    """One frame of opcode 0x54's arm on `d` (state, counter, scale, lock,
+    b1, stay -- p[+0x16] & 2); `inside()` is player_in_rect's answer,
+    `stamp(sel)` lays the table down."""
+    st = d["state"]
+    if st == 1:
+        d["counter"] = (d["counter"] + 0x100) & 0xFFFF
+        if d["counter"] < 0x400:
+            return
+        if d["stay"]:
+            d["state"], d["lock"] = 0x63, 0xFF
+        else:
+            d["state"] = 2
+        return
+    if st == 0:
+        if not (inside() or d["lock"] == 0xFF):
+            return
+        stamp(1)
+        d["state"], d["scale"] = 1, 0x1000
+        return
+    if st == 0x20:
+        d["counter"] = (d["counter"] + 0x80) & 0xFFFF
+        if d["counter"] < 0xFFF:
+            return
+        d["b1"] = d["counter"] = d["state"] = 0
+        stamp(0)
+        d["scale"] = 0
+        return
+    if st == 0x63:
+        return
+    d["state"] = (st + 1) & 0xFFFF
+
+
+def wall_cycle(stay, enter=2, leave=None, frames=80):
+    """A hidden wall's run: the player steps into the rectangle on frame
+    `enter` (and out on `leave`), as [(state, counter, scale, the sel last
+    laid)]."""
+    d = {"state": 0, "counter": 0, "scale": 0, "lock": 60, "b1": 0, "stay": stay}
+    laid = [0]
+    rows = []
+    for f in range(frames):
+        inside = enter <= f and (leave is None or f < leave)
+        wall_step(d, lambda inside=inside: inside, lambda sel: laid.__setitem__(0, sel))
+        rows.append((d["state"], d["counter"], d["scale"], laid[0]))
+    return rows
 
 
 def lift_step(d, clear, stamp):
@@ -494,9 +580,12 @@ def export(out_dir):
             for w in (0, 7)]
     gates = [{"wait": w, "lock": lk, "frames": [list(f) for f in gate_cycle(w, lk, 120)]}
              for w, lk in ((0, 0xFF), (9, 0xFE), (0, 0x97))]
+    walls = [{"stay": st, "enter": en, "leave": lv,
+              "frames": [list(f) for f in wall_cycle(st, en, lv)]}
+             for st, en, lv in ((True, 2, None), (False, 3, 5))]
     path = os.path.join(out_dir, "liftcheck.json")
     with open(path, "w") as fh:
-        json.dump({"runs": runs, "gates": gates}, fh, separators=(",", ":"))
+        json.dump({"runs": runs, "gates": gates, "walls": walls}, fh, separators=(",", ":"))
     return path
 
 
@@ -767,6 +856,72 @@ def gate_game_runs(snap="silv1"):
     return out
 
 
+PLAYER_POS = 0x801B25F0
+
+
+def wall_game_runs(snap="a1"):
+    """The game's own opcode-0x54 arm over a level-0 snapshot, beside
+    wall_step and the loader's stamp_table: level 0's hidden wall (slot 323)
+    with the player put in its rectangle on the third frame -- as placed, it
+    stays open; and again with p[+0x16]'s bit 2 cleared and the player gone
+    on the fifth, so it waits and shuts. [(what, frames alike, frames)]."""
+    import mipsrun
+    import objload
+    path = os.path.join(ROOT, "out", "snap", snap + ".ram")
+    if not os.path.exists(path):
+        return []
+    ram = open(path, "rb").read()
+    out = []
+    slot = 323
+    for stay, leave in ((True, None), (False, 5)):
+        cpu = mipsrun.object_cpu(ram)
+        rec = mipsrun.OBJECT_TABLE + mipsrun.OBJECT_STRIDE * slot
+        ld = objload.Load(0)
+        ld.grid = bytearray(cpu.ram[LEVEL_GRID & 0x1FFFFF:(LEVEL_GRID & 0x1FFFFF) + 64000])
+        o = dict(ld.recs[slot])
+        t = bytearray(cpu.rd(rec + 0x38 + i, 1) for i in range(8))
+        if not stay:
+            t[6] &= ~2 & 0xFF
+            cpu.wr(rec + 0x3E, 1, t[6])
+        o["tail"] = t
+        cx, cz, w, h, y = wall_rect(t)
+        inside_at = ((cx << 11) + 0x400, y, (cz << 11) + 0x400)
+        away = list(struct.unpack_from("<3i", ram, PLAYER_POS & 0x1FFFFF))
+        stamps = lift_stamps(ld, o)[0]
+        d = {"state": cpu.rd(rec + 8, 2), "counter": cpu.rd(rec + 0xA, 2),
+             "scale": cpu.rd(rec + 0x2C, 2), "lock": t[0], "b1": cpu.rd(rec + 1, 1),
+             "stay": bool(t[6] & 2)}
+        b0 = cpu.rd(rec + 0x40, 1)                   # the loader kept +0 here
+        tb = wall_table(ld, o)
+
+        def stamp(sel, ld=ld, o=o, tb=tb, b0=b0):
+            ld.stamp_table(b0, o["x"], o["z"], o["angles"][1], tb, sel, 0x80 if sel else 0)
+
+        def cells_of(get):
+            return tuple((get(x, z, 5), get(x, z, 8), get(x, z, 9)) for x, z, _q in stamps)
+
+        def game(x, z, k, cpu=cpu):
+            return cpu.rd(LEVEL_GRID + z * 800 + x * 10 + k, 1)
+
+        def model(x, z, k, ld=ld):
+            return ld.grid[ld.cell(x, z) + k]
+        alike = n = 0
+        for f in range(70):
+            here = 2 <= f and (leave is None or f < leave)
+            p = inside_at if here else away
+            for i in range(3):
+                cpu.wr(PLAYER_POS + 4 * i, 4, p[i])
+            mipsrun.object_arm(cpu, slot)
+            wall_step(d, lambda here=here: here, stamp)
+            g = (cpu.rd(rec + 8, 2), cpu.rd(rec + 0xA, 2), cpu.rd(rec + 0x2C, 2),
+                 cpu.rd(rec + 1, 1), cells_of(game))
+            m = (d["state"], d["counter"], d["scale"], d["b1"], cells_of(model))
+            n += 1
+            alike += g == m
+        out.append(("stays open" if stay else "shuts again", alike, n))
+    return out
+
+
 def gate_game_check(out=sys.stdout):
     """gate_game_runs, counted; and every doorway test the arm made asks
     collide_query of the gate's own place at 0x1130, 0xc80 and 0xc0."""
@@ -784,11 +939,18 @@ def gate_game_check(out=sys.stdout):
         for c in calls:
             args += 1
             bad_args += c != (o["x"], o["y"], o["z"], GATE_CLEAR, LIFT_CLEAR[1], 0xC0)
+    walls = wall_game_runs()
+    wa, wn = sum(r[1] for r in walls), sum(r[2] for r in walls)
+    if walls:
+        print(f"  {wa} of {wn} frames of the game's own hidden-wall arm (opcode 0x54), run "
+              f"over a1 by tools/mipsrun.py, are wall_step's -- state, counter, scale, +1 "
+              f"and its three cells' tile, shape and +9 ({', '.join(r[0] for r in walls)})",
+              file=out)
     print(f"  {alike} of {n} frames of the game's own gate arm, run over silv1 by "
           f"tools/mipsrun.py, are gate_step's -- state, counter and the doorway's shapes "
           f"and fence ({', '.join(r[0] for r in runs)}); {args - bad_args} of {args} "
           f"doorway tests ask collide_query(the gate, 0x1130, 0xc80, 0xc0)", file=out)
-    return alike == n and bad_args == 0
+    return alike == n and bad_args == 0 and wa == wn
 
 
 if __name__ == "__main__":

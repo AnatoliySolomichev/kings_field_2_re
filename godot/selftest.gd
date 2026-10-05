@@ -592,7 +592,28 @@ func _lifts() -> bool:
 				bad += 1
 				if first == "":
 					first = "gate frame %d: godot %s python %s" % [gn, str(got), str(w)]
-	print("lift doors: %d of %d frames match tools/doors.py (%d of them a gate's)" % [n - bad, n, gn])
+	var wn := 0
+	for run in doc.get("walls", []):
+		var wd := {"state": 0, "counter": 0, "scale": 0, "lock": 60, "b1": 0,
+			"stay": bool(run["stay"])}
+		var wlaid := [0]
+		var f := 0
+		for want in run["frames"]:
+			var inside: bool = f >= int(run["enter"]) and (run["leave"] == null or f < int(run["leave"]))
+			script.wall_step(wd, func() -> bool: return inside,
+				func(sel: int) -> void: wlaid[0] = sel)
+			var got := [int(wd["state"]), int(wd["counter"]), int(wd["scale"]), int(wlaid[0])]
+			var w := []
+			for v in want:
+				w.append(int(v))
+			n += 1
+			wn += 1
+			if got != w:
+				bad += 1
+				if first == "":
+					first = "wall frame %d: godot %s python %s" % [f, str(got), str(w)]
+			f += 1
+	print("lift doors: %d of %d frames match tools/doors.py (%d of them a gate's, %d a hidden wall's)" % [n - bad, n, gn, wn])
 	if bad > 0:
 		print("  first difference: " + first)
 	return bad == 0

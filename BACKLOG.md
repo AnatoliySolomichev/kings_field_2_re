@@ -625,8 +625,13 @@ it would open:
   the player 1078 of 1078, the creatures 457 of 457. Who holds a door shut
   out of the player's reach is settled: the two creatures of kind 4 that live
   behind doors 51 and 123 (slots 15 and 7).
-* **class 0x54 (one on level 0)** -- `stamp_table` from `0x8008288c + 40 *
-  (2 * tr[+0xe] + (p[+0x16] & 1))` at load; its arm is not read.
+* **class 0x54, the hidden wall -- read and in the port** (FORMATS.md, "A
+  hidden wall"): level 0's opens when the player steps onto the strip two
+  cells west of it; held to the game's own arm over a1 (`tools/mipsrun.py`),
+  140 of 140 frames. What else levels 0 and 4 place is read too (FORMATS.md,
+  "What else levels 0 and 4 place"): level 0's traps never run, 0xe6 is a
+  depth bias and 0x1f an ambient sound -- nothing for the port -- and the
+  0xe1 triggers call the levels' own entry 3, which is not in the port.
 * **classes 0x00 (12) and 0x1b (23)**, `find_object` points 0x700 in front of or
   behind them; 11 of the 12 class-0 doors carry lock byte `0x8c`, a key.
 * **keys -- in**: a lock byte other than 0xff, 0xfd or 0xfe is either the

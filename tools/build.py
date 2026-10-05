@@ -139,10 +139,10 @@ def main(quick=False, only_check=False):
         "the creatures' behaviours, against every snapshot's RAM",
         keep=["bytes of the kinds", "runs of one behaviour", "creature frames exact"])
     run(["tools/doors.py", "--check"],
-        "the swinging and the lift doors and the gates, against what was played",
+        "the doors, the gates and the hidden wall, against what was played and the game's code",
         keep=["steps of a moving door", "steps of a lift door", "more at 0x14",
-              "held by a creature", "doorway answers", "no out/lua_bp27",
-              "steps of a gate", "no gate lines", "game's own gate arm"])
+              "doorway answers", "no out/lua_bp27", "steps of a gate", "no gate lines",
+              "game's own gate arm", "game's own hidden-wall arm"])
     run(["tools/crossing.py", "--check"],
         "the crossings between levels, against what was played",
         keep=["crossings the model makes"])

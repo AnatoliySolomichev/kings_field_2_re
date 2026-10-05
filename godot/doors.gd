@@ -102,6 +102,12 @@ const DRAWN := 0xF0                # draw_terrain skips a tile at or above this 
 # apart (open, moving, shut), and the model stands while shut. A lock odd and
 # between 0x96 and 0xc6 opens it of itself for good; the others open to USE
 # once the pedestals have set the lock's bits (0xfd, 0xfe, 0xff).
+# The hidden walls: opcode 0x54 (0x80048ecc), level 0's in cell (7,2) -- a
+# piece of wall the grid draws until the player steps into a strip of cells
+# nearby; then its table is laid down at sel 1 (the tiles 0xfc, not drawn;
+# the shapes passable) and its model drawn, its counter the clock up to
+# 0x400. One that is to stay (p[+0x16] & 2) does; another waits and shuts.
+const WALL_OPS := [0x54]
 const GATE_OPS := [2]
 const GATE_CLEAR := 0x1130         # collide_query's radius for the gateway
 const GATE_OPEN := 0               # the templates, in gate widths along
@@ -111,6 +117,7 @@ const GATE_SHUT := 2
 var doors: Array = []
 var lifts: Array = []
 var gates: Array = []
+var walls: Array = []
 var player: Node3D
 var acc := 0.0
 
@@ -140,7 +147,7 @@ func _ready() -> void:
 			d["skin"] = {}
 			gates.append(d)
 			continue
-		if int(d["op"]) in LIFT_OPS:
+		if int(d["op"]) in LIFT_OPS or int(d["op"]) in WALL_OPS:
 			d["node"] = objs.find_child("l%03d" % int(d["slot"]), true, false) if objs else null
 			d["tiles"] = level.find_child("t%03d" % int(d["slot"]), true, false) if level else null
 			d["state"] = 0
@@ -155,7 +162,12 @@ func _ready() -> void:
 			d["drawn"] = drawn
 			if d["node"]:
 				d["node"].visible = false
-			lifts.append(d)
+			if int(d["op"]) in WALL_OPS:
+				d["lock"] = int(d["tail"][0])
+				d["b1"] = 0
+				walls.append(d)
+			else:
+				lifts.append(d)
 			continue
 		d["node"] = objs.find_child("d%03d" % int(d["slot"]), true, false) if objs else null
 		d["yaw0"] = int(d["yaw"])
@@ -167,7 +179,7 @@ func _ready() -> void:
 
 # @port engine -- USE into _interact, the arms at 15 a second, the nodes turned to the yaw
 func _process(dt: float) -> void:
-	if doors.is_empty() and lifts.is_empty() and gates.is_empty():
+	if doors.is_empty() and lifts.is_empty() and gates.is_empty() and walls.is_empty():
 		return
 	if KFGame.modal:                  # object_give's frames: they stand still
 		return
@@ -186,6 +198,8 @@ func _process(dt: float) -> void:
 					_lift(d)
 			for d in gates:
 				_gate(d)
+			for d in walls:
+				_wall(d)
 	for d in doors:
 		if d["node"]:
 			# rot_matrix_y is cos, -sin / sin, cos, so with y and z flipped the
@@ -195,6 +209,8 @@ func _process(dt: float) -> void:
 		_draw_lift(d)
 	for d in gates:
 		_draw_gate(d)
+	for d in walls:
+		_draw_lift(d)
 
 
 # object_interact for the doors: find_object's point for class 1 is the player,
@@ -397,6 +413,52 @@ static func gate_step(d: Dictionary, clear: Callable, stamp: Callable) -> void:
 		d["counter"] = 0
 		d["state"] = 0
 		stamp.call(GATE_SHUT)
+		return
+	d["state"] = (st + 1) & 0xFFFF
+
+
+# @port helper -- hands wall_step player_in_rect over its rectangle and stamp_table
+func _wall(d: Dictionary) -> void:
+	var r: Array = d["rect"]
+	wall_step(d, func() -> bool: return KFObjects.player_in_rect(player.gx, player.gz,
+			int(r[0]), int(r[1]), int(r[2]), int(r[3]), player.gy, int(r[4])),
+		func(sel: int) -> void: _stamp_table(d, 1, sel))
+
+
+# One frame of the hidden wall's arm (0x80048ecc) on d's state, counter,
+# scale, lock and +1; `inside` is player_in_rect over its rectangle,
+# `stamp(sel)` lays its table down. tools/doors.py wall_step.
+# @orig game:0x80048ecc object_interpreter+0x1ebc  status:verified -- opcode 0x54's arm: 140 of 140 frames of the game's own, run over a1 by tools/mipsrun.py with the player put in its rectangle (one that stays open, one that shuts), as tools/doors.py wall_step
+static func wall_step(d: Dictionary, inside: Callable, stamp: Callable) -> void:
+	var st := int(d["state"])
+	if st == 1:
+		d["counter"] = (int(d["counter"]) + 0x100) & 0xFFFF
+		if int(d["counter"]) < 0x400:
+			return
+		if bool(d["stay"]):
+			d["state"] = 0x63
+			d["lock"] = 0xFF
+		else:
+			d["state"] = 2
+		return
+	if st == 0:
+		if not (inside.call() or int(d["lock"]) == 0xFF):
+			return
+		stamp.call(1)
+		d["state"] = 1
+		d["scale"] = 0x1000
+		return
+	if st == 0x20:
+		d["counter"] = (int(d["counter"]) + 0x80) & 0xFFFF
+		if int(d["counter"]) < 0xFFF:
+			return
+		d["b1"] = 0
+		d["counter"] = 0
+		d["state"] = 0
+		stamp.call(0)
+		d["scale"] = 0
+		return
+	if st == 0x63:
 		return
 	d["state"] = (st + 1) & 0xFFFF
 
