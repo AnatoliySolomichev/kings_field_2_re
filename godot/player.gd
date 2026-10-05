@@ -184,7 +184,8 @@ var flash := 0
 # eight offense ratings a blow carries (0x801b2538), the eight defence ones a
 # hit meets (0x801b254a), the effective stat (0x801b2524) both scale by, and
 # the five working skills (0x801b2526) the magic meter refills by. A fresh
-# character's: the dagger's offense, the leather plate's [13, 6, 4] and 20.
+# character's: the excellector's offense (weapon 0), the leather plate's
+# [13, 6, 4] and 20.
 var offense: Array = [39, 32, 9, 0, 0, 0, 0, 0]
 var defence: Array = [13, 6, 4, 0, 0, 0, 0, 0]
 var stat := 20
@@ -193,6 +194,15 @@ var working: Array = [0, 0, 0, 0, 10]
 # the leather plate (42) in the second (0x8002bb84(0x2a, 1)).
 var worn: Array = [0xFF, 42, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
 var equip := KFEquip.new()
+# The magic in hand and the button's spell or thing (0x801b25ab, 0x801b25ac,
+# 0x801b25ad): new_character clears all three, and every snapshot has them so.
+var spell_a := 0xFF
+var spell_b := 0xFF
+var item_b := 0xFF
+# equip_armour's slots 0..6 are the worn bytes 0x801b25d4, d5, d7, d8, d6, d9
+# and da -- head, body, arms, feet, shield and the two items
+const WORN_OF_SLOT := [0, 1, 3, 4, 2, 5, 6]
+const NO_WEAPON := 0xFF
 # The weapon in hand (0x801b25af) and its swing (tools/weapon.py): the clock
 # 0x801b25a4, the pause 0x801b24f3, the hit and sound times 0x801b25a6 and
 # 0x801b25a8, the strength 0x801b2504; the meter is weapon_meter. The
@@ -242,12 +252,17 @@ func _ready() -> void:
 	gy = int(-position.y * UNIT)
 	gz = int(-position.z * UNIT)
 	facing = int(rotation.y / TAU * 4096.0) & 0xFFF
+	if not (carried is Array):      # a new game, or a death with no crystal
+		inventory.start()
 	if carried is Array:            # the crystal kept what the player had
 		inventory = carried[0]
 		gold = int(carried[1])
 		character = carried[2]
 		weapon_id = int(carried[3])
 		worn = carried[4]
+		spell_a = int(carried[5][0])
+		spell_b = int(carried[5][1])
+		item_b = int(carried[5][2])
 	carried = null
 	recalc_stats()
 	if respawn is Array:
@@ -279,6 +294,31 @@ func recalc_stats() -> void:
 	working = r["working"]
 	stat = int(r["stat"])
 	resist = int(r["resist"])
+
+
+# equip_weapon (0x8002bdc0), from the equipment screen: the weapon in the
+# slot, its meter emptied and the swing's pause 0xa, its clock -1, and the
+# stats again. The model it installs held.gd finds by the id.
+# @orig game:0x8002bdc0 equip_weapon  status:partial -- the slot, the meter, the pause, the clock and the stats; not the sound it plays, or the spells two story flags (0x801ba9af, 0x801ba9b5) unlock with it
+func equip_weapon(id: int) -> void:
+	weapon_id = id
+	wstate["pause"] = 0xA
+	wstate["meter"] = 0
+	wstate["strength"] = 0
+	wstate["clock"] = -1
+	weapon_meter = 0
+	recalc_stats()
+	KFInfo.note("player: weapon %d in hand" % id)
+
+
+# equip_armour (0x8002bb84): a thing worn in one of the seven slots, and the
+# stats again.
+# @orig game:0x8002bb84 equip_armour  status:partial -- the slot and the stats; not the record pointers it keeps beside them (0x801b25b8..)
+func equip_armour(id: int, slot: int) -> void:
+	if slot >= 0 and slot < WORN_OF_SLOT.size():
+		worn[int(WORN_OF_SLOT[slot])] = id
+	recalc_stats()
+	KFInfo.note("player: %d worn in slot %d, defence %s" % [id, slot, str(defence)])
 
 
 # The level out/godot was built for: tools/level3d.py names the project
@@ -486,7 +526,8 @@ func _frame(dir: Vector3) -> void:
 	_use()
 	# player_turn (0x80030424): a swing begins on the attack button's edge
 	# when the pause after the last blow is over (0x8002c040).
-	if attack_latch and int(wstate["pause"]) == 0 and not KFWeapon.records.is_empty():
+	# sub_8002c040 starts nothing with no weapon in hand
+	if attack_latch and int(wstate["pause"]) == 0 and weapon_id < KFWeapon.records.size():
 		KFWeapon.start(wstate, KFWeapon.records[weapon_id])
 	attack_latch = false
 	var cap := SPEED_MAX_RUN if Input.is_key_pressed(KEY_SHIFT) else SPEED_MAX
@@ -575,7 +616,8 @@ func _use() -> void:
 # or between swings the meter's refill; the blow is actors.gd's to land.
 # @orig game:0x8002d2a0 held_item_tick  status:partial -- which of its two paths runs: the swing or the refill (weapon.gd)
 func _weapon() -> void:
-	if KFWeapon.records.is_empty():
+	# held_item_tick's .L47: with no weapon (0xff), nothing at all
+	if weapon_id >= KFWeapon.records.size():
 		return
 	var rec: PackedByteArray = KFWeapon.records[weapon_id]
 	if int(wstate["clock"]) == -1:
@@ -837,7 +879,7 @@ func _dying() -> void:
 	if revive:
 		inventory.take_item(REVIVE_ITEM)
 		respawn = [REVIVE_POS.x, REVIVE_POS.y, REVIVE_POS.z, REVIVE_FACING]
-		carried = [inventory, gold, character, weapon_id, worn]
+		carried = [inventory, gold, character, weapon_id, worn, [spell_a, spell_b, item_b]]
 	else:
 		# a new character (0x8002b468), where it puts a new game: bp25's session
 		# began at (0x1f000, -0x3c00, 0x4000) too
@@ -856,7 +898,8 @@ func _dying() -> void:
 # spot, or [] for a new game's start.
 static var respawn = null
 # What the player carries across that reload when the crystal revives them:
-# [the inventory, the gold, the character, the weapon, what is worn].
+# [the inventory, the gold, the character, the weapon, what is worn, the
+# magic and the button's].
 static var carried = null
 
 

@@ -534,8 +534,12 @@ Eating heals. Left, roughly in order:
   nor the level's entry 2 (level 0's is empty);
 * the chosen thing's model turning in "use item" (`0x80025be8`), the guide
   (triangle: the thing's description), the maps and notes (95..100);
-* "use magic", "equipment" (`ui_equip_page`), "status/records"
-  (`ui_ratings_page`), "storage" and "system";
+* "equipment" is in (FORMATS.md, "The equipment screen") but for its MAGIC
+  and BUTTON lines (`0x8001d0c4`, `0x8001d3a0`), the thing's turning model
+  and the guide; a bow in hand (weapons `0x1b`, `0x1c`) swings as a blade
+  does in the port, where `held_item_tick` has a path of its own for it.
+  Snapshots of the equipment screen and its list would hold them to the game;
+* "use magic", "status/records" (`ui_ratings_page`), "storage" and "system";
 * `pad_read_latch`'s repeat while a direction is held -- the port reads new
   presses only.
 

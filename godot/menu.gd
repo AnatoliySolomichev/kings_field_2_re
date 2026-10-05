@@ -39,6 +39,13 @@ const NOTHING_HAPPENS := 0xA
 # The keys use_item's arm at 0x8005d188 takes: royal, copper, silver,
 # magician's, jail, dwarves', Lyn's.
 const KEYS := [135, 137, 138, 139, 140, 142, 144]
+# ui_panel's modes with no count column
+const NO_COUNTS := [2, 3, 4, 8, 9, 0x10]
+# ui_equip_page's lines: the range of things each lists, and the slot of
+# equip_armour it hands the choice to (line 0 is equip_weapon's)
+const EQUIP_RANGES := {0: [0x00, 0x21], 2: [0x33, 0x3E], 3: [0x22, 0x29], 4: [0x2A, 0x32],
+	5: [0x3F, 0x47], 6: [0x48, 0x50], 7: [0x51, 0x5E], 8: [0x51, 0x5E]}
+const ARMOUR_SLOT := {2: 4, 3: 0, 4: 1, 5: 2, 6: 3, 7: 5, 8: 6}
 # ui_status_page's five icons: (working skill, u, CLUT) in the order drawn --
 # light, fire, earth, wind, water -- 14 square at v 0xc0 of page 0x1d, depth 0x1e
 const SKILL_ICONS := [[4, 0x00, 0x7D04], [0, 0x10, 0x7D44], [1, 0x20, 0x7D84],
@@ -53,10 +60,12 @@ var tex := {}                       # "tpage_clut" -> [solid, semi]
 var ot := {}                        # the screen being drawn: depth -> [prim]
 var look := {"box": 0x78, "text": 0x80, "shadow": 0x30, "pulse": 0,
 	"confirm": 3, "cancel": 1, "semi": 1, "bright": 0x80}
-var state := ""                     # "", "main", "use_item", "prompt"
+var state := ""                     # "", "main", "use_item", "prompt", "equip", "equip_list", "equip_prompt"
 var main_sel := 0
 var list := {}                      # the use-item screen's list
 var prompt_sel := 0
+var equip_sel := 0                  # the equipment screen's line
+var chooser := {}                   # ui_equip_page's list while it is up
 var player: Node
 var acc := 0.0
 var frames := 0                     # the pad is read every second frame
@@ -330,11 +339,14 @@ static func legend(o: Dictionary, lk: Dictionary, two: bool) -> void:
 	small_text(o, lk, 0xC6, 0xD6, words["return"])
 
 
-# ui_panel (0x80025468) in mode 1: the title, the rows with their counts, the
-# frame, the chosen row's bar and the legend (two buttons with flag 0x8000).
-# @orig game:0x80025468 ui_panel  status:partial -- mode 1 and its 0x8000 form; tools/ui.py, 116 of 116 primitives of inv1 and inv2; the other modes' columns not here
+# ui_panel (0x80025468): the title, the rows, the frame, the chosen row's bar
+# and the legend. Mode 3 puts a second name 0x54 to the right of each row's
+# (the equipment screen's), modes 1 and 5 the count "x N" at x + 0xe9; the
+# legend is two buttons for modes 3, 8, 9 and 12 and with flag 0x8000.
+# @orig game:0x80025468 ui_panel  status:partial -- modes 1, 3 and 5 and the 0x8000 flag; tools/ui.py, 116 of 116 primitives of inv1 and inv2; the number columns of modes 2, 4, 8, 9, 0xa..0x10 not here
 static func panel(o: Dictionary, lk: Dictionary, s: Dictionary, mode: int) -> void:
 	var style: Array = rec(LABEL_STYLE)
+	var m := mode & 0xFFF
 	if not (s["title"] as Array).is_empty():
 		label_plate(o, lk, rec(RECORDS + 12 * 2), int(s["tx"]), int(s["ty"]))
 		draw_label(o, lk, style, int(s["tx"]), int(s["ty"]), s["title"])
@@ -345,7 +357,10 @@ static func panel(o: Dictionary, lk: Dictionary, s: Dictionary, mode: int) -> vo
 		var x := int(s["x"]) + 0xD
 		var y := int(s["y"]) + 8 + (row << 4)
 		draw_label(o, lk, style, x, y, (s["names"][k] as Array).slice(0, int(s["length"])))
-		if (mode & 0xFFF) == 1 and int(s["counts"][k]) != 0xFF:
+		if m == 3:
+			draw_label(o, lk, style, x + 0x54, y,
+				(s["names2"][k] as Array).slice(0, 0x18) + [0xFF])
+		if not (m in NO_COUNTS) and int(s["counts"][k]) != 0xFF:
 			draw_number(o, lk, rec(NUMBER_STYLE), int(s["x"]) + 0xE9, y,
 				number_digits(int(s["counts"][k]), 2, 0, 1))
 	frame(o, lk, int(s["x"]), int(s["y"]), 0x10A, (int(s["rows"]) << 4) | 0xC)
@@ -357,16 +372,17 @@ static func panel(o: Dictionary, lk: Dictionary, s: Dictionary, mode: int) -> vo
 		add(o, 49, quad(int(s["x"]) + 6, int(s["y"]) + (row << 4) + 5, int(r[4]), int(r[5]),
 			int(r[2]), int(r[3]), int(r[4]), int(r[5]), int(r[0]), int(r[1]),
 			int(c[0]) | (int(c[0]) << 8) | (int(c[1]) << 16), 1))
-	legend(o, lk, (mode & 0x8000) != 0)
+	legend(o, lk, m in [3, 8, 9, 0xC] or (mode & 0x8000) != 0)
 
 
-# item_list (0x8001aea4): the things 95..149 carried in inventory_a.
+# item_list (0x8001aea4): the things first..last carried in inventory_a --
+# 95..149 for "use item", a line's range for the equipment.
 # @orig game:0x8001aea4 item_list  status:transcribed
-static func item_list(inv: PackedByteArray) -> Dictionary:
+static func item_list(inv: PackedByteArray, first := FIRST_THING, last := LAST_THING) -> Dictionary:
 	var names := []
 	var counts := []
 	var ids := []
-	for i in range(FIRST_THING, LAST_THING + 1):
+	for i in range(first, last + 1):
 		if int(inv[i]) != 0:
 			names.append(data["names"][i])
 			counts.append(int(inv[i]))
@@ -378,7 +394,7 @@ static func item_list(inv: PackedByteArray) -> Dictionary:
 # ui_menu_label(0, 0) and sub_80027728: the list under "use item" -- x 27,
 # y 147, three rows -- its selection held to it, the first row and the bar.
 # @orig game:0x80027688 ui_menu_label  status:verified -- the list's place in inv1 and inv2
-# @orig game:0x80027728 sub_80027728  status:transcribed
+# @orig game:0x80027728 list_place  status:transcribed
 static func use_item_list(inv: PackedByteArray, selected: int) -> Dictionary:
 	var l := item_list(inv)
 	var title: Array = data["labels"][0][0][2]
@@ -404,6 +420,116 @@ static func place(s: Dictionary, selected: int) -> void:
 	else:
 		s["first"] = sel
 		s["sel_row"] = 0
+
+
+# ui_menu_chrome's up and down (0x800223a4..0x800224d0): the selection
+# moves one, the bar with it until it reaches the edge of the rows shown and
+# then the rows under it; past either end it goes round -- to the last, the
+# rows showing the end of the list, or to the first.
+# @orig game:0x800223a4 ui_menu_chrome+0xa8  status:transcribed -- the up and down; the sound (0xc) not here
+static func chrome_move(s: Dictionary, press: int) -> bool:
+	var n := int(s["count"])
+	var rows := int(s["rows"])
+	if n == 0:
+		return false
+	if press & UP:
+		if int(s["sel"]) != 0:
+			s["sel"] = int(s["sel"]) - 1
+			if int(s["sel_row"]) != 0:
+				s["sel_row"] = int(s["sel_row"]) - 1
+			else:
+				s["first"] = int(s["first"]) - 1
+		else:
+			s["sel"] = n - 1
+			if n < rows:
+				s["first"] = 0
+				s["sel_row"] = n - 1
+			else:
+				s["first"] = n - rows
+				s["sel_row"] = rows - 1
+		return true
+	if press & DOWN:
+		if int(s["sel"]) < n - 1:
+			s["sel"] = int(s["sel"]) + 1
+			if int(s["sel_row"]) == rows - 1:
+				s["first"] = int(s["first"]) + 1
+			else:
+				s["sel_row"] = int(s["sel_row"]) + 1
+		else:
+			s["sel"] = 0
+			s["first"] = 0
+			s["sel_row"] = 0
+		return true
+	return false
+
+
+# equip_names (0x8001c9c0): the equipment screen's ten names -- the weapon,
+# magic A, the shield, head, body, arms, feet, the two items, and the
+# button's spell or, with none, its thing; a spell's name for magic A and a
+# spell on the button, a thing's otherwise, 0xff for nothing.
+# @orig game:0x8001c9c0 equip_names  status:transcribed
+static func equip_names(st: Dictionary) -> Array:
+	var out := []
+	var ids := equip_ids(st)
+	for i in ids.size():
+		var ident := int(ids[i])
+		if ident == 0xFF:
+			out.append([0xFF])
+		elif i == 1 or (i == 9 and int(st["spell_b"]) != 0xFF):
+			out.append(data["equip"]["spells"][ident])
+		else:
+			out.append(data["names"][ident])
+	return out
+
+
+# @port helper -- equip_names' ten bytes, out of the player's slots
+static func equip_ids(st: Dictionary) -> Array:
+	var w: Array = st["worn"]
+	var last := int(st["spell_b"]) if int(st["spell_b"]) != 0xFF else int(st["item_b"])
+	return [int(st["weapon"]), int(st["spell_a"]), int(w[2]), int(w[0]), int(w[1]),
+		int(w[3]), int(w[4]), int(w[5]), int(w[6]), last]
+
+
+# menu_equipment (0x8001c7a8): ui_menu_label's list with no title, ten rows
+# from x 0x1b, y 0x23 -- the headings and, in mode 3, the names beside them.
+# @orig game:0x8001c7a8 menu_equipment  status:partial -- the ten lines and their choosing; magic (1) and the button (9) open nothing yet (0x8001d0c4, 0x8001d3a0)
+static func equipment_list(st: Dictionary, sel: int) -> Dictionary:
+	return {"tx": 0, "ty": 0x20, "title": [], "x": 0x1B, "y": 0x23, "rows": 10,
+		"length": 0x18, "count": 10, "sel": sel, "first": 0, "sel_row": sel,
+		"names": data["equip"]["headings"], "names2": equip_names(st),
+		"counts": [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]}
+
+
+# ui_equip_page's list (0x8001cbb8) for a line: what is carried in its range
+# and "TAKE OFF", the other item line's thing counted one less, the
+# selection on what is worn now -- under ui_menu_label's title "EQUIPMENT".
+# @orig game:0x8001cbb8 ui_equip_page  status:partial -- the list, its choosing, the prompt and the equipping; not the thing's model turning (0x80025be8) or the guide (0x80024f88)
+static func equip_list(inv: PackedByteArray, line: int, st: Dictionary) -> Dictionary:
+	var counted := inv.duplicate()
+	if line == 7 or line == 8:
+		var other := int(st["worn"][6 if line == 7 else 5])
+		if other != 0xFF:
+			counted[other] = int(counted[other]) - 1
+	var range_: Array = EQUIP_RANGES[line]
+	var l := item_list(counted, int(range_[0]), int(range_[1]))
+	var names: Array = l["names"]
+	var ids: Array = l["ids"]
+	var counts: Array = l["counts"]
+	counts.pop_back()
+	names.append(data["equip"]["take_off"])
+	counts.append(0xFF)
+	ids.append(0xFF)
+	var now := int(equip_ids(st)[line])
+	var sel := 0
+	for i in ids.size() - 1:
+		if int(ids[i]) == now:
+			sel = i
+			break
+	var s := {"tx": 0x1F, "ty": 0x20, "title": data["labels"][0][2][2], "x": 0x1B,
+		"y": 0x93, "rows": 3, "length": 0x18, "count": ids.size(), "names": names,
+		"counts": counts, "ids": ids, "sel": 0, "first": 0, "sel_row": 0, "line": line}
+	place(s, sel)
+	return s
 
 
 # The "use item" screen's 2D part, as tools/ui.py draws it.
@@ -611,7 +737,7 @@ func _may_open() -> bool:
 
 # pause_menu's start (0x80027198 and its first frames): the world held, the
 # main page up.
-# @orig game:0x8001a774 pause_menu  status:partial -- the six lines and the "use item" screen; the others answer nothing yet, and the status page is not drawn
+# @orig game:0x8001a774 pause_menu  status:partial -- the six lines, the status page behind them and the "use item" screen; the others answer nothing yet
 func _open() -> void:
 	KFGame.modal = true
 	state = "main"
@@ -648,18 +774,20 @@ func _step(press: int) -> void:
 				if main_sel == 0:
 					list = use_item_list(player.inventory.a, int(list.get("sel", 0)))
 					state = "use_item"
+				elif main_sel == 2:
+					equip_sel = 0                       # ui_menu_label's 0
+					state = "equip"
 				else:
 					KFInfo.note("menu: line %d is not ported yet" % main_sel)
 			elif press & cancel:
 				_close()
 		"use_item":
 			var n := int(list["count"])
-			if press & UP and n > 0:
-				var sel := int(list["sel"]) - 1
-				place(list, sel if sel >= 0 else n - 1)
-			elif press & DOWN and n > 0:
-				var sel2 := int(list["sel"]) + 1
-				place(list, sel2 if sel2 < n else 0)
+			if n == 0:
+				if press != 0:                  # ui_menu_chrome: an empty list goes at any button
+					state = "main"
+			elif press & (UP | DOWN):
+				chrome_move(list, press)
 			elif press & confirm and n > 0:
 				prompt_sel = 0
 				state = "prompt"
@@ -676,6 +804,38 @@ func _step(press: int) -> void:
 					state = "use_item"
 			elif press & cancel:
 				state = "use_item"
+		"equip":
+			var s := equipment_list(_equip_state(), equip_sel)
+			if press & (UP | DOWN):
+				chrome_move(s, press)
+				equip_sel = int(s["sel"])
+			elif press & confirm:
+				if EQUIP_RANGES.has(equip_sel):
+					chooser = equip_list(player.inventory.a, equip_sel, _equip_state())
+					state = "equip_list"
+				else:
+					KFInfo.note("menu: the equipment's line %d is not ported yet" % equip_sel)
+			elif press & cancel:
+				state = "main"
+		"equip_list":
+			if press & (UP | DOWN):
+				chrome_move(chooser, press)
+			elif press & confirm:
+				prompt_sel = 0
+				state = "equip_prompt"
+			elif press & cancel:
+				state = "equip"
+		"equip_prompt":
+			# ui_prompt(s, 5, 5, id): "USE" or "CANCEL"; either way back to the list
+			# unless it was used
+			if press & (UP | DOWN):
+				prompt_sel = 1 - prompt_sel
+				moved = true
+			elif press & confirm and prompt_sel == 0:
+				_equip(int(chooser["line"]), int(chooser["ids"][int(chooser["sel"])]))
+				state = "equip"
+			elif press & (confirm | cancel):
+				state = "equip_list"
 
 
 # The thing chosen: 104..120 are eaten (item_consume), then the menu closes
@@ -737,6 +897,22 @@ func _use(id: int) -> void:
 		KFMessages.announce(NOTHING_HAPPENS)
 
 
+# @port helper -- the slots equip_names reads, out of the player
+func _equip_state() -> Dictionary:
+	return {"weapon": player.weapon_id, "spell_a": player.spell_a,
+		"spell_b": player.spell_b, "item_b": player.item_b, "worn": player.worn}
+
+
+# ui_equip_page's end (0x8001cfa0): the line's slot gets the choice --
+# equip_weapon for the weapon, equip_armour for the rest; "TAKE OFF" is 0xff.
+# @orig game:0x8001cfa0 ui_equip_page+0x3e8  status:transcribed
+func _equip(line: int, id: int) -> void:
+	if line == 0:
+		player.equip_weapon(id)
+	elif ARMOUR_SLOT.has(line):
+		player.equip_armour(id, int(ARMOUR_SLOT[line]))
+
+
 # @port helper -- what ui_status_page reads, out of the player: the paralysis, the curse, the slowing and the dark are not in the port
 func _status() -> Dictionary:
 	var ch: Dictionary = player.character
@@ -758,6 +934,13 @@ func _build() -> void:
 			panel(ot, look, list, 1)
 		"prompt":
 			panel(ot, look, list, 1 | 0x8000)
+			options(ot, look, prompt_sel)
+		"equip":
+			panel(ot, look, equipment_list(_equip_state(), equip_sel), 3)
+		"equip_list":
+			panel(ot, look, chooser, 5)
+		"equip_prompt":
+			panel(ot, look, chooser, 5 | 0x8000)
 			options(ot, look, prompt_sel)
 
 

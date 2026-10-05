@@ -2884,11 +2884,78 @@ is there yet to hold it to.
 status page behind it; "use item", its list, the prompt and eating are there,
 drawn by a transcription of the same routines -- 17 of 17 screens give
 `tools/ui.py`'s primitive lists, and the use-item ones give the game's own
-frames. The other five lines, the chosen thing's model turning in "use item"
-(`0x80025be8`) and `use_item`'s other arms (crystals, fruits, Orladin's and
-Silviera's keys...) are not yet there. The seven keys
+frames. "Equipment" is there too (below); "use magic", "status/records",
+"storage" and "system", the chosen thing's model turning in "use item"
+(`0x80025be8`) and `use_item`'s arms for Orladin's and Silviera's keys, the
+flask, the truth glass and Ichrius' things are not yet. The seven keys
 of the shared arm are (`godot/loot.gd`, `try_key`, "Keys" above); anything
 else that is not eaten says "Nothing Happens".
+
+### The equipment screen
+
+The main page's third line is **`menu_equipment`** (`0x8001c7a8`). It
+builds a list with `ui_menu_label` and then takes its title away (`+0` = 0)
+and makes it ten rows from x `0x1b`, y `0x23`, drawn by `ui_panel` in **mode
+3**: each row's heading -- ten 24-byte glyph rows at `0x8007f230`, WEAPON,
+MAGIC, SHIELD, HEAD, BODY, ARMS, FEET, ITEM 1, ITEM 2 and "[square] BUTTON"
+-- and `0x54` to the right of it the name **`equip_names`** (`0x8001c9c0`)
+gives: the weapon (`0x801b25af`), magic A (`0x801b25ab`), then
+`0x801b25d6`, `d4`, `d5`, `d7`, `d8`, `d9`, `da`, and the button's spell
+(`0x801b25ac`) or, with none, its thing (`0x801b25ad`). A spell's name comes
+from `0x80080430` (31 rows of 24), a thing's from `0x8007f620`, `0xff` is
+nothing. The two-button legend; `ui_menu_chrome` moves the choice.
+
+A line chosen opens **`ui_equip_page`** (`0x8001cbb8`) -- or, for MAGIC and
+BUTTON, `0x8001d0c4` and `0x8001d3a0`, not read yet. It lists, with
+`item_list`, what `inventory_a` holds of the line's range:
+
+| line | range | then |
+| --- | --- | --- |
+| weapon | 0..`0x21` | `equip_weapon(id)` |
+| shield | `0x33`..`0x3e` | `equip_armour(id, 4)` -- `0x801b25d6` |
+| head | `0x22`..`0x29` | slot 0, `0x801b25d4` |
+| body | `0x2a`..`0x32` | slot 1, `0x801b25d5` |
+| arms | `0x3f`..`0x47` | slot 2, `0x801b25d7` |
+| feet | `0x48`..`0x50` | slot 3, `0x801b25d8` |
+| items 1, 2 | `0x51`..`0x5e` | slots 5, 6, `0x801b25d9`, `da` |
+
+and a last row "TAKE OFF" (`0x8007f338`) whose id is `0xff`. For an item line
+the other item line's thing is counted one less while the list is up, so a
+single ring cannot be worn twice: **what is worn is still counted in
+`inventory_a`** -- a new character's excellector and leather plate are there, put
+in by `reset_story_flags` (`0x8005eacc`: both arrays cleared, then the
+excellector (weapon 0), the plate, two earth herbs and an antidote, which every snapshot of
+a new character holds). The list is `ui_menu_label`'s -- title EQUIPMENT,
+three rows from y `0x93` -- in mode 5, counts "x N" and three buttons, its
+selection put on what is worn now (`list_place`). The choice goes through
+`ui_prompt(s, 5, 5, id)`: kind 5's words are kind 0's, USE and CANCEL; USE
+hands the id to the line's routine and goes back to the ten lines, anything
+else back to the list. The thing chosen turns as a model beside the list
+(`0x80025be8`), and triangle shows its page (`0x80024f88`).
+
+**`equip_weapon`** (`0x8002bdc0`) puts the id in `0x801b25af`, empties the
+weapon meter and the swing strength, sets the swing's pause to `0xa` and its
+clock to -1, and, unless the id is `0xff`, points `held_item_record` at the
+weapon's record and installs FDAT.T entry `0x62 + id` as `model_table[0x20]`
+-- the hand and weapon `draw_held_item` draws (four entries, 18, 19, 25 and
+26, hold no model). With no weapon `sub_8002c040` starts no swing and
+`held_item_tick` does nothing. **`equip_armour`** (`0x8002bb84`) writes its
+slot -- 0..6 are `0x801b25d4`, `d5`, `d7`, `d8`, `d6`, `d9`, `da` -- and
+both end in `player_recalc_stats`.
+
+`ui_menu_chrome`'s up and down (`0x800223a4`), which every list uses: the
+selection moves one and the bar with it, the rows shown moving only when the
+bar is at their edge; past either end it goes round, to the last (the rows
+showing the end) or to the first. An empty list closes at any button. The
+port's "use item" list had placed the selection afresh on each move, which
+scrolls differently; it moves as the game does now.
+
+**In the port** (`godot/menu.gd`): the ten lines, the lists, the prompt and
+the equipping, as `tools/ui.py` draws them (8 of the 25 screens the
+self-test holds); `godot/player.gd equip_weapon`, `equip_armour`, and every
+weapon's model in hand (`tools/level3d.py build_held_gltf`). Not there: the
+MAGIC and BUTTON lines, the turning model, the guide, and a bow's own path
+through `held_item_tick` (weapons `0x1b`, `0x1c`).
 
 ### The banners
 

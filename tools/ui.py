@@ -277,10 +277,18 @@ def bar_colour(look):
     return look.box + 0x5F - a, look.box + 0x2F - (a >> 1)
 
 
+# ui_panel's modes with no count column: 2 and 3 (.L11), 4, 8 and 9 (the
+# flag at sp+0x48) and 0x10, which has its own
+NO_COUNTS = (2, 3, 4, 8, 9, 0x10)
+
+
 def panel(f, look, e, s, mode):
     """ui_panel (0x80025468) for `s` -- title (x, y, glyphs), x, y, count,
-    rows, first, selected row, label length, names, counts -- in mode 1."""
+    rows, first, selected row, label length, names, counts -- in modes 1, 3
+    and 5: mode 3 a second name 0x54 to the right of the first ("names2", 24
+    bytes and an end), modes 1 and 5 the count "x N" at x + 0xe9."""
     style = record(e, LABEL_STYLE)
+    m = mode & 0xFFF
     if s["title"]:
         title_plate(f, look, record(e, RECORDS + 12 * 2), s["tx"], s["ty"])
         draw_label(f, look, style, s["tx"], s["ty"], s["title"])
@@ -290,7 +298,9 @@ def panel(f, look, e, s, mode):
         k = s["first"] + row
         x, y = s["x"] + 0xD, s["y"] + 8 + (row << 4)
         draw_label(f, look, style, x, y, s["names"][k][:s["length"]])
-        if mode == 1 and s["counts"][k] != 0xFF:
+        if m == 3:
+            draw_label(f, look, style, x + 0x54, y, list(s["names2"][k][:0x18]) + [0xFF])
+        if m not in NO_COUNTS and s["counts"][k] != 0xFF:
             draw_number(f, look, record(e, NUMBER_STYLE), s["x"] + 0xE9, y,
                         number_digits(s["counts"][k], 2, 0, 1))
     frame(f, look, e, s["x"], s["y"], 0x10A, (s["rows"] << 4) | 0xC)
@@ -509,6 +519,112 @@ def main_page(e, look, ps, sel):
     return f.order()
 
 
+EQUIP_HEADINGS = 0x8007F230    # ten 24-byte rows: WEAPON, MAGIC .. ITEM 2, [] BUTTON
+TAKE_OFF = 0x8007F338          # the chooser's last row, ten bytes
+SPELL_NAMES = 0x80080430       # 24-byte rows, spell by spell
+# ui_equip_page's line -> (first, last) of the things it lists, and the slot
+# of equip_armour (0x8002bb84) it hands the choice to; line 0 is the weapon's
+EQUIP_RANGES = {0: (0x00, 0x21), 2: (0x33, 0x3E), 3: (0x22, 0x29), 4: (0x2A, 0x32),
+                5: (0x3F, 0x47), 6: (0x48, 0x50), 7: (0x51, 0x5E), 8: (0x51, 0x5E)}
+ARMOUR_SLOT = {2: 4, 3: 0, 4: 1, 5: 2, 6: 3, 7: 5, 8: 6}
+# equip_armour's slot -> the worn byte, 0x801b25d4 + n
+WORN_OF_SLOT = {0: 0, 1: 1, 2: 3, 3: 4, 4: 2, 5: 5, 6: 6}
+
+
+def equip_ids(st):
+    """sub_8001c9c0's ten bytes: the weapon, magic A, then the shield, head,
+    body, arms, feet and the two items (0x801b25d6, d4, d5, d7, d8, d9, da),
+    and magic B or, with none, the button's item."""
+    w = st["worn"]
+    last = st["spell_b"] if st["spell_b"] != 0xFF else st["item_b"]
+    return [st["weapon"], st["spell_a"], w[2], w[0], w[1], w[3], w[4], w[5], w[6], last]
+
+
+def equip_names(e, st):
+    """sub_8001c9c0 (0x8001c9c0): the ten lines' names -- a spell's from
+    0x80080430 for magic A and for the button while it holds a spell, a
+    thing's from 0x8007f620 otherwise, and 0xff for nothing."""
+    out = []
+    for i, ident in enumerate(equip_ids(st)):
+        if ident == 0xFF:
+            out.append([0xFF] + [0] * 23)
+        elif i == 1 or (i == 9 and st["spell_b"] != 0xFF):
+            out.append(list(e.bytes(SPELL_NAMES + 24 * ident, 24)))
+        else:
+            out.append(list(e.bytes(NAMES + 24 * ident, 24)))
+    return out
+
+
+def equipment_screen(e, look, st, sel):
+    """sub_8001c7a8's frame: ui_panel(s, 3) -- no title, the ten headings
+    from x 0x1b + 13 and the names beside them, from y 0x23."""
+    s = {"tx": 0, "ty": 0x20, "title": [], "x": 0x1B, "y": 0x23, "rows": 10,
+         "length": 0x18, "count": 10, "first": 0, "sel_row": sel,
+         "names": [list(e.bytes(EQUIP_HEADINGS + 24 * i, 24)) for i in range(10)],
+         "names2": equip_names(e, st), "counts": [0xFF] * 10}
+    f = Frame()
+    panel(f, look, e, s, 3)
+    return f.order()
+
+
+def equip_list(e, inventory, line, st):
+    """ui_equip_page's list (0x8001cbb8) for one of the lines: what is
+    carried in the line's range, and "TAKE OFF"; for an item line the other
+    item line's thing counted one less. The answer has the place of what is
+    worn now as "sel"."""
+    inv = list(inventory)
+    if line in (7, 8):
+        other = st["worn"][6 if line == 7 else 5]
+        if other != 0xFF:
+            inv[other] -= 1
+    first, last = EQUIP_RANGES[line]
+    names, counts, ids = item_list(e, inv, first, last)
+    names.append(list(e.bytes(TAKE_OFF, 10)) + [0] * 14)
+    counts.append(0xFF)
+    ids.append(0xFF)
+    now = equip_ids(st)[line]
+    sel = 0
+    for i in range(len(ids) - 1):
+        if ids[i] == now:
+            sel = i
+    lab = e.bytes(0x8007E67C + 2 * 28 + 4, 16)
+    s = {"tx": 0x1F, "ty": 0x20, "title": list(lab), "x": 0x1B, "y": 0x93,
+         "rows": 3, "length": 0x18, "count": len(ids), "names": names,
+         "counts": counts, "ids": ids}
+    place(s, sel)
+    return s
+
+
+def place(s, sel):
+    """sub_80027728: the index held to the list, the first row shown and the
+    bar's row."""
+    n = s["count"]
+    sel = min(sel, n - 1) if n else 0
+    s["sel"] = sel
+    if n - sel < s["rows"]:
+        if n < s["rows"]:
+            s["first"], s["sel_row"] = 0, sel
+        else:
+            s["first"] = n - s["rows"]
+            s["sel_row"] = sel - s["first"]
+    else:
+        s["first"], s["sel_row"] = sel, 0
+
+
+def equip_list_screen(e, look, s, prompt=None):
+    """ui_equip_page's frame, ui_panel(s, 5): the list with its counts and
+    three buttons -- or, while ui_prompt(s, 5, 5) asks, the list in mode
+    5 | 0x8000 under "USE" and "CANCEL"."""
+    f = Frame()
+    if prompt is None:
+        panel(f, look, e, s, 5)
+    else:
+        panel(f, look, e, s, 5 | 0x8000)
+        options(f, look, e, (45, 58, PROMPT_WORDS[0] + [0xFF]), (45, 84, CANCEL + [0xFF]),
+                prompt)
+    return f.order()
+
+
 def item_list(e, inventory, first=0x5F, last=0x95):
     """0x8001aea4: (names, counts, ids) of the things first..last carried."""
     names, counts, ids = [], [], []
@@ -528,17 +644,7 @@ def use_item_screen(e, look, inventory, selected=0):
     s = {"tx": 0x1F, "ty": 0x20, "title": list(lab), "x": 0x1B, "y": 0x93,
          "rows": 3, "length": 0x18, "count": len(ids), "names": names,
          "counts": counts + [0xFF], "ids": ids}
-    # sub_80027728: the index held to the list, the first row and the bar
-    n = s["count"]
-    sel = min(selected, n - 1) if n else 0
-    if n - sel < s["rows"]:
-        if n < s["rows"]:
-            s["first"], s["sel_row"] = 0, sel
-        else:
-            s["first"] = n - s["rows"]
-            s["sel_row"] = sel - s["first"]
-    else:
-        s["first"], s["sel_row"] = sel, 0
+    place(s, selected)
     f = Frame()
     panel(f, look, e, s, 1)
     return f.order()
@@ -600,6 +706,11 @@ def export(out_dir):
                      "return": gp_string(e, 0x74)},
            "pages": pages,
            # ui_status_page's words: its four labels and the six conditions
+           # the equipment screens': the ten headings, "TAKE OFF", the spells' names
+           "equip": {"headings": [list(e.bytes(EQUIP_HEADINGS + 24 * i, 24))
+                                  for i in range(10)],
+                     "take_off": list(e.bytes(TAKE_OFF, 10)),
+                     "spells": [list(e.bytes(SPELL_NAMES + 24 * i, 24)) for i in range(31)]},
            "status": {"labels": {k: list(e.bytes(a, {"experience": 20, "level": 20,
                                                        "condition": 12, "gold": 10}[k]))
                                  for k, a in STATUS_LABELS.items()},
@@ -639,11 +750,40 @@ def export_cases(e):
         menu_page(f, look, e, 0, 6, sel)
         cases.append({"screen": "menu", "sel": sel, "pulse": 0x44,
                       "prims": [[d, p] for d, p in f.order()]})
+    for st, sel in EQUIP_CASES:
+        look.pulse = 0x17
+        cases.append({"screen": "equip", "equip": st, "sel": sel, "pulse": 0x17,
+                      "prims": [[d, p] for d, p in equipment_screen(e, look, st, sel)]})
+    inv = [0] * 150
+    for k, v in EQUIP_INVENTORY.items():
+        inv[int(k)] = v
+    for line, prompt in ((0, None), (4, None), (7, None), (3, 0), (8, 1)):
+        st = EQUIP_CASES[1][0]
+        look.pulse = 0x31
+        s = equip_list(e, inv, line, st)
+        cases.append({"screen": "equip_list", "equip": st, "line": line,
+                      "inventory": EQUIP_INVENTORY, "prompt": prompt, "pulse": 0x31,
+                      "sel": s["sel"],
+                      "prims": [[d, p] for d, p in equip_list_screen(e, look, s, prompt)]})
     for ps in STATUS_CASES:
         look.pulse = 0x2A
         cases.append({"screen": "main", "sel": 2, "pulse": 0x2A, "status": ps,
                       "prims": [[d, p] for d, p in main_page(e, look, ps, 2)]})
     return cases
+
+
+# A fresh character's things, and a well-dressed one's, for the equipment
+# screens; and what the second carries
+EQUIP_CASES = [
+    ({"weapon": 0, "spell_a": 0x1D, "spell_b": 0xFF, "item_b": 0xFF,
+      "worn": [0xFF, 42, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]}, 0),
+    ({"weapon": 5, "spell_a": 0x1D, "spell_b": 0xFF, "item_b": 0x68,
+      "worn": [34, 43, 52, 63, 72, 81, 0xFF]}, 4),
+    ({"weapon": 0xFF, "spell_a": 0xFF, "spell_b": 0x13, "item_b": 0x68,
+      "worn": [0xFF] * 7}, 9),
+]
+EQUIP_INVENTORY = {"0": 1, "5": 1, "9": 1, "34": 1, "35": 1, "42": 1, "43": 1,
+                   "52": 1, "63": 1, "72": 1, "81": 2, "83": 1, "104": 3}
 
 
 # A fresh character (as the snapshots hold one), and one with everything up

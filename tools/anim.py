@@ -258,7 +258,8 @@ def export(out_dir, lv=0):
     doc = {"_note": "MO.T entries as 0x800431e8 reads them; tools/anim.py",
            "models": {}, "cases": []}
     wanted = [(m, None) for m in sorted({a["model"] for a in actors.table(lv) if a})]
-    wanted.append((WEAPON_KEY + 0, 0))          # the weapon a new character holds
+    # every weapon: the equipment screen can put any in hand (equip_weapon)
+    wanted += [(WEAPON_KEY + w, w) for w in range(0x22)]
     # and the lift doors' and the big chests' models, which draw_model_plain
     # animates by the object's counter (tools/doors.py, tools/chests.py)
     try:

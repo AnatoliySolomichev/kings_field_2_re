@@ -760,6 +760,22 @@ func _menus() -> bool:
 			"main":
 				KFMenu.status_page(o, lk, case["status"])
 				KFMenu.menu_page(o, lk, 0, 6, int(case["sel"]))
+			"equip":
+				KFMenu.panel(o, lk, KFMenu.equipment_list(case["equip"], int(case["sel"])), 3)
+			"equip_list":
+				var inv := PackedByteArray()
+				inv.resize(150)
+				for key in case["inventory"]:
+					inv[int(key)] = int(case["inventory"][key])
+				var sl := KFMenu.equip_list(inv, int(case["line"]), case["equip"])
+				if int(sl["sel"]) != int(case["sel"]):
+					print("  equip_list line %d: the selection %d, python's %d" % [int(case["line"]),
+						int(sl["sel"]), int(case["sel"])])
+				if case["prompt"] == null:
+					KFMenu.panel(o, lk, sl, 5)
+				else:
+					KFMenu.panel(o, lk, sl, 5 | 0x8000)
+					KFMenu.options(o, lk, int(case["prompt"]))
 		var got := JSON.stringify(_norm(KFMenu.order(o)))
 		var want := JSON.stringify(_norm(case["prims"]))
 		n += 1

@@ -669,11 +669,15 @@ def build_effects_gltf(lv, out="out/godot"):
     return path
 
 
-def build_held_gltf(lv, out="out/godot", weapons=(0,)):
+HELD_WEAPONS = range(0x22)        # the weapons, items 0..33; equip_weapon installs any
+
+
+def build_held_gltf(lv, out="out/godot", weapons=HELD_WEAPONS):
     """The hand and weapon draw_held_item draws while the player swings --
-    FDAT.T entry 0x62 + the weapon, one node `wNNN` each, for godot/held.gd.
-    draw_held_item lights it with the player's cell; this bakes the level's
-    class 0 into it."""
+    FDAT.T entry 0x62 + the weapon, one node `wNNN` each, for godot/held.gd:
+    every weapon, since the equipment screen can put any in hand. Four
+    entries (18, 19, 25, 26) hold no model. draw_held_item lights it with the
+    player's cell; this bakes the level's class 0 into it."""
     import anim
     vram = object_vram(lv)
     look = lighting.table()
@@ -681,7 +685,10 @@ def build_held_gltf(lv, out="out/godot", weapons=(0,)):
     g = gltf.Gltf()
     mats, items = {}, []
     for w in weapons:
-        raw = anim.load_weapon(w).raw
+        try:
+            raw = anim.load_weapon(w).raw
+        except Exception:
+            continue                                 # no model in the entry
         o = tmd.find_tmd(raw)
         data = raw[o:]
         _idv, _flags, nobj = struct.unpack_from("<3I", data, 0)

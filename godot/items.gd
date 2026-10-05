@@ -33,6 +33,21 @@ var b: PackedByteArray = _empty()
 var last_message := -1
 
 
+# reset_story_flags' tail (0x8005eacc), at a new game and at a death with no
+# crystal: both arrays cleared and a new character's things put in -- the
+# excellector (0), the leather plate (42), two earth herbs (104) and an antidote
+# (105). Every snapshot of a new character carries those, and what it wears
+# and wields is among them: an equipped thing still counts.
+# @orig game:0x8005eacc reset_story_flags+0x68  status:verified -- the four counts every snapshot of a new character holds
+func start() -> void:
+	a = _empty()
+	b = _empty()
+	a[0] = 1
+	a[42] = 1
+	a[104] = 2
+	a[105] = 1
+
+
 # @port helper -- 150 zero counts
 static func _empty() -> PackedByteArray:
 	var p := PackedByteArray()
