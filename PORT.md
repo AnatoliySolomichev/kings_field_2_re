@@ -255,7 +255,7 @@ floor, not a score.
 | [`lift_step`](godot/doors.gd#L268) | `game:0x800470c4` object_interpreter+0xb4 | verified |
 |  | `game:0x80047290` object_interpreter+0x280 | transcribed |
 |  | `game:0x80047444` object_interpreter+0x434 | transcribed |
-| [`_lift_clear`](godot/doors.gd#L303) | `game:0x80033f38` collide_query | partial |
+| [`_lift_clear`](godot/doors.gd#L303) | `game:0x80033f38` collide_query | verified |
 | [`_stamp_table`](godot/doors.gd#L321) | `game:0x800443c8` stamp_table | transcribed |
 | [`_draw_lift`](godot/doors.gd#L350) | `game:0x8003e34c` draw_model_plain | partial |
 |  | `game:0x8003c1b8` draw_terrain+0x1e8 | transcribed |
@@ -477,7 +477,7 @@ The whole file is the port's own: **check** — labels for comparing the two win
 | [`use_item_screen`](godot/menu.gd#L537) | `game:0x8001aa84` menu_use_item | partial |
 | [`options`](godot/menu.gd#L545) | `game:0x80025b24` sub_80025b24 | transcribed |
 | [`menu_page`](godot/menu.gd#L565) | `game:0x800252f4` sub_800252f4 | transcribed |
-| [`status_page`](godot/menu.gd#L592) | `game:0x800227ec` ui_status_page | transcribed |
+| [`status_page`](godot/menu.gd#L592) | `game:0x800227ec` ui_status_page | verified |
 | [`_put`](godot/menu.gd#L672) | — port's own, *helper*: bytes copied over the front of a record on the stack, as lwl/lwr and sb do | |
 | [`order`](godot/menu.gd#L678) | — port's own, *helper*: the ordering table in the order the GPU draws it, each sprite with its page | |
 | [`_process`](godot/menu.gd#L701) | — port's own, *engine*: the menu button opens it; its own frames at 15 a second while it is up | |
@@ -759,7 +759,7 @@ The whole file is the port's own: **check** — a model browser for naming thing
 | `game:0x800221e8` sub_800221e8 | [`godot/menu.gd:759`](godot/menu.gd#L759) | `func _step` | transcribed |
 | `game:0x800222fc` ui_menu_chrome | [`godot/menu.gd:760`](godot/menu.gd#L760) | `func _step` | partial |
 | `game:0x800223a4` ui_menu_chrome+0xa8 | [`godot/menu.gd:429`](godot/menu.gd#L429) | `func chrome_move` | transcribed |
-| `game:0x800227ec` ui_status_page | [`godot/menu.gd:591`](godot/menu.gd#L591) | `func status_page` | transcribed |
+| `game:0x800227ec` ui_status_page | [`godot/menu.gd:591`](godot/menu.gd#L591) | `func status_page` | verified |
 | `game:0x80024c70` ui_prompt | [`godot/menu.gd:761`](godot/menu.gd#L761) | `func _step` | partial |
 | `game:0x800252f4` sub_800252f4 | [`godot/menu.gd:564`](godot/menu.gd#L564) | `func menu_page` | transcribed |
 | `game:0x80025468` ui_panel | [`godot/menu.gd:346`](godot/menu.gd#L346) | `func panel` | partial |
@@ -845,7 +845,7 @@ The whole file is the port's own: **check** — a model browser for naming thing
 | `game:0x80033f38` collide_query | [`godot/ai.gd:303`](godot/ai.gd#L303) | `func _query` | partial |
 | `game:0x80033f38` collide_query | [`godot/ai.gd:331`](godot/ai.gd#L331) | `func _floor_at` | partial |
 | `game:0x80033f38` collide_query | [`godot/collision.gd:664`](godot/collision.gd#L664) | `func query_all` | partial |
-| `game:0x80033f38` collide_query | [`godot/doors.gd:302`](godot/doors.gd#L302) | `func _lift_clear` | partial |
+| `game:0x80033f38` collide_query | [`godot/doors.gd:302`](godot/doors.gd#L302) | `func _lift_clear` | verified |
 | `game:0x80033f38` collide_query | [`godot/player.gd:801`](godot/player.gd#L801) | `func _query31` | partial |
 | `game:0x80033f94` collide_query+0x5c | [`godot/collision.gd:683`](godot/collision.gd#L683) | `func fenced` | verified |
 | `game:0x800351fc` texture_scroll_step | [`godot/scroll.gd:149`](godot/scroll.gd#L149) | `func _process` | transcribed |

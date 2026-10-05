@@ -119,9 +119,12 @@ def _ram(r, a, n=2):
     return struct.unpack_from("<H" if n == 2 else "<B", r, a & 0x1FFFFF)[0]
 
 
+METER_RECORDS = (25, 26)    # the weapon and magic meters' bars
+
+
 def check(out=sys.stdout):
     """The formulas against the table each snapshot's RAM holds."""
-    ok = bad = snaps = bare = 0
+    ok = bad = snaps = bare = stale = 0
     for path in sorted(glob.glob(os.path.join(ROOT, "out", "snap", "*.ram"))):
         r = open(path, "rb").read()
         style = r[STYLE & 0x1FFFFF]
@@ -146,12 +149,22 @@ def check(out=sys.stdout):
             for f, v in fields.items():
                 if s[f] == v:
                     ok += 1
+                elif style == 0 and s["index"] in METER_RECORDS:
+                    # A bare frame's table is the last world frame's: a meter
+                    # the menu changed since -- equip_weapon empties the
+                    # weapon's -- is still drawn as it was.
+                    stale += 1
+                    print(f"  {os.path.basename(path)} record {s['index']} {f}: RAM "
+                          f"{s[f]}, the meter now gives {v} -- changed in the menu "
+                          f"after the table was written", file=out)
                 else:
                     bad += 1
                     print(f"  {os.path.basename(path)} record {s['index']} {f}: "
                           f"RAM {s[f]}, model {v}", file=out)
     print(f"  {ok} of {ok + bad} fields of the live sprite table reproduced "
-          f"over {snaps} snapshots, {bare} of them drawn bare by render_frame_bare",
+          f"over {snaps} snapshots, {bare} of them drawn bare by render_frame_bare"
+          + (f"; {stale} more of a meter changed in the menu since its last world "
+             f"frame" if stale else ""),
           file=out)
     return bad == 0 and snaps > 0
 

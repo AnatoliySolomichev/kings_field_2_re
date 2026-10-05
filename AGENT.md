@@ -198,7 +198,9 @@ the collision, against the game's own answers          8075 of 8078
 the level table, against the snapshots                 13 of 13
 the movement, against the watchpoint                   48 of 48, 15 of 15
 the conversations, against what was played             44 of 44
-the equipment tables, against a RAM snapshot           3264/3264, 2112/2112, 16/16
+the equipment tables, against a RAM snapshot           3264/3264, 2112/2112, 16/16;
+                                                       player_recalc_stats 437 of
+                                                       437 values over 19 snapshots
 the conversation hooks, two readings of one table      23 of 23
 the port against the game, function by function        297 of 297 placed: 169
                                                        reproduce the game, 128 the
@@ -212,12 +214,19 @@ the lighting table, against every snapshot             89 856 of 89 856 bytes
 the panel's sprite table, against every snapshot       520 of 520 fields
 the compass's records, against every snapshot          65 of 65 fields
 the swinging door, against the bp24 recording          226 of 226 steps
-the lift doors, against the bp27 recording             2016 of 2016 steps; 621 of 621
-                                                       doorway answers for the player
+the lift doors, against the bp27 recording             3528 of 3528 steps; the doorway
+                                                       answers, the player 1078 of
+                                                       1078, the creatures 457 of 457
 the chests' lids, against the snapshots                7 of 7 opened lids on the
                                                        lid's path, one moving
 the conversations a USE at a time, bp21                4 of 4 recorded conversations;
                                                        21 of 21 calls op for op
+the menus, against their snapshots' frames             16 of 16 frames primitive for
+                                                       primitive: use item (scrolled
+                                                       too), the main page with the
+                                                       status page, the equipment
+                                                       screen, its list and prompt
+the spells unlocked, against every snapshot            19 of 19
 the drops, against the snapshots                       3 of 3 lying as the fall leaves
                                                        them (consistent, not a proof)
 the creatures' behaviour tables, against snapshots     168 896 of 168 896 bytes,

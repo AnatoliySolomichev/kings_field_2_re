@@ -23,7 +23,7 @@ class_name KFEquip
 #   6. under zero is 0, and the stat and the skills stop at 999.
 #
 # All of it is recalc(); tools/equip.py --check holds the same reading against
-# every snapshot: 299 of 299 values over 13 of them. And the armour helper adds
+# every snapshot: 437 of 437 values over 19 of them. And the armour helper adds
 # a ninth value, the record's +8, to 0x801b255a: the resistance to poison.
 #
 # Both tables come off the disc -- FDAT entry 97 blocks 1 and 2 -- and
@@ -93,7 +93,7 @@ func add_armour(id: int, defense: Array) -> void:
 # (five), "curse" (0x801b255e), "b56a", "b56e", "b578" (the flat bonuses'
 # timers), "weapon", "worn" (seven), "story" (0x801ba9e9), "level" -- and the
 # answer is what it writes: "offense", "defense", "working", "stat".
-# @orig game:0x80029500 player_recalc_stats  status:verified -- 299 of 299 values over 13 snapshots (tools/equip.py); not the word it copies from 0x801b2584 to 0x801c12f0
+# @orig game:0x80029500 player_recalc_stats  status:verified -- 437 of 437 values over 19 snapshots, one with nothing worn or wielded (tools/equip.py); not the word it copies from 0x801b2584 to 0x801c12f0
 func recalc(st: Dictionary) -> Dictionary:
 	var off := []
 	var dfn := []

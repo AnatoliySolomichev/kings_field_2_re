@@ -262,7 +262,7 @@ func _lift(d: Dictionary) -> void:
 # One frame of the lift arm (0x800470c4) on d's state, counter and scale;
 # `clear` answers collide_query about the doorway and `stamp(t, sel)` lays
 # table t down. tools/doors.py lift_step, which selftest.gd holds this to.
-# @orig game:0x800470c4 object_interpreter+0xb4  status:verified -- opcode 3's arm: the lift, the stamps and the wait; 2016 of 2016 recorded steps of doors 51 and 123 (emu/bp27.lua, tools/doors.py), with the game's own answer for the creatures
+# @orig game:0x800470c4 object_interpreter+0xb4  status:verified -- opcode 3's arm: the lift, the stamps and the wait; 3528 of 3528 recorded steps of doors 51 and 123 over 15 lifts (emu/bp27.lua, tools/doors.py)
 # @orig game:0x80047290 object_interpreter+0x280  status:transcribed -- opcode 4's, the same arm with its own tables
 # @orig game:0x80047444 object_interpreter+0x434  status:transcribed -- opcode 5's
 static func lift_step(d: Dictionary, clear: Callable, stamp: Callable) -> void:
@@ -299,7 +299,7 @@ static func lift_step(d: Dictionary, clear: Callable, stamp: Callable) -> void:
 # its radius + 0x700 of the door (actor_in_range) and the player not within
 # 0x700 + 0x320 (player_in_range). The cell's occupancy count, asked first,
 # follows from either: each marks every cell within its radius + 0x800.
-# @orig game:0x80033f38 collide_query  status:partial -- the doorway test the lift arm asks: the player (0x80) 621 of 621 against the game's answers in bp27; the creatures (0x40) not yet, the game hiding which it found
+# @orig game:0x80033f38 collide_query  status:verified -- the doorway test the lift arm asks, against bp27's answers: the player (0x80) 1078 of 1078, the creatures (0x40) 457 of 457 with the ones near listed
 func _lift_clear(d: Dictionary) -> bool:
 	var x := int(d["x"])
 	var y := int(d["y"])

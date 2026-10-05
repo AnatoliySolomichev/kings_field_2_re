@@ -426,7 +426,7 @@ static func place(s: Dictionary, selected: int) -> void:
 # moves one, the bar with it until it reaches the edge of the rows shown and
 # then the rows under it; past either end it goes round -- to the last, the
 # rows showing the end of the list, or to the first.
-# @orig game:0x800223a4 ui_menu_chrome+0xa8  status:transcribed -- the up and down; the sound (0xc) not here
+# @orig game:0x800223a4 ui_menu_chrome+0xa8  status:transcribed -- the up and down, the rows shown after them as inv3 holds them; the sound (0xc) not here
 static func chrome_move(s: Dictionary, press: int) -> bool:
 	var n := int(s["count"])
 	var rows := int(s["rows"])
@@ -492,7 +492,7 @@ static func equip_ids(st: Dictionary) -> Array:
 
 # menu_equipment (0x8001c7a8): ui_menu_label's list with no title, ten rows
 # from x 0x1b, y 0x23 -- the headings and, in mode 3, the names beside them.
-# @orig game:0x8001c7a8 menu_equipment  status:partial -- the ten lines and their choosing; magic (1) and the button (9) open nothing yet (0x8001d0c4, 0x8001d3a0)
+# @orig game:0x8001c7a8 menu_equipment  status:partial -- the ten lines, drawn as the game draws them (equip1, equip4: 4 of 4 buffers), and their choosing; magic (1) and the button (9) open nothing yet (0x8001d0c4, 0x8001d3a0)
 static func equipment_list(st: Dictionary, sel: int) -> Dictionary:
 	return {"tx": 0, "ty": 0x20, "title": [], "x": 0x1B, "y": 0x23, "rows": 10,
 		"length": 0x18, "count": 10, "sel": sel, "first": 0, "sel_row": sel,
@@ -503,7 +503,7 @@ static func equipment_list(st: Dictionary, sel: int) -> Dictionary:
 # ui_equip_page's list (0x8001cbb8) for a line: what is carried in its range
 # and "TAKE OFF", the other item line's thing counted one less, the
 # selection on what is worn now -- under ui_menu_label's title "EQUIPMENT".
-# @orig game:0x8001cbb8 ui_equip_page  status:partial -- the list, its choosing, the prompt and the equipping; not the thing's model turning (0x80025be8) or the guide (0x80024f88)
+# @orig game:0x8001cbb8 ui_equip_page  status:partial -- the list, its choosing, the prompt and the equipping, the list and prompt drawn as the game draws them (equip2, equip3: 4 of 4 buffers); not the thing's model turning (0x80025be8) or the guide (0x80024f88)
 static func equip_list(inv: PackedByteArray, line: int, st: Dictionary) -> Dictionary:
 	var counted := inv.duplicate()
 	if line == 7 or line == 8:
@@ -588,7 +588,7 @@ static func menu_page(o: Dictionary, lk: Dictionary, page: int, n: int, sel: int
 # water -- the condition and the gold, in a frame. Two records on the stack
 # carry it, a label's (x, y, glyphs) and a number's, each moved and
 # overwritten in place as the routine goes; `ps` holds the values.
-# @orig game:0x800227ec ui_status_page  status:transcribed -- as tools/ui.py draws it; no snapshot of the main page yet
+# @orig game:0x800227ec ui_status_page  status:verified -- as tools/ui.py draws it, which is the game's frame: 2 of 2 buffers of menu1, 428 primitives each
 static func status_page(o: Dictionary, lk: Dictionary, ps: Dictionary) -> void:
 	var style: Array = rec(LABEL_STYLE)
 	var nstyle: Array = rec(NUMBER_STYLE)

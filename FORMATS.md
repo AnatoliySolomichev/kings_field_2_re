@@ -2607,25 +2607,31 @@ at once and one held open).
 **Checked against a recording.** `emu/bp27.lua` stops at the head of the arm
 for every lift door not at rest and logs its state, counter and scale, the
 player, and the tile and shape of its two cells; `tools/doors.py` replays it
-locked, one step from each line against the next. Seven lifts, of doors 51
-and 123: **2016 of 2016** steps -- the 57 frames up with both stamps, the
-eighteen standing, the waits and the drops. A second recording also stopped
-after each arm's `collide_query` and logged the mask it returned: in **621 of
-621** of those answers bit `0x80` is set exactly when `player_in_range` --
-the player within `0x700 + 0x320` of the door, the body `0x6a4` as its top --
-puts the player in reach (177 up to 2488 units away, none from 2608).
+locked, one step from each line against the next. Fifteen lifts over three
+recordings, of doors 51 and 123: **3528 of 3528** steps -- the 57 frames up
+with both stamps, the eighteen standing, the waits and the drops; one more
+step shut the door and USE opened it again in the same frame. The later
+recordings also stopped after each arm's `collide_query` and logged the mask
+it returned: in **1078 of 1078** of those answers bit `0x80` is set exactly
+when `player_in_range` -- the player within `0x700 + 0x320` of the door, the
+body `0x6a4` as its top -- puts the player in reach. (A log holds several
+sessions, each counting vertical blanks from its own start: its lines are
+matched within their session.)
 
-The other bit is the creatures': **140 frames** the game held the doorway on
-bit `0x10` alone or with the player's, with the player 1736 to 2960 away --
-at door 51 for 24 frames with the player standing still at 2960, then let go
-where they stood. Which creature, the log could not say: `collide_query`
-writes `actor_in_range`'s answer to `0x801e648c` and then, on its way to the
+The other bit is the creatures': **544 frames** the game held the doorway on
+bit `0x10`, alone or with the player's. `collide_query` writes
+`actor_in_range`'s answer to `0x801e648c` and then, on its way to the
 objects, **writes -1 over it** (`0x800340a8`), so whoever asks after it never
-learns who. bp27 now lists the awake creatures within `0x2000` of the door
+learns who -- so bp27 lists the awake creatures within `0x2000` of the door
 with each answer, and `tools/doors.py` asks `actor_in_range`'s question of
-them; on level 0 the creatures of kind 4 live a few cells behind both doors.
-The replay takes the game's bit for them meanwhile; the 35 frames of the first
-recording, which logged no answers, are counted apart.
+them: in **457 of 457** answers that list them it finds one exactly when the
+game's bit is set. Who: **two creatures of kind 4 (model 60)**, the one of
+slot 15 that lives a few cells behind door 51 (404 frames between them; 174
+of them it) and the one of slot 7 behind door 123 (230). They hold the door
+open while they stand in its doorway's reach -- `0x700` past their radius of
+300, their 1812 of height against the door's `0xc80` -- the player anywhere.
+The 35 frames of the first recording, which logged no answers, are counted
+apart.
 
 ### Chests, and picking things up
 
@@ -2877,8 +2883,9 @@ light, and 0 fire, 1 earth, 2 water, 3 wind. Then "CONDITION" and, at
 `+0x38`, the first of paralyse (`0x801b2568`), curse (`0x801b255e`), slow
 (`turn_slow_timer`), poison (`poison_frames`), dark (`0x801b2562`) that is
 set, or "NORMAL"; "GOLD" and the gold; and `ui_frame(0x9b, 0x1a, 0x8d, 0xb4)`
-round it all. `tools/ui.py status_page` draws it; no snapshot of the main page
-is there yet to hold it to.
+round it all. `tools/ui.py status_page` draws it, and the snapshot `menu1`
+holds it to the game: both buffers, **428 of 428 primitives** each, are the
+main page the model draws out of the snapshot's own figures, line 0 lit.
 
 **In the port** (`godot/menu.gd`) the menu button opens the main page, the
 status page behind it; "use item", its list, the prompt and eating are there,
@@ -2949,6 +2956,15 @@ bar is at their edge; past either end it goes round, to the last (the rows
 showing the end) or to the first. An empty list closes at any button. The
 port's "use item" list had placed the selection afresh on each move, which
 scrolls differently; it moves as the game does now.
+
+**Against the game**: the snapshots `equip1` and `equip4` (the ten lines,
+the weapon and the plate on and then both taken off), `equip2` (the WEAPON
+list) and `equip3` (its prompt) are, buffer for buffer, frames the model
+draws out of their own state -- the slots, the inventory and the list
+records `ui_menu_label` left on the stack (`0x801ffc48` for the ten lines,
+`0x801ff7a0` for the list): 8 of 8, and `inv3`, a "use item" list scrolled
+to its end, 2 of 2 (`tools/ui.py check_menus`). The turning model is filed
+deeper than any 2D part (from depth 0x100 on), so it is left out.
 
 **In the port** (`godot/menu.gd`): the ten lines, the lists, the prompt and
 the equipping, as `tools/ui.py` draws them (8 of the 25 screens the
@@ -3386,7 +3402,7 @@ And `skill_unlock` (`0x80029f1c`) does nothing for skills 0..3 until story
 flag `0x6d + k` (`0x801ba9f5`) is set; it sets `0x7b + k` when one of k's
 spells unlocks. For each threshold reached it unlocks the first spell not yet
 unlocked among the first (index + 1) of the skill's list, `announce(3)` each.
-13 of 13 snapshots hold exactly the spells it leaves a new character with
+19 of 19 snapshots hold exactly the spells it leaves a new character with
 their skills (`tools/levelup.py`); the port has all of it (`godot/levelup.gd`
 `skill_unlock`, `use_arm`; `award` calls it after each level, as
 `award_exp` does at `0x8002a574`).
@@ -3550,8 +3566,9 @@ Two corrections to the published list, both of which it had no way to notice:
   one per rating -- and is the **poison resistance** `player_take_hit` rolls
   against. Five pieces carry one (ids 74, 76, 79, 83, 86: 25, 50, 75, 75, 5).
   The routine whole -- the curse halving, the three bonus timers, thirteen
-  things worn by id, the clamps -- is `tools/equip.py recalc()`, 299 of 299
-  values over the 13 snapshots, and `godot/equip.gd recalc()`, which the
+  things worn by id, the clamps -- is `tools/equip.py recalc()`, 437 of 437
+  values over 19 snapshots (one, `equip4`, with nothing worn or wielded),
+  and `godot/equip.gd recalc()`, which the
   player now calls where the game does: on a level, a strong blow, an item.
 
 ### The level index

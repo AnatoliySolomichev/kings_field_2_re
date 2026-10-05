@@ -226,29 +226,36 @@ def lift_load(path=None):
     if not os.path.exists(path):
         return rows
     queries, near = {}, {}
+    # A log can hold several sessions, one after another, each with its own
+    # vertical-blank count from wherever the emulator was: a line belongs to
+    # the session the last "armed" header began, and is matched only in it.
+    session = 0
     for line in open(path):
+        if line.startswith("=== bp27") and "armed" in line:
+            session += 1
+            continue
         m = LIFT_LINE.match(line)
         if m:
             g = [int(x) for x in m.groups()]
-            rows.append({"vb": g[0], "slot": g[1], "op": g[2], "st": g[3],
-                         "ctr": g[4], "scale": g[5], "p": (g[6], g[7], g[8]),
+            rows.append({"session": session, "vb": g[0], "slot": g[1], "op": g[2],
+                         "st": g[3], "ctr": g[4], "scale": g[5], "p": (g[6], g[7], g[8]),
                          "cells": ((g[9], g[10]), (g[11], g[12]))})
             continue
         m = LIFT_QUERY.match(line)
         if m:
             g = [None if x is None else int(x) for x in m.groups()]
             who = None if g[3] < 0 else [g[6], g[7], g[8], g[9], g[10]]
-            queries[(g[0], g[1])] = (g[2], who)
+            queries[(session, g[0], g[1])] = (g[2], who)
             continue
         m = LIFT_ACTOR.match(line)
         if m:
             g = [int(x) for x in m.groups()]
-            near.setdefault((g[0], g[1]), []).append(
+            near.setdefault((session, g[0], g[1]), []).append(
                 {"actor": g[2], "model": g[3], "pos": (g[4], g[5], g[6]),
                  "r": g[7], "h": g[8], "flags": g[9]})
     for r in rows:
-        r["q"] = queries.get((r["vb"], r["slot"]))
-        r["near"] = near.get((r["vb"], r["slot"]), [])
+        r["q"] = queries.get((r["session"], r["vb"], r["slot"]))
+        r["near"] = near.get((r["session"], r["vb"], r["slot"]), [])
     return rows
 
 
@@ -279,9 +286,9 @@ def lift_check(out=sys.stdout, verbose=False):
     ld = objload.Load(0)
     by = {}
     for r in rows:
-        by.setdefault(r["slot"], []).append(r)
-    ok = bad = used = unseen = held = freed = held_by = 0
-    for slot, rs in sorted(by.items()):
+        by.setdefault((r["session"], r["slot"]), []).append(r)
+    ok = bad = used = unseen = held = freed = held_by = reopened = 0
+    for (_session, slot), rs in sorted(by.items()):
         rec = ld.recs.get(slot)
         if rec is None or rec["op"] not in LIFT_OPS:
             continue
@@ -329,6 +336,11 @@ def lift_check(out=sys.stdout, verbose=False):
                 if a["st"] == LIFT_WAIT:
                     held += b["st"] == LIFT_WAIT
                     freed += b["st"] == 0x15
+            elif got[0] == 0 and b["st"] == 1 and got[1:] == want[1:]:
+                # shut on this frame and opened again by USE before the next:
+                # object_interact sets state 1 on a door at state 0, and the
+                # arm's line the frame after shows it
+                reopened += 1
             elif (a["st"] == b["st"] == LIFT_WAIT and a["q"] is None
                   and a["ctr"] == b["ctr"] and a["cells"] == b["cells"]):
                 # The game held the doorway and the player was out of reach:
@@ -342,12 +354,14 @@ def lift_check(out=sys.stdout, verbose=False):
                           file=out)
     print(f"  {ok} of {ok + bad} steps of a lift door reproduced -- state, counter, "
           f"scale and its two cells' tile and shape; {used} lifts from USE, "
-          f"{held} frames held, {freed} let go",
+          f"{held} frames held, {freed} let go"
+          + (f"; {reopened} shut and opened again by USE in the same frame"
+             if reopened else ""),
           file=out)
     if held_by:
         print(f"  {held_by} of the waiting frames held by a creature by the game's "
-              f"own answer (bit 0x10 of collide_query); which one, the log cannot "
-              f"say", file=out)
+              f"own answer (bit 0x10 of collide_query); which one, the A lines say "
+              f"where the log has them (below)", file=out)
     if unseen:
         print(f"  {unseen} more at 0x14 where the game held the doorway with the "
               f"player out of reach: a creature, which a log without Q lines does "

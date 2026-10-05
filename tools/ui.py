@@ -805,15 +805,19 @@ STATUS_CASES = [
 ]
 
 
+MODEL_DEPTH = 0x100     # the thing's turning model is filed deeper than any 2D part
+
+
 def snapshot_ui(name):
-    """The frame's 2D primitives in drawing order, both buffers: [[prim]]."""
+    """The frame's 2D primitives in drawing order, both buffers: [[prim]] --
+    the sprites and textured quads above the turning model's depths."""
     import gpuframe
     ram = gpuframe.load(name)
     out = []
     for buf in (0, 1):
         prims = []
         for d, p in gpuframe.frame(ram, buf):
-            if p["kind"] in ("sprite", "quad"):
+            if p["kind"] in ("sprite", "quad") and d < MODEL_DEPTH:
                 q = {k: v for k, v in p.items() if k not in ("abr", "raw")}
                 if q["kind"] == "sprite":
                     q.pop("semi", None)
@@ -822,7 +826,110 @@ def snapshot_ui(name):
     return ram, out
 
 
+def stack_lists(ram):
+    """The list records on the menus' stack: {address: record} -- found by
+    what ui_menu_label leaves in them (x 0x1b, length 0x18) and the y and
+    rows of the two kinds, three rows at 0x93 or the equipment's ten at
+    0x23."""
+    out = {}
+    for a in range(0x1F0000, 0x200000 - 0x40, 2):
+        if ram[a + 0x1C] == 0x1B and ram[a + 0x23] == 0x18 \
+                and (ram[a + 0x1D], ram[a + 0x1F]) in ((0x93, 3), (0x23, 10)):
+            out[0x80000000 | a] = {"count": ram[a + 0x1E], "rows": ram[a + 0x1F],
+                                   "first": ram[a + 0x20], "sel": ram[a + 0x21],
+                                   "sel_row": ram[a + 0x22]}
+    return out
+
+
+def equip_state(ram):
+    """The slots equip_names reads, out of a snapshot."""
+    return {"weapon": ram[0x1B25AF], "spell_a": ram[0x1B25AB], "spell_b": ram[0x1B25AC],
+            "item_b": ram[0x1B25AD], "worn": list(ram[0x1B25D4:0x1B25DB])}
+
+
+def snapshot_screens(e, ram, name):
+    """What the model draws for a menu snapshot, for each way the frame could
+    be -- [(what, primitives)] -- out of the snapshot's own state: the
+    inventory, the player's slots and figures, and the list records on the
+    stack (the selection and the rows shown, as ui_menu_chrome left them)."""
+    look = Look(ram)
+    lists = stack_lists(ram)
+    inv = ram[INVENTORY_A & 0x1FFFFF:(INVENTORY_A & 0x1FFFFF) + 150]
+    three = [r for r in lists.values() if r["rows"] == 3]
+    ten = [r for r in lists.values() if r["rows"] == 10]
+    out = []
+    for pulse in range(0x60):
+        look.pulse = pulse
+        if name.startswith("inv") and three:
+            r = three[0]
+            names, counts, ids = item_list(e, inv)
+            lab = e.bytes(0x8007E67C + 4, 16)
+            s = {"tx": 0x1F, "ty": 0x20, "title": list(lab), "x": 0x1B, "y": 0x93,
+                 "rows": 3, "length": 0x18, "count": len(ids), "names": names,
+                 "counts": counts + [0xFF], "ids": ids,
+                 "first": r["first"], "sel_row": r["sel_row"], "sel": r["sel"]}
+            f = Frame()
+            panel(f, look, e, s, 1)
+            out.append((f"use item, row {r['sel_row']} of the rows from {r['first']}, "
+                        f"pulse {pulse:#x}", f.order()))
+        elif name.startswith("menu"):
+            for sel in range(6):
+                out.append((f"main page, line {sel}, pulse {pulse:#x}",
+                            main_page(e, look, status_of(ram), sel)))
+        elif name.startswith("equip") and ten:
+            st = equip_state(ram)
+            line = ten[0]["sel"]
+            out.append((f"equipment, line {line}, pulse {pulse:#x}",
+                        equipment_screen(e, look, st, line)))
+            if three and line in EQUIP_RANGES:
+                r = three[0]
+                s = equip_list(e, list(inv), line, st)
+                s["first"], s["sel_row"], s["sel"] = r["first"], r["sel_row"], r["sel"]
+                for prompt in (None, 0, 1):
+                    out.append((f"equipment list, line {line}, row {r['sel_row']}, "
+                                f"prompt {prompt}, pulse {pulse:#x}",
+                                equip_list_screen(e, look, s, prompt)))
+    return out
+
+
+def check_menus(out=sys.stdout, verbose=False, names=("menu1", "equip1", "equip2",
+                                                     "equip3", "equip4", "inv3")):
+    """The main page, the equipment screens and a scrolled "use item" list
+    against the snapshots of them, frame for frame: each buffer has to be,
+    primitive for primitive, one of the frames the model draws from the
+    snapshot's own state."""
+    e = exe()
+    ok = bad = 0
+    for name in names:
+        path = os.path.join(ROOT, "out", "snap", name + ".ram")
+        if not os.path.exists(path):
+            continue
+        ram, bufs = snapshot_ui(name)
+        cands = snapshot_screens(e, ram, name)
+        for b, game in enumerate(bufs):
+            hit = next((what for what, prims in cands if prims == game), None)
+            ok += hit is not None
+            bad += hit is None
+            if verbose or hit is None:
+                print(f"  {name} buffer {b}: {len(game)} primitives -- "
+                      f"{hit if hit else 'NO FRAME OF THE MODEL'}", file=out)
+                if hit is None and cands:
+                    best = max(cands, key=lambda c: sum(1 for x, y in zip(c[1], game) if x == y))
+                    i = next((i for i, (x, y) in enumerate(zip(best[1], game)) if x != y),
+                             min(len(best[1]), len(game)))
+                    print(f"    nearest: {best[0]}, {len(best[1])} primitives, first "
+                          f"difference at {i}:", file=out)
+                    if i < len(game):
+                        print(f"      game  {game[i]}", file=out)
+                    if i < len(best[1]):
+                        print(f"      model {best[1][i]}", file=out)
+    print(f"  {ok} of {ok + bad} frames of the main page, the equipment screens and a "
+          f"scrolled list drawn primitive for primitive as the game drew them", file=out)
+    return bad == 0
+
+
 def check(out=sys.stdout, verbose=False):
+    menus = check_menus(out, verbose)
     e = exe()
     ok = bad = 0
     for name in ("inv1", "inv2"):
@@ -857,7 +964,7 @@ def check(out=sys.stdout, verbose=False):
                             break
     print(f"  {ok} of {ok + bad} frames of the \"use item\" screen drawn primitive for "
           f"primitive as the game drew them (tools/ui.py)", file=out)
-    return bad == 0
+    return bad == 0 and menus
 
 
 def bar_colour_with(look, a):

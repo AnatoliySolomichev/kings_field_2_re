@@ -520,9 +520,8 @@ game's frames of the screen primitive for primitive (`inv1`, `inv2`, read by
 `tools/gpuframe.py`), and `godot/menu.gd` draws what `tools/ui.py` draws.
 Eating heals. Left, roughly in order:
 
-* `ui_status_page` (`0x800227ec`) is in, transcribed: a snapshot with the
-  menu open on its main page would hold it to the game's frame
-  (`tools/ui.py` can then compare it as it does `inv1`);
+* `ui_status_page` (`0x800227ec`) is in and holds: `menu1`'s frame is the
+  model's, 428 of 428 primitives;
 * `use_item`'s arms (`0x8005cbe0`, 61 of them): the seven keys of the shared
   arm are in (`godot/loot.gd` `try_key`, transcribed: no recording has a key
   used yet -- a bp session using the copper key on level 0's slot 9 would
@@ -538,7 +537,7 @@ Eating heals. Left, roughly in order:
   and BUTTON lines (`0x8001d0c4`, `0x8001d3a0`), the thing's turning model
   and the guide; a bow in hand (weapons `0x1b`, `0x1c`) swings as a blade
   does in the port, where `held_item_tick` has a path of its own for it.
-  Snapshots of the equipment screen and its list would hold them to the game;
+  The screens hold against `equip1`..`equip4`, 8 of 8 frames;
 * "use magic", "status/records" (`ui_ratings_page`), "storage" and "system";
 * `pad_read_latch`'s repeat while a direction is held -- the port reads new
   presses only.
@@ -604,12 +603,10 @@ it would open:
   lifts it 57 frames, stamps the doorway passable at 0xc18, stands eighteen
   frames, waits for the doorway to clear and drops. `godot/doors.gd` does all
   of it, with the door's cells as a node of their own. Against `emu/bp27.lua`:
-  2016 of 2016 steps, and the player's half of the doorway test against the
-  game's own answers, 621 of 621. Left: which creature holds a door on
-  `collide_query`'s bit 0x10 -- 140 frames at doors 51 and 123 with the player
-  out of reach. The query overwrites the creature's slot before it returns,
-  so bp27 now lists the creatures near the door with each answer; one more
-  recording there names it.
+  3528 of 3528 steps, and the doorway test against the game's own answers --
+  the player 1078 of 1078, the creatures 457 of 457. Who holds a door shut
+  out of the player's reach is settled: the two creatures of kind 4 that live
+  behind doors 51 and 123 (slots 15 and 7).
 * **class 0x54 (one on level 0)** -- `stamp_table` from `0x8008288c + 40 *
   (2 * tr[+0xe] + (p[+0x16] & 1))` at load; its arm is not read.
 * **classes 0x00 (12) and 0x1b (23)**, `find_object` points 0x700 in front of or
