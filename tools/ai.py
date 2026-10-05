@@ -348,6 +348,9 @@ def brake(a, lvl, decel, flags, others=(), player=None):
     return move_horizontal(a, lvl, flags, others, player)
 
 
+LOG_NEAR = 0x3000       # emu/bp16.lua NEAR as the recordings so far had it: the
+                        # creatures it logs round the player (0x5000 from 2026-10-05,
+                        # which only makes the edge here the more cautious)
 FENCE = 0x40            # a layer's byte +4: no creature may stand on it
 FENCED_SURFACE = -100000  # 0xfffe7960, what collide_query writes over the floor
 CREATURE_LAYERS = 0x93  # collision_layers (0x8018faac) in play: 3 in two snapshots
@@ -956,6 +959,19 @@ def _no_rand():
     raise NeedsRand()
 
 
+def sidestep(a0, a1):
+    """Whether a creature's logged move is what actor_move_horizontal does
+    with a thing in its way (.L11): the step turned a quarter off the bearing
+    at half its length -- give or take the rounding of its two parts -- or,
+    the way round blocked as well, no move at all."""
+    import movement
+    vx, vz = s16(a0["vel"][0]), s16(a0["vel"][1])
+    n = movement.game_isqrt(vx * vx + vz * vz)
+    dx, dz = a1["pos"][0] - a0["pos"][0], a1["pos"][2] - a0["pos"][2]
+    d = movement.game_isqrt(dx * dx + dz * dz)
+    return n > 0 and (abs(d - (n >> 1)) <= 1 or (dx, dz) == (0, 0))
+
+
 def check_locked(out=sys.stdout, path=None, verbose=False, lv=0):
     """bp16's act= with the hidden fields (2026-09-28 on): each creature
     stepped once from what the log says it was, against the next frame.
@@ -994,7 +1010,10 @@ def check_locked(out=sys.stdout, path=None, verbose=False, lv=0):
         doors_ = replay.doors(lv)
     except Exception:
         doors_ = []
-    shoved = 0
+    shoved = at_edge = edge_other = 0
+    # the largest creature in the log, for how near its edge one may meet
+    # another the log does not hold
+    max_r = max((a["radius"] for r in rows for a in r["act"]), default=0)
     prev_yaw = {}
     hidden = {}             # slot -> what the log does not hold, from our step
     last_turn = {}          # slot -> the yaw's last step that was not 0
@@ -1056,6 +1075,11 @@ def check_locked(out=sys.stdout, path=None, verbose=False, lv=0):
                 # before the next log line) moves them after the creature looked
                 shoved += 1
                 continue
+            # bp16 logs the awake creatures within LOG_NEAR of the player: one
+            # this near the edge may have another just beyond it in its way
+            reach = a0["radius"] + max_r + abs(a0["vel"][0]) + abs(a0["vel"][1])
+            edge = max(abs(a0["pos"][0] - r0["p"][0]),
+                       abs(a0["pos"][2] - r0["p"][2])) > LOG_NEAR - reach
             want = (a1["pos"][0], a1["pos"][2], a1["yaw"] & 0xFFF, a1["vel"][0],
                     a1["vel"][1], a1["clock"])
             # rand(): the first try with none; a step that calls it is tried
@@ -1095,6 +1119,13 @@ def check_locked(out=sys.stdout, path=None, verbose=False, lv=0):
                 # our step came out right; else the yaw's last step
                 keep = ("vst", "vy", "aim", "n72") + (("turn",) if matched else ())
                 hidden[k] = {kk: last[kk] for kk in keep}
+            if not matched and edge and sidestep(a0, a1):
+                # gone round a thing the log does not hold: actor_move_horizontal
+                # (.L11) turns a step a quarter off the bearing to whatever is in
+                # its way, at half its length, where the model walks straight on
+                at_edge += 1
+                continue
+            edge_other += not matched and edge
             if "rate" in a0:
                 full[0] += matched
                 full[1] += 1
@@ -1119,6 +1150,14 @@ def check_locked(out=sys.stdout, path=None, verbose=False, lv=0):
     if shoved:
         print(f"  ({shoved} frames with the player by a swinging door set apart: "
               f"its shove moves them after the creature looked)", file=out)
+    if at_edge:
+        print(f"  ({at_edge} frames of a creature near the edge of what bp16 logs, "
+              f"stepping round something at half its stride or stopped by it, set "
+              f"apart: another just beyond the edge, unlogged)", file=out)
+    if edge_other:
+        print(f"  ({edge_other} of the frames that differ are of a creature as near "
+              f"that edge: what such a neighbour changes besides -- the turn, the aim)",
+              file=out)
     tot_ok = sum(v[0] for v in res.values())
     tot = sum(v[0] + v[1] for v in res.values())
     print(f"  level {lv}: {tot_ok} of {tot} creature frames stepped from the log land "

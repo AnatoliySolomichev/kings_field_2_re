@@ -5431,6 +5431,21 @@ slots have moved already when a higher one looks at them; and a player by a
 swinging door is shoved (`object_interpreter`) after the creatures looked, so
 those frames are set apart as the replay sets them.
 
+**Level 4's 72 were one creature at the edge of the log.** bp16 logs the awake
+creatures within `0x3000` of the player; all 72 are slot 17, a model-53
+creature some 9700 to 10300 east of the player, walking a corridor (cells
+(36..41, 25)) that slot 10, another of the kind, shares -- `silv2` has them
+5500 apart there -- and slot 10 is beyond the edge and so in no log line. In
+56 of them the game's step is what `actor_move_horizontal` does with a thing
+in its way (`.L11`): the stride turned a quarter off the bearing to it at half
+its length (the logged z steps by 15 where the velocity says 31), or, the way
+round blocked as well, no move at all; the model, which does not know of slot
+10, walks straight on. `tools/ai.py --locked` sets those apart -- a creature
+within its radius, the largest logged and its stride of the edge, whose
+move is that half stride or nothing -- and counts the other 16, all of the
+same creature in the same stretch, as misses: what such a neighbour changes
+besides is the turn and the aim. bp16 now logs `0x5000` round the player.
+
 **The volley, opcode 0x19** (`0x800523f0`), which level 0's kinds 2 and 3 use
 and most kinds on the next levels: the clock; fire times at +0x70 from the
 record's +0xe, +0x12 apart and back to 0 past +0x10, each running the list at

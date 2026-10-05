@@ -113,7 +113,8 @@ local PSTATE = 0x801b25e5
 local VBLANKS = 0x801c12e8        -- vblank_count
 local BLOCK = 0x801b2640          -- twelve halfwords, logged raw
 local ACTORS = 0x80185da8         -- actor_table: 200 slots of 0x88
-local NEAR = 0x3000               -- how far from the player an actor is logged
+local NEAR = 0x5000               -- how far from the player an actor is logged: far
+                                  -- enough that one at the edge has its neighbours too
 
 -- The creatures the player can run into this frame: actor_spot_taken asks
 -- every slot whose +9 is 1, and the player moves before actor_tick_driver in
