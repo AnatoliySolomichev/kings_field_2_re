@@ -93,13 +93,18 @@ func group_of(op: int) -> String:
 # The trigger test every door, teleport and switch uses: is the player's own
 # cell inside this rectangle? Read off player_in_rect (0x80046884), which
 # takes the cells as `player_pos >> 11` and `0x801b25f8 >> 11` -- so the
-# rectangle is in cells, not in world units.
+# rectangle is in cells, not in world units -- and then, unless the height it
+# is given is 0x8000, the player's y above it - 0xc80 and not below it + 0x800.
 # @orig game:0x80046884 player_in_rect  status:transcribed
 static func player_in_rect(px: int, pz: int, cx: int, cz: int,
-		w: int, h: int) -> bool:
+		w: int, h: int, py := 0, y := 0x8000) -> bool:
 	var pcx := px >> 11
 	var pcz := pz >> 11
-	return pcx >= cx and pcx < cx + w and pcz >= cz and pcz < cz + h
+	if not (pcx >= cx and pcx < cx + w and pcz >= cz and pcz < cz + h):
+		return false
+	if y == 0x8000:
+		return true
+	return not (y + 0x800 < py) and not (py < y - 0xC80)
 
 
 # One frame of the interpreter over whatever the port has placed. It finds each

@@ -142,6 +142,9 @@ def main(quick=False, only_check=False):
         "the swinging and the lift doors, against what was played",
         keep=["steps of a moving door", "steps of a lift door", "more at 0x14",
               "held by a creature", "doorway answers", "no out/lua_bp27"])
+    run(["tools/crossing.py", "--check"],
+        "the crossings between levels, against what was played",
+        keep=["crossings the model makes"])
     run(["tools/mipsrun.py", "--check"],
         "the game's own code, run over a snapshot",
         keep=["exactly", "NOT"])

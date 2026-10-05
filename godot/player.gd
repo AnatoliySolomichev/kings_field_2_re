@@ -275,7 +275,38 @@ func _ready() -> void:
 			rotation.y = float(facing) * TAU / 4096.0
 			_to_godot()
 	respawn = null
+	if arrive is Array:             # walked in from another level (crossing.gd)
+		flying = false
+		gx = int(arrive[0])
+		gy = int(arrive[1])
+		gz = int(arrive[2])
+		facing = int(arrive[3])
+		pitch = int(arrive[4])
+		vstate = int(arrive[5])
+		vvel = int(arrive[6])
+		fwd_speed = int(arrive[7])
+		stf_speed = int(arrive[8])
+		hp = int(arrive[9])
+		hp_max = int(arrive[10])
+		mp = int(arrive[11])
+		weapon_meter = int(arrive[12])
+		magic_meter = int(arrive[13])
+		poison = int(arrive[14])
+		rotation.y = float(facing) * TAU / 4096.0
+		_to_godot()
+	arrive = null
 	_refresh()
+
+
+# What a crossing takes over into the other level's world (crossing.gd): what
+# the crystal keeps -- the inventory, the gold, the character, what is worn
+# and wielded, the magic -- and where the player stands, shifted, facing,
+# looking, falling and walking, with HP, MP, the meters and the poison.
+# @port engine -- the player's state, kept across the change of world
+func carry_over(p: Vector3i) -> void:
+	carried = [inventory, gold, character, weapon_id, worn, [spell_a, spell_b, item_b]]
+	arrive = [p.x, p.y, p.z, facing, pitch, vstate, vvel, fwd_speed, stf_speed,
+		hp, hp_max, mp, weapon_meter, magic_meter, poison]
 
 
 # player_recalc_stats is the game's after anything that changes what it reads:
@@ -324,11 +355,9 @@ func equip_armour(id: int, slot: int) -> void:
 # The level out/godot was built for: tools/level3d.py names the project
 # "King's Field II - level N". This returned 0 whatever the build, so on any
 # other level the port read level 0's collision, doors and sky.
-# @port engine -- the level out/godot was built for, off the project's name
+# @port engine -- the level this world is of (KFGame.current_level)
 func _level() -> int:
-	var name := str(ProjectSettings.get_setting("application/config/name", ""))
-	var i := name.rfind("level ")
-	return int(name.substr(i + 6)) if i >= 0 else 0
+	return KFGame.current_level()
 
 
 # @port engine -- the game's position into the node's
@@ -900,6 +929,10 @@ func _dying() -> void:
 # Where _ready puts the player after a death reloads the level: the crystal's
 # spot, or [] for a new game's start.
 static var respawn = null
+# Where a crossing puts the player down in the next level's world, and how:
+# [x, y, z, facing, pitch, vertical state and velocity, speeds, HP, its
+# maximum, MP, the two meters, the poison].
+static var arrive = null
 # What the player carries across that reload when the crystal revives them:
 # [the inventory, the gold, the character, the weapon, what is worn, the
 # magic and the button's].

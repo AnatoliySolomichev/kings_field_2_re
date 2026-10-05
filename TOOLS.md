@@ -817,6 +817,21 @@ restamped grid are not in a recording of the player alone), a step the model
 model took whole and the game did not -- creatures in the sessions from before
 bp16 logged where they stood.
 
+### More than one level
+
+`python3 tools/level3d.py N` adds level N's world to `out/godot` -- its
+`worldNN.tscn` and data beside the others' -- and makes it the one the project
+starts in. Build the others first and level 0 last:
+
+```
+python3 tools/level3d.py 4
+python3 tools/level3d.py 0
+```
+
+and the port walks from level 0 into level 4 and back (`godot/crossing.gd`).
+`python3 tools/crossing.py` lists every level's crossings; `--check` holds the
+reading to the crossings bp16 recorded.
+
 ### Running the game's own code
 
 `tools/mipsrun.py` runs GAME.EXE's routines over a RAM snapshot -- an R3000's

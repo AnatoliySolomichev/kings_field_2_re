@@ -60,6 +60,28 @@ static var modal := false
 # live.txt): the creatures, the doors and the swing are the game's, laid over
 # the port's every frame, and their own machines stand still.
 static var follow := false
+# The level the world scene is of: set by whoever loads one (a crossing, the
+# comparison following the game); -1 until then, and the level the project was
+# built for stands in -- tools/level3d.py names it "King's Field II - level N".
+static var level := -1
+# The level block in hand, 0x8018fad8's five bytes: the level second. A
+# crossing asks for another (crossing.gd).
+static var block: Array = []
+
+
+# @port engine -- the level in hand: the one loaded, or the project's own
+static func current_level() -> int:
+	if level >= 0:
+		return level
+	var name := str(ProjectSettings.get_setting("application/config/name", ""))
+	var i := name.rfind("level ")
+	return int(name.substr(i + 6)) if i >= 0 else 0
+
+
+# @port engine -- the scene of a level: worldNN.tscn, which tools/level3d.py writes for each level it builds
+static func scene_of(lv: int) -> String:
+	var path := "res://world%02d.tscn" % lv
+	return path if ResourceLoader.exists(path) else "res://world.tscn"
 
 const FRAME := [
 	[0x800341e8, "light_table_reset", false],

@@ -320,7 +320,7 @@ def export(out_dir, lv=0):
             cases.append({"entity": ent, "pattern": pattern, "calls": calls})
     path = os.path.join(out_dir, "talkcheck.json")
     with open(path, "w") as fh:
-        json.dump({"cases": cases}, fh, separators=(",", ":"))
+        json.dump({"level": lv, "cases": cases}, fh, separators=(",", ":"))
     return path
 
 

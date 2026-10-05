@@ -3002,5 +3002,15 @@
   "name": "ratings_labels",
   "kind": "data",
   "evidence": "OFFENSE (0x8007f380) and DEFENSE (0x8007f398), glyph codes, 0xff ending each; ui_ratings_page copies ten bytes of each"
+ },
+ "0x8018fad4": {
+  "name": "level_change_busy",
+  "kind": "data",
+  "evidence": "a level change under way: object_trigger sets it to 1 and starts nothing while it is set; level_load clears it"
+ },
+ "0x8018faed": {
+  "name": "crossing_shift",
+  "kind": "data",
+  "evidence": "three s8 bytes, x and z in cells and height in 128s: what level_load hands world_shift, 0x7f in the first for none. object_trigger keeps the crossing object's +0x40..+0x42 here"
  }
 }

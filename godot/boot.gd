@@ -80,7 +80,7 @@ func _exec() -> void:
 			# GAME.EXE. The port's game is the level the tools build, so this
 			# is where the boot chain hands over to what the rest of the
 			# project already had.
-			get_tree().change_scene_to_file("res://world.tscn")
+			get_tree().change_scene_to_file(KFGame.scene_of(KFGame.current_level()))
 		END:
 			var l := Label.new()
 			l.text = "END.EXE is not ported. It plays \\OP\\M4.S, M5.S and M6.S."

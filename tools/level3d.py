@@ -1222,6 +1222,7 @@ SCENE = """[gd_scene load_steps={load_steps} format=3]
 [ext_resource type="Script" path="res://document.gd" id="28"]
 [ext_resource type="Script" path="res://info.gd" id="29"]
 [ext_resource type="Script" path="res://menu.gd" id="30"]
+[ext_resource type="Script" path="res://crossing.gd" id="31"]
 {gallery_res}
 
 [sub_resource type="Environment" id="Env"]
@@ -1276,6 +1277,9 @@ script = ExtResource("26")
 
 [node name="Info" type="Node" parent="."]
 script = ExtResource("29")
+
+[node name="Crossing" type="Node" parent="."]
+script = ExtResource("31")
 
 [node name="Scroll" type="Node" parent="."]
 script = ExtResource("17")
@@ -1483,9 +1487,12 @@ def project(lv, out="out/godot", start=(57, 4)):
     nodes = "\n".join(f'\n[node name="g{i}" parent="Gallery" '
                        f'instance=ExtResource("{100 + i}")]'
                        for i in range(len(pieces)))
-    open(f"{out}/world.tscn", "w").write(
-        SCENE.format(lv=lv, px=px, py=py, pz=pz, gallery_res=res,
-                     gallery_nodes=nodes, load_steps=23 + len(pieces)))
+    scene = SCENE.format(lv=lv, px=px, py=py, pz=pz, gallery_res=res,
+                         gallery_nodes=nodes, load_steps=24 + len(pieces))
+    # world.tscn is the level built last, which the project is named for;
+    # worldNN.tscn stays for each level built, for a crossing to load
+    open(f"{out}/world.tscn", "w").write(scene)
+    open(f"{out}/world{lv:02d}.tscn", "w").write(scene)
     # The boot chain: the shell, the opening and the pad, which is where the
     # project now starts. world.tscn is still the level and boot.gd hands over
     # to it the way SLUS_002.55 hands over to GAME.EXE.
@@ -1497,7 +1504,8 @@ def project(lv, out="out/godot", start=(57, 4)):
                  "damage.gd", "equip.gd", "objcoll.gd", "scroll.gd",
                  "doors.gd", "sky.gd", "hud.gd", "compass.gd", "ai.gd",
                  "weapon.gd", "anim.gd", "effects.gd", "held.gd",
-                 "loot.gd", "messages.gd", "document.gd", "talk.gd", "info.gd", "menu.gd"):
+                 "loot.gd", "messages.gd", "document.gd", "talk.gd", "info.gd", "menu.gd",
+                 "crossing.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening
@@ -1570,6 +1578,11 @@ def project(lv, out="out/godot", start=(57, 4)):
         ui.export(out)
     except Exception as e:
         print(f"menu pages skipped: {e}")
+    try:
+        import crossing
+        crossing.export(out, lv)
+    except Exception as e:
+        print(f"crossings skipped: {e}")
     try:
         import escript
         escript.export(out)

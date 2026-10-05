@@ -33,15 +33,18 @@ Also worth doing and cheap: the port shows a still where the game plays a
 movie. `tools/str.py` decodes any frame correctly but is pure Python, so
 playing one back wants either a faster decoder or a pre-rendered sequence.
 
-## 1. Cross-level teleport
+## 1. Cross-level teleport -- found, and in the port
 
-The loader is now known: `0x8005f444(level)`, fed from the pending byte at
-`0x8018fae4`, indexing a pointer table that `0x8005ee58` builds. What is not
-known is how to drive it from outside — writing the pending byte should do
-nothing on its own. Next step is to find what normally sets `0x8018fae4` and
-then calls the loader, which is the same trigger the placed transition objects
-pull. Until then, writing the four position copies only moves the player inside
-the level already loaded.
+The levels are pieces of one world and nothing marks a seam: an object of
+opcode 0xe0 names a rectangle of cells, `object_trigger` starts the change to
+its level block, and `level_load` shifts the world by the cells the placement
+record names (FORMATS.md, "Walking from one level into the next";
+`tools/crossing.py`, 2 of 2 crossings bp16 recorded). The port loads the other
+level's world (`worldNN.tscn`, for each level `tools/level3d.py` has built) and
+carries the player over (`godot/crossing.gd`); the comparison follows the game
+into it. Left: what the other bytes of the block (0, 2, 3, 4) choose, the
+level_state written for the level left, and the stairs (opcode 0xeb, which call
+`level_load` themselves).
 
 Still open underneath it: the per-level `FDAT.T` triples at `3n` are read by
 something we have not found, and a level change touches no archive at all, so

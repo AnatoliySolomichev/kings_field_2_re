@@ -3692,6 +3692,49 @@ Other callers of `0x80017c78`, for whenever the trigger objects are decoded:
 `0x80029244`, `0x800292a8`, `0x80029360`, `0x8004a3f4`, `0x8004a424`,
 `0x8004a54c`, `0x8004a858`, `0x8005c9b8`, `0x8005c9e8`, `0x8005cb80`.
 
+### Walking from one level into the next
+
+**The levels are pieces of one world, and the player walks from one into the
+next.** No teleport: an object of opcode **0xe0** (type 280, drawn as nothing)
+names a rectangle of cells -- its own cell, `+0x38` wide, `+0x39` deep -- and
+its arm in `object_interpreter` (`0x8004a7f8`) asks `player_in_rect` whether
+the player's cell is in it, and their y within the object's (above
+y - 0xc80, not below y + 0x800). If so, `object_trigger_args` calls
+`object_trigger(+0x3a..+0x3e, +0x40, +0x41, +0x42)`: a **level block** of five
+bytes -- the five at `0x8018fad8`, the level second, 0xff "as it is" -- and a
+**shift in cells**. `object_trigger` starts a change only when none is under
+way (`0x8018fad4`) and the block is not the one in hand: the pending block at
+`0x8018fae4`, the shift at `0x8018faed`, `level_load`'s state machine at 0.
+When `level_load` has the new grid it calls `world_shift(+0x40 * 2048,
+-(+0x42 * 128), +0x41 * 2048)` -- unless the first is 0x7f -- over the player,
+the effects, the objects and the creatures, so the player walks on where the
+new level has the same ground; the level is current a hundred frames later.
+
+**The shift is in the placement record.** `load_object_placement`'s arm for
+class 0xe0 (`0x80045668`) reads p[+0xa], p[+8] and p[+0xc] -- which put any
+other object somewhere inside its cell -- as the cell the player is to stand
+in on the other side: it takes them back off the position and keeps target
+minus own cell, or 0x7f when p[+0xa] is 0xff. Level 0's way into level 4 is
+its slot 173, cell 46 of its southern edge (z 70 to 79), block
+`[4, 4, 4, 13, 15]` and z -70: level 4's z 0..9 is level 0's 70..79. Level 4's
+way back is its slot 1 at cell 52, +70; its slot 5 leads to level 12, shifted
+(-36, +15). The crossings that would keep the level -- level 0's slot 120,
+level 4's slots 4 and 16 -- have no shift, and are what tells the port each
+level's own block.
+
+**Checked against bp16**, which walked from level 0 into level 4 and back:
+`tools/crossing.py` fires on frames 8105 and 13058, where the player steps
+into the rectangles, and the log's player jumps by -70 and +70 cells nine
+frames later each time -- the frames `level_load` spends on the disc -- and
+the model fires nowhere else; the one other jump in the log is a new
+character's start.
+
+**In the port**: `tools/level3d.py N` writes `worldNN.tscn` for each level it
+builds, beside the per-level data it always wrote; `godot/crossing.gd` runs the
+arm over `crossNN.json` and, on a change, loads the other level's world on the
+trigger's frame and puts the player down shifted, with what they carry. The
+comparison (C) follows the game into the other level's world when it is built.
+
 ### Identifying the loaded level (fallback)
 
 Walkability alone is useless — the levels whose grids carry no solid cells

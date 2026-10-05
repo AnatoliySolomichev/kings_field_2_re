@@ -80,6 +80,9 @@ var player: Node3D
 var marker: MeshInstance3D
 var flags: MeshInstance3D
 var compare := false
+# The switches, kept while the world of another level loads (static: the
+# scene and this node go, the class stays).
+static var kept = null
 var locked := true
 var rung := 2
 
@@ -113,6 +116,14 @@ var game_fps := 0.0
 
 func _ready() -> void:
 	player = get_node_or_null("../Player")
+	if kept is Array:                  # carried over from the level before
+		compare = bool(kept[0])
+		locked = bool(kept[1])
+		rung = int(kept[2])
+		live_input = bool(kept[3])
+		only_drawn = bool(kept[4])
+		KFPad.from_emulator = live_input
+		kept = null
 	marker = MeshInstance3D.new()
 	var caps := CapsuleMesh.new()
 	caps.radius = 0.4
@@ -124,6 +135,7 @@ func _ready() -> void:
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	marker.material_override = mat
 	marker.visible = false
+	marker.visible = compare
 	add_child(marker)
 
 	flags = MeshInstance3D.new()
@@ -307,8 +319,17 @@ func _process(_dt: float) -> void:
 		player._aim()
 
 	if int(cur["lv"]) != player._level():
-		_hud("the game is on level %d; this build has only level %d" % [
-			cur["lv"], player._level()])
+		# The game walked into another level: load its world too, when it is
+		# built, and go on comparing there
+		var scene := "res://world%02d.tscn" % int(cur["lv"])
+		if ResourceLoader.exists(scene):
+			KFGame.level = int(cur["lv"])
+			KFGame.block = []
+			kept = [compare, locked, rung, live_input, only_drawn]
+			get_tree().change_scene_to_file(scene)
+			return
+		_hud("the game is on level %d; level %d is not built (python3 tools/level3d.py %d)" % [
+			cur["lv"], cur["lv"], cur["lv"]])
 		return
 	_follow(cur)
 	if prev.is_empty() or int(cur["f"]) != int(prev["f"]) + 1:

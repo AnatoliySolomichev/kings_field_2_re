@@ -689,21 +689,22 @@ func _conversations() -> bool:
 		print("conversations: no cases to check against")
 		return true
 	var doc = JSON.parse_string(FileAccess.get_file_as_string("res://talkcheck.json"))
+	var lv := int(doc.get("level", 0))           # the level the cases were cut for
 	var n := 0
 	var bad := 0
 	var first := ""
 	for case in doc["cases"]:
 		var ent := int(case["entity"])
-		var sc := KFTalk.script_for(0, ent)
+		var sc := KFTalk.script_for(lv, ent)
 		if sc.is_empty():
 			continue
-		KFTalk.states.erase("0/%d" % ent)
+		KFTalk.states.erase("%d/%d" % [lv, ent])
 		KFTalk.flags.fill(0)
 		KFTalk.speaker = -1
 		var pattern: Array = case["pattern"]
 		var k := 0
 		for want in case["calls"]:
-			var c := KFTalk.begin(0, ent, sc, int(sc["kind"]))
+			var c := KFTalk.begin(lv, ent, sc, int(sc["kind"]))
 			var shown := []
 			while true:
 				var e := KFTalk.advance(c)
