@@ -722,6 +722,81 @@ def pedestal_check(out=sys.stdout, verbose=False):
     return bad == 0
 
 
+PEDESTAL_PUT_KEY = 0x8005C7E8
+
+
+def pedestal_game_runs(snap="silv1"):
+    """The game's own code for a key put on a pedestal, run by
+    tools/mipsrun.py over a level-4 snapshot taken before it, beside the
+    model: use_item's part (the lock the key, the state 0), the game's
+    pedestal_put_key, then the opcode-0x18 arm frame by frame -- with
+    object_use_state, vec_rotate and its MVMVA -- and last the key taken (its
+    type 0xff) for the reset. For pedestals 108 (a half turn), 192 (none) and
+    110 (a quarter): [(slot, frames alike, frames)]."""
+    import mipsrun
+    path = os.path.join(ROOT, "out", "snap", snap + ".ram")
+    if not os.path.exists(path):
+        return []
+    ram = open(path, "rb").read()
+    out = []
+    ot, stride = mipsrun.OBJECT_TABLE, mipsrun.OBJECT_STRIDE
+    for slot in (108, 192, 110):
+        cpu = mipsrun.object_cpu(ram)
+        rec = ot + stride * slot
+        if cpu.rd(rec + 0x38, 1) != 0xFF:
+            continue
+        raw = bytes(cpu.rd(rec + i, 1) for i in range(stride))
+        ped = {"slot": slot, "state": 0, "lock": SILVIERA_KEY,
+               "ring": 0xFF, "n": raw[0x40],
+               "pos": list(struct.unpack_from("<3i", raw, 0x14)),
+               "angles": list(struct.unpack_from("<3h", raw, 0x24)),
+               "b0": raw[0], "tail": list(raw[0x38:0x40])}
+        gslot = ped["tail"][3]
+        grec = ot + stride * gslot
+        gate = {"lock": cpu.rd(grec + 0x38, 1)}
+        cpu.wr(rec + 0x38, 1, SILVIERA_KEY)          # use_item: the lock, the state
+        cpu.wr(rec + 8, 2, 0)
+        cpu.call(PEDESTAL_PUT_KEY, rec, SILVIERA_KEY)
+        ring = cpu.rd(rec + 0x39, 1)
+        key = put_key(ped, SILVIERA_KEY, ring)
+        krec = ot + stride * (KEY_RING + ring)
+        alike = n = 0
+        for f in range(KEY_FRAMES + 4):
+            if f == KEY_FRAMES + 3:                   # the key taken back
+                cpu.wr(krec + 6, 2, NO_KEY)
+                key["type"] = NO_KEY
+            mipsrun.object_arm(cpu, slot)
+            pedestal_step(ped, key, gate)
+            game = (cpu.rd(rec + 8, 2), cpu.rd(rec + 0x38, 1), cpu.rd(rec + 0x40, 1),
+                    [mipsrun.s32(cpu.rd(krec + 0x14 + 4 * i, 4)) for i in range(3)],
+                    cpu.rd(krec + 4, 1), cpu.rd(krec + 0x38, 1), cpu.rd(krec + 0x40, 2),
+                    [cpu.rd(krec + 0x24 + 2 * i, 2) for i in range(3)],
+                    cpu.rd(grec + 0x38, 1))
+            model = (ped["state"], ped["lock"], ped["n"], key["pos"], key["op"],
+                     key["lock"], key["link"], [a & 0xFFFF for a in key["angles"]],
+                     gate["lock"])
+            n += 1
+            alike += game == model
+        out.append((slot, alike, n))
+    return out
+
+
+def pedestal_game_check(out=sys.stdout):
+    """pedestal_game_runs, counted."""
+    runs = pedestal_game_runs()
+    if not runs:
+        return True
+    alike = sum(r[1] for r in runs)
+    n = sum(r[2] for r in runs)
+    print(f"  {alike} of {n} frames of the game's own pedestal arm and object_use_state, "
+          f"run over silv1 by tools/mipsrun.py from its own pedestal_put_key, are "
+          f"pedestal_step's -- the pedestal's state, lock and count, the key's place, "
+          f"opcode, +0x38, +0x40 and angles, the gate's lock; pedestals "
+          f"{', '.join(str(r[0]) for r in runs)}, each to rest and then the key taken",
+          file=out)
+    return alike == n
+
+
 def check(out=sys.stdout, verbose=False):
     """The lid's path against every chest the snapshots caught after USE:
     one still moving has to be a frame of it, one at rest its end, and what
@@ -753,7 +828,8 @@ def check(out=sys.stdout, verbose=False):
     lying = check_drops(out, verbose)
     put = check_pedestal(out)
     held = pedestal_check(out, verbose)
-    return bad == 0 and lying and put and held
+    ran = pedestal_game_check(out)
+    return bad == 0 and lying and put and held and ran
 
 
 def check_drops(out=sys.stdout, verbose=False):

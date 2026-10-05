@@ -270,7 +270,7 @@ floor, not a score.
 |  | `game:0x80047444` object_interpreter+0x434 | transcribed |
 | [`_lift_clear`](godot/doors.gd#L345) | `game:0x80033f38` collide_query | verified |
 | [`_gate`](godot/doors.gd#L358) | — port's own, *helper*: hands gate_step the gateway test and stamp_rect, keeping the template laid | |
-| [`gate_step`](godot/doors.gd#L369) | `game:0x800475f8` object_interpreter+0x5e8 | transcribed |
+| [`gate_step`](godot/doors.gd#L369) | `game:0x800475f8` object_interpreter+0x5e8 | verified |
 | [`_gate_clear`](godot/doors.gd#L407) | `game:0x80033f38` collide_query | transcribed |
 | [`_draw_gate`](godot/doors.gd#L421) | `game:0x8003e34c` draw_model_plain | partial |
 | [`_stamp_table`](godot/doors.gd#L439) | `game:0x800443c8` stamp_table | transcribed |
@@ -450,8 +450,8 @@ The whole file is the port's own: **check** — labels for comparing the two win
 | [`key_test`](godot/loot.gd#L645) | `game:0x80046608` key_test | transcribed |
 | [`put_key`](godot/loot.gd#L677) | `game:0x8005d244` use_item+0x664 | transcribed |
 | [`_put_key`](godot/loot.gd#L706) | `game:0x8005c7e8` pedestal_put_key | verified |
-| [`pedestal_step`](godot/loot.gd#L747) | `game:0x8004aeb8` object_interpreter+0x3ea8 | transcribed |
-| [`use_state`](godot/loot.gd#L770) | `game:0x80046914` object_use_state | transcribed |
+| [`pedestal_step`](godot/loot.gd#L747) | `game:0x8004aeb8` object_interpreter+0x3ea8 | verified |
+| [`use_state`](godot/loot.gd#L770) | `game:0x80046914` object_use_state | verified |
 | [`_pedestal`](godot/loot.gd#L799) | — port's own, *helper*: a pedestal's frame: its key out of the rows, its gate out of doors.gd | |
 | [`_pedestal_target`](godot/loot.gd#L813) | — port's own, *helper*: the slot a pedestal's tail[3] names, from the pedestal's slot (a key's +0x40) | |
 | [`_gate_of`](godot/loot.gd#L823) | — port's own, *helper*: the object a pedestal serves, by slot | |
@@ -933,18 +933,18 @@ The whole file is the port's own: **check** — a model browser for naming thing
 | `game:0x80046294` spawn_gold | [`godot/loot.gd:247`](godot/loot.gd#L247) | `func spawn` | transcribed |
 | `game:0x80046608` key_test | [`godot/loot.gd:644`](godot/loot.gd#L644) | `func key_test` | transcribed |
 | `game:0x80046884` player_in_rect | [`godot/objects.gd:98`](godot/objects.gd#L98) | `func player_in_rect` | transcribed |
-| `game:0x80046914` object_use_state | [`godot/loot.gd:769`](godot/loot.gd#L769) | `func use_state` | transcribed |
+| `game:0x80046914` object_use_state | [`godot/loot.gd:769`](godot/loot.gd#L769) | `func use_state` | verified |
 | `game:0x80047010` object_interpreter | [`godot/objects.gd:113`](godot/objects.gd#L113) | `func tick` | partial |
 | `game:0x800470c4` object_interpreter+0xb4 | [`godot/doors.gd:307`](godot/doors.gd#L307) | `func lift_step` | verified |
 | `game:0x80047290` object_interpreter+0x280 | [`godot/doors.gd:308`](godot/doors.gd#L308) | `func lift_step` | transcribed |
 | `game:0x80047444` object_interpreter+0x434 | [`godot/doors.gd:309`](godot/doors.gd#L309) | `func lift_step` | transcribed |
-| `game:0x800475f8` object_interpreter+0x5e8 | [`godot/doors.gd:368`](godot/doors.gd#L368) | `func gate_step` | transcribed |
+| `game:0x800475f8` object_interpreter+0x5e8 | [`godot/doors.gd:368`](godot/doors.gd#L368) | `func gate_step` | verified |
 | `game:0x8004814c` object_interpreter+0x113c | [`godot/doors.gd:255`](godot/doors.gd#L255) | `func _step` | verified |
 | `game:0x80048790` object_interpreter+0x1780 | [`godot/loot.gd:413`](godot/loot.gd#L413) | `func lid_step` | verified |
 | `game:0x80048960` object_interpreter+0x1950 | [`godot/loot.gd:441`](godot/loot.gd#L441) | `func big_step` | transcribed |
 | `game:0x8004a7f8` object_interpreter+0x37e8 | [`godot/crossing.gd:75`](godot/crossing.gd#L75) | `func fire` | verified |
 | `game:0x8004a954` object_interpreter+0x3944 | [`godot/sky.gd:96`](godot/sky.gd#L96) | `func _process` | transcribed |
-| `game:0x8004aeb8` object_interpreter+0x3ea8 | [`godot/loot.gd:746`](godot/loot.gd#L746) | `func pedestal_step` | transcribed |
+| `game:0x8004aeb8` object_interpreter+0x3ea8 | [`godot/loot.gd:746`](godot/loot.gd#L746) | `func pedestal_step` | verified |
 | `game:0x8004b228` object_interpreter+0x4218 | [`godot/loot.gd:318`](godot/loot.gd#L318) | `func fall_step` | transcribed |
 | `game:0x8004b300` object_interpreter+0x42f0 | [`godot/loot.gd:319`](godot/loot.gd#L319) | `func fall_step` | transcribed |
 | `game:0x8004b388` object_interpreter+0x4378 | [`godot/loot.gd:320`](godot/loot.gd#L320) | `func fall_step` | transcribed |

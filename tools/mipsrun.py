@@ -22,8 +22,16 @@ which `tools/gpuframe.py` reads back. `frame()` does that. The menu snapshots
 check the machine: their own frames, drawn again from the state they hold,
 must come out primitive for primitive.
 
-Not modelled: the load delay slot (the compiler never leans on it), the GTE,
-interrupts, exceptions. A routine that needs one stops with the reason.
+The GTE is there as far as the object code needs it: its registers, the
+moves to and from them and MVMVA, the matrix times a vector the library's
+ApplyMatrix and its kin are; any other command stops. `object_arm()` runs one
+object's arm of `object_interpreter` -- the registers the loop sets up for it,
+until the loop's continue -- so a door's or a pedestal's frames can be had
+from the game itself, over a snapshot.
+
+Not modelled: the load delay slot (the compiler never leans on it), the GTE's
+other commands and its flag register, interrupts, exceptions. A routine that
+needs one stops with the reason.
 """
 import os
 import struct
@@ -64,6 +72,8 @@ class CPU:
         self.io_writes = 0
         self.r[28] = GP
         self.r[29] = STACK
+        self.gd = [0] * 32         # the GTE's data registers
+        self.gc = [0] * 32         # and its control registers
 
     # -- memory --------------------------------------------------------------
 
@@ -257,7 +267,7 @@ class CPU:
         elif op == 16:
             pass                                    # COP0: interrupts aside
         elif op == 18:
-            raise Stop(f"the GTE at {pc:#x}")
+            self.cop2(w, pc, setr)
         elif op >= 0x20:
             a = (r[rs] + simm) & 0xFFFFFFFF
             if op == 0x20:
@@ -300,13 +310,157 @@ class CPU:
                 word = self.rd(al, 4)
                 keep = 0 if k == 0 else (0xFFFFFFFF >> (8 * (4 - k)))
                 self.wr(al, 4, (word & keep) | ((r[rt] << (8 * k)) & 0xFFFFFFFF))
-            elif op in (0x32, 0x3A):
-                raise Stop(f"the GTE's memory at {pc:#x}")
+            elif op == 0x32:                        # lwc2
+                self.gte_write(rt, self.rd(a, 4))
+            elif op == 0x3A:                        # swc2
+                self.wr(a, 4, self.gte_read(rt))
             else:
                 raise Stop(f"opcode {op:#x} at {pc:#x}")
         else:
             raise Stop(f"opcode {op:#x} at {pc:#x}")
         return None
+
+
+def _s16(v):
+    v &= 0xFFFF
+    return v - 0x10000 if v & 0x8000 else v
+
+
+def _gte_read(self, i):
+    """mfc2 and swc2: a data register as the GTE hands it out -- the vector
+    z's and IR0..IR3 sign-extended, OTZ and the SZs not, SXYP as SXY2."""
+    d = self.gd
+    if i in (1, 3, 5, 8, 9, 10, 11):
+        return d[i] & 0xFFFF | (0xFFFF0000 if d[i] & 0x8000 else 0)
+    if i in (7, 16, 17, 18, 19):
+        return d[i] & 0xFFFF
+    if i == 15:
+        return d[14]
+    if i in (28, 29):
+        c = [max(0, min(0x1F, _s16(d[k]) >> 7)) for k in (9, 10, 11)]
+        return c[0] | c[1] << 5 | c[2] << 10
+    return d[i] & 0xFFFFFFFF
+
+
+def _gte_write(self, i, v):
+    """mtc2 and lwc2."""
+    d = self.gd
+    v &= 0xFFFFFFFF
+    if i == 15:                                  # SXYP pushes the screen FIFO
+        d[12], d[13], d[14], d[15] = d[13], d[14], v, v
+    elif i == 28:                                # IRGB sets IR1..IR3
+        d[28] = v & 0x7FFF
+        d[9], d[10], d[11] = (v & 0x1F) << 7, ((v >> 5) & 0x1F) << 7, ((v >> 10) & 0x1F) << 7
+    elif i == 30:                                # LZCS: LZCR counts its leading bits
+        d[30] = v
+        x = v if not v & 0x80000000 else ~v & 0xFFFFFFFF
+        n = 0
+        while n < 32 and not x & (0x80000000 >> n):
+            n += 1
+        d[31] = n
+    elif i != 31:
+        d[i] = v
+
+
+def _cop2(self, w, pc, setr):
+    """A COP2 instruction: the moves, or a command (bit 25)."""
+    rs, rt, rd = (w >> 21) & 31, (w >> 16) & 31, (w >> 11) & 31
+    if w & (1 << 25):
+        cmd = w & 0x3F
+        if cmd == 0x12:
+            self.mvmva(w)
+            return
+        raise Stop(f"GTE command {cmd:#x} at {pc:#x}")
+    if rs == 0:
+        setr(rt, self.gte_read(rd))
+    elif rs == 2:
+        v = self.gc[rd]
+        if rd in (4, 12, 20, 26, 27, 29, 30):
+            v = _s16(v) & 0xFFFFFFFF
+        setr(rt, v)
+    elif rs == 4:
+        self.gte_write(rd, self.r[rt])
+    elif rs == 6:
+        self.gc[rd] = self.r[rt] & 0xFFFFFFFF
+    else:
+        raise Stop(f"COP2 {rs:#x} at {pc:#x}")
+
+
+def _mvmva(self, w):
+    """MVMVA: MAC = (translation << 12 + matrix x vector) >> (sf * 12), IR
+    the MAC saturated (to 0 under lm). The matrix: rotation, light or
+    colour; the vector V0..V2 or IR; the translation TR, BK, FC or none."""
+    sf = 12 if w & (1 << 19) else 0
+    mx, vv, cv = (w >> 17) & 3, (w >> 15) & 3, (w >> 13) & 3
+    lm = w & (1 << 10)
+    c, d = self.gc, self.gd
+    if mx == 3:
+        raise Stop("MVMVA with the garbage matrix")
+    base = (0, 8, 16)[mx]
+    m = []
+    for k in range(5):
+        word = c[base + k]
+        m += [_s16(word), _s16(word >> 16)]
+    m = m[:9]
+    if vv == 3:
+        v = [_s16(d[9]), _s16(d[10]), _s16(d[11])]
+    else:
+        v = [_s16(d[2 * vv]), _s16(d[2 * vv] >> 16), _s16(d[2 * vv + 1])]
+    t = [0, 0, 0]
+    if cv != 3:
+        tb = (5, 13, 21)[cv]
+        t = [s32(c[tb + k]) for k in range(3)]
+    for i in range(3):
+        mac = ((t[i] << 12) + m[3 * i] * v[0] + m[3 * i + 1] * v[1] + m[3 * i + 2] * v[2]) >> sf
+        d[25 + i] = mac & 0xFFFFFFFF
+        d[9 + i] = max(0 if lm else -0x8000, min(0x7FFF, mac)) & 0xFFFF
+
+
+CPU.gte_read = _gte_read
+CPU.gte_write = _gte_write
+CPU.cop2 = _cop2
+CPU.mvmva = _mvmva
+
+
+OBJECT_INTERPRETER = 0x80047010
+OBJECT_OP_TABLE = 0x8001209C
+OBJECT_TABLE = 0x80191A5C
+OBJECT_TYPES = 0x8018FB3C
+OBJECT_STRIDE = 0x44
+OBJECT_CONTINUE = (0x8004B4D0, 0x8004B4D4)     # .L335 and .L336: the loop's next slot
+CURRENT_OBJECT, CURRENT_TYPE = 0x80198394, 0x80198390
+OBJECT_SOUND = 0x8004482C
+
+
+def object_arm(cpu, slot, limit=2_000_000):
+    """One slot's turn in object_interpreter (0x80047010): $s5 the record,
+    $s2 the record + 8, $s3 its type row, $s7 1, the two current_ words
+    written, and its opcode's arm run until it reaches the loop's continue.
+    The frame is object_interpreter's own 0x120 bytes, under STACK."""
+    rec = OBJECT_TABLE + OBJECT_STRIDE * slot
+    op = cpu.rd(rec + 4, 1)
+    typ = cpu.rd(rec + 6, 2)
+    row = OBJECT_TYPES + 24 * typ
+    cpu.wr(CURRENT_OBJECT, 4, rec)
+    cpu.wr(CURRENT_TYPE, 4, row)
+    r = cpu.r
+    r[21], r[18], r[19], r[23] = rec, rec + 8, row, 1
+    r[29] = STACK - 0x120
+    cpu.wr(r[29] + 0xC8, 4, 0x18C)
+    cpu.pc = cpu.rd(OBJECT_OP_TABLE + 4 * op, 4)
+    n0 = cpu.steps
+    while cpu.pc not in OBJECT_CONTINUE:
+        if cpu.steps - n0 > limit:
+            raise Stop(f"more than {limit} steps in slot {slot}'s arm")
+        cpu.step()
+    r[29] = STACK
+
+
+def object_cpu(ram):
+    """A machine over `ram` for object_arm: object_sound is silent."""
+    cpu = CPU(ram)
+    cpu.hooks[OBJECT_SOUND] = lambda c: 0
+    return cpu
 
 
 def clear_otag_r(cpu):

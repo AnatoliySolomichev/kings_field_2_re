@@ -365,7 +365,7 @@ func _gate(d: Dictionary) -> void:
 # One frame of the gate's arm (0x800475f8) on d's state, counter and lock;
 # `clear` answers collide_query about the gateway, `stamp(k)` lays the
 # template k gate-widths along down. tools/doors.py gate_step.
-# @orig game:0x800475f8 object_interpreter+0x5e8  status:transcribed -- opcode 2's arm, as tools/doors.py gate_step; no recording of a gate yet
+# @orig game:0x800475f8 object_interpreter+0x5e8  status:verified -- 520 of 520 frames of the game's own arm, run over silv1 by tools/mipsrun.py (four gates: three turns and a lock that opens itself; the doorway test scripted), as tools/doors.py gate_step; no recording of a gate yet
 static func gate_step(d: Dictionary, clear: Callable, stamp: Callable) -> void:
 	var st := int(d["state"])
 	var auto := (((int(d["lock"]) + 0x6A) & 0xFF) < 0x31) and (int(d["lock"]) & 1) != 0

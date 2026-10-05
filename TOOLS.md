@@ -857,6 +857,15 @@ taking it over. `--check` draws `menu1`'s main page again from the snapshot
 and holds it to the frame the snapshot carries. The menus' self-test cases
 for screens nobody has a snapshot of come from it (`tools/ui.py export`).
 
+It has as much of the GTE as the object code asks for -- the registers, the
+moves and MVMVA, which `ApplyMatrixLV` and so `vec_rotate` are -- and
+`object_arm(cpu, slot)` runs one object's arm of `object_interpreter`, the
+registers its loop sets up, to the loop's continue; `cpu.hooks[addr] = fn`
+answers for a routine (`collide_query`, say) from a script. That is how the
+gates and the pedestals are held to the game without a recording:
+`tools/doors.py gate_game_check` and `tools/chests.py pedestal_game_check`
+run their arms over `silv1` a frame at a time beside the models.
+
 ```
 python3 tools/mipsrun.py --check
 ```

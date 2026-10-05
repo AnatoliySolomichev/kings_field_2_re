@@ -683,9 +683,118 @@ def gate_check(out=sys.stdout, verbose=False):
     return bad == 0
 
 
+COLLIDE_QUERY = 0x80033F38
+LEVEL_GRID = 0x801D4464
+
+
+def gate_game_runs(snap="silv1"):
+    """The game's own opcode-2 arm, run by tools/mipsrun.py over a level-4
+    snapshot, beside gate_step: for gates of each turn -- 96 (none), 113
+    (a quarter, type 0xb0), 91 (a half) -- opened as USE opens them, the
+    doorway held by collide_query for some frames and then clear; and one
+    whose lock is set to 0x97, which opens of itself and stays. The doorway
+    test is scripted (a hook on collide_query, its arguments kept), so what
+    is compared is the machine and its stamps: [(what, frames alike, frames,
+    the collide_query calls as (x, y, z, radius, height, flags))]."""
+    import mipsrun
+    import objload
+    path = os.path.join(ROOT, "out", "snap", snap + ".ram")
+    if not os.path.exists(path):
+        return []
+    ram = open(path, "rb").read()
+    out = []
+    for slot, held, lock in ((96, 0, None), (113, 6, None), (91, 3, None), (51, 0, 0x97)):
+        cpu = mipsrun.object_cpu(ram)
+        rec = mipsrun.OBJECT_TABLE + mipsrun.OBJECT_STRIDE * slot
+        calls, left = [], [held]
+
+        def query(c, calls=calls, left=left):
+            sp = c.r[29]
+            calls.append((mipsrun.s32(c.r[4]), mipsrun.s32(c.r[5]), mipsrun.s32(c.r[6]),
+                          c.r[7], c.rd(sp + 0x10, 4), c.rd(sp + 0x14, 4)))
+            if left[0] > 0:
+                left[0] -= 1
+                return 0x40
+            return 0
+        cpu.hooks[COLLIDE_QUERY] = query
+        ld = objload.Load(4)
+        ld.grid = bytearray(cpu.ram[LEVEL_GRID & 0x1FFFFF:(LEVEL_GRID & 0x1FFFFF) + 64000])
+        o = ld.recs[slot]
+        tr = ld.rows[o["type"]]
+        t = o["tail"]
+        cells = doorway(ld, o)
+        d = {"state": 1, "counter": 0, "lock": cpu.rd(rec + 0x38, 1)}
+        if lock is None:
+            cpu.wr(rec + 8, 2, 1)                     # object_interact's USE
+        else:
+            cpu.wr(rec + 0x38, 1, lock)
+            d = {"state": 0, "counter": 0, "lock": lock}
+        mheld = [held]
+
+        def clear(mheld=mheld):
+            if mheld[0] > 0:
+                mheld[0] -= 1
+                return False
+            return True
+
+        def stamp(k, ld=ld, o=o, t=t, tr=tr):
+            ld.stamp_rect(o["b0"], t[3] + k * tr[0xD], t[4], t[1], t[2], tr[0xD], tr[0xE],
+                          o["angles"][1], MASK)
+
+        def game_cells(cpu=cpu, cells=cells):
+            out = []
+            for x, z in cells:
+                a = LEVEL_GRID + z * 800 + x * 10
+                out.append(cpu.rd(a + 8, 1) + (FENCE if cpu.rd(a + 9, 1) & 0x40 else 0))
+            return tuple(out)
+
+        def model_cells(ld=ld, cells=cells):
+            return tuple(ld.grid[ld.cell(x, z) + 8]
+                         + (FENCE if ld.grid[ld.cell(x, z) + 9] & 0x40 else 0) for x, z in cells)
+        alike = n = 0
+        for _f in range(130):
+            mipsrun.object_arm(cpu, slot)
+            gate_step(d, clear, stamp)
+            game = (cpu.rd(rec + 8, 2), cpu.rd(rec + 0xA, 2), game_cells())
+            model = (d["state"], d["counter"], model_cells())
+            n += 1
+            alike += game == model
+            if game[0] == 0 and model[0] == 0 and _f > 2:
+                break
+        what = f"gate {slot}" + (f", lock {lock:#x}" if lock is not None else
+                                 f", held {held} frames")
+        out.append((what, alike, n, calls))
+    return out
+
+
+def gate_game_check(out=sys.stdout):
+    """gate_game_runs, counted; and every doorway test the arm made asks
+    collide_query of the gate's own place at 0x1130, 0xc80 and 0xc0."""
+    runs = gate_game_runs()
+    if not runs:
+        return True
+    import objload
+    ld = objload.Load(4)
+    alike = sum(r[1] for r in runs)
+    n = sum(r[2] for r in runs)
+    args = bad_args = 0
+    for what, _a, _n, calls in runs:
+        slot = int(what.split()[1].rstrip(","))
+        o = ld.recs[slot]
+        for c in calls:
+            args += 1
+            bad_args += c != (o["x"], o["y"], o["z"], GATE_CLEAR, LIFT_CLEAR[1], 0xC0)
+    print(f"  {alike} of {n} frames of the game's own gate arm, run over silv1 by "
+          f"tools/mipsrun.py, are gate_step's -- state, counter and the doorway's shapes "
+          f"and fence ({', '.join(r[0] for r in runs)}); {args - bad_args} of {args} "
+          f"doorway tests ask collide_query(the gate, 0x1130, 0xc80, 0xc0)", file=out)
+    return alike == n and bad_args == 0
+
+
 if __name__ == "__main__":
     v = "--check" not in sys.argv
     a = check(verbose=v)
     b = lift_check(verbose=v)
     c = gate_check(verbose=v)
-    sys.exit(0 if a and b and c else 1)
+    g = gate_game_check()
+    sys.exit(0 if a and b and c and g else 1)

@@ -52,7 +52,7 @@ def run(args, why, out=sys.stdout, keep=None):
     head = f"  {why}"
     if shown:
         print(f"{head}: {shown[0].strip()}", file=out)
-        for line in shown[1:4]:
+        for line in shown[1:7]:
             print(f"      {line.strip()}", file=out)
     else:
         print(f"{head}: done in {time.time() - t:.1f}s", file=out)
@@ -142,7 +142,7 @@ def main(quick=False, only_check=False):
         "the swinging and the lift doors and the gates, against what was played",
         keep=["steps of a moving door", "steps of a lift door", "more at 0x14",
               "held by a creature", "doorway answers", "no out/lua_bp27",
-              "steps of a gate", "no gate lines"])
+              "steps of a gate", "no gate lines", "game's own gate arm"])
     run(["tools/crossing.py", "--check"],
         "the crossings between levels, against what was played",
         keep=["crossings the model makes"])
@@ -157,7 +157,8 @@ def main(quick=False, only_check=False):
         keep=["recorded conversations", "calls bp21 caught"])
     run(["tools/chests.py", "--check"],
         "the chests' lids, the drops and the pedestals, against every snapshot",
-        keep=["opened lids", "things lying", "Silviera's key", "pedestal lines"])
+        keep=["opened lids", "things lying", "Silviera's key", "pedestal lines",
+              "game's own pedestal arm"])
     run(["tools/weapon.py", "--check"],
         "the creatures' HP and the player's weapon, against snapshots and bp25",
         keep=["awake creatures", "frames of the weapon", "blows landed"])

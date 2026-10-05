@@ -2688,8 +2688,20 @@ with the lifts, and the stamps go into the collision cells and the fence
 (`_stamp`, the swinging doors' too). `tools/doors.py gate_step` is the arm in
 Python, and `godot/selftest.gd` holds the port to it over three runs -- a gate
 let drop at once, one held nine frames (lock `0xfe`), one that opened itself
-(`0x97`) and stays: 360 of 360 frames. **No recording of a gate yet**: a bp27
-session on level 4 opening gate 96 (cell (38,23)) would check it.
+(`0x97`) and stays: 360 of 360 frames.
+
+**Checked against the game's own code.** `tools/mipsrun.py` runs the arm
+itself over `silv1`'s RAM, a frame at a time, with `collide_query` answering
+from a script (its arguments kept): gates 96, 113 (a quarter turn, type
+`0xb0`) and 91 (a half) opened by USE and held 0, 6 and 3 frames, and gate 51
+with its lock set to `0x97` -- **520 of 520** frames are `gate_step`'s, state,
+counter and the doorway's shapes and fence as the game's `stamp_rect` left
+them in its grid, and **12 of 12** doorway tests ask
+`collide_query(the gate, 0x1130, 0xc80, 0xc0)` (`tools/doors.py
+gate_game_check`). Left for a recording: who holds a doorway in play -- in
+`silv1` a creature of model 53 within its radius plus `0x1130` of gate 96
+would -- and the sound; a bp27 session on level 4 opening gate 96 (cell
+(38,23)) would show both.
 
 ### Chests, and picking things up
 
@@ -2843,7 +2855,13 @@ So the key comes down from 0x600 above and 0x190 in front of the pedestal to
 pedestal's x and z and 0x500 above, its angles the pedestal's and its scale
 0x1000, its `+0`, `+1` and opcode, its `+0x38` 0xff, and gate 91's lock from
 `0xfc` to `0xfe` -- **13 of 13** of the claims together
-(`tools/chests.py check_pedestal`). The key's own opcode, `0x70`, is one the
+(`tools/chests.py check_pedestal`). And the frames between: `tools/mipsrun.py`
+runs the game's own `pedestal_put_key` and then the arm, with
+`object_use_state`, `vec_rotate` and its GTE matrix, over `silv1` for
+pedestals 108, 192 and 110 (a half, no and a quarter turn), each to rest and
+then with the key taken -- **72 of 72** frames are `pedestal_step`'s: the
+pedestal's state, lock and count, the key's place, opcode, `+0x38`, `+0x40`
+and angles, and the gate's lock (`tools/chests.py pedestal_game_check`). The key's own opcode, `0x70`, is one the
 executable hands to `level_hooks + 0x24` -- level 4's is `jr $ra`, so the key
 just stands there.
 

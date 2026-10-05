@@ -743,7 +743,7 @@ func _put_key(pd: Dictionary, item: int) -> void:
 # its mask (tail[5], or tail[2] when that is 0xff); then object_use_state,
 # and on the frame the key comes to rest the gate's lock takes tail[2]. True
 # on that frame. tools/chests.py pedestal_step.
-# @orig game:0x8004aeb8 object_interpreter+0x3ea8  status:transcribed -- opcode 0x18's arm, as tools/chests.py pedestal_step, whose end silv2 holds; not the type-0x86 key's view on level 23 (gp+0x10e)
+# @orig game:0x8004aeb8 object_interpreter+0x3ea8  status:verified -- 72 of 72 frames of the game's own arm, run over silv1 by tools/mipsrun.py (three pedestals, to rest and the key taken), as tools/chests.py pedestal_step, whose end silv2 holds; not the type-0x86 key's view on level 23 (gp+0x10e)
 static func pedestal_step(p: Dictionary, key, gate: Dictionary, c: KFCollision) -> bool:
 	var t: Array = p["tail"]
 	if int(p["state"]) != 0 and key != null and int(key["type"]) == GONE:
@@ -766,7 +766,7 @@ static func pedestal_step(p: Dictionary, key, gate: Dictionary, c: KFCollision) 
 # fixed_madd from KEY_START to KEY_END, both turned by the pedestal's angles,
 # count / 20 of the way. At 20 the key's +0x38 is 0xff, free to take, the
 # state 0x63, and the answer true.
-# @orig game:0x80046914 object_use_state  status:transcribed -- with the pedestal's arguments, as tools/chests.py use_state; the end it comes to is silv2's; not the sound (0x12)
+# @orig game:0x80046914 object_use_state  status:verified -- with the pedestal's arguments: the same 72 frames of the game's own code, and silv2's end; not the sound (0x12)
 static func use_state(p: Dictionary, key: Dictionary, c: KFCollision) -> bool:
 	if int(p["state"]) == 0:
 		if int(p["lock"]) == FREE:

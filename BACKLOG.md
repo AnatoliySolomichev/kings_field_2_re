@@ -533,7 +533,8 @@ Eating heals. Left, roughly in order:
   they now do). So is Silviera's key (`0x8005d244`) with level 4's
   pedestals (opcode 0x18, `object_use_state`) and the key they hold, which
   opens their gates (FORMATS.md, "Keys"): `silv1` to `silv2` replayed, 13 of
-  13 -- its twenty frames transcribed; bp27 now logs the pedestals (P lines)
+  13, and the twenty frames between against the game's own code run over
+  silv1 (`tools/mipsrun.py`), 72 of 72; bp27 now logs the pedestals (P lines)
   for a session that puts the key down and takes it back. Orladin's key
   (`0x8005d300`, the pedestals of type 0x102, opcode 0x1a, of levels 14, 16
   and 17, and the type-0xa2 locks), the flask, the truth glass, Ichrius'
@@ -608,10 +609,11 @@ it would open:
   doorway down from three templates (open, moving, shut) and the fence bit
   with them; USE opens a lock of 0xff (0xfd, 0xfe but for type 0xae), a lock
   odd and in 0x96..0xc6 opens of itself for good. `godot/doors.gd` holds to
-  `tools/doors.py gate_step`, 360 of 360 frames -- transcribed: no recording
-  has a gate in it. A bp27 session on level 4 opening gate 96 (cell (38,23))
-  would check it. The pedestals that set the other gates' locks (opcode
-  0x18) are in too (5a', the keys).
+  `tools/doors.py gate_step`, 360 of 360 frames, and gate_step to the game's
+  own arm run over silv1 by `tools/mipsrun.py`, 520 of 520 -- no recording has
+  a gate in it yet: a bp27 session on level 4 opening gate 96 (cell (38,23))
+  would show who holds a doorway in play. The pedestals that set the other
+  gates' locks (opcode 0x18) are in too (5a', the keys).
 * **the lift doors, classes 0x03 to 0x05 -- read and in the port** (FORMATS.md,
   "A door that lifts"): five on level 0 and one on level 8, all six in the game
   as `tools/objload.py` reads the twelve levels. Shut, each is a stretch of
