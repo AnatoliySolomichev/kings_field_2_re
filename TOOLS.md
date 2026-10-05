@@ -686,9 +686,15 @@ the banners' page (`msgpage.png`) and records (`messages.json`).
 
 ```
 python3 tools/chests.py             the lid's path against every opened lid in the snapshots,
-                                    and the drops lying in them against the falls
+                                    the drops lying in them against the falls, Silviera's
+                                    key on a pedestal (silv1 -> silv2, bp27's P lines)
 python3 tools/chests.py --check     the counts alone
 ```
+
+The pedestals of level 4 are here too (`put_key`, `pedestal_step`,
+`use_state`): Silviera's key put down, its twenty frames onto the pedestal and
+the gate's lock taking the mask; `godot/loot.gd` the same, with `find_object`
+over every object `lootNN.json`'s `find` rows place.
 
 `readables.py` also composes the page `load_entry` shows for a sign
 (`read/N.png`, ITEM.T 0x96 + N) and models its fade, for `godot/document.gd`,

@@ -2813,7 +2813,57 @@ side of the key used at level 4's pedestal in cell (33,23) (slot 108), hold
 free and then of type 141 at the pedestal's x and z, standing on it, its
 `+0x40` the pedestal's slot and the pedestal's `+0x39` 0 (`tools/chests.py`).
 By then the pedestal's own opcode (`0x18`) has its state at 99 and the key's
-(`0x70`) its lock at `0xff`; neither arm is read.
+(`0x70`) its lock at `0xff`.
+
+**The pedestal's arm** (`0x8004aeb8`) does the rest, once a frame. A pedestal
+not at state 0 whose key -- the object in slot 380 + its `+0x39` -- has the
+type `0xff`, taken, goes back to state 0 with its lock `0xff`, and the object
+its `+0x3b` names loses the pedestal's mask (`+0x3d`, or `+0x3a` when that is
+`0xff`). Then **`object_use_state`** (`0x80046914`), with the two vectors at
+`0x8009c318` and `0x8009c320`, 0 and 20:
+
+```
+state 0, lock not 0xff   init_object_record on the key, then its opcode 0x70,
+                         its +0 the pedestal's, +1 0x80, +0x40 the pedestal's
+                         slot, its yaw the pedestal's; the count (+0x40) 19 if
+                         the key's +0x38 is not 0, else 0; state 1 -- and on
+state 1                  the count + 1; the key at the pedestal plus
+                         fixed_madd((0, -0x600, 0x190), (0, -0x500, 0),
+                         count * 0x1000 / 20), both turned by the pedestal's
+                         angles; at 20 a sound (0x12), the key's +0x38 0xff,
+                         state 0x63, and 1
+```
+
+-- and on that 1 the arm ORs the pedestal's mask (`+0x3a`) into the lock of
+the object `+0x3b` names: a gate (opcode 2, "A gate"), which USE then opens.
+So the key comes down from 0x600 above and 0x190 in front of the pedestal to
+0x500 above it in twenty frames, and the gate is open to USE from the last.
+**Checked**: replayed from `silv1`'s pedestal and gate, the model ends where
+`silv2` has them -- the pedestal at 0x63 with its count at 20, the key at the
+pedestal's x and z and 0x500 above, its angles the pedestal's and its scale
+0x1000, its `+0`, `+1` and opcode, its `+0x38` 0xff, and gate 91's lock from
+`0xfc` to `0xfe` -- **13 of 13** of the claims together
+(`tools/chests.py check_pedestal`). The key's own opcode, `0x70`, is one the
+executable hands to `level_hooks + 0x24` -- level 4's is `jr $ra`, so the key
+just stands there.
+
+Being of class `0x40`, the key can be **taken back**: `object_give`'s `.L3`
+sees a key of type `0x86`, `0x8d` or `0x88` with opcode `0x70`, finds its
+pedestal at its `+0x40` and the object the pedestal serves, and refuses while
+that is a gate (opcode 2) not at state 0; otherwise it flies to the eye as
+anything else, and the pedestal's arm, finding the type `0xff`, takes the
+mask out of the gate's lock again. Level 4 has seven pedestals: 63 → gate 51
+(mask 3), 86 → 75 (2), 108 → 91 (2), 192 → 91 (1), 110 → 92 (3), 116 → 115
+(3), 119 → 120 (3); gate 91 has two, and either opens it. Level 23's two
+pairs serve gates of type `0xae`, which want both.
+
+Silviera's key asks `find_object` for **the first object** in front, whatever
+it is -- a gate within reach and lower in the table than the pedestal gets
+"Wrong key!" -- so the port exports every object's place, class, reach
+and top (`lootNN.json`'s `find`) and asks the same question of them
+(`godot/loot.gd find_object`). A plain fit on anything but a pedestal is no
+answer here: the shared arm's sound and flag are not in this one, and the menu
+says "Nothing Happens".
 
 `python3 tools/chests.py --keys` lists every lock on the disc a key is asked
 about: 169 of them on 23 levels. Level 0 has seven -- slot 9 the copper key,

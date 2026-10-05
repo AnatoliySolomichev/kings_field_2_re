@@ -530,12 +530,15 @@ Eating heals. Left, roughly in order:
   used yet -- a bp session using the copper key on level 0's slot 9 would
   check it); so are verdite, the fruits and the crystals, with
   `skill_unlock` (FORMATS.md, "Four of the five skills never grow" -- which
-  they now do). Orladin's key (`0x8005d300`, the pedestals of type 0x102 and
-  the type-0xa2 locks), Silviera's (`0x8005d244`, read and held to the
-  snapshots silv1 and silv2, 7 of 7 -- but its pedestals, opcode 0x18, and
-  the key it stands there, opcode 0x70, are level 4's and not read),
-  the flask, the truth glass, Ichrius' things and the spell books are not,
-  nor the level's entry 2 (level 0's is empty);
+  they now do). So is Silviera's key (`0x8005d244`) with level 4's
+  pedestals (opcode 0x18, `object_use_state`) and the key they hold, which
+  opens their gates (FORMATS.md, "Keys"): `silv1` to `silv2` replayed, 13 of
+  13 -- its twenty frames transcribed; bp27 now logs the pedestals (P lines)
+  for a session that puts the key down and takes it back. Orladin's key
+  (`0x8005d300`, the pedestals of type 0x102, opcode 0x1a, of levels 14, 16
+  and 17, and the type-0xa2 locks), the flask, the truth glass, Ichrius'
+  things and the spell books are not, nor the level's entry 2 (level 0's is
+  empty, level 4's answers item 0x7b alone);
 * the chosen thing's model turning in "use item" (`0x80025be8`), the guide
   (triangle: the thing's description), the maps and notes (95..100);
 * "equipment" is in (FORMATS.md, "The equipment screen") but for its MAGIC
@@ -607,8 +610,8 @@ it would open:
   odd and in 0x96..0xc6 opens of itself for good. `godot/doors.gd` holds to
   `tools/doors.py gate_step`, 360 of 360 frames -- transcribed: no recording
   has a gate in it. A bp27 session on level 4 opening gate 96 (cell (38,23))
-  would check it; the pedestals that set the other gates' locks (opcode
-  0x18) are next.
+  would check it. The pedestals that set the other gates' locks (opcode
+  0x18) are in too (5a', the keys).
 * **the lift doors, classes 0x03 to 0x05 -- read and in the port** (FORMATS.md,
   "A door that lifts"): five on level 0 and one on level 8, all six in the game
   as `tools/objload.py` reads the twelve levels. Shut, each is a stretch of

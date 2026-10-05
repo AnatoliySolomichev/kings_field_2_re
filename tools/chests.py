@@ -484,6 +484,80 @@ def key_cases():
 
 SILVIERA_KEY, PEDESTAL = 141, 0x101
 KEY_RING, KEY_RING_SIZE = 380, 16       # pedestal_put_key's find_free_slot(0x17c, 0x10)
+KEY_START, KEY_END = (0, -0x600, 0x190), (0, -0x500, 0)   # 0x8009c318, 0x8009c320
+KEY_FRAMES = 20                         # the arm's last argument to object_use_state
+KEY_OP, AT_REST, NO_KEY = 0x70, 0x63, 0xFF
+
+
+def put_key(p, item, ring):
+    """use_item's arm for Silviera's key (0x8005d244) on a type-0x101
+    pedestal whose lock is 0xff, and pedestal_put_key (0x8005c7e8): the lock
+    the key's number, the state 0, and the object in slot 380 + ring the
+    key's type with +0x38 0 -- returned, as pedestal_step takes it."""
+    p["lock"], p["state"], p["ring"] = item, 0, ring
+    return {"type": item, "op": 0xFF, "lock": 0, "pos": [0, 0, 0],
+            "angles": [0, 0, 0], "b0": 0, "b1": 0x80, "link": 0}
+
+
+def use_state(p, key):
+    """object_use_state (0x80046914) as opcode 0x18's arm calls it, with
+    (0x8009c318, 0x8009c320, 0, 20). At state 0 with a lock other than 0xff
+    the key is set up -- init_object_record, opcode 0x70, the pedestal's +0,
+    +1 0x80, the pedestal's slot at its +0x40 and its yaw at +0x26 -- the
+    count (+0x40) 19 if the key's +0x38 is not 0, else 0, and state 1; and
+    in the same call, as at state 1, the count goes up and the key stands at
+    the pedestal plus fixed_madd from (0, -0x600, 0x190) to (0, -0x500, 0),
+    both turned by the pedestal's angles, count / 20 of the way. At 20: a
+    sound (0x12), the key's +0x38 0xff -- free to take -- the state 0x63, and
+    True."""
+    if p["state"] == 0:
+        if p["lock"] == 0xFF:
+            return False
+        p["n"] = KEY_FRAMES - 1 if key["lock"] != 0 else 0
+        p["state"] = 1
+        key.update({"op": KEY_OP, "b0": p["b0"], "b1": 0x80, "link": p["slot"],
+                    "angles": [0, p["angles"][1], 0]})
+    if p["state"] != 1:
+        return False
+    p["n"] = (p["n"] + 1) & 0xFF
+    t = (p["n"] << 12) // KEY_FRAMES
+    a = weapon.vec_rotate(p["angles"], KEY_START)
+    b = weapon.vec_rotate(p["angles"], KEY_END)
+    key["pos"] = [lerp(a[i], b[i], t) + p["pos"][i] for i in range(3)]
+    if p["n"] < KEY_FRAMES:
+        return False
+    key["lock"] = 0xFF
+    p["state"] = AT_REST
+    return True
+
+
+def pedestal_step(p, key, gate):
+    """One frame of opcode 0x18's arm (0x8004aeb8): the pedestal `p` (slot,
+    state, lock, ring, n, pos, angles, b0, tail), its key -- the object in
+    slot 380 + its ring -- and the object its tail[3] names, `gate` (lock).
+    A pedestal not at state 0 whose key is gone (taken: the type 0xff) goes
+    back to state 0 with the lock 0xff, and the gate loses its mask (tail[5],
+    or tail[2] when that is 0xff); then use_state, and on the frame the key
+    comes to rest the gate's lock takes tail[2]. True on that frame."""
+    t = p["tail"]
+    if p["state"] != 0 and key is not None and key["type"] == NO_KEY:
+        p["lock"], p["state"] = 0xFF, 0
+        gate["lock"] &= ~(t[5] if t[5] != 0xFF else t[2]) & 0xFF
+    if key is None or not use_state(p, key):
+        return False
+    gate["lock"] |= t[2]
+    return True
+
+
+def pedestal_run(p, gate, item=SILVIERA_KEY, ring=0, frames=KEY_FRAMES + 2):
+    """The key put on `p` and the frames after, as [(state, n, key x, y, z,
+    the key's +0x38, the gate's lock)]."""
+    key = put_key(p, item, ring)
+    rows = []
+    for _ in range(frames):
+        pedestal_step(p, key, gate)
+        rows.append((p["state"], p["n"], *key["pos"], key["lock"], gate["lock"]))
+    return rows, key
 
 
 def check_pedestal(out=sys.stdout, before="silv1", after="silv2"):
@@ -508,6 +582,14 @@ def check_pedestal(out=sys.stdout, before="silv1", after="silv2"):
                 "z": struct.unpack_from("<i", o, 0x1C)[0], "link": o[0x40]}
     pedestals = [k for k in range(396) if obj(b, k)["type"] == PEDESTAL
                  and obj(a, k)["lock"] == 0xFF and obj(b, k)["lock"] == SILVIERA_KEY]
+    def full(r, k):
+        o = obj(r, k)
+        raw = r[ot + k * rec:ot + (k + 1) * rec]
+        o.update({"b0": raw[0], "b1": raw[1], "tail": list(raw[0x38:0x40]),
+                  "angles": list(struct.unpack_from("<3h", raw, 0x24)),
+                  "scale": list(struct.unpack_from("<3h", raw, 0x2C)),
+                  "n": raw[0x40]})
+        return o
     claims = []
     have = (a[0xC85E8 + SILVIERA_KEY], b[0xC85E8 + SILVIERA_KEY])    # inventory_a
     claims.append(("the key leaves the pack", have[1] == have[0] - 1))
@@ -524,6 +606,29 @@ def check_pedestal(out=sys.stdout, before="silv1", after="silv2"):
             ("its +0x40 is the pedestal's slot", o["link"] == k),
             ("it stands on the pedestal", (o["x"], o["z"]) == (p["x"], p["z"]) and o["y"] < p["y"]),
         ]
+        # and the 20 frames after, from silv1's pedestal and gate: opcode
+        # 0x18's arm with object_use_state, against silv2
+        p0, p1 = full(a, k), full(b, k)
+        g0, g1 = full(a, p0["tail"][3]), full(b, p0["tail"][3])
+        ped = {"slot": k, "state": p0["state"], "lock": p0["lock"], "ring": p0["ring"],
+               "n": p0["n"], "pos": [p0["x"], p0["y"], p0["z"]], "angles": p0["angles"],
+               "b0": p0["b0"], "tail": p0["tail"]}
+        gate = {"lock": g0["lock"]}
+        _rows, key = pedestal_run(ped, gate, SILVIERA_KEY, p["ring"])
+        k1 = full(b, slot)
+        claims += [
+            ("the pedestal at rest (0x63), its count at 20",
+             (ped["state"], ped["n"]) == (p1["state"], p1["n"]) == (AT_REST, KEY_FRAMES)),
+            ("the key where object_use_state leaves it",
+             key["pos"] == [k1["x"], k1["y"], k1["z"]]),
+            ("its angles the pedestal's, its scale 0x1000",
+             key["angles"] == k1["angles"] and k1["scale"] == [0x1000] * 3),
+            ("its +0 the pedestal's, +1 0x80, opcode 0x70",
+             (key["b0"], key["b1"], key["op"]) == (k1["b0"], k1["b1"], k1["op"])),
+            ("free to take: its +0x38 0xff", key["lock"] == k1["lock"] == 0xFF),
+            ("the gate's lock with the pedestal's mask",
+             gate["lock"] == g1["lock"] and g1["lock"] != g0["lock"]),
+        ]
     ok = sum(1 for _w, c in claims if c)
     for what, c in claims:
         if not c:
@@ -533,6 +638,88 @@ def check_pedestal(out=sys.stdout, before="silv1", after="silv2"):
           + (f" (slot {pedestals[0]}, the key put in slot {KEY_RING + obj(b, pedestals[0])['ring']})"
              if pedestals else ""), file=out)
     return ok == len(claims)
+
+
+PEDESTAL_LINE = None
+
+
+def pedestal_lines(path=None):
+    """emu/bp27.lua's P lines: a pedestal each time it changes -- its state,
+    lock, ring place, count, its key (opcode, type, +0x38, x, y, z) and the
+    lock of the object it serves."""
+    import re
+    global PEDESTAL_LINE
+    if PEDESTAL_LINE is None:
+        PEDESTAL_LINE = re.compile(
+            r"P vb=(\d+) lv=(\d+) slot=(\d+) st=(\d+) lock=(\d+) ring=(\d+) n=(\d+) "
+            r"key=(\d+),(\d+),(\d+),(-?\d+),(-?\d+),(-?\d+) gate=(\d+),(\d+)")
+    path = path or os.path.join(ROOT, "out", "lua_bp27.log")
+    rows, session = [], 0
+    if not os.path.exists(path):
+        return rows
+    for line in open(path):
+        if line.startswith("=== bp27") and "armed" in line:
+            session += 1
+            continue
+        m = PEDESTAL_LINE.match(line)
+        if m:
+            g = [int(x) for x in m.groups()]
+            rows.append({"session": session, "vb": g[0], "lv": g[1], "slot": g[2],
+                         "st": g[3], "lock": g[4], "ring": g[5], "n": g[6],
+                         "key": {"op": g[7], "type": g[8], "lock": g[9],
+                                 "pos": [g[10], g[11], g[12]]},
+                         "gate": g[13], "gate_lock": g[14]})
+    return rows
+
+
+def pedestal_check(out=sys.stdout, verbose=False):
+    """bp27's P lines against use_state: each line of a key on its way down or
+    at rest holds the place the count puts it at, and the gate's lock has the
+    pedestal's mask from the frame it comes to rest; a pedestal set back to 0
+    has taken the mask away again."""
+    rows = pedestal_lines()
+    if not rows:
+        print("  no pedestal lines in out/lua_bp27.log: ./emu/run.sh debug bp27.lua, "
+              "put Silviera's key on a pedestal on level 4", file=out)
+        return True
+    import objload
+    loads = {}
+    ok = bad = 0
+    last = {}
+    for r in rows:
+        if r["lv"] not in loads:
+            loads[r["lv"]] = objload.Load(r["lv"])
+        rec = loads[r["lv"]].recs.get(r["slot"])
+        if rec is None:
+            continue
+        t = rec["tail"]
+        claims = []
+        if r["st"] in (1, AT_REST) and r["key"]["op"] == KEY_OP:
+            n = r["n"]
+            a = weapon.vec_rotate(rec["angles"], KEY_START)
+            b = weapon.vec_rotate(rec["angles"], KEY_END)
+            tt = (n << 12) // KEY_FRAMES
+            want = [lerp(a[i], b[i], tt) + (rec["x"], rec["y"], rec["z"])[i] for i in range(3)]
+            claims.append(("the key where the count puts it", r["key"]["pos"] == want))
+            if r["st"] == AT_REST:
+                claims.append(("at rest: the count 20 and the key free",
+                               n == KEY_FRAMES and r["key"]["lock"] == 0xFF))
+                claims.append(("the gate's lock has the mask", r["gate_lock"] & t[2] == t[2]))
+        prev = last.get((r["session"], r["slot"]))
+        if prev is not None and prev["st"] != 0 and r["st"] == 0:
+            mask = t[5] if t[5] != 0xFF else t[2]
+            claims.append(("set back: the lock 0xff and the mask gone from the gate",
+                           r["lock"] == 0xFF and r["gate_lock"] & mask == 0))
+        last[(r["session"], r["slot"])] = r
+        for what, good in claims:
+            ok += good
+            bad += not good
+            if verbose and not good:
+                print(f"  level {r['lv']} pedestal {r['slot']} vb {r['vb']}: not so: {what}",
+                      file=out)
+    print(f"  {ok} of {ok + bad} of what bp27's pedestal lines say hold "
+          f"({len(rows)} lines)", file=out)
+    return bad == 0
 
 
 def check(out=sys.stdout, verbose=False):
@@ -565,7 +752,8 @@ def check(out=sys.stdout, verbose=False):
           f"tools/chests.py takes ({len(path)} frames from USE to rest)", file=out)
     lying = check_drops(out, verbose)
     put = check_pedestal(out)
-    return bad == 0 and lying and put
+    held = pedestal_check(out, verbose)
+    return bad == 0 and lying and put and held
 
 
 def check_drops(out=sys.stdout, verbose=False):
@@ -628,9 +816,24 @@ def export(out_dir):
                                 (0x62, 2000, -0x78, 0)):
         falls.append({"op": op, "drop": drop, "vel": vel, "rest": rest,
                       "frames": [list(f) for f in fall_path(op, drop, vel, rest)]})
+    # level 4's pedestal 108 (cell (33,23)), turned 0x800, and one at no
+    # turn, each to rest and then the key taken back: the reset
+    pedestals = []
+    for pos, ang, tail in (([68072, -14080, 48000], [0, 2048, 0], [255, 255, 2, 91, 255, 2, 255, 255]),
+                           ([60952, -14080, 50304], [0, 0, 0], [255, 255, 1, 91, 255, 1, 255, 255]),
+                           ([12000, -18688, 133000], [0, 1024, 0], [255, 255, 3, 92, 255, 255, 255, 255])):
+        ped = {"slot": 108, "state": 0, "lock": 0xFF, "ring": 0xFF, "n": 0xFF, "pos": pos,
+               "angles": ang, "b0": 2, "tail": tail}
+        gate = {"lock": 0xFC}
+        rows, key = pedestal_run(ped, gate)
+        key["type"] = NO_KEY                      # taken back
+        pedestal_step(ped, key, gate)
+        rows.append((ped["state"], ped["n"], *key["pos"], ped["lock"], gate["lock"]))
+        pedestals.append({"pos": pos, "angles": ang, "tail": tail,
+                          "frames": [list(r) for r in rows]})
     doc = {"lid": [list(r) for r in lid_cycle()],
            "big": [list(r) for r in big_cycle()], "flights": flights,
-           "falls": falls, "keys": key_cases()}
+           "falls": falls, "keys": key_cases(), "pedestals": pedestals}
     path = os.path.join(out_dir, "chestcheck.json")
     with open(path, "w") as fh:
         json.dump(doc, fh, separators=(",", ":"))

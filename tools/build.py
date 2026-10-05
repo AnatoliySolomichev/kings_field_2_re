@@ -156,8 +156,8 @@ def main(quick=False, only_check=False):
         "the conversations a USE at a time, against what was played",
         keep=["recorded conversations", "calls bp21 caught"])
     run(["tools/chests.py", "--check"],
-        "the chests' lids and the drops, against every snapshot",
-        keep=["opened lids", "things lying", "Silviera's key"])
+        "the chests' lids, the drops and the pedestals, against every snapshot",
+        keep=["opened lids", "things lying", "Silviera's key", "pedestal lines"])
     run(["tools/weapon.py", "--check"],
         "the creatures' HP and the player's weapon, against snapshots and bp25",
         keep=["awake creatures", "frames of the weapon", "blows landed"])

@@ -600,8 +600,8 @@ func _lifts() -> bool:
 
 # The chests and object_give, loot.gd against tools/chests.py: the lid's 82
 # frames from USE to rest -- a path seven lids in the snapshots lie on -- the
-# big chest's, and three of object_give's sequences: taken after the spin,
-# put back, and taken mid-flight.
+# big chest's, three of object_give's sequences: taken after the spin, put
+# back, and taken mid-flight -- and Silviera's key on three pedestals.
 func _chests() -> bool:
 	if not FileAccess.file_exists("res://chestcheck.json"):
 		print("chests: no cases to check against")
@@ -698,7 +698,37 @@ func _chests() -> bool:
 				bad += 1
 				if first == "":
 					first = "key case %s: godot %s python %s" % [str(k), str(got), str(want)]
-	print("chests: %d of %d frames match tools/chests.py (the lid, the big chest, %d flights of object_give, %d falls, %d keys tried on locks twice over)" % [n - bad, n, flights, falls, keys])
+	var peds := 0
+	for pc in doc.get("pedestals", []):
+		# Silviera's key put on a pedestal, its frames to rest, and the key
+		# taken back: [state, count, the key's x, y, z, its +0x38 (the
+		# pedestal's lock on the last), the gate's lock]
+		var pd := {"slot": 108, "state": 0, "lock": 141, "ring": 0, "n": 0xFF,
+			"x": int(pc["pos"][0]), "y": int(pc["pos"][1]), "z": int(pc["pos"][2]),
+			"angles": (pc["angles"] as Array).map(func(v): return int(v)), "b0": 2,
+			"tail": (pc["tail"] as Array).map(func(v): return int(v))}
+		var gate := {"lock": 0xFC}
+		var key := {"type": 141, "op": 0xFF, "lock": 0, "pos": Vector3i.ZERO,
+			"angles": [0, 0, 0], "b0": 0, "b1": 0x80, "link": 0}
+		var frames: Array = pc["frames"]
+		for i in frames.size():
+			var last := i == frames.size() - 1
+			if last:
+				key["type"] = 0xFF
+			script.pedestal_step(pd, key, gate, coll)
+			var q: Vector3i = key["pos"]
+			var got := [int(pd["state"]), int(pd["n"]), q.x, q.y, q.z,
+				int(pd["lock"]) if last else int(key["lock"]), int(gate["lock"])]
+			var w := []
+			for v in frames[i]:
+				w.append(int(v))
+			n += 1
+			if got != w:
+				bad += 1
+				if first == "":
+					first = "pedestal %d frame %d: godot %s python %s" % [peds, i, str(got), str(w)]
+		peds += 1
+	print("chests: %d of %d frames match tools/chests.py (the lid, the big chest, %d flights of object_give, %d falls, %d keys tried on locks twice over, %d pedestals)" % [n - bad, n, flights, falls, keys, peds])
 	if bad > 0:
 		print("  first difference: " + first)
 	return bad == 0

@@ -39,6 +39,7 @@ const NOTHING_HAPPENS := 0xA
 # The keys use_item's arm at 0x8005d188 takes: royal, copper, silver,
 # magician's, jail, dwarves', Lyn's.
 const KEYS := [135, 137, 138, 139, 140, 142, 144]
+const SILVIERA_KEY := 141          # an arm of its own (0x8005d244): the pedestals
 # ui_panel's modes with no count column
 const NO_COUNTS := [2, 3, 4, 8, 9, 0x10]
 # ui_ratings_page's lines, as its sb's leave the label record for each: two
@@ -919,7 +920,7 @@ func _step(press: int) -> void:
 # and use_item runs, whose last word is the level's entry 2 and, if nothing
 # has answered, "Nothing Happens".
 # @orig game:0x8001b254 item_consume  status:transcribed
-# @orig game:0x8005d748 use_item+0xb68  status:partial -- the tail: the level's entry 2 not called (level 0's is empty, 0x801e8704); the eaten things, the keys (loot.gd try_key) and the arms that raise a figure (levelup.gd use_arm) answer, the rest say "Nothing Happens"
+# @orig game:0x8005d748 use_item+0xb68  status:partial -- the tail: the level's entry 2 not called (level 0's is empty, 0x801e8704; level 4's answers item 0x7b alone); the eaten things, the keys (loot.gd try_key, put_key) and the arms that raise a figure (levelup.gd use_arm) answer, the rest say "Nothing Happens"
 func _use(id: int) -> void:
 	var inv: KFItems = player.inventory
 	var eaten := false
@@ -969,6 +970,10 @@ func _use(id: int) -> void:
 	if id in KEYS:
 		var lt := get_node_or_null("../../Loot")
 		if lt and int(lt.try_key(id)) != 0:
+			answered = true
+	elif id == SILVIERA_KEY:
+		var lt := get_node_or_null("../../Loot")
+		if lt and int(lt.put_key(id)) != 0:
 			answered = true
 	if not answered:
 		KFMessages.announce(NOTHING_HAPPENS)

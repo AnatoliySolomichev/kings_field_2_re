@@ -844,8 +844,11 @@ def build_objects_gltf(lv, out="out/godot"):
     items += build_loot(lv, load, grid, look, prims_of, loot_rows, loot)
     spawn = {}
     items += build_drops(lv, load, look, prims_of, spawn)
+    keys, pedestal_rows = {}, []
+    items += build_pedestals(lv, load, look, prims_of, pedestal_rows, keys)
     with open(f"{out}/loot{lv:02d}.json", "w") as f:
-        json.dump({"rows": loot_rows, "spawn": spawn}, f, separators=(",", ":"))
+        json.dump({"rows": loot_rows, "spawn": spawn, "pedestals": pedestal_rows,
+                   "keys": keys, "find": find_rows(load)}, f, separators=(",", ":"))
     for o, bags in doors:
         dp, dn = prims_of(bags)
         ntri += dn
@@ -1011,6 +1014,65 @@ def build_loot(lv, load, grid, look, prims_of, rows, slots):
             "top": struct.unpack_from("<H", tr, 8)[0], "kind": tr[1],
             "c": 0, "e": 0, "model": 0})
     return items
+
+
+PEDESTAL_OPS = (0x18,)
+PEDESTAL_KEYS = {0x101: 141}     # use_item's arm for Silviera's key asks for type 0x101
+
+
+def build_pedestals(lv, load, look, prims_of, rows, keys):
+    """The pedestals (opcode 0x18), their rows for lootNN.json, and a hidden
+    node `qNNN` for each key one of them takes here -- Silviera's, 141, on a
+    type-0x101 pedestal -- which godot/loot.gd copies when the key is put
+    there. At the model's own size: object_use_state's init_object_record
+    leaves the scale 0x1000, where a drop's is doubled. Lit by class 0."""
+    items, wanted = [], set()
+    for k, o in sorted(load.recs.items()):
+        if o["op"] not in PEDESTAL_OPS:
+            continue
+        tr = load.rows[o["type"]]
+        rows.append({"slot": k, "type": o["type"], "op": o["op"],
+                     "x": o["x"], "y": o["y"], "z": o["z"], "angles": list(o["angles"]),
+                     "b0": o["b0"], "tail": list(o["tail"][:8]),
+                     "reach": struct.unpack_from("<H", tr, 6)[0],
+                     "top": struct.unpack_from("<H", tr, 8)[0]})
+        if o["type"] in PEDESTAL_KEYS:
+            wanted.add(PEDESTAL_KEYS[o["type"]])
+    llm, lcm, bk = light_class(look, 0, 0)
+    for t in sorted(wanted):
+        try:
+            _flags, objs = tmd.load(*tmd.model_of(t, lv))
+        except Exception:
+            continue
+        own = {}
+        emit_object(objs, lambda v: (v[0] / UNIT, -v[1] / UNIT, -v[2] / UNIT),
+                    lambda raw: shade(raw, llm, lcm, bk), own)
+        dp, _dn = prims_of(own)
+        if not dp:
+            continue
+        items.append((f"q{t:03d}", dp, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)))
+        tr = load.rows[t]
+        keys[str(t)] = {
+            "type": t, "kind": tr[1],
+            "reach": struct.unpack_from("<H", tr, 6)[0],
+            "top": struct.unpack_from("<H", tr, 8)[0],
+            "c": struct.unpack_from("<h", tr, 0xC)[0],
+            "e": struct.unpack_from("<h", tr, 0xE)[0]}
+    return items
+
+
+def find_rows(load):
+    """find_object's view of every object the level places: [slot, class,
+    type, x, y, z, yaw, the record's +0xc, the type's +6 and +8] -- what it
+    tests a point against, for godot/loot.gd find_object -- and the opcode
+    and the lock (+0x38) key_test asks of what it finds."""
+    out = []
+    for k, o in sorted(load.recs.items()):
+        tr = load.rows[o["type"]]
+        out.append([k, o["cls"], o["type"], o["x"], o["y"], o["z"], o["angles"][1],
+                    o["height"], struct.unpack_from("<H", tr, 6)[0],
+                    struct.unpack_from("<H", tr, 8)[0], o["op"], o["tail"][0]])
+    return out
 
 
 def quaternion(m):
