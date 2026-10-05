@@ -61,6 +61,13 @@ RAM snapshot is straightforward now that the block is located.
 record's own reader already had cell, fine offset within the cell, rotation and
 type id. `tools/level3d.py` now places 294 of level 0's 347 objects.
 
+**Held to the game's own loader on all 28 levels** (FORMATS.md, the end of
+"The first frame does more"): `tools/mipsrun.py` loads each level into a
+snapshot by `load_object_placement` itself, and `tools/objload.py` is 4836 of
+4838 records and every grid byte of it -- the two left are the level hooks'
+(classes 0xa6, 0xa7). What the hooks (`level_hooks + 0x20`) do at load is
+the one part of the loader not modelled.
+
 **Withdrawn: "height is not in the record at all."** It is, at offset 12, a
 signed 16-bit measured from the terrain, and `y = -128 * cell[+6] + h`
 reproduces the live table for 345 of level 0's 347 objects. The claim survived

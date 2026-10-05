@@ -176,8 +176,8 @@ def main(quick=False, only_check=False):
         "the compass's records, against every snapshot's RAM",
         keep=["switches, pitches"])
     run(["tools/objload.py", "--check"],
-        "the object loader, against every snapshot with a level",
-        keep=["over every snapshot"])
+        "the object loader, against every snapshot with a level and the game's own",
+        keep=["over every snapshot", "load_object_placement leaves them", "differs:"])
     run(["tools/objops.py", "--types"],
         "the object type table, against a RAM snapshot",
         keep=["of 7968", "rows"])

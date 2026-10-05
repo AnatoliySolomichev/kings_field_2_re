@@ -293,9 +293,11 @@ class Load:
                      0x13, 0xF0, 0xF2, 0xE9, 0xE5):
             r["op"] = cls
         elif cls == 0x07:
+            # .L22: object_set_present(r, 0, the row's +0xc) -- the byte it
+            # puts back is +0xc itself here, not +0x17 as for 0x51 and 0x52
             r["op"], r["b1"] = 7, 0
             if tr[0xC] != 0xFF:
-                self.set_absent(r, tr[0x17])
+                self.set_absent(r, tr[0xC])
         elif cls == 0x09:
             r["op"] = 9
             tail[8] = r["b0"]
@@ -570,6 +572,63 @@ def grid_check(path, lv):
     return before, after, L
 
 
+def game_check(out=sys.stdout, snap="a1"):
+    """Every level loaded by the game's own load_object_placement --
+    tools/mipsrun.py over a snapshot with the level's grid, type rows,
+    overlay and entry 3n + 1 put in (level_cpu) -- against this model: each
+    record's type, opcode, +0, +1, +3, position, angles, scale, +0xc and
+    +0x38..+0x3f, and every byte of the grid. The records the loader hands
+    to the level's own hook (+0x20) are left as the common part made them
+    here, and what the hook does to them is counted apart."""
+    import mipsrun
+    if not os.path.exists(os.path.join(ROOT, "out", "snap", snap + ".ram")):
+        return True
+    ot = mipsrun.OBJECT_TABLE & 0x1FFFFF
+    recs = alike = hook_diff = levels = 0
+    grid_bad = 0
+    firsts = []
+    for lv in range(28):
+        try:
+            L = Load(lv)
+            cpu = mipsrun.level_cpu(lv, snap)
+        except Exception as e:                    # noqa: BLE001
+            firsts.append(f"level {lv}: {e}")
+            continue
+        levels += 1
+        for k in range(SLOTS):
+            raw = bytes(cpu.ram[ot + REC * k:ot + REC * (k + 1)])
+            r = L.recs.get(k)
+            if r is None:
+                ok = struct.unpack_from("<H", raw, 6)[0] == 0xFF
+            else:
+                ok = (struct.unpack_from("<H", raw, 6)[0] == r["type"]
+                      and raw[4] == r["op"] and raw[0] == r["b0"] and raw[1] == r["b1"]
+                      and raw[3] == r["flags"]
+                      and struct.unpack_from("<3i", raw, 0x14) == (r["x"], r["y"], r["z"])
+                      and struct.unpack_from("<3h", raw, 0x24) == tuple(s16(a) for a in r["angles"])
+                      and struct.unpack_from("<3h", raw, 0x2C) == tuple(r["scale"])
+                      and struct.unpack_from("<h", raw, 0xC)[0] == s16(r["height"])
+                      and raw[0x38:0x40] == bytes(r["tail"][:8]))
+            if r is None and ok:
+                continue
+            recs += 1
+            if ok:
+                alike += 1
+            elif r is not None and k in L.hooked:
+                hook_diff += 1
+            elif len(firsts) < 6:
+                firsts.append(f"level {lv} slot {k}")
+        g = cpu.ram[mipsrun.LEVEL_GRID & 0x1FFFFF:(mipsrun.LEVEL_GRID & 0x1FFFFF) + W * W * CELL]
+        grid_bad += sum(1 for i in range(len(g)) if g[i] != L.grid[i])
+    for line in firsts:
+        print(f"  differs: {line}", file=out)
+    print(f"  {alike} of {recs} records of {levels} levels as the game's own "
+          f"load_object_placement leaves them (tools/mipsrun.py, each level put into "
+          f"{snap}), {hook_diff} more the level's own hook changed; {grid_bad} of "
+          f"{levels * W * W * CELL} grid bytes differ", file=out)
+    return alike + hook_diff == recs and grid_bad == 0
+
+
 def main():
     args = sys.argv[1:]
     if not args or args[0] == "--check":
@@ -590,6 +649,8 @@ def main():
             total["grid"] = (ta + (after == 0), tn + 1)
         print("over every snapshot: " + ", ".join(
             f"{name} {a} of {n}" for name, (a, n) in total.items()))
+        if not game_check():
+            sys.exit(1)
         return
     lv = int(args[0])
     L = Load(lv).first_frame()

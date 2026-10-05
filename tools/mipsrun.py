@@ -463,6 +463,45 @@ def object_cpu(ram):
     return cpu
 
 
+FDAT_BUFFER = 0x801C17A4         # level_load reads entry 3n + 1 here
+LEVEL_GRID = 0x801D4464
+LEVEL_TYPES = 0x8019175C         # the level's own 32 type rows, 300..331
+OVERLAY = 0x801E8308             # the level's code, entry 3n + 2
+LOAD_OBJECT_PLACEMENT = 0x80044D9C
+
+
+def level_cpu(lv, snap="a1"):
+    """A machine over a snapshot's RAM with level `lv` put in it -- its grid,
+    its 32 type rows, its overlay and its entry 3n + 1 where level_load reads
+    it -- and the game's own load_object_placement run over that: the object
+    table and the grid as a fresh load of `lv` leaves them, the saved state
+    aside. Any level, from a snapshot of any."""
+    import objload
+    import objops
+    import placement
+    from tarc import TArc
+    ram = open(os.path.join(ROOT, "out", "snap", snap + ".ram"), "rb").read()
+    cpu = object_cpu(ram)
+    arc = TArc(objload.FDAT)
+
+    def put(at, data):
+        o = at & 0x1FFFFF
+        cpu.ram[o:o + len(data)] = data
+    put(LEVEL_GRID, bytes(objload.grid_of(lv)))
+    rows = objops.type_rows(level=lv)
+    put(LEVEL_TYPES, b"".join(bytes(r) for r in rows[300:332]))
+    ov = arc.raw(lv * 3 + 2)
+    if len(ov) >= 256:
+        put(OVERLAY, bytes(ov))
+    put(FDAT_BUFFER, bytes(arc.raw(lv * 3 + 1)))
+    blank = bytearray(OBJECT_STRIDE)
+    blank[4], blank[6] = 0xFF, 0xFF
+    for k in range(396):
+        put(OBJECT_TABLE + OBJECT_STRIDE * k, bytes(blank))
+    cpu.call(LOAD_OBJECT_PLACEMENT, FDAT_BUFFER + placement.BLOCK)
+    return cpu
+
+
 def clear_otag_r(cpu):
     """ClearOTagR(ot, n): the console's DMA channel 6 -- entry k links to
     k - 1 and the first ends the list."""

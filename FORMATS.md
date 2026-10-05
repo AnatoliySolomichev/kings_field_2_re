@@ -5090,6 +5090,21 @@ built with no doors in it**, because the only grid with the stamps was a dump
 of level 0. From the disc it differs from the live grid by 32 to 72 bytes;
 from the loader, by none.
 
+**And against the game's own loader, on every level.** `tools/mipsrun.py
+level_cpu` puts a level into a snapshot's RAM as `level_load` would -- its
+grid at `0x801d4464`, its 32 type rows at `0x8019175c`, its overlay at
+`0x801e8308`, entry `3n + 1` where `level_load` reads it (`0x801c17a4`) --
+and runs `load_object_placement` itself over the placement block. Over all
+28 levels: **4836 of 4838** records are the model's, type, opcode, `+0`,
+`+1`, `+3`, place, angles, scale, `+0xc` and `+0x38..+0x3f`; the other two
+are records the loader hands to the level's own hook (classes `0xa6` on
+level 2 and `0xa7` on level 7, which it gives their class as the opcode); and
+**0 of 1 792 000** grid bytes differ (`python3 tools/objload.py --check`).
+It found one thing wrong: a big chest (class 7) that the loader takes away
+puts back the cell's tile from its type row's **`+0xc`** -- the byte it
+tests for `0xff` -- not `+0x17`, as the classes `0x51` and `0x52` do. Level
+12's slot 273 is one: tile 125, where the model had 0.
+
 ### What a watchpoint caught instead: the world shifts
 
 A write watchpoint on the X coordinate of object slot 0, live across a level

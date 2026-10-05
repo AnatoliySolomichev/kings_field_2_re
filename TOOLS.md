@@ -865,7 +865,11 @@ answers for a routine (`collide_query`, say) from a script. That is how the
 gates and the pedestals are held to the game without a recording:
 `tools/doors.py gate_game_check` and `tools/chests.py pedestal_game_check`
 run their arms over `silv1` a frame at a time beside the models, and the
-hidden wall over `a1`.
+hidden wall over `a1`. `level_cpu(lv)` loads any level into a snapshot's RAM
+by the game's own `load_object_placement` -- its grid, type rows, overlay
+and entry `3n + 1` put where `level_load` puts them -- which is how
+`tools/objload.py --check` holds the loader model to the game on all 28
+levels.
 
 ```
 python3 tools/mipsrun.py --check
