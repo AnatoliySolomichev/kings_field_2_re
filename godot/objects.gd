@@ -95,7 +95,7 @@ func group_of(op: int) -> String:
 # takes the cells as `player_pos >> 11` and `0x801b25f8 >> 11` -- so the
 # rectangle is in cells, not in world units -- and then, unless the height it
 # is given is 0x8000, the player's y above it - 0xc80 and not below it + 0x800.
-# @orig game:0x80046884 player_in_rect  status:transcribed
+# @orig game:0x80046884 player_in_rect  status:verified -- 600 of 600 calls of the game's own, the height and the 0x8000 that skips it (tools/routines.py)
 static func player_in_rect(px: int, pz: int, cx: int, cz: int,
 		w: int, h: int, py := 0, y := 0x8000) -> bool:
 	var pcx := px >> 11

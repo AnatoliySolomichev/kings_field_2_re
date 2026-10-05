@@ -864,10 +864,23 @@ registers its loop sets up, to the loop's continue; `cpu.hooks[addr] = fn`
 answers for a routine (`collide_query`, say) from a script. That is how the
 gates and the pedestals are held to the game without a recording:
 `tools/doors.py gate_game_check` and `tools/chests.py pedestal_game_check`
-run their arms over `silv1` a frame at a time beside the models.
+run their arms over `silv1` a frame at a time beside the models, and the
+hidden wall over `a1`.
 
 ```
 python3 tools/mipsrun.py --check
+```
+
+**`routines.py`** asks the small routines themselves -- the sine and cosine,
+`vec_angle`, `ratan2`, `arctan_unit`, the square root, `in_range`,
+`in_oriented_rect`, `facing_test`, `approach`, `fixed_madd`,
+`player_in_rect` -- some 13 900 calls over `a1`, corners and all, and writes
+the game's answers to `routinecheck.json`; `godot/selftest.gd` puts each to
+the port's copy (`routines:`). It found the port's height test ignoring the
+`0xffff` that tells `in_range` to skip it.
+
+```
+python3 tools/routines.py           each routine: how many calls, and a few
 ```
 
 ### Watching the two side by side

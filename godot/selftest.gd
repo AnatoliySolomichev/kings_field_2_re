@@ -302,6 +302,9 @@ func _init() -> void:
 	if not _objects():
 		quit(1)
 		return
+	if not _routines():
+		quit(1)
+		return
 	quit(0)
 
 
@@ -614,6 +617,72 @@ func _lifts() -> bool:
 					first = "wall frame %d: godot %s python %s" % [f, str(got), str(w)]
 			f += 1
 	print("lift doors: %d of %d frames match tools/doors.py (%d of them a gate's, %d a hidden wall's)" % [n - bad, n, gn, wn])
+	if bad > 0:
+		print("  first difference: " + first)
+	return bad == 0
+
+
+# The game's own small routines, called by tools/mipsrun.py over a snapshot
+# (tools/routines.py), against the port's copies one call at a time: the sine
+# and cosine, the bearings, the square root, the range tests, facing_test,
+# approach, fixed_madd and player_in_rect.
+func _routines() -> bool:
+	if not FileAccess.file_exists("res://routinecheck.json"):
+		print("routines: no cases to check against")
+		return true
+	var doc = JSON.parse_string(FileAccess.get_file_as_string("res://routinecheck.json"))
+	var r: Dictionary = doc["routines"]
+	var n := 0
+	var bad := 0
+	var first := ""
+	var per := {}
+	for name in r:
+		var ok := 0
+		for row in r[name]:
+			var c: Array = (row as Array).map(func(v): return int(v))
+			var want: int = c[c.size() - 1]
+			var got := 0
+			match name:
+				"game_sin":
+					got = coll.game_sin(c[0])
+				"game_cos":
+					got = coll.game_cos(c[0])
+				"arctan_unit":
+					got = coll.arctan_unit(c[0])
+				"vec_angle":
+					got = coll.vec_angle(c[0], c[1])
+				"ratan2":
+					got = coll.ratan2(c[0], c[1])
+				"game_isqrt":
+					got = coll.isqrt(c[0])
+				"in_range":
+					got = coll.in_range(c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8])
+				"in_oriented_rect":
+					got = coll.in_oriented_rect(c[0], c[1], c[2], c[3], c[4], c[5], c[6],
+						c[7], c[8], c[9], c[10])
+				"facing_test":
+					got = 1 if KFCreatureAI.facing_test(c[0], c[1], c[2]) else 0
+					want = 1 if want != 0 else 0
+				"approach":
+					got = KFCreatureAI.approach(c[0], c[1], c[2])
+				"fixed_madd":
+					got = KFCreatureAI.lerp_fixed(c[0], c[1], c[2])
+				"player_in_rect":
+					got = 1 if KFObjects.player_in_rect(c[0], c[2], c[3], c[4], c[5], c[6],
+						c[1], c[7]) else 0
+					want = 1 if want != 0 else 0
+				_:
+					continue
+			n += 1
+			if got == want:
+				ok += 1
+			else:
+				bad += 1
+				if first == "":
+					first = "%s%s: godot %d, the game %d" % [name, str(c.slice(0, c.size() - 1)), got, want]
+		per[name] = "%d/%d" % [ok, (r[name] as Array).size()]
+	print("routines: %d of %d calls of the game's own routines answered alike (%s)" % [
+		n - bad, n, ", ".join(per.keys().map(func(k): return "%s %s" % [k, per[k]]))])
 	if bad > 0:
 		print("  first difference: " + first)
 	return bad == 0

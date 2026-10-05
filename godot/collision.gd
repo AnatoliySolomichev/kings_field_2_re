@@ -89,7 +89,7 @@ func load_from(path: String) -> bool:
 # 0x80076cc4 and 0x80076da0, over the game's own quarter wave: 0x1000 to the
 # turn, 4096 to the unit. Not Godot's sin() -- these are the values the
 # PlayStation actually multiplied by.
-# @orig game:0x80076cc4 game_sin  status:transcribed
+# @orig game:0x80076cc4 game_sin  status:verified -- 4396 of 4396 calls of the game's own, every angle and some past the circle (tools/routines.py)
 func game_sin(a: int) -> int:
 	if sin_table.is_empty():
 		return 0
@@ -105,7 +105,7 @@ func game_sin(a: int) -> int:
 	return -sin_table[0x1000 - a]
 
 
-# @orig game:0x80076da0 game_cos  status:transcribed
+# @orig game:0x80076da0 game_cos  status:verified -- 4396 of 4396 calls of the game's own (tools/routines.py)
 func game_cos(a: int) -> int:
 	if sin_table.is_empty():
 		return 0
@@ -185,7 +185,7 @@ func direction_from_angles(pitch: int, yaw: int) -> PackedInt32Array:
 const CORDIC := [511, 302, 159, 81, 41, 20, 10, 5, 3, 1, 0, 0]
 
 
-# @orig game:0x800742ac arctan_unit  status:transcribed
+# @orig game:0x800742ac arctan_unit  status:verified -- 557 of 557 calls of the game's own (tools/routines.py)
 func arctan_unit(ratio: int) -> int:
 	var x := 0x1000
 	var y := ratio
@@ -214,7 +214,7 @@ func _idiv(a: int, b: int) -> int:
 	return -q if (a < 0) != (b < 0) else q
 
 
-# @orig game:0x80016ab8 vec_angle  status:transcribed -- within 4.37 of 4096 of atan2
+# @orig game:0x80016ab8 vec_angle  status:verified -- 601 of 601 calls of the game's own, the axes and diagonals among them (tools/routines.py)
 func vec_angle(u: int, v: int) -> int:
 	if absi(v) >= absi(u):
 		if v > 0:
@@ -230,7 +230,7 @@ func vec_angle(u: int, v: int) -> int:
 # 0x80074508: the game's integer square root, through the GTE leading-zero count
 # and a 192-entry table. NOT floor(sqrt(x)) -- a perfect square comes back one
 # short, isqrt(40000) = 199, and the walking step depends on that unit.
-# @orig game:0x80074508 game_isqrt  status:transcribed
+# @orig game:0x80074508 game_isqrt  status:verified -- 607 of 607 calls of the game's own, through its GTE leading-zero count (tools/routines.py)
 func isqrt(x: int) -> int:
 	if x <= 0 or isqrt_table.is_empty():
 		return 0
@@ -583,7 +583,7 @@ const OBJECT_BIT := 0x20
 
 
 # 0x80074380, the library's ratan2 over its 1025-entry table.
-# @orig game:0x80074380 ratan2  status:transcribed
+# @orig game:0x80074380 ratan2  status:verified -- 601 of 601 calls of the game's own (tools/routines.py)
 func ratan2(y: int, x: int) -> int:
 	var negx := x < 0
 	var negy := y < 0
@@ -606,14 +606,16 @@ func ratan2(y: int, x: int) -> int:
 # 0x80016ec8 and the height test it shares with in_oriented_rect: a thing at
 # py whose top is `top` above its feet against one at y whose top is `own`
 # above; Y grows downward.
-# @orig game:0x80016f28 in_range+0x60  status:transcribed -- the height overlap, skipped for y 0xffff
+# @orig game:0x80016f28 in_range+0x60  status:verified -- the height overlap, skipped for y 0xffff; through in_range and in_oriented_rect, the game's own answers (tools/routines.py)
 func _heights(py: int, y: int, top: int, own: int) -> bool:
+	if y == 0xFFFF:
+		return true
 	if py < y:
 		return not (py < y - own)
 	return not (y < py - top)
 
 
-# @orig game:0x80016ec8 in_range  status:transcribed
+# @orig game:0x80016ec8 in_range  status:verified -- 600 of 600 calls of the game's own, the skipped height among them (tools/routines.py)
 func in_range(px: int, py: int, pz: int, x: int, y: int, z: int, r: int,
 		top: int, own: int) -> int:
 	var dx := px - x
@@ -629,7 +631,7 @@ func in_range(px: int, py: int, pz: int, x: int, y: int, z: int, r: int,
 
 
 # 0x80016d3c: the offset to polar and back out along the rectangle's own axes.
-# @orig game:0x80016d3c in_oriented_rect  status:transcribed
+# @orig game:0x80016d3c in_oriented_rect  status:verified -- 600 of 600 calls of the game's own (tools/routines.py)
 func in_oriented_rect(ang: int, px: int, py: int, pz: int, x: int, y: int,
 		z: int, a: int, b: int, top: int, own: int) -> int:
 	var ddx := (px - x) >> 3

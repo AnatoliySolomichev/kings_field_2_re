@@ -664,22 +664,9 @@ static func _facing(a: int, b: int, tol: int) -> bool:
 	return d <= tol or d >= 0x1000 - tol
 
 
-# in_range (0x80016ec8), as godot/actors.gd has it.
-# @orig game:0x80016ec8 in_range  status:transcribed
+# in_range (0x80016ec8): KFCollision's, which tools/routines.py holds to the
+# game's own answers -- this copy once lacked the skip for y 0xffff.
+# @port helper -- in_range through KFCollision
 func _in_range(ax: int, ay: int, az: int, x: int, y: int, z: int, r: int,
 		top := 0, own := 0) -> int:
-	var dx := ax - x
-	if dx < -r or r < dx:
-		return -1
-	var dz := az - z
-	if dz < -r or r < dz:
-		return -1
-	if ay < y:
-		if ay < y - own:
-			return -1
-	elif y < ay - top:
-		return -1
-	var sx := dx >> 3
-	var sz := dz >> 3
-	var dist: int = player.coll.isqrt(sx * sx + sz * sz) << 3
-	return -1 if r < dist else dist
+	return player.coll.in_range(ax, ay, az, x, y, z, r, top, own)

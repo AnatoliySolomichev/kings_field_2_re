@@ -570,26 +570,12 @@ func _kill(k: int) -> void:
 
 
 # 0x80016ec8: the distance from (x, z) to the actor, or -1 beyond r. With y
-# other than 0xffff the bodies must also overlap in height.
-# @orig game:0x80016ec8 in_range  status:transcribed
+# other than 0xffff the bodies must also overlap in height. KFCollision's,
+# which tools/routines.py holds to the game's own answers.
+# @port helper -- in_range through KFCollision
 func _in_range(ax: int, ay: int, az: int, x: int, y: int, z: int, r: int,
 		top := 0, own := 0) -> int:
-	var dx := ax - x
-	if dx < -r or r < dx:
-		return -1
-	var dz := az - z
-	if dz < -r or r < dz:
-		return -1
-	if y != NO_Y:
-		if ay < y:
-			if ay < y - own:
-				return -1
-		elif y < ay - top:
-			return -1
-	var sx := dx >> 3
-	var sz := dz >> 3
-	var dist := coll.isqrt(sx * sx + sz * sz) << 3
-	return -1 if r < dist else dist
+	return coll.in_range(ax, ay, az, x, y, z, r, top, own)
 
 
 # actor_in_range (0x8004d838), collide_query's flag 0x40: the first awake

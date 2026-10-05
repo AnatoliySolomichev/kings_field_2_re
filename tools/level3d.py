@@ -1647,6 +1647,11 @@ def project(lv, out="out/godot", start=(57, 4)):
     except Exception as e:
         print(f"chest cases skipped: {e}")
     try:
+        import routines
+        routines.export(out)
+    except Exception as e:
+        print(f"routine cases skipped: {e}")
+    try:
         import readables
         readables.export(out, lv)
     except Exception as e:
@@ -1785,7 +1790,7 @@ def verify(out="out/godot"):
                             "fences:",
                             "creature run:",
                             "levels:", "skills:", "angles:",
-                            "scripts:", "damage:", "equipment:", "player_recalc_stats:", "knock-back:", "weapon:", "animation:", "spores:", "lift doors:", "chests:", "inscriptions:", "conversations:", "menus:", "FAIL", "  first",
+                            "scripts:", "damage:", "equipment:", "player_recalc_stats:", "knock-back:", "weapon:", "animation:", "spores:", "lift doors:", "chests:", "inscriptions:", "conversations:", "menus:", "routines:", "FAIL", "  first",
                             "  level case", "  angle (", "  script level",
                             "  hit ")):
             print("   " + line.strip())
