@@ -540,7 +540,8 @@ Eating heals. Left, roughly in order:
   and the guide; a bow in hand (weapons `0x1b`, `0x1c`) swings as a blade
   does in the port, where `held_item_tick` has a path of its own for it.
   The screens hold against `equip1`..`equip4`, 8 of 8 frames;
-* "use magic", "status/records" (`ui_ratings_page`), "storage" and "system";
+* "status/records" is in but for its CONVERSATION line (`text_pager`,
+  `0x8001d944`); "use magic", "storage" and "system" are not;
 * `pad_read_latch`'s repeat while a direction is held -- the port reads new
   presses only.
 

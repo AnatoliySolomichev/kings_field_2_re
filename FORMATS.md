@@ -2908,6 +2908,30 @@ flask, the truth glass and Ichrius' things are not yet. The seven keys
 of the shared arm are (`godot/loot.gd`, `try_key`, "Keys" above); anything
 else that is not eaten says "Nothing Happens".
 
+### Status/records, and running the game's own code
+
+The main page's fourth line, **status/records** (`menu_records`,
+`0x8001d784`), is page 1 of the label table -- OFFENSE/DEFENSE and
+CONVERSATION under the title STATUS/RECORDS, chosen as the main page is
+(`sub_800221e8`). The first is **`ui_ratings_page`** (`0x80023300`), held up
+by `menu_ratings` (`0x8001d8a4`) until any button: OFFENSE at (30, 34) and
+its eight halves 16 apart from y 50, DEFENSE at (164, 34) and its nine 17
+apart from y 51, each label two spaces in and its number in six digits `0x4d`
+to the right; `ui_frame(20, 26, 276, 180)` and "return" under it. The
+second, CONVERSATION, is `text_pager` (`0x8001d944`), not read yet.
+
+No snapshot shows that page, and none had to. **`tools/mipsrun.py`** is enough
+of an R3000 to run GAME.EXE's own code over a snapshot's RAM -- the integer
+instructions, the delay slots, the RAM and the scratchpad, the hardware
+registers read as 0, ClearOTagR (the console's DMA) and the sound stood in
+for. A menu's frame is plain code, so `frame_begin` and a screen's routine
+run that way leave in the RAM the packets the game would have sent, and
+`tools/gpuframe.py` reads them back. It is checked the way everything here
+is: `ui_status_page` and the main page, run over `menu1`'s RAM, draw both of
+its buffers' 428 primitives exactly, each at its own pulse. The port's
+ratings page and status/records' page are held to what the routine itself
+draws (4 sets of ratings, both lines chosen), not to a transcription of it.
+
 ### The equipment screen
 
 The main page's third line is **`menu_equipment`** (`0x8001c7a8`). It
@@ -3568,8 +3592,12 @@ Two corrections to the published list, both of which it had no way to notice:
   fire, earth, wind, water — filling `0x801b2538..0x801b2549` and
   `0x801b254a..0x801b255b` back to back. The list names a "dark" entry on the
   defensive side but not the offensive one, which puts every magic label it
-  gives for offence one slot low. Untested: no snapshot we hold has a character
-  with any magic rating at all (*unverified*). What the code says:
+  gives for offence one slot low. **Settled by the game's own page**:
+  `ui_ratings_page` (`0x80023300`), run over a snapshot's RAM with each half
+  set apart (`tools/mipsrun.py`), labels the offense halves slash, blow, stab,
+  holy, fire, earth, wind, water magic and the defense ones slash, blow, stab,
+  dark, fire, earth, wind, water magic -- and draws the ninth defense half
+  (`0x801b255a`) fourth, as **POISON**. What the code says besides:
   `player_recalc_stats` (`0x80029500`) writes **eight** offense halves and
   **nine** defense halves, and the ninth defense half (`0x801b255a`) is filled
   from the armour record's `+8` -- the hole in the eight `+2..+0x12` it adds

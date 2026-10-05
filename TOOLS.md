@@ -817,6 +817,21 @@ restamped grid are not in a recording of the player alone), a step the model
 model took whole and the game did not -- creatures in the sessions from before
 bp16 logged where they stood.
 
+### Running the game's own code
+
+`tools/mipsrun.py` runs GAME.EXE's routines over a RAM snapshot -- an R3000's
+integer instructions, delay slots, RAM and scratchpad, with ClearOTagR, the
+sound and the pad stood in for. `frame(ram, [(routine, args...), ...])` runs
+`frame_begin` and the routines and returns the frame they built, as
+`tools/gpuframe.py` reads it; `cpu.watch[addr] = fn` traces a call without
+taking it over. `--check` draws `menu1`'s main page again from the snapshot
+and holds it to the frame the snapshot carries. The menus' self-test cases
+for screens nobody has a snapshot of come from it (`tools/ui.py export`).
+
+```
+python3 tools/mipsrun.py --check
+```
+
 ### Watching the two side by side
 
 `emu/bp16.lua` also overwrites `out/godot/live.txt` once per game frame, and the

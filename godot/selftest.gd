@@ -762,6 +762,10 @@ func _menus() -> bool:
 				KFMenu.menu_page(o, lk, 0, 6, int(case["sel"]))
 			"equip":
 				KFMenu.panel(o, lk, KFMenu.equipment_list(case["equip"], int(case["sel"])), 3)
+			"ratings":
+				KFMenu.ratings_page(o, lk, case["offense"], case["defense"])
+			"page":
+				KFMenu.menu_page(o, lk, int(case["page"]), int(case["n"]), int(case["sel"]))
 			"equip_list":
 				var inv := PackedByteArray()
 				inv.resize(150)

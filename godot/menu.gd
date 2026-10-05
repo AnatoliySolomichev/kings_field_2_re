@@ -41,6 +41,21 @@ const NOTHING_HAPPENS := 0xA
 const KEYS := [135, 137, 138, 139, 140, 142, 144]
 # ui_panel's modes with no count column
 const NO_COUNTS := [2, 3, 4, 8, 9, 0x10]
+# ui_ratings_page's lines, as its sb's leave the label record for each: two
+# spaces, and SLASH, BLOW, STAB, then HOLY, FIRE, EARTH, WIND, WATER MAGIC
+# on the offense side; POISON and DARK MAGIC in their places on the defense
+const SP2 := [0x7F, 0x7F]
+const MAGIC := [0x7F, 0x0C, 0x00, 0x06, 0x08, 0x02]
+const R_SLASH := [0x12, 0x0B, 0x00, 0x12, 0x07]
+const R_BLOW := [0x01, 0x0B, 0x0E, 0x16]
+const R_STAB := [0x12, 0x13, 0x00, 0x01]
+const R_HOLY := [0x07, 0x0E, 0x0B, 0x18]
+const R_FIRE := [0x05, 0x08, 0x11, 0x04]
+const R_EARTH := [0x04, 0x00, 0x11, 0x13, 0x07]
+const R_WIND := [0x16, 0x08, 0x0D, 0x03]
+const R_WATER := [0x16, 0x00, 0x13, 0x04, 0x11]
+const R_POISON := [0x0F, 0x0E, 0x08, 0x12, 0x0E, 0x0D]
+const R_DARK := [0x03, 0x00, 0x11, 0x0A]
 # ui_equip_page's lines: the range of things each lists, and the slot of
 # equip_armour it hands the choice to (line 0 is equip_weapon's)
 const EQUIP_RANGES := {0: [0x00, 0x21], 2: [0x33, 0x3E], 3: [0x22, 0x29], 4: [0x2A, 0x32],
@@ -65,6 +80,7 @@ var main_sel := 0
 var list := {}                      # the use-item screen's list
 var prompt_sel := 0
 var equip_sel := 0                  # the equipment screen's line
+var records_sel := 0                # status/records' line: offense/defense, conversation
 var chooser := {}                   # ui_equip_page's list while it is up
 var player: Node
 var acc := 0.0
@@ -668,6 +684,43 @@ static func status_page(o: Dictionary, lk: Dictionary, ps: Dictionary) -> void:
 	frame(o, lk, 0x9B, 0x1A, 0x8D, 0xB4)
 
 
+# ui_ratings_page (0x80023300), under status/records' first line: OFFENSE at
+# (30, 34) and its eight ratings below it 16 apart, DEFENSE at (164, 34) and
+# its nine halves 17 apart -- the ninth, the poison resistance (0x801b255a),
+# fourth -- each number in six digits 0x4d right of its label; the frame
+# (20, 26, 276, 180) round them, and "return" under it. tools/mipsrun.py runs
+# the routine itself over a snapshot's RAM for the self-test's cases.
+# @orig game:0x80023300 ui_ratings_page  status:verified -- the game's own code run over menu1's RAM draws what this draws, four sets of ratings (tools/mipsrun.py)
+static func ratings_page(o: Dictionary, lk: Dictionary, off: Array, dfn: Array) -> void:
+	var style: Array = rec(LABEL_STYLE)
+	var nstyle: Array = rec(NUMBER_STYLE)
+	var words: Dictionary = data["ratings"]
+	var sides := [
+		[30, 34, 16, 50, words["offense"], [
+			[R_SLASH, 0], [R_BLOW, 1], [R_STAB, 2], [R_HOLY + MAGIC, 3],
+			[R_FIRE + MAGIC, 4], [R_EARTH + MAGIC, 5], [R_WIND + MAGIC, 6],
+			[R_WATER + MAGIC, 7]], off],
+		[164, 34, 17, 51, words["defense"], [
+			[R_SLASH, 0], [R_BLOW, 1], [R_STAB, 2], [R_POISON, 8],
+			[R_DARK + MAGIC, 3], [R_FIRE + MAGIC, 4], [R_EARTH + MAGIC, 5],
+			[R_WIND + MAGIC, 6], [R_WATER + MAGIC, 7]], dfn],
+	]
+	for side in sides:
+		var x := int(side[0])
+		draw_label(o, lk, style, x, int(side[1]), side[4])
+		var y := int(side[3])
+		for line in side[5]:
+			draw_label(o, lk, style, x, y, SP2 + line[0] + [0xFF])
+			var v: Array = side[6]
+			var k := int(line[1])
+			draw_number(o, lk, nstyle, x + 0x4D, y,
+				number_digits(int(v[k]) if k < v.size() else 0, 6, 0, 0))
+			y += int(side[2])
+	frame(o, lk, 20, 26, 276, 180)
+	button(o, lk, 128, 214, int(lk["cancel"]))
+	small_text(o, lk, 138, 214, data["words"]["return"])
+
+
 # @port helper -- bytes copied over the front of a record on the stack, as lwl/lwr and sb do
 static func _put(dst: Array, src: Array) -> void:
 	for i in src.size():
@@ -759,6 +812,8 @@ func _close() -> void:
 # @orig game:0x800221e8 sub_800221e8  status:transcribed -- the main page's choice: up and down round the six, the confirm and the cancel
 # @orig game:0x800222fc ui_menu_chrome  status:partial -- the list's up and down, the confirm and the cancel; not the quantity or the model's turning
 # @orig game:0x80024c70 ui_prompt  status:partial -- kind 0, "use" and "cancel"
+# @orig game:0x8001d784 menu_records  status:partial -- status/records' two lines; CONVERSATION (text_pager) not here
+# @orig game:0x8001d8a4 menu_ratings  status:transcribed -- the ratings page until a button is pressed
 func _step(press: int) -> void:
 	var confirm := 0x40 if int(look["confirm"]) == 3 else 0x20
 	var cancel := 0x20 if int(look["confirm"]) == 3 else 0x40
@@ -777,6 +832,9 @@ func _step(press: int) -> void:
 				elif main_sel == 2:
 					equip_sel = 0                       # ui_menu_label's 0
 					state = "equip"
+				elif main_sel == 3:
+					records_sel = 0
+					state = "records"
 				else:
 					KFInfo.note("menu: line %d is not ported yet" % main_sel)
 			elif press & cancel:
@@ -804,6 +862,25 @@ func _step(press: int) -> void:
 					state = "use_item"
 			elif press & cancel:
 				state = "use_item"
+		"records":
+			# sub_8001d784: sub_800221e8 over page 1's two lines
+			if press & UP:
+				records_sel = 1 if records_sel == 0 else records_sel - 1
+				moved = true
+			elif press & DOWN:
+				records_sel = 0 if records_sel == 1 else records_sel + 1
+				moved = true
+			elif press & confirm:
+				if records_sel == 0:
+					state = "ratings"
+				else:
+					KFInfo.note("menu: the conversations' record is not ported yet")
+			elif press & cancel:
+				state = "main"
+		"ratings":
+			# sub_8001d8a4: the page until any button is pressed
+			if press != 0:
+				state = "records"
 		"equip":
 			var s := equipment_list(_equip_state(), equip_sel)
 			if press & (UP | DOWN):
@@ -935,6 +1012,10 @@ func _build() -> void:
 		"prompt":
 			panel(ot, look, list, 1 | 0x8000)
 			options(ot, look, prompt_sel)
+		"records":
+			menu_page(ot, look, 1, 2, records_sel)
+		"ratings":
+			ratings_page(ot, look, player.offense, player.defence + [player.resist])
 		"equip":
 			panel(ot, look, equipment_list(_equip_state(), equip_sel), 3)
 		"equip_list":

@@ -2987,5 +2987,20 @@
   "name": "pedestal_put_key",
   "kind": "code",
   "evidence": "(pedestal, key): find_free_slot(0x17c, 0x10) -- the ring of slots 380..395 -- the new object's type the key and +0x38 0, the pedestal's +0x39 its place in the ring. silv1/silv2: slot 380 of type 141 stands on level 4's pedestal 108"
+ },
+ "0x8001d784": {
+  "name": "menu_records",
+  "kind": "code",
+  "evidence": "pause_menu's fourth line: page 1 of the label table (OFFENSE/DEFENSE, CONVERSATION) chosen with sub_800221e8; 0 runs menu_ratings, 1 text_pager"
+ },
+ "0x8001d8a4": {
+  "name": "menu_ratings",
+  "kind": "code",
+  "evidence": "ui_ratings_page in its own frames until a button is pressed (pad_read_latch), then sound 0xe and back"
+ },
+ "0x8007f380": {
+  "name": "ratings_labels",
+  "kind": "data",
+  "evidence": "OFFENSE (0x8007f380) and DEFENSE (0x8007f398), glyph codes, 0xff ending each; ui_ratings_page copies ten bytes of each"
  }
 }

@@ -706,6 +706,9 @@ def export(out_dir):
                      "return": gp_string(e, 0x74)},
            "pages": pages,
            # ui_status_page's words: its four labels and the six conditions
+           # ui_ratings_page's two headings, OFFENSE and DEFENSE
+           "ratings": {"offense": list(e.bytes(0x8007F380, 10)),
+                       "defense": list(e.bytes(0x8007F398, 10))},
            # the equipment screens': the ten headings, "TAKE OFF", the spells' names
            "equip": {"headings": [list(e.bytes(EQUIP_HEADINGS + 24 * i, 24))
                                   for i in range(10)],
@@ -765,6 +768,19 @@ def export_cases(e):
                       "inventory": EQUIP_INVENTORY, "prompt": prompt, "pulse": 0x31,
                       "sel": s["sel"],
                       "prims": [[d, p] for d, p in equip_list_screen(e, look, s, prompt)]})
+    # ui_ratings_page as the game's own code draws it, run over menu1's RAM by
+    # tools/mipsrun.py -- when that snapshot is here
+    menu1 = os.path.join(ROOT, "out", "snap", "menu1.ram")
+    if os.path.exists(menu1):
+        import mipsrun
+        ram = open(menu1, "rb").read()
+        for off, dfn, prims in mipsrun.ratings_cases(ram):
+            cases.append({"screen": "ratings", "offense": off, "defense": dfn,
+                          "sel": 0, "pulse": 0, "prims": [[d, p] for d, p in prims],
+                          "look": "menu1"})
+        for sel, pulse, prims in mipsrun.page_cases(ram, 1, 2):
+            cases.append({"screen": "page", "page": 1, "n": 2, "sel": sel, "pulse": pulse,
+                          "prims": [[d, p] for d, p in prims], "look": "menu1"})
     for ps in STATUS_CASES:
         look.pulse = 0x2A
         cases.append({"screen": "main", "sel": 2, "pulse": 0x2A, "status": ps,
