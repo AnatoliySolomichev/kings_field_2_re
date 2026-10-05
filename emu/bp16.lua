@@ -150,6 +150,50 @@ local function awake()
     return table.concat(out, ',')
 end
 
+-- For the port to follow the game, not only the player: what else the frame
+-- shows, after the seventeen numbers of live.txt, as three tokens --
+--   w=clock,phase,weapon   the swing: 0x801b25a4 (s16, -1 at rest), 0x801b25ae,
+--                          0x801b25af
+--   d=slot,op,state,counter,third;...   every door of object_table: op 1's
+--                          state +8, counter +0x40 and yaw +0x26 (bp24's), the
+--                          lifts' (3, 4, 5) state +8, counter +0xa, scale +0x2c
+--                          (bp27's)
+--   a=k,b9,x,y,z,yaw,anim,clock,hp;...  every actor slot in use (+0 not 0xff):
+--                          +9 (render_walk draws it while 1), +0x2c..+0x34,
+--                          the yaw +0x42, the animation +0xc, its clock +0x18
+--                          and the HP +0x1a
+local OBJECTS = 0x80191a5c        -- object_table: 396 records of 0x44
+local function swing()
+    return string.format('w=%d,%d,%d', s16(0x801b25a4), u8(0x801b25ae), u8(0x801b25af))
+end
+local function doors()
+    local out = {}
+    for k = 0, 395 do
+        local r = OBJECTS + k * 0x44
+        local op = u8(r + 4)
+        if op == 1 then
+            out[#out + 1] = string.format('%d,1,%d,%d,%d', k, u16(r + 8), u16(r + 0x40),
+                                          s16(r + 0x26))
+        elseif op >= 3 and op <= 5 then
+            out[#out + 1] = string.format('%d,%d,%d,%d,%d', k, op, u16(r + 8),
+                                          u16(r + 0xa), u16(r + 0x2c))
+        end
+    end
+    return 'd=' .. table.concat(out, ';')
+end
+local function actors()
+    local out = {}
+    for k = 0, 199 do
+        local a = ACTORS + k * 0x88
+        if u8(a) ~= 0xff then
+            out[#out + 1] = string.format('%d,%d,%d,%d,%d,%d,%d,%d,%d', k, u8(a + 9),
+                s32(a + 0x2c), s32(a + 0x30), s32(a + 0x34), s16(a + 0x42),
+                u8(a + 0xc), u16(a + 0x18), u16(a + 0x1a))
+        end
+    end
+    return 'a=' .. table.concat(out, ';')
+end
+
 local clock = os and os.clock or function() return 0 end
 local t0 = clock()
 local frame = 0
@@ -203,11 +247,11 @@ arm(0x8002fe1c, 'frame', function()
     local live = io.open(LIVE_TMP, 'w')
     if live then
         -- 14-17: HP, MP and the weapon and magic meters, for the port's panel
-        live:write(string.format('%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d\n',
+        live:write(string.format('%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %s %s %s\n',
             frame, s32(PX), s32(PY), s32(PZ), s16(ANG), u8(VSTATE), s16(VVEL),
             s16(FWD), s16(STRAFE), u16(BTN), u8(0x8018fad9), s16(PITCH),
             s32(VBLANKS), u16(0x801b24fc), u16(0x801b2500), u16(0x801b2502),
-            u16(0x801b2506)))
+            u16(0x801b2506), swing(), doors(), actors()))
         live:close()
         os.rename(LIVE_TMP, LIVE)
     end

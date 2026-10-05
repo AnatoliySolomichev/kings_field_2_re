@@ -5140,7 +5140,12 @@ burrow 258 of 298, the volley 42 of 42, wander 251 of 558 (its aim, +0x64,
 was not logged). bp16 logs the rest from now on -- +0x58, +0x64, +0xd, +0x52,
 +0x70, +0x72, +0x1a, +0xc -- and the check uses them when they are there.
 **With every field logged, 3939 of 3942 frames are exact**, the flinch (225)
-and the dying (336) included. What that session taught: opcode 6's last
+and the dying (336) included -- and, with a longer session on 2026-10-05,
+**12 095 of 12 098** on level 0 and **7200 of 7272 on level 4**, whose
+creatures the machine had never been held to: the log walks from one level to
+the other, and its frames are now checked a level at a time, each with its
+own creatures in the slots (261 and 221 behaviour runs, every one a whole
+number of cycles). What the first session taught: opcode 6's last
 sub-state is `walk_to` the aim with no turn of its own (most 0, turn accel 0,
 `0x80052284`) -- a rate it already has still turns it -- not a drive; lower
 slots have moved already when a higher one looks at them; and a player by a

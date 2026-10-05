@@ -56,6 +56,10 @@ enum Exit { RUNNING = 0, TO_OPENING = 2, TO_ENDING_A = 3, TO_ENDING_B = 4 }
 # creatures, the doors and the effects stand still, and only render_frame's
 # part goes on (the banners, messages.gd).
 static var modal := false
+# While the port follows the emulator (ghost.gd, C, with bp16 writing
+# live.txt): the creatures, the doors and the swing are the game's, laid over
+# the port's every frame, and their own machines stand still.
+static var follow := false
 
 const FRAME := [
 	[0x800341e8, "light_table_reset", false],

@@ -147,7 +147,8 @@ func _process(dt: float) -> void:
 	acc = minf(acc + dt, 0.25)
 	while acc >= 1.0 / TICK_HZ:
 		acc -= 1.0 / TICK_HZ
-		_pass(int(player.get("gx")), int(player.get("gz")))
+		if not KFGame.follow:         # following the emulator, they are the game's
+			_pass(int(player.get("gx")), int(player.get("gz")))
 	if changes != shown:
 		refresh()
 
@@ -212,6 +213,36 @@ func _pass(px: int, pz: int) -> void:
 		_place(k)
 	frame += 1
 	spawn_anywhere = false
+
+
+# The game's creatures, while the port follows the emulator (ghost.gd, C):
+# every slot in use with its +9, place, yaw, animation, clock and HP as bp16
+# sends them. A slot it does not send is free in the game (+0 is 0xff): gone.
+# @port check -- the game's actors laid over the port's, for the comparison
+func follow(entries: Array) -> void:
+	var seen := {}
+	for e in entries:
+		var k := int(e[0])
+		if k < 0 or k >= SLOTS or actors[k] == null:
+			continue
+		seen[k] = true
+		var a: Dictionary = actors[k]
+		if int(a["st"]) != int(e[1]):
+			a["st"] = int(e[1])
+			changes += 1
+		a["px"] = int(e[2])
+		a["py"] = int(e[3])
+		a["pz"] = int(e[4])
+		a["ry"] = int(e[5]) & 0xFFF
+		a["anim"] = int(e[6])
+		a["clock"] = int(e[7])
+		a["hp"] = int(e[8])
+		_place(k)
+	for k in SLOTS:
+		var a = actors[k]
+		if a != null and not seen.has(k) and int(a["st"]) != GONE:
+			a["st"] = GONE
+			changes += 1
 
 
 # Where the creature's node stands and faces: its position and its yaw +0x42.

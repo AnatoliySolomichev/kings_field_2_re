@@ -231,9 +231,13 @@ the drops, against the snapshots                       3 of 3 lying as the fall 
                                                        them (consistent, not a proof)
 the creatures' behaviour tables, against snapshots     168 896 of 168 896 bytes,
                                                        69 of 69 awake actors
-the creatures' machine, against the bp16 act= log      181 of 181 behaviour runs;
+the creatures' machine, against the bp16 act= log      level 0: 261 of 261 runs,
+                                                       12095 of 12098 frames with
+                                                       every field logged; level
+                                                       4: 221 of 221, 7200 of 7272
+                                                       (before: 181 of 181 runs,
                                                        3939 of 3942 frames with
-                                                       every field logged
+                                                       every field logged)
 the spores, against the bp26 recording                 118 of 118 frames,
                                                        118 of 118 strikes
 the walking, against the recording (replay rung 2)     124 891 of 125 116 frames;

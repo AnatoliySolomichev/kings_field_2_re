@@ -2,6 +2,8 @@ extends Node3D
 # The game and the port, in one world, frame for frame.
 #
 #   C  compare on / off      L  locked / free      F9  resync now
+#      -- and while it is on, the creatures, the doors and the swing are the
+#      game's too, as bp16 sends them (_follow)
 #   B  take the buttons from the emulator
 #   V  all the creatures / only the ones the game draws
 #
@@ -211,7 +213,7 @@ func _read() -> Dictionary:
 	var parts := f.get_as_text().strip_edges().split(" ", false)
 	if parts.size() < 11:
 		return {}
-	return {
+	var out := {
 		"age": int(Time.get_unix_time_from_system()) -
 			FileAccess.get_modified_time(LIVE),
 		"f": int(parts[0]),
@@ -226,13 +228,34 @@ func _read() -> Dictionary:
 		"wm": int(parts[15]) if parts.size() > 16 else -1,
 		"mm": int(parts[16]) if parts.size() > 16 else -1,
 	}
+	# bp16's three tokens past the numbers: the swing, the doors, the creatures
+	for i in range(17, parts.size()):
+		var t: String = parts[i]
+		var rows := []
+		for e in t.substr(2).split(";", false):
+			var v := []
+			for x in e.split(",", false):
+				v.append(int(x))
+			rows.append(v)
+		if t.begins_with("w=") and rows.size() == 1 and rows[0].size() == 3:
+			out["swing"] = rows[0]
+		elif t.begins_with("d="):
+			out["doors"] = rows.filter(func(r): return r.size() == 5)
+		elif t.begins_with("a="):
+			out["actors"] = rows.filter(func(r): return r.size() == 9)
+	return out
 
 
 func _process(_dt: float) -> void:
 	if player == null or not (compare or live_input):
+		KFGame.follow = false
 		return
 	var cur := _read()
 	var why := _why_not(cur)
+	# The port's own creatures, doors and swing stand still while the game's
+	# are laid over them -- as long as there is a game to follow, on this level
+	KFGame.follow = compare and why == "" and cur.has("actors") \
+		and int(cur["lv"]) == player._level()
 	if why != feed:
 		_hud("")
 	if why != "":
@@ -287,6 +310,7 @@ func _process(_dt: float) -> void:
 		_hud("the game is on level %d; this build has only level %d" % [
 			cur["lv"], player._level()])
 		return
+	_follow(cur)
 	if prev.is_empty() or int(cur["f"]) != int(prev["f"]) + 1:
 		prev = cur
 		_resync(cur)
@@ -319,6 +343,27 @@ func _process(_dt: float) -> void:
 		_resync(cur)
 	prev = cur
 	_hud("")
+
+
+# The game's frame laid over the port's, past the player: the swing in hand
+# (the held model draws by its clock and phase), every door's state, and every
+# creature -- so what stands and moves in the port is what stands and moves in
+# the game, frame for frame, and the port's own machines are what the
+# self-test holds to the recordings instead.
+# @port check -- the game's swing, doors and creatures laid over the port's
+func _follow(cur: Dictionary) -> void:
+	if cur.has("swing"):
+		var w: Array = cur["swing"]
+		player.wstate["clock"] = int(w[0])
+		player.wstate["phase"] = int(w[1])
+		player.weapon_id = int(w[2])
+	var dn := get_node_or_null("../Doors")
+	if dn and dn.has_method("follow") and cur.has("doors"):
+		for d in cur["doors"]:
+			dn.follow(int(d[0]), int(d[1]), int(d[2]), int(d[3]), int(d[4]))
+	var act := get_node_or_null("../Actors")
+	if act and act.has_method("follow") and cur.has("actors"):
+		act.follow(cur["actors"])
 
 
 # The rungs. The controller turns and accelerates before it steps, so the facing

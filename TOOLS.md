@@ -843,6 +843,20 @@ answering "already running".
 **C** compares, **B** takes the buttons from the emulator, **L** switches
 locked against free running, **F9** resyncs, and **1/2/3** pick the rung.
 
+**While C is on, the rest of the game's frame is laid over the port too.**
+Past its seventeen numbers the line carries three tokens: `w=` the swing
+(its clock `0x801b25a4`, phase `0x801b25ae` and the weapon), `d=` every door
+of `object_table` (a swinging door's state, counter `+0x40` and yaw, a lift's
+state, counter `+0xa` and scale) and `a=` every actor slot in use (`+9`, the
+place, the yaw, the animation and its clock, the HP). The port's own
+creature machine, door arms and swing stand still meanwhile (`KFGame.follow`),
+and the doors lay their collision stamps as the game's arm would have by
+that counter -- so a blow, a door opened in the emulator and the creatures
+walking about show in the port as they happen there. Before, C moved only the
+player: the port's creatures went their own way, and with B off nothing
+pressed in the emulator reached the port. The port's own machines are what
+the self-test and the recordings hold to the game; this is for looking.
+
 **B is the one to reach for first.** The line `bp16.lua` writes carries the
 game's own decoded button word — `0x801b265c`, the same word
 `player_controller` reads — so with B on the port stops reading its keyboard

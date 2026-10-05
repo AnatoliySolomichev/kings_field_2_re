@@ -879,7 +879,7 @@ def check(out=sys.stdout):
     return ok == awake and snaps > 0
 
 
-def check_log(out=sys.stdout, path=None):
+def check_log(out=sys.stdout, path=None, lv=0):
     """What bp16's act= can hold the machine to without its hidden state.
 
     * **how long a behaviour runs**: to the end of its animation clock,
@@ -894,7 +894,9 @@ def check_log(out=sys.stdout, path=None):
     import math
     import replay
     rows, _ = replay.load(path) if path else replay.load()
-    rows = [r for r in rows if r.get("act") is not None]
+    # one level's frames: a log that walked on to another carries its creatures
+    # in the same slots, which are other creatures there
+    rows = [r for r in rows if r.get("act") is not None and r["lv"] == lv]
     if not rows:
         print("  no bp16 frames with act= to check the machine against", file=out)
         return True
@@ -941,8 +943,8 @@ def check_log(out=sys.stdout, path=None):
         if steps.get(op) and op in speed:
             walk.append(f"opcode {op} at {steps[op].most_common(1)[0][0]} a frame "
                         f"for a speed of {speed[op]}")
-    print(f"  {ok} of {ok + bad} runs of one behaviour last a whole number of "
-          f"animation cycles; " + ", ".join(walk), file=out)
+    print(f"  level {lv}: {ok} of {ok + bad} runs of one behaviour last a whole "
+          f"number of animation cycles; " + ", ".join(walk), file=out)
     return bad == 0
 
 
@@ -954,7 +956,7 @@ def _no_rand():
     raise NeedsRand()
 
 
-def check_locked(out=sys.stdout, path=None, verbose=False):
+def check_locked(out=sys.stdout, path=None, verbose=False, lv=0):
     """bp16's act= with the hidden fields (2026-09-28 on): each creature
     stepped once from what the log says it was, against the next frame.
 
@@ -968,7 +970,7 @@ def check_locked(out=sys.stdout, path=None, verbose=False):
     import movement
     import replay
     rows, _ = replay.load(path) if path else replay.load()
-    rows = [r for r in rows if r.get("act") and "phase" in r["act"][0]]
+    rows = [r for r in rows if r.get("act") and "phase" in r["act"][0] and r["lv"] == lv]
     if not rows:
         print("  no bp16 frames with the full act= to lock the machine to",
               file=out)
@@ -1112,15 +1114,15 @@ def check_locked(out=sys.stdout, path=None, verbose=False):
     for line in (full_miss or firsts):
         print(line, file=out)
     if full[1]:
-        print(f"  with every field logged (bp16 since 2026-09-29): {full[0]} of "
-              f"{full[1]} creature frames exact", file=out)
+        print(f"  level {lv}, with every field logged (bp16 since 2026-09-29): "
+              f"{full[0]} of {full[1]} creature frames exact", file=out)
     if shoved:
         print(f"  ({shoved} frames with the player by a swinging door set apart: "
               f"its shove moves them after the creature looked)", file=out)
     tot_ok = sum(v[0] for v in res.values())
     tot = sum(v[0] + v[1] for v in res.values())
-    print(f"  {tot_ok} of {tot} creature frames stepped from the log land where "
-          f"the game put them -- " + ", ".join(
+    print(f"  level {lv}: {tot_ok} of {tot} creature frames stepped from the log land "
+          f"where the game put them -- " + ", ".join(
               f"opcode {op}: {v[0]} of {v[0] + v[1]}" + (f" ({v[2]} of them with rand)" if v[2] else "")
               for op, v in sorted(res.items())), file=out)
     return tot_ok == tot
@@ -1197,8 +1199,13 @@ def main():
     if a == "--locked":
         sys.exit(0 if check_locked(verbose=True) else 1)
     if a == "--check":
-        ok = check() and check_log()
-        check_locked()           # a report: the log still hides some fields
+        ok = check()
+        # every level the log walked on, each with its own creatures in the slots
+        import replay
+        rows, _ = replay.load()
+        for lv in sorted({r["lv"] for r in rows if r.get("act") is not None}) or [0]:
+            ok = check_log(lv=lv) and ok
+            check_locked(lv=lv)      # a report: the log still hides some fields
         sys.exit(0 if ok else 1)
     lv = int(a)
     for kd in kinds(lv):

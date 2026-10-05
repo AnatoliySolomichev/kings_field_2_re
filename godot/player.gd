@@ -526,8 +526,10 @@ func _frame(dir: Vector3) -> void:
 	_use()
 	# player_turn (0x80030424): a swing begins on the attack button's edge
 	# when the pause after the last blow is over (0x8002c040).
-	# sub_8002c040 starts nothing with no weapon in hand
-	if attack_latch and int(wstate["pause"]) == 0 and weapon_id < KFWeapon.records.size():
+	# sub_8002c040 starts nothing with no weapon in hand; following the
+	# emulator, the swing is the game's (ghost.gd)
+	if attack_latch and int(wstate["pause"]) == 0 and weapon_id < KFWeapon.records.size() \
+			and not KFGame.follow:
 		KFWeapon.start(wstate, KFWeapon.records[weapon_id])
 	attack_latch = false
 	var cap := SPEED_MAX_RUN if Input.is_key_pressed(KEY_SHIFT) else SPEED_MAX
@@ -616,8 +618,9 @@ func _use() -> void:
 # or between swings the meter's refill; the blow is actors.gd's to land.
 # @orig game:0x8002d2a0 held_item_tick  status:partial -- which of its two paths runs: the swing or the refill (weapon.gd)
 func _weapon() -> void:
-	# held_item_tick's .L47: with no weapon (0xff), nothing at all
-	if weapon_id >= KFWeapon.records.size():
+	# held_item_tick's .L47: with no weapon (0xff), nothing at all; and
+	# following the emulator the swing and the meter are the game's
+	if weapon_id >= KFWeapon.records.size() or KFGame.follow:
 		return
 	var rec: PackedByteArray = KFWeapon.records[weapon_id]
 	if int(wstate["clock"]) == -1:

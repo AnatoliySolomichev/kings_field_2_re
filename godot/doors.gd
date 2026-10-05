@@ -149,17 +149,19 @@ func _process(dt: float) -> void:
 		return
 	if KFGame.modal:                  # object_give's frames: they stand still
 		return
-	if KFPad.hit(KFPad.USE):
-		_interact()
-	acc = minf(acc + dt, 0.25)
-	while acc >= 1.0 / TICK_HZ:
-		acc -= 1.0 / TICK_HZ
-		for d in doors:
-			if int(d["state"]) != 0:
-				_step(d)
-		for d in lifts:
-			if int(d["state"]) != 0:
-				_lift(d)
+	# following the emulator, the doors are the game's (follow), drawn here
+	if not KFGame.follow:
+		if KFPad.hit(KFPad.USE):
+			_interact()
+		acc = minf(acc + dt, 0.25)
+		while acc >= 1.0 / TICK_HZ:
+			acc -= 1.0 / TICK_HZ
+			for d in doors:
+				if int(d["state"]) != 0:
+					_step(d)
+			for d in lifts:
+				if int(d["state"]) != 0:
+					_lift(d)
 	for d in doors:
 		if d["node"]:
 			# rot_matrix_y is cos, -sin / sin, cos, so with y and z flipped the
@@ -319,6 +321,10 @@ func _lift_clear(d: Dictionary) -> bool:
 # tiles of the drawn layer are kept to show or hide the door's tNNN cells.
 # @orig game:0x800443c8 stamp_table  status:transcribed -- the flag byte (0xff here) not carried
 func _stamp_table(d: Dictionary, t: int, sel: int) -> void:
+	if t == 1:
+		d["tile_open"] = sel == 1
+	else:
+		d["shape_open"] = sel == 1
 	var hi := int(d["hi"])
 	var lo := 3 - hi
 	var cells: PackedInt32Array = player.coll.cells
@@ -367,11 +373,42 @@ func _draw_lift(d: Dictionary) -> void:
 		KFAnim.animate(d["skin"], int(d["anim"]), int(d["counter"]))
 
 
+# The game's own door, while the port follows the emulator (ghost.gd, C): its
+# state, counter and yaw or scale as bp16 sends them, and the stamps its arm
+# would have laid down by then -- a swinging door's doorway open from counter
+# 0x19 to 0x12c of state 2 (the arm stamps at 0x18 and at 0x12c), a lift's
+# tiles while it is not at rest and its shapes from 0xc18 of state 1 to the
+# end of the wait (0x14).
+# @port check -- the game's door laid over the port's, for the comparison
+func follow(slot: int, op: int, state: int, counter: int, third: int) -> void:
+	for d in (doors if op == 1 else lifts):
+		if int(d["slot"]) != slot:
+			continue
+		d["state"] = state
+		d["counter"] = counter
+		if op == 1:
+			d["yaw"] = third
+			var open := state == 2 and counter > STAMP_OPEN and counter <= CLOSE_AT
+			if open != bool(d.get("open", false)):
+				_stamp(d, 0 if open else 2)
+		else:
+			d["scale"] = third
+			var tile := state != 0
+			var shape := (state == 1 and counter >= LIFT_PASSABLE) \
+				or (state >= 2 and state <= LIFT_WAIT)
+			if tile != bool(d.get("tile_open", false)):
+				_stamp_table(d, 1, 1 if tile else 0)
+			if shape != bool(d.get("shape_open", false)):
+				_stamp_table(d, 0, 1 if shape else 0)
+		return
+
+
 # stamp_rect (0x800445b8) over the port's collision cells, with the mask the
 # door uses: layer 1's rotation (added to by the turn) and its shape. `shift` is
 # where the template sits relative to p[+0x13]: 0 open, 1 closed, 2 closed again.
 # @orig game:0x800445b8 stamp_rect  status:transcribed
 func _stamp(d: Dictionary, shift: int) -> void:
+	d["open"] = shift == 0
 	var t: Array = d["tail"]
 	var b0 := int(d["b0"])
 	if not (b0 & 2):

@@ -11,6 +11,7 @@
 /emu/*.pid
 /emu/*.html
 /emu/*.js
+/emu/*.sstate*
 
 # Everything derived: RAM snapshots, decoded images, rendered maps, caches.
 # All of it regenerates from the disc with the tools in tools/.
