@@ -97,8 +97,20 @@ const USE_OWN := 0x9C4             # find_object's $a3, the point's height
 const USE_FACING := 0x200
 const DRAWN := 0xF0                # draw_terrain skips a tile at or above this (0x8003c1b8)
 
+# The gates: opcode 2 (0x800475f8), level 4's walls -- the lift's rise, but
+# stamp_rect lays the doorway down from three templates a gate's width
+# apart (open, moving, shut), and the model stands while shut. A lock odd and
+# between 0x96 and 0xc6 opens it of itself for good; the others open to USE
+# once the pedestals have set the lock's bits (0xfd, 0xfe, 0xff).
+const GATE_OPS := [2]
+const GATE_CLEAR := 0x1130         # collide_query's radius for the gateway
+const GATE_OPEN := 0               # the templates, in gate widths along
+const GATE_MOVING := 1
+const GATE_SHUT := 2
+
 var doors: Array = []
 var lifts: Array = []
+var gates: Array = []
 var player: Node3D
 var acc := 0.0
 
@@ -118,6 +130,16 @@ func _ready() -> void:
 	var level := get_node_or_null("../Level")
 	for row in rows:
 		var d: Dictionary = row
+		if int(d["op"]) in GATE_OPS:
+			d["node"] = objs.find_child("l%03d" % int(d["slot"]), true, false) if objs else null
+			d["yaw0"] = int(d["yaw"])
+			d["state"] = 0
+			d["counter"] = 0
+			d["lock"] = int(d["tail"][0])
+			d["laid"] = GATE_SHUT       # load_object_placement's stamp
+			d["skin"] = {}
+			gates.append(d)
+			continue
 		if int(d["op"]) in LIFT_OPS:
 			d["node"] = objs.find_child("l%03d" % int(d["slot"]), true, false) if objs else null
 			d["tiles"] = level.find_child("t%03d" % int(d["slot"]), true, false) if level else null
@@ -145,7 +167,7 @@ func _ready() -> void:
 
 # @port engine -- USE into _interact, the arms at 15 a second, the nodes turned to the yaw
 func _process(dt: float) -> void:
-	if doors.is_empty() and lifts.is_empty():
+	if doors.is_empty() and lifts.is_empty() and gates.is_empty():
 		return
 	if KFGame.modal:                  # object_give's frames: they stand still
 		return
@@ -162,6 +184,8 @@ func _process(dt: float) -> void:
 			for d in lifts:
 				if int(d["state"]) != 0:
 					_lift(d)
+			for d in gates:
+				_gate(d)
 	for d in doors:
 		if d["node"]:
 			# rot_matrix_y is cos, -sin / sin, cos, so with y and z flipped the
@@ -169,6 +193,8 @@ func _process(dt: float) -> void:
 			d["node"].rotation.y = float(int(d["yaw"]) - int(d["yaw0"])) * TAU / 4096.0
 	for d in lifts:
 		_draw_lift(d)
+	for d in gates:
+		_draw_gate(d)
 
 
 # object_interact for the doors: find_object's point for class 1 is the player,
@@ -192,6 +218,20 @@ func _interact() -> void:
 			continue
 		d["state"] = 1
 		KFInfo.note("door: the lift door in slot %d opens" % int(d["slot"]))
+	# classes 0 to 2 the same: state 0, the lock 0xff -- or 0xfd or 0xfe unless
+	# the type is 0xae; a gate (class 2) through find_object's plain test
+	for d in gates:
+		var gl := int(d["lock"])
+		if int(d["state"]) != 0 or not (gl == 0xFF or ((gl == 0xFD or gl == 0xFE) and int(d["type"]) != 0xAE)):
+			continue
+		if _in_range(int(d["x"]), int(d["y"]), int(d["z"]), player.gx, player.gy + USE_UP, player.gz,
+				int(d["reach"]) + USE_REACH, int(d["top"]), USE_OWN) < 0:
+			continue
+		if not _facing(player.facing,
+				c.vec_angle(int(d["x"]) - player.gx, int(d["z"]) - player.gz), USE_FACING):
+			continue
+		d["state"] = 1
+		KFInfo.note("door: the gate in slot %d rises" % int(d["slot"]))
 	for d in doors:
 		if int(d["state"]) != 0:
 			continue
@@ -314,6 +354,82 @@ func _lift_clear(d: Dictionary) -> bool:
 		PLAYER_BODY, LIFT_OWN) < 0
 
 
+# @port helper -- hands gate_step the gateway test and stamp_rect, keeping the template laid
+func _gate(d: Dictionary) -> void:
+	gate_step(d, func() -> bool: return _gate_clear(d),
+		func(k: int) -> void:
+			_stamp(d, k * int(d["w"]))
+			d["laid"] = k)
+
+
+# One frame of the gate's arm (0x800475f8) on d's state, counter and lock;
+# `clear` answers collide_query about the gateway, `stamp(k)` lays the
+# template k gate-widths along down. tools/doors.py gate_step.
+# @orig game:0x800475f8 object_interpreter+0x5e8  status:transcribed -- opcode 2's arm, as tools/doors.py gate_step; no recording of a gate yet
+static func gate_step(d: Dictionary, clear: Callable, stamp: Callable) -> void:
+	var st := int(d["state"])
+	var auto := (((int(d["lock"]) + 0x6A) & 0xFF) < 0x31) and (int(d["lock"]) & 1) != 0
+	if st == 0:
+		if auto:
+			d["state"] = 1
+		return
+	if st == 1:
+		if int(d["counter"]) == 0:
+			stamp.call(GATE_MOVING)
+		d["counter"] = (int(d["counter"]) + LIFT_RATE) & 0xFFFF
+		if int(d["counter"]) == LIFT_PASSABLE:
+			stamp.call(GATE_OPEN)
+		if int(d["counter"]) >= 0x1000:
+			d["counter"] = LIFT_OPEN
+			d["state"] = 2
+		return
+	if st == LIFT_WAIT:
+		if auto:
+			return                             # it opened itself; it stays so
+		if clear.call():
+			d["state"] = 0x15
+			stamp.call(GATE_MOVING)
+		return
+	if st == 0x15:
+		d["counter"] = (int(d["counter"]) - LIFT_RATE) & 0xFFFF
+		if int(d["counter"]) != 0 and int(d["counter"]) < 0x8000:
+			return
+		d["counter"] = 0
+		d["state"] = 0
+		stamp.call(GATE_SHUT)
+		return
+	d["state"] = (st + 1) & 0xFFFF
+
+
+# collide_query(the gate, 0x1130, 0xc80, 0xc0) is 0: no awake creature within
+# its radius + 0x1130 and the player not within 0x1130 + 0x320.
+# @orig game:0x80033f38 collide_query  status:transcribed -- the gateway's test, as the lift's with 0x1130
+func _gate_clear(d: Dictionary) -> bool:
+	var x := int(d["x"])
+	var y := int(d["y"])
+	var z := int(d["z"])
+	var an := get_node_or_null("../Actors")
+	if an and an.has_method("in_range_of") and an.in_range_of(x, y, z, GATE_CLEAR, LIFT_OWN) != -1:
+		return false
+	return _in_range(player.gx, player.gy, player.gz, x, y, z, GATE_CLEAR + PLAYER_R,
+		PLAYER_BODY, LIFT_OWN) < 0
+
+
+# The gate's model, standing while shut and lifted by its counter: the
+# animation +1 names at the counter's clock, as a lift door's.
+# @orig game:0x8003e34c draw_model_plain  status:partial -- the gate's model at the counter's frame
+func _draw_gate(d: Dictionary) -> void:
+	var nd: Node3D = d["node"]
+	if nd == null:
+		return
+	if (d["skin"] as Dictionary).is_empty():
+		if not KFAnim.models.has(int(d["model"])):
+			KFAnim.load_from("res://anim%02d.json" % player._level())
+		d["skin"] = KFAnim.skin(nd, int(d["model"]))
+	if not (d["skin"] as Dictionary).is_empty():
+		KFAnim.animate(d["skin"], int(d["anim"]), int(d["counter"]))
+
+
 # stamp_table (0x800443c8) with the cells worked out at export: table 0 is the
 # shape, 1 the tile; `sel` picks an entry's first four bytes or its last. 0xfc
 # leaves a shape and 0xff a tile as it is. The shapes go into the port's
@@ -378,9 +494,26 @@ func _draw_lift(d: Dictionary) -> void:
 # would have laid down by then -- a swinging door's doorway open from counter
 # 0x19 to 0x12c of state 2 (the arm stamps at 0x18 and at 0x12c), a lift's
 # tiles while it is not at rest and its shapes from 0xc18 of state 1 to the
-# end of the wait (0x14).
+# end of the wait (0x14), a gate's templates (its lock comes as the third).
 # @port check -- the game's door laid over the port's, for the comparison
 func follow(slot: int, op: int, state: int, counter: int, third: int) -> void:
+	if op in GATE_OPS:
+		for d in gates:
+			if int(d["slot"]) == slot:
+				d["state"] = state
+				d["counter"] = counter
+				d["lock"] = third
+				# the template the arm has laid by then: open from 0xc18 of the
+				# rise to the end of the wait, shut at rest, moving otherwise
+				var want := GATE_MOVING
+				if (state == 1 and counter >= LIFT_PASSABLE) or (state >= 2 and state <= LIFT_WAIT):
+					want = GATE_OPEN
+				elif state == 0:
+					want = GATE_SHUT
+				if want != int(d.get("laid", GATE_SHUT)):
+					_stamp(d, want * int(d["w"]))
+					d["laid"] = want
+		return
 	for d in (doors if op == 1 else lifts):
 		if int(d["slot"]) != slot:
 			continue
@@ -404,8 +537,11 @@ func follow(slot: int, op: int, state: int, counter: int, third: int) -> void:
 
 
 # stamp_rect (0x800445b8) over the port's collision cells, with the mask the
-# door uses: layer 1's rotation (added to by the turn) and its shape. `shift` is
-# where the template sits relative to p[+0x13]: 0 open, 1 closed, 2 closed again.
+# doors and gates use (0x2d): layer 1's rotation (added to by the turn), its
+# shape, and bit 0x40 of its +9 -- the fence, a wall to the creatures alone,
+# which an open gate's template has and a shut one's has not. The tile (mask 1)
+# is the same in the templates the port's levels use. `shift` is where the
+# template sits relative to p[+0x13]: 0 open, 1 closed, 2 closed again.
 # @orig game:0x800445b8 stamp_rect  status:transcribed
 func _stamp(d: Dictionary, shift: int) -> void:
 	d["open"] = shift == 0
@@ -438,6 +574,7 @@ func _stamp(d: Dictionary, shift: int) -> void:
 		row = -1
 		dx += h - 1
 	var cells: PackedInt32Array = player.coll.cells
+	var fence: PackedByteArray = player.coll.fence
 	var src := sz * 80 + sx
 	var dst := dz * 80 + dx
 	for _r in h:
@@ -448,11 +585,14 @@ func _stamp(d: Dictionary, shift: int) -> void:
 				cells[o * 6 + 4] = (cells[s * 6 + 4] + rot) & 3
 			if MASK & 8:
 				cells[o * 6 + 3] = cells[s * 6 + 3]
+			if MASK & 0x20 and not fence.is_empty():
+				fence[o] = (fence[o] & 1) | (fence[s] & 2)
 			s += 1
 			o += step
 		src += 80
 		dst += row
 	player.coll.cells = cells
+	player.coll.fence = fence
 
 
 # facing_test (0x80016a2c): is `b` within `tol` of `a`, either way round.

@@ -177,6 +177,10 @@ local function doors()
         elseif op >= 3 and op <= 5 then
             out[#out + 1] = string.format('%d,%d,%d,%d,%d', k, op, u16(r + 8),
                                           u16(r + 0xa), u16(r + 0x2c))
+        elseif op == 2 then
+            -- a gate (level 4's walls): its state, counter and lock
+            out[#out + 1] = string.format('%d,2,%d,%d,%d', k, u16(r + 8),
+                                          u16(r + 0xa), u8(r + 0x38))
         end
     end
     return 'd=' .. table.concat(out, ';')

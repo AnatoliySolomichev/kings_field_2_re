@@ -2633,6 +2633,64 @@ open while they stand in its doorway's reach -- `0x700` past their radius of
 The 35 frames of the first recording, which logged no answers, are counted
 apart.
 
+### A gate: opcode 2
+
+Class `0x02` -- 128 objects in the game, ten of them level 4's walls of
+types `0xaf` (model 303) and `0xb0` (304) -- gets opcode 2 and `+1` = 0;
+`load_object_placement` stamps its doorway **shut** with `stamp_rect` from the
+record's templates and marks the cells within `0x1130` as occupied. The
+templates are three blocks of layer-1 cells side by side, `type[+0xd]` wide
+and `type[+0xe]` deep, from `(p[+0x13], p[+0x14])` -- the tail's `+3` and
+`+4`: the first **open**, the next **moving**, the third **shut**. The
+doorway is `(p[+0x11], p[+0x12])`, turned by the yaw as a swinging door's.
+Level 4's are 3 by 2 at x 0..8 and 9..17 of z 78..79. With the mask `0x2d`
+the tile, the rotation, the shape and bit `0x40` of `+9` are copied; the
+tiles are the same in all three, the shapes are not (26..28 open, 98..100
+moving and shut) -- and bit `0x40`, **the fence**, is in the open template
+alone: an open gate is a wall to the creatures (`collide_query`'s flag 2 in
+their `0x93`), not to the player.
+
+**The arm** (`0x800475f8`) is the lift's rise with `stamp_rect` for the
+tables:
+
+```
+state 0         +3 |= 2; a lock (+0x38) that is odd and in 0x96..0xc6
+                ((lock + 0x6a) & 0xff < 0x31) starts it: state 1
+state 1         counter 0: +3 &= ~2, the "moving" template, sound;
+                counter += 0x48; at 0xc18 the "open" template;
+                from 0x1000 on, counter 0xfff and state 2
+state 2..0x13   state += 1: eighteen frames standing open
+state 0x14      the lock as in state 0: open for good. Else
+                collide_query(x, y, z, 0x1130, 0xc80, 0xc0) clear: state
+                0x15, the "moving" template, sound
+state 0x15      counter -= 0x48; at 0 or under: counter and state 0, the
+                "shut" template
+```
+
+`+3`'s bit 2, while it rests, makes `render_walk` ask `view_bits_around`
+the cell (the type's `+0xc`) rather than `view_bits_at` it -- the shut gate is
+drawn when the cells beside it are seen. The model moves as a lift door's:
+`draw_model_plain` with `+1` (0) as the animation and the counter as its
+clock -- model 303 lifts by `0xa00` from 0 to `0xfff`.
+
+**Opening.** `find_object` takes class 2 through its plain test
+(`0x80045f30`, as the lifts), and `object_interact`'s arm for classes 0 to 2
+opens a gate whose state is 0 and whose lock is `0xff` -- or `0xfd` or `0xfe`,
+unless the type is `0xae`. Level 4's locks: `0xff` on gates 96, 113 and 117,
+which USE opens; `0xfc` on 51, 75, 91, 92, 115 and 120, which the pedestals
+open (opcode `0x18`: each ORs its mask into its gate's lock once the key
+stands on it, and one bit is enough for types `0xaf` and `0xb0`); `0xf0` on
+74.
+
+**In the port** (`godot/doors.gd` `gate_step`, `_gate_clear`, `_draw_gate`):
+the model is `lNNN` in the objects, built by `tools/level3d.py build_lifts`
+with the lifts, and the stamps go into the collision cells and the fence
+(`_stamp`, the swinging doors' too). `tools/doors.py gate_step` is the arm in
+Python, and `godot/selftest.gd` holds the port to it over three runs -- a gate
+let drop at once, one held nine frames (lock `0xfe`), one that opened itself
+(`0x97`) and stays: 360 of 360 frames. **No recording of a gate yet**: a bp27
+session on level 4 opening gate 96 (cell (38,23)) would check it.
+
 ### Chests, and picking things up
 
 A **small chest** is three objects in one cell: the body (type 155, class

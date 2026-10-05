@@ -5,7 +5,7 @@
     python3 tools/doors.py --check    the checks alone
 
 The swinging doors against emu/bp24.lua, and the lift doors (opcodes 3 to 5,
-lift_step) against emu/bp27.lua.
+lift_step) and the gates (opcode 2, gate_step) against emu/bp27.lua.
 
 `object_interpreter`'s arm for opcode 1 (`0x8004814c`) runs once a frame for
 every class-1 door, and `godot/doors.gd` is its port; this is the same arm in
@@ -159,6 +159,85 @@ def lift_step(d, clear, stamp):
         d["counter"] = d["state"] = d["scale"] = 0
         return
     d["state"] = (st + 1) & 0xFFFF
+
+
+# The gates: opcode 2 (0x800475f8), level 4's walls. The same rise as a lift
+# door -- 0x48 a frame, 0xfff, eighteen frames, the wait, the drop -- but
+# stamp_rect lays the doorway down, from one of three templates a gate's width
+# apart: the type row's +0xd cells from the record's p[+0x13] (the template's
+# x, p[+0x14] its z) is "moving", that plus +0xd again "shut", the first "open".
+# The model stands while shut and rises with the counter. A gate whose lock is
+# odd and between 0x96 and 0xc6 opens of itself and never shuts; the others
+# open to USE (object_interact's arm for classes 0 to 2: state 0, the lock
+# 0xff, or 0xfd or 0xfe unless the type is 0xae) -- which the pedestals give
+# them, a bit of the lock each.
+GATE_OPS = (2,)
+GATE_CLEAR = 0x1130       # collide_query's radius for the doorway
+GATE_OPEN, GATE_MOVING, GATE_SHUT = 0, 1, 2      # the template, in gate widths
+
+
+def gate_auto(lock):
+    """0x80047644: a lock of 0x96..0xc6 (the byte plus 0x6a under 0x31)."""
+    return ((lock + 0x6A) & 0xFF) < 0x31
+
+
+def gate_step(d, clear, stamp):
+    """One frame of opcode 2's arm (0x800475f8) on `d` (state, counter, lock);
+    `clear()` answers collide_query(the gate, 0x1130, 0xc80, 0xc0), `stamp(k)`
+    lays the template k gate-widths along down."""
+    st = d["state"]
+    if st == 0:
+        if gate_auto(d["lock"]) and d["lock"] & 1:
+            d["state"] = 1
+        return
+    if st == 1:
+        if d["counter"] == 0:
+            stamp(GATE_MOVING)
+        d["counter"] = (d["counter"] + LIFT_RATE) & 0xFFFF
+        if d["counter"] == LIFT_PASSABLE:
+            stamp(GATE_OPEN)
+        if d["counter"] >= 0x1000:
+            d["counter"], d["state"] = LIFT_OPEN, 2
+        return
+    if st == LIFT_WAIT:
+        if gate_auto(d["lock"]) and d["lock"] & 1:
+            return                             # it opened itself; it stays so
+        if clear():
+            d["state"] = 0x15
+            stamp(GATE_MOVING)
+        return
+    if st == 0x15:
+        d["counter"] = (d["counter"] - LIFT_RATE) & 0xFFFF
+        if d["counter"] and d["counter"] < 0x8000:
+            return
+        d["counter"] = d["state"] = 0
+        stamp(GATE_SHUT)
+        return
+    d["state"] = (st + 1) & 0xFFFF
+
+
+def gate_cycle(wait=0, lock=0xFF, frames=None):
+    """A gate's run from USE as [(state, counter, the template last laid)],
+    the doorway taken for `wait` frames of state 0x14."""
+    d = {"state": 1, "counter": 0, "lock": lock}
+    laid = [GATE_SHUT]
+    held = [wait]
+    rows = []
+
+    def clear():
+        if held[0] > 0:
+            held[0] -= 1
+            return False
+        return True
+
+    def stamp(k):
+        laid[0] = k
+    for _ in range(frames or 200):
+        gate_step(d, clear, stamp)
+        rows.append((d["state"], d["counter"], laid[0]))
+        if d["state"] == 0:
+            break
+    return rows
 
 
 def lift_clear(d, player, creatures=()):
@@ -413,9 +492,11 @@ def export(out_dir):
     import json
     runs = [{"wait": w, "frames": [list(f) for f in lift_cycle(w)]}
             for w in (0, 7)]
+    gates = [{"wait": w, "lock": lk, "frames": [list(f) for f in gate_cycle(w, lk, 120)]}
+             for w, lk in ((0, 0xFF), (9, 0xFE), (0, 0x97))]
     path = os.path.join(out_dir, "liftcheck.json")
     with open(path, "w") as fh:
-        json.dump({"runs": runs}, fh, separators=(",", ":"))
+        json.dump({"runs": runs, "gates": gates}, fh, separators=(",", ":"))
     return path
 
 
@@ -492,8 +573,119 @@ def check(out=sys.stdout, verbose=False):
     return bad == 0
 
 
+GATE_LINE = re.compile(r"G vb=(\d+) lv=(\d+) slot=(\d+) st=(\d+) ctr=(\d+) "
+                       r"lock=(\d+) pos=(-?\d+) (-?\d+) (-?\d+) cells=([\d,]*)")
+GATE_QUERY = re.compile(r"GQ vb=(\d+) slot=(\d+) mask=(\d+)")
+FENCE = 1000                 # bp27 adds it to a cell's shape when +9 has 0x40
+
+
+def gate_load(path=None):
+    """bp27's G lines, each with the doorway test's mask that frame (its GQ
+    line) or None."""
+    path = path or os.path.join(ROOT, "out", "lua_bp27.log")
+    rows, queries = [], {}
+    if not os.path.exists(path):
+        return rows
+    session = 0
+    for line in open(path):
+        if line.startswith("=== bp27") and "armed" in line:
+            session += 1
+            continue
+        m = GATE_LINE.match(line)
+        if m:
+            g = m.groups()
+            rows.append({"session": session, "vb": int(g[0]), "lv": int(g[1]),
+                         "slot": int(g[2]), "st": int(g[3]), "ctr": int(g[4]),
+                         "lock": int(g[5]), "p": tuple(int(x) for x in g[6:9]),
+                         "cells": tuple(int(x) for x in g[9].split(",") if x)})
+            continue
+        m = GATE_QUERY.match(line)
+        if m:
+            queries[(session, int(m.group(1)), int(m.group(2)))] = int(m.group(3))
+    for r in rows:
+        r["q"] = queries.get((r["session"], r["vb"], r["slot"]))
+    return rows
+
+
+def doorway(ld, rec):
+    """The doorway's cells as bp27 lists them: (+0x39, +0x3a) on, the type's
+    +0xd by +0xe, across and along swapped for an odd quarter turn."""
+    import objload
+    tr = ld.rows[rec["type"]]
+    w, h = tr[0xD], tr[0xE]
+    rot = (-(objload.s16(rec["angles"][1]) >> 10)) & 3
+    nx, nz = (h, w) if rot & 1 else (w, h)
+    dx, dz = rec["tail"][1], rec["tail"][2]
+    return [(dx + c, dz + r) for r in range(nz) for c in range(nx)]
+
+
+def gate_check(out=sys.stdout, verbose=False):
+    """emu/bp27.lua's G lines, a step at a time: the logged gate through
+    gate_step -- the doorway test the game's own mask when the log has it --
+    and its stamps through the loader's stamp_rect, against the next line of
+    the same gate: state, counter, lock, and the doorway's shapes and fence."""
+    rows = gate_load()
+    if not rows:
+        print("  no gate lines in out/lua_bp27.log: ./emu/run.sh debug bp27.lua, "
+              "open gate 96 on level 4", file=out)
+        return True
+    import objload
+    loads = {}
+    by = {}
+    for r in rows:
+        by.setdefault((r["session"], r["lv"], r["slot"]), []).append(r)
+    ok = bad = used = 0
+    for (_session, lv, slot), rs in sorted(by.items()):
+        if lv not in loads:
+            loads[lv] = objload.Load(lv)
+        ld = loads[lv]
+        rec = ld.recs.get(slot)
+        if rec is None or rec["op"] not in GATE_OPS:
+            continue
+        tr = ld.rows[rec["type"]]
+        t = rec["tail"]
+        cells = doorway(ld, rec)
+        used += sum(1 for r in rs if r["st"] == 1 and r["ctr"] == 0)
+        for a, b in zip(rs, rs[1:]):
+            if a["st"] == 0:
+                continue                        # USE, object_interact: not the arm
+            for (x, z), v in zip(cells, a["cells"]):
+                o = ld.cell(x, z)
+                ld.grid[o + 8] = v % FENCE
+                ld.grid[o + 9] = (ld.grid[o + 9] & 0xBF) | (0x40 if v >= FENCE else 0)
+            d = {"state": a["st"], "counter": a["ctr"], "lock": a["lock"]}
+
+            def stamp(k, ld=ld, rec=rec, t=t, tr=tr):
+                ld.stamp_rect(rec["b0"], t[3] + k * tr[0xD], t[4], t[1], t[2],
+                              tr[0xD], tr[0xE], rec["angles"][1], MASK)
+
+            def clear(a=a, rec=rec):
+                if a["q"] is not None:
+                    return a["q"] == 0
+                return movement.in_range(a["p"], rec["x"], rec["y"], rec["z"],
+                                         GATE_CLEAR + PLAYER_R, PLAYER_BODY,
+                                         LIFT_CLEAR[1]) == -1
+            gate_step(d, clear, stamp)
+            got = (d["state"], d["counter"], d["lock"],
+                   tuple(ld.grid[ld.cell(x, z) + 8]
+                         + (FENCE if ld.grid[ld.cell(x, z) + 9] & 0x40 else 0)
+                         for x, z in cells))
+            want = (b["st"], b["ctr"], b["lock"], b["cells"])
+            if got == want:
+                ok += 1
+            else:
+                bad += 1
+                if verbose:
+                    print(f"  level {lv} gate {slot} vb {a['vb']}: model {got}, "
+                          f"game {want}", file=out)
+    print(f"  {ok} of {ok + bad} steps of a gate reproduced -- state, counter, lock "
+          f"and the doorway's shapes and fence; {used} opened", file=out)
+    return bad == 0
+
+
 if __name__ == "__main__":
     v = "--check" not in sys.argv
     a = check(verbose=v)
     b = lift_check(verbose=v)
-    sys.exit(0 if a and b else 1)
+    c = gate_check(verbose=v)
+    sys.exit(0 if a and b and c else 1)

@@ -1,6 +1,10 @@
--- A door that lifts, frame by frame.
+-- A door that lifts, frame by frame -- and level 4's gates and pedestals.
 --
 --   ./emu/run.sh debug bp27.lua
+--
+-- On level 4: gate 96 in cell (38,23) opens to USE; the others open once a
+-- key stands on their pedestal (Silviera's key on the pedestal in cell
+-- (33,23), slot 108, opens gate 91). The G, GQ and P lines below are theirs.
 --
 -- Level 0 has five, and each looks like any other piece of wall: slots 20,
 -- 51, 74, 86 and 123, in cells (10,4) (2,56) (18,2) (23,2) and (28,4) -- the
@@ -153,4 +157,88 @@ for i, a in ipairs({ {0x800471f4, 3}, {0x800473a8, 4}, {0x8004755c, 5} }) do
     log(string.format('query %08x lift %d -> %s', a[1], a[2], tostring(ok)))
     if ok then bp27[3 + i] = bp end
 end
-log('=== bp27 recording; open a lift door with USE, walk through, let it drop ===')
+
+-- The gates, opcode 2 (0x800475f8): a G line for each gate not at rest, as
+-- for the lifts, with its lock (+0x38) and the doorway's cells -- layer 1's
+-- shape (+8), plus 1000 where +9 carries 0x40, the fence -- over the
+-- rectangle stamp_rect writes: (+0x39, +0x3a), the type's +0xd by +0xe,
+-- across and along swapped for an odd quarter turn. And a GQ line with the
+-- doorway test's mask, after the gate's collide_query (0x800477a0).
+local TYPES = 0x8018fb3c
+local LEVEL = 0x8018fad9           -- current_level_block's second byte: the level
+
+local function doorway(rec)
+    local row = TYPES + u16(rec + 6) * 24
+    local w, h = u8(row + 0xd), u8(row + 0xe)
+    local rot = (-math.floor(s16(rec + 0x26) / 1024)) % 4
+    local nx, nz = w, h
+    if rot % 2 == 1 then nx, nz = h, w end
+    local dx, dz = u8(rec + 0x39), u8(rec + 0x3a)
+    local cs = {}
+    for r = 0, nz - 1 do
+        for c = 0, nx - 1 do
+            local cx, cz = dx + c, dz + r
+            if cx >= 0 and cz >= 0 and cx < 80 and cz < 80 then
+                local a = LEVEL_GRID + cz * 800 + cx * 10
+                local fence = math.floor(u8(a + 9) / 0x40) % 2
+                cs[#cs + 1] = tostring(u8(a + 8) + 1000 * fence)
+            end
+        end
+    end
+    return table.concat(cs, ',')
+end
+
+local function gate()
+    local g = regs()
+    if not g then return end
+    local rec = (tonumber(g.s2) % 0x100000000) - 8
+    local slot = math.floor((rec - OBJECT_TABLE) / STRIDE)
+    local st = u16(rec + 8)
+    if st == 0 and (last[slot] or 0) == 0 then return end
+    last[slot] = st
+    log(string.format('G vb=%d lv=%d slot=%d st=%d ctr=%d lock=%d pos=%d %d %d cells=%s',
+        s32(VBLANKS), u8(LEVEL), slot, st, u16(rec + 0xa), u8(rec + 0x38),
+        s32(PLAYER), s32(PLAYER + 4), s32(PLAYER + 8), doorway(rec)))
+end
+
+local function gate_query()
+    local g = regs()
+    if not g then return end
+    local rec = (tonumber(g.s2) % 0x100000000) - 8
+    local slot = math.floor((rec - OBJECT_TABLE) / STRIDE)
+    log(string.format('GQ vb=%d slot=%d mask=%d', s32(VBLANKS), slot,
+        tonumber(g.v0) % 0x100000000))
+end
+
+-- The pedestals, opcode 0x18 (0x8004aeb8): a P line whenever one changes --
+-- its state (+8), lock (+0x38), ring index (+0x39), object_use_state's frame
+-- count (+0x40), the key in slot 380 + the ring index -- its opcode (+4),
+-- type (+6), lock (+0x38) and position (+0x14) -- and the gate it serves
+-- (+0x3b) with that gate's lock.
+local seen = {}
+
+local function pedestal()
+    local g = regs()
+    if not g then return end
+    local rec = (tonumber(g.s2) % 0x100000000) - 8
+    local slot = math.floor((rec - OBJECT_TABLE) / STRIDE)
+    local ring = u8(rec + 0x39)
+    local key = OBJECT_TABLE + (380 + ring) * STRIDE
+    local gs = u8(rec + 0x3b)
+    local gr = OBJECT_TABLE + gs * STRIDE
+    local s = string.format('st=%d lock=%d ring=%d n=%d key=%d,%d,%d,%d,%d,%d gate=%d,%d',
+        u16(rec + 8), u8(rec + 0x38), ring, u8(rec + 0x40),
+        u8(key + 4), u16(key + 6), u8(key + 0x38),
+        s32(key + 0x14), s32(key + 0x18), s32(key + 0x1c), gs, u8(gr + 0x38))
+    if seen[slot] == s then return end
+    seen[slot] = s
+    log(string.format('P vb=%d lv=%d slot=%d %s', s32(VBLANKS), u8(LEVEL), slot, s))
+end
+
+for i, a in ipairs({ {0x800475f8, 'gate', gate}, {0x800477a0, 'gateq', gate_query},
+                     {0x8004aeb8, 'pedestal', pedestal} }) do
+    local ok, bp = pcall(PCSX.addBreakpoint, a[1], 'Exec', 4, a[2], a[3])
+    log(string.format('%s %08x -> %s', a[2], a[1], tostring(ok)))
+    if ok then bp27[6 + i] = bp end
+end
+log('=== bp27 recording; open a lift door or a gate with USE, walk through, let it drop ===')

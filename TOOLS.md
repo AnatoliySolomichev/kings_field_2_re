@@ -624,10 +624,18 @@ The cells each door's tile table rewrites are a node of their own in
 `levelNN.gltf`, `tNNN` by slot; the model is `lNNN` in `objectsNN.gltf`; both
 sit in `doorsNN.json` with the cells and bytes of the two stamp tables.
 
+Level 4's gates (opcode 2, FORMATS.md "A gate") are built the same way --
+`lNNN`, rising by its animation -- and stamp their doorway from the level's
+templates: open at counter 0xc18, shut again once it is clear. Gate 96 in cell
+(38,23) opens to USE; the others wait for their pedestal's key. bp27 logs them
+too (G, GQ and P lines: the gates, their doorway test, the pedestals), and
+`doors.py` replays the G lines through `gate_step` and the loader's
+`stamp_rect`; bp16 sends their state to the comparison.
+
 ```
-python3 tools/doors.py              both kinds against the recordings, with what differs
+python3 tools/doors.py              all three kinds against the recordings, with what differs
 python3 tools/doors.py --check      the counts alone
-./emu/run.sh debug bp27.lua         a lift door frame by frame, into out/lua_bp27.log
+./emu/run.sh debug bp27.lua         a lift door or a gate frame by frame, into out/lua_bp27.log
 ```
 
 **`gpuframe.py`** -- a frame's GPU primitives read back out of a RAM

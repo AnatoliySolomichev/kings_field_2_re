@@ -600,8 +600,15 @@ them with USE, swings them, stamps the doorway's collision open and closed and
 waits while the player stands in it. What is left, in order of how many doors
 it would open:
 
-* **class 0x02, 128 objects** -- `stamp_rect` from `p[+0x13] + 2w`, marked with
-  radius 0x1130; its arm is not read.
+* **class 0x02, 128 objects -- read and in the port** (FORMATS.md, "A gate"):
+  level 4's walls among them. The lift's rise, with `stamp_rect` laying the
+  doorway down from three templates (open, moving, shut) and the fence bit
+  with them; USE opens a lock of 0xff (0xfd, 0xfe but for type 0xae), a lock
+  odd and in 0x96..0xc6 opens of itself for good. `godot/doors.gd` holds to
+  `tools/doors.py gate_step`, 360 of 360 frames -- transcribed: no recording
+  has a gate in it. A bp27 session on level 4 opening gate 96 (cell (38,23))
+  would check it; the pedestals that set the other gates' locks (opcode
+  0x18) are next.
 * **the lift doors, classes 0x03 to 0x05 -- read and in the port** (FORMATS.md,
   "A door that lifts"): five on level 0 and one on level 8, all six in the game
   as `tools/objload.py` reads the twelve levels. Shut, each is a stretch of

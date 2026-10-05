@@ -761,9 +761,12 @@ def build_objects_gltf(lv, out="out/godot"):
     placed = missing = hidden = 0
     doors, door_rows = [], []
     loot = loot_slots(load)
+    import doors as doormod
     for _k, o in sorted(load.recs.items()):
         if o["slot"] in loot:
             continue                    # a node of its own: build_loot
+        if o["op"] in doormod.GATE_OPS:
+            continue                    # a node of its own that rises: build_lifts
         # The game's own rule, read off load_object_placement and render_walk:
         # the opcode, the record's +0 against the view byte, and the scale.
         if not load.drawn(o):
@@ -860,7 +863,7 @@ def build_objects_gltf(lv, out="out/godot"):
     with open(f"{out}/doors{lv:02d}.json", "w") as f:
         json.dump(door_rows, f, separators=(",", ":"))
     print(f"objects: {placed} placed, {len(doors)} of them doors on their own "
-          f"node, {len(lifts)} lift doors, {len(loot_rows)} chests, things to take and "
+          f"node, {len(lifts)} lift doors and gates, {len(loot_rows)} chests, things to take and "
           f"things to read, {missing} without a model, {hidden} the game does not draw, "
           f"{ntri} triangles, {len(mats)} materials -> {path}")
     return path
@@ -1053,7 +1056,7 @@ def build_lifts(lv, load, grid, look, prims_of, rows):
     import doors
     items = []
     for k, o in sorted(load.recs.items()):
-        if o["op"] not in doors.LIFT_OPS:
+        if o["op"] not in doors.LIFT_OPS + doors.GATE_OPS:
             continue
         try:
             _flags, objs = tmd.load(*tmd.model_of(o["type"], lv))
@@ -1073,6 +1076,17 @@ def build_lifts(lv, load, grid, look, prims_of, rows):
         items.append((f"l{k:03d}", dp, (o["x"] / UNIT, -o["y"] / UNIT, -o["z"] / UNIT),
                       quaternion(m)))
         tr = load.rows[o["type"]]
+        if o["op"] in doors.GATE_OPS:
+            # a gate: stamp_rect from its templates, the model standing shut
+            rows.append({
+                "slot": k, "type": o["type"], "op": o["op"],
+                "x": o["x"], "y": o["y"], "z": o["z"], "yaw": o["angles"][1],
+                "b0": o["b0"], "height": o["height"], "tail": list(o["tail"][:8]),
+                "reach": struct.unpack_from("<H", tr, 6)[0],
+                "top": struct.unpack_from("<H", tr, 8)[0],
+                "w": tr[0xD], "h": tr[0xE],
+                "model": lift_model(o["type"], lv), "anim": o.get("b1", 0)})
+            continue
         shape, tile = doors.lift_stamps(load, o)
         rows.append({
             "slot": k, "type": o["type"], "op": o["op"],

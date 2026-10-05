@@ -568,7 +568,31 @@ func _lifts() -> bool:
 				bad += 1
 				if first == "":
 					first = "frame %d: godot %s python %s" % [n, str(got), str(w)]
-	print("lift doors: %d of %d frames match tools/doors.py" % [n - bad, n])
+	var gn := 0
+	for run in doc.get("gates", []):
+		var g := {"state": 1, "counter": 0, "lock": int(run["lock"])}
+		var laid := [script.GATE_SHUT]
+		var gheld := [int(run["wait"])]
+		var gclear := func() -> bool:
+			if gheld[0] > 0:
+				gheld[0] -= 1
+				return false
+			return true
+		var gstamp := func(k: int) -> void:
+			laid[0] = k
+		for want in run["frames"]:
+			script.gate_step(g, gclear, gstamp)
+			var got := [int(g["state"]), int(g["counter"]), laid[0]]
+			var w := []
+			for v in want:
+				w.append(int(v))
+			n += 1
+			gn += 1
+			if got != w:
+				bad += 1
+				if first == "":
+					first = "gate frame %d: godot %s python %s" % [gn, str(got), str(w)]
+	print("lift doors: %d of %d frames match tools/doors.py (%d of them a gate's)" % [n - bad, n, gn])
 	if bad > 0:
 		print("  first difference: " + first)
 	return bad == 0
