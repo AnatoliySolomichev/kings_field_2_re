@@ -47,6 +47,7 @@ zero -- writes exactly the bytes this table says, where it says; and
 `save_serialise` over every snapshot in `out/snap` builds exactly the buffer
 this table builds from the same RAM. `--check` prints the counts.
 """
+import json
 import os
 import random
 import struct
@@ -338,6 +339,25 @@ def check(out=sys.stdout):
     print(f"  save_serialise, the game's, over {len(snaps)} snapshots: {same} of "
           f"{total} bytes as this table builds them", file=out)
     return ok
+
+
+def export(out_dir):
+    """cards.json -- the emulator's card files, by absolute path, which the
+    port reads at the title (godot/card.gd) -- and savecheck.json, what this
+    makes of them and its table, for godot/selftest.gd to hold the port's
+    reading to."""
+    cards = [os.path.abspath(p) for p in CARDS]
+    with open(os.path.join(out_dir, "cards.json"), "w") as fh:
+        json.dump({"cards": cards}, fh, indent=1)
+    rows = [{"path": os.path.abspath(p), "slot": s, "title": title(f), "sum": checksum(f),
+             "valid": valid(f), "level": f[DATA_AT], "pos": fields(f[DATA_AT:])["pos"]}
+            for p, s, f in saves()]
+    path = os.path.join(out_dir, "savecheck.json")
+    with open(path, "w") as fh:
+        json.dump({"fields": [[o, n, a] for o, n, a, _nm in FIELDS],
+                   "blocks": [[o, n, a, st] for o, n, a, st, _nm in BLOCKS],
+                   "saves": rows}, fh, separators=(",", ":"))
+    return path
 
 
 def show(slot=None, out=sys.stdout):

@@ -305,6 +305,12 @@ func _init() -> void:
 	if not _routines():
 		quit(1)
 		return
+	if not _saves():
+		quit(1)
+		return
+	if not _level_states():
+		quit(1)
+		return
 	quit(0)
 
 
@@ -686,6 +692,116 @@ func _routines() -> bool:
 	if bad > 0:
 		print("  first difference: " + first)
 	return bad == 0
+
+
+# The memory card, card.gd against tools/memcard.py: save_restore's table
+# entry by entry -- the one the game's own save_restore writes byte for byte
+# -- and every save on the emulator's cards read alike: its slot, title, sum,
+# whether the game would believe it, its level and where the player stands.
+func _saves() -> bool:
+	if not FileAccess.file_exists("res://savecheck.json"):
+		print("saves: no cases to check against")
+		return true
+	var doc = JSON.parse_string(FileAccess.get_file_as_string("res://savecheck.json"))
+	var n := 0
+	var bad := 0
+	var first := ""
+	var tables := [[doc["fields"], KFCard.FIELDS, 3], [doc["blocks"], KFCard.BLOCKS, 4]]
+	for t in tables:
+		var want: Array = t[0]
+		var have: Array = t[1]
+		for i in maxi(want.size(), have.size()):
+			n += 1
+			var w: Array = want[i] if i < want.size() else []
+			var g: Array = (have[i] as Array).slice(0, int(t[2])) if i < have.size() else []
+			if w.map(func(v): return int(v)) != g.map(func(v): return int(v)):
+				bad += 1
+				if first == "":
+					first = "table entry %d: godot %s, tools/memcard.py %s" % [i, str(g), str(w)]
+	var entries := n
+	var got := {}
+	for sv in KFCard.saves(KFCard.card_paths()):
+		got["%s/%d" % [sv["path"], int(sv["slot"])]] = sv
+	for w in doc["saves"]:
+		n += 1
+		var key := "%s/%d" % [w["path"], int(w["slot"])]
+		var sv: Dictionary = got.get(key, {})
+		var why := ""
+		if sv.is_empty():
+			why = "not found"
+		else:
+			var data: PackedByteArray = sv["data"]
+			var f := KFCard.restore(data.slice(KFCard.DATA_AT))
+			var pos := [KFCard.num(f, "x", true), KFCard.num(f, "y", true), KFCard.num(f, "z", true)]
+			if str(sv["title"]) != str(w["title"]):
+				why = "title %s, not %s" % [sv["title"], w["title"]]
+			elif KFCard.checksum(data) != int(w["sum"]) or bool(sv["valid"]) != bool(w["valid"]):
+				why = "the sum %d, not %d" % [KFCard.checksum(data), int(w["sum"])]
+			elif int(data[KFCard.DATA_AT]) != int(w["level"]) \
+					or pos != (w["pos"] as Array).map(func(v): return int(v)):
+				why = "level %d at %s" % [int(data[KFCard.DATA_AT]), str(pos)]
+		if why != "":
+			bad += 1
+			if first == "":
+				first = "%s: %s" % [key, why]
+	print("saves: %d of %d -- save_restore's %d entries as tools/memcard.py has them (the game's own writes them byte for byte), and %d saves on the cards read alike" % [
+		n - bad, n, entries, (doc["saves"] as Array).size()])
+	if bad > 0:
+		print("  first difference: " + first)
+	return bad == 0
+
+
+# What a level remembers, levelstate.gd against tools/levelstate.py: every
+# stream the self-test is given -- the snapshots', scrambled ones, the saves'
+# -- read into the same actors, conversations and 396 slot opcodes, and every
+# thing a creating opcode makes, the game's rand an LCG from 1 on both sides.
+func _level_states() -> bool:
+	if not FileAccess.file_exists("res://levelstatecheck.json"):
+		print("level states: no cases to check against")
+		return true
+	var doc = JSON.parse_string(FileAccess.get_file_as_string("res://levelstatecheck.json"))
+	var n := 0
+	var ok := 0
+	var mn := 0
+	var mok := 0
+	var first := ""
+	var ints := func(a): return (a as Array).map(func(r): return (r as Array).map(func(v): return int(v)))
+	for st in doc["streams"]:
+		n += 1
+		var d := KFLevelState.decode((st["hex"] as String).hex_decode())
+		var same: bool = ints.call(d["actors"]) == ints.call(st["actors"]) \
+			and ints.call(d["talks"]) == ints.call(st["talks"]) \
+			and ints.call(d["slots"]) == ints.call(st["slots"])
+		if same:
+			ok += 1
+		elif first == "":
+			first = "%s: the stream read otherwise" % st["label"]
+		var lcg := [1]
+		var rand := func() -> int:
+			lcg[0] = (int(lcg[0]) * 0x41C64E6D + 0x3039) & 0xFFFFFFFF
+			return (int(lcg[0]) >> 16) & 0x7FFF
+		var slots: Array = d["slots"]
+		for s in slots.size():
+			var row: Array = slots[s]
+			if not KFLevelState.KINDS.has(int(row[0])):
+				continue
+			mn += 1
+			var m := KFLevelState.made(row, rand)
+			var w: Dictionary = (st["made"] as Dictionary).get(str(s), {})
+			var pos = [m["pos"].x, m["pos"].y, m["pos"].z] if m.has("pos") else null
+			var wpos = (w["pos"] as Array).map(func(v): return int(v)) if w.has("pos") else null
+			if int(m["kind"]) == int(w.get("kind", -1)) and int(m["type"]) == int(w.get("type", -1)) \
+					and (m["angles"] as Array) == (w.get("angles", []) as Array).map(func(v): return int(v)) \
+					and int(m["state"]) == int(w.get("state", -1)) and int(m["lock"]) == int(w.get("lock", -1)) \
+					and int(m["rest"]) == int(w.get("rest", -1)) and pos == wpos:
+				mok += 1
+			elif first == "":
+				first = "%s slot %d: made %s, tools/levelstate.py %s" % [st["label"], s, str(m), str(w)]
+	print("level states: %d of %d streams read as tools/levelstate.py reads them (whose reader 90 of 90 runs of the game's hold), %d of %d things made alike" % [
+		ok, n, mok, mn])
+	if ok != n or mok != mn:
+		print("  first difference: " + first)
+	return ok == n and mok == mn
 
 
 # The chests and object_give, loot.gd against tools/chests.py: the lid's 82

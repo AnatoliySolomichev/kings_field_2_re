@@ -444,10 +444,21 @@ now takes its input through the slots instead of reading keys directly.
 | the binding slots (`0x80081868`…) | `pad.gd`, the `FORWARD`…`PAUSE` constants |
 | `player_walk` (`GAME` `0x8002f9bc`) | `player.gd`, `_tick` — now reading the slots |
 | `player_vertical` (`GAME` `0x8002ed60`) | `player.gd`, `_move` (unchanged; see FORMATS.md §4) |
+| `card_list_saves` (`OPEN` `0x80014264`) | `card.gd`, `saves` -- over the emulator's card files, which `cards.json` names |
+| `read_overlay_arg2` (`GAME` `0x8001fa60`) and the list (`0x8001fc5c`) | `loadscreen.gd` -- the choice, not the game's drawing |
+| `save_load_slot`, `save_checksum`, `save_restore` (`GAME` `0x8002860c`, `0x80028c74`, `0x8005ffd0`) | `card.gd`, `valid`, `checksum`, `restore` and `put`; `player.gd`, `take_save` |
+| `apply_level_state` (`GAME` `0x8005f444`) | `levelstate.gd`, `decode` and `made`; `actors.gd`, `loot.gd` and `doors.gd` put each slot's part back |
 
 Run it with `python3 tools/level3d.py 0` and then `godot-4 --path out/godot`.
 The project now starts at `boot.tscn`, goes through the logos and the title
-screen, and `NEW` loads the level.
+screen, and `NEW` loads the level. **`CONTINUE` lists the saves on the
+emulator's memory cards** (`emu/memcard1.mcd` and `2`) and loads the one
+picked: its level, where the player stands and faces, the character, what is
+carried, worn and wielded, the story flags, and what every level visited
+remembers -- the creatures gone, where each conversation has got, the chests
+opened, the things taken, dropped or set on a pedestal, the doors' and gates'
+locks. A save made in the emulator is there the next time the title is
+passed; nothing is written to the card.
 
 ---
 

@@ -1588,7 +1588,7 @@ def project(lv, out="out/godot", start=(57, 4)):
                  "doors.gd", "sky.gd", "hud.gd", "compass.gd", "ai.gd",
                  "weapon.gd", "anim.gd", "effects.gd", "held.gd",
                  "loot.gd", "messages.gd", "document.gd", "talk.gd", "info.gd", "menu.gd",
-                 "crossing.gd"):
+                 "crossing.gd", "card.gd", "levelstate.gd", "loadscreen.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening
@@ -1684,8 +1684,14 @@ def project(lv, out="out/godot", start=(57, 4)):
     try:
         import levelstate
         levelstate.export(out)
+        levelstate.export_check(out)
     except Exception as e:                       # no recording, no streams
         print(f"level state skipped: {e}")
+    try:
+        import memcard
+        memcard.export(out)
+    except Exception as e:                       # no card, nothing to continue
+        print(f"memory card skipped: {e}")
     try:
         import levelmap
         levelmap.export(out)
@@ -1790,7 +1796,7 @@ def verify(out="out/godot"):
                             "fences:",
                             "creature run:",
                             "levels:", "skills:", "angles:",
-                            "scripts:", "damage:", "equipment:", "player_recalc_stats:", "knock-back:", "weapon:", "animation:", "spores:", "lift doors:", "chests:", "inscriptions:", "conversations:", "menus:", "routines:", "FAIL", "  first",
+                            "scripts:", "damage:", "equipment:", "player_recalc_stats:", "knock-back:", "weapon:", "animation:", "spores:", "lift doors:", "chests:", "inscriptions:", "conversations:", "menus:", "routines:", "saves:", "level states:", "FAIL", "  first",
                             "  level case", "  angle (", "  script level",
                             "  hit ")):
             print("   " + line.strip())

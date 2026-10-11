@@ -295,6 +295,9 @@ func _ready() -> void:
 		rotation.y = float(facing) * TAU / 4096.0
 		_to_godot()
 	arrive = null
+	if KFCard.loaded is Dictionary:  # a save off the card, picked in loadscreen.gd
+		take_save(KFCard.loaded)
+		KFCard.loaded = null
 	_refresh()
 
 
@@ -307,6 +310,66 @@ func carry_over(p: Vector3i) -> void:
 	carried = [inventory, gold, character, weapon_id, worn, [spell_a, spell_b, item_b]]
 	arrive = [p.x, p.y, p.z, facing, pitch, vstate, vvel, fwd_speed, stf_speed,
 		hp, hp_max, mp, weapon_meter, magic_meter, poison]
+
+
+# A save, as save_restore put it back (KFCard.restore): where the player
+# stands and faces, the character, what is carried, worn and wielded, the
+# magic in hand, HP and MP, the poison and the strong blows. Then what
+# save_loaded_fixup (0x80028f90) does before the level is entered:
+# sub_80028e9c clears the bob, the crouch, the fall and the player's state;
+# equip_weapon takes the weapon up again, its meter at 0, and recalculates the
+# stats; and the magic meter is game_main's block_zero of the player block,
+# which nothing restores.
+# @orig game:0x8005ffd0 save_restore  status:partial -- the player's fields the port keeps; the curse and the timers (0x801b255e..0x801b2578), 0x801b24ec, 0x801b2644, 0x801b2522, 0x801b250a..0x801b2512, 0x801b2514, 0x801b24f1, the panel's bytes and the minutes are read and not used
+# @orig game:0x80028f90 save_loaded_fixup  status:partial -- the clearing (sub_80028e9c), equip_weapon and the stats; not equip_armour(0xff, 0xff), the three bonus timers' effects respawned (effect_spawn), set_spell_a/b's resources or the control scheme
+func take_save(f: Dictionary) -> void:
+	flying = false
+	gx = KFCard.num(f, "x", true)
+	gy = KFCard.num(f, "y", true)
+	gz = KFCard.num(f, "z", true)
+	var pf := KFCard.num(f, "pitch_facing")
+	pitch = coll._s16(pf & 0xFFFF)
+	facing = (pf >> 16) & 0xFFF
+	hp = KFCard.num(f, "hp")
+	hp_max = KFCard.num(f, "hp_max")
+	mp = KFCard.num(f, "mp")
+	gold = KFCard.num(f, "gold")
+	poison = KFCard.num(f, "poison")
+	strong_hits = KFCard.num(f, "strong")
+	var spells := []
+	for v in (f["spells"] as PackedByteArray):
+		spells.append(int(v))
+	character = {"exp": KFCard.num(f, "exp"), "exp_next": KFCard.num(f, "exp_next"),
+		"level": KFCard.num(f, "level"), "hp_max": hp_max,
+		"mp_max": KFCard.num(f, "mp_max"), "stat36": KFCard.num(f, "stat36"),
+		"grow": KFCard.halves(f, "skills"), "wis": KFCard.num(f, "wis"),
+		"spells": spells}
+	var inv: PackedByteArray = f["inventory"]
+	inventory = KFItems.new()
+	inventory.a = inv.slice(0, KFItems.COUNT)
+	inventory.b = inv.slice(KFItems.COUNT, 2 * KFItems.COUNT)
+	worn = []
+	for v in (f["worn"] as PackedByteArray):
+		worn.append(int(v))
+	var hand: PackedByteArray = f["in_hand"]
+	spell_a = int(hand[0])
+	spell_b = int(hand[1])
+	item_b = int(hand[2])
+	# sub_80028e9c (0x80028e9c); the player block's block_zero (game_main)
+	vstate = 0
+	vvel = 0
+	pstate = 0
+	bob = 0
+	bob_phase = 0
+	crouch = 0
+	fwd_speed = 0
+	stf_speed = 0
+	magic_meter = 0
+	equip_weapon(KFCard.num(f, "weapon"))       # the meter 0, the pause, the stats
+	rotation.y = float(facing) * TAU / 4096.0
+	_to_godot()
+	KFInfo.note("save: level %d at (%d, %d, %d), facing 0x%x; %d exp, %d gold" % [
+		_level(), gx, gy, gz, facing, int(character["exp"]), gold])
 
 
 # player_recalc_stats is the game's after anything that changes what it reads:

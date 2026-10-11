@@ -22,8 +22,15 @@ finish, none of them blocking:
   (`0x8002860c`) reads the file, BOOT.md section 8. The file is three card
   blocks with the save buffer in them verbatim (FORMATS.md §15, "On the
   card"), and `tools/memcard.py` reads the emulator's cards, checked against
-  the game's own `save_restore` and `save_serialise`. What is left is the
-  port's side: loading a save into it.
+  the game's own `save_restore` and `save_serialise`. **The port loads them
+  now**: CONTINUE lists the emulator's saves and puts one back (BOOT.md
+  section 7). What is left: the list is not drawn as the game draws it
+  (`ui_panel` mode 8, `ui_prompt` kind 6); the port keeps its own record of a
+  level it has left (`saved` in `actors.gd`, `loot.gd`, `doors.gd`) rather
+  than writing the game's stream, so it loses what it does not keep -- the
+  things a creature dropped, a key on a pedestal -- and cannot save; and
+  `save_loaded_fixup`'s bonus timers, `seq_state`, `map_seen_bits` and the
+  two 150-byte tables are read and not used.
 * **Sound.** `OP.D`'s trailing VAB is extracted and unparsed, the title music
   is a streamed XA track inside `\OP\M2.S` that nothing decodes, and the two
   menu sounds are ids `0x3a` and `0x5a` into that bank.

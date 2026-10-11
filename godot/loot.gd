@@ -91,8 +91,11 @@ var reading = null                 # the document up, load_entry's frames
 var resume := 0                    # where object_interact goes on after it
 var talking := {}                  # script_interpreter's call while it runs (KFTalk)
 # What was opened and taken, by level, across the reload a revive makes:
-# {level: {slot: [type, lock, +0]}} -- the game keeps it in level_state.
+# {level: {slot: [type, lock, +0]}} -- the game keeps it in level_state. A
+# save loaded since (KFLevelState.epoch) makes it stale: the save's streams
+# stand instead.
 static var saved := {}
+static var saved_epoch := 0
 # What a creature can leave when it dies (lootNN.json's "spawn"): type ->
 # {the type row's fields, the hidden tNNN node a drop is copied from}.
 var templates := {}
@@ -165,12 +168,94 @@ func _ready() -> void:
 		rows[int(r["slot"])] = r
 	slots = rows.keys()
 	slots.sort()
+	if saved_epoch != KFLevelState.epoch:
+		saved.clear()
+		saved_epoch = KFLevelState.epoch
+	if not saved.has(player._level()):     # the save's stream, if it has the level
+		take_stream(KFLevelState.decoded(player._level()))
 	var kept: Dictionary = saved.get(player._level(), {})
 	for k in kept:
 		if rows.has(k):
 			rows[k]["type"] = int(kept[k][0])
 			rows[k]["lock"] = int(kept[k][1])
 			rows[k]["b0"] = int(kept[k][2])
+
+
+# The object section of a level's stream from a save (KFLevelState.decode),
+# over what this file keeps: an emptied slot's thing gone (its type 0xff), a
+# lock put back (0xfd) -- a lid opened is 0xfe -- a pedestal's lock and its
+# key's place in the ring (0xf4), and a thing made since the level was built
+# made again (0xf0..0xf3). A slot of a class this file does not keep is
+# doors.gd's, or nobody's yet.
+# @orig game:0x8005f520 apply_level_state+0xdc  status:partial -- the object section over the chests, the things, the pedestals and the keys; 0xf5 (class 0x56) and the classes the port does not run are not put anywhere
+func take_stream(d: Dictionary) -> void:
+	if d.is_empty():
+		return
+	var act := get_node_or_null("../Actors")
+	var rand := Callable(act, "_rand") if act and act.has_method("_rand") \
+		else func() -> int: return 0
+	var ops: Array = d["slots"]
+	for s in ops.size():
+		var row: Array = ops[s]
+		var op := int(row[0])
+		if op == 0xFF:
+			if rows.has(s):
+				rows[s]["type"] = GONE
+		elif op == 0xFD:
+			if rows.has(s):
+				rows[s]["lock"] = int(row[1])
+		elif op == 0xF4:
+			for pd in pedestals:
+				if int(pd["slot"]) == s:
+					pd["lock"] = int(row[1])
+					pd["ring"] = int(row[2])
+		elif KFLevelState.KINDS.has(op):
+			_made(s, KFLevelState.made(row, rand))
+
+
+# A thing the stream makes, in slot `s` (KFLevelState.made): its model off the
+# template a drop or a key is copied from; at rest (+8 0x63) and free to take
+# (+0x38 0xff), but for a key, whose +0x38 is the stream's and whose place
+# object_use_state gives it. +0 is the layer select_cell_layer finds -- 2 the
+# upper, 1 the lower -- and a key's 0, init_object_record's. What the game
+# leaves at +0x3a -- a heap of gold's amount -- is whatever the slot held
+# before, which a fresh level does not say; here it is 0.
+# @orig game:0x8005f5fc apply_level_state+0x1b8  status:partial -- the made thing's place, +8, the layer and +0x38, as the reader writes them; +0x3a of gold (not in the stream) is 0 here
+func _made(s: int, t: Dictionary) -> void:
+	if rows.has(s):
+		var old = rows[s].get("node")
+		if old:
+			(old as Node).queue_free()
+		slots.erase(s)
+	var typ := int(t["type"])
+	var tp: Dictionary = templates.get(typ, key_templates.get(typ, {}))
+	var tr: Dictionary = tp.get("row", {})
+	var pos: Vector3i = t.get("pos", Vector3i.ZERO)
+	var b0 := 0
+	if t.has("pos"):
+		b0 = 1
+		var cx := pos.x >> 11
+		var cz := pos.z >> 11
+		var c: KFCollision = player.coll
+		if cx >= 0 and cx < KFCollision.W and cz >= 0 and cz < KFCollision.W \
+				and c._layer((cz * KFCollision.W + cx) * 6, pos.y) != 0:
+			b0 = 2
+	var r := {"slot": s, "cls": 0x40, "type": typ, "kind": int(tr.get("kind", 0)),
+		"count": 0, "reach": int(tr.get("reach", 0)), "top": int(tr.get("top", 0)),
+		"c": int(tr.get("c", 0)), "e": int(tr.get("e", 0)), "lock": int(t["lock"]),
+		"b0": b0, "b1": 0x80, "inside": 0, "op": int(t["kind"]), "state": int(t["state"]),
+		"vel": 0, "rest": int(t["rest"]), "angles": t["angles"], "skin": {}, "model": 0,
+		"link": 0, "pos": pos, "node": null}
+	var tn = tp.get("node")
+	if tn:
+		var nd := (tn as Node3D).duplicate() as Node3D
+		nd.name = "k%03d" % s
+		(tn as Node3D).get_parent().add_child(nd)
+		r["node"] = nd
+	rows[s] = r
+	slots.append(s)
+	slots.sort()
+	KFInfo.note("save: type %d made again in slot %d" % [typ, s])
 
 
 # @port data -- what was opened and taken, kept for the next load of the level

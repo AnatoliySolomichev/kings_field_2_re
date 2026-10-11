@@ -49,7 +49,7 @@ var frames := 0
 var movie := 3                    # play_movie(3): L0.S, the ASCII logo
 var seen_attract := false         # open_main's $s4
 var choice := 0                   # the byte that ends up in overlay_arg2
-var saves := 0                    # card_list_saves' count; nothing to load here
+var saves := 0                    # card_list_saves' count, off the emulator's cards (KFCard)
 var art: Texture2D
 var kings: Texture2D
 var field: Texture2D
@@ -62,7 +62,7 @@ var music: AudioStreamPlayer
 var playing := false
 
 
-# @orig open:0x80011ee0 open_main+0xcc  status:transcribed -- overlay_arg 1 goes straight to the title, else play_movie(3); the nodes are the port's
+# @orig open:0x80011ee0 open_main+0xcc  status:transcribed -- overlay_arg 1 goes straight to the title, else play_movie(3); the saves counted (card_list_saves, KFCard); the nodes are the port's
 func _ready() -> void:
 	art = _tex("opd0")
 	kings = _tex("opd1")
@@ -89,6 +89,7 @@ func _ready() -> void:
 	hud.scale = Vector2(1, 0.5)                 # the screen is squashed; undo it
 	hud.add_theme_font_size_override("font_size", 12)
 	add_child(hud)
+	saves = KFCard.saves().size()     # open_main: card_probe, then card_list_saves
 	# open_main only shows the logos when it was not just handed back the
 	# machine by GAME.EXE.
 	if _arg() == 1:

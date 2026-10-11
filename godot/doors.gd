@@ -118,6 +118,12 @@ var doors: Array = []
 var lifts: Array = []
 var gates: Array = []
 var walls: Array = []
+# Each door's, lift's, gate's and wall's lock (+0x38) by level, kept when the
+# level is left -- level_state_write's 0xfd for classes 0..5 and 0x54 -- for
+# the next load; a key that opened one stays turned. A save loaded since
+# (KFLevelState.epoch) makes it stale: the save's streams stand instead.
+static var saved := {}
+static var saved_epoch := 0
 var player: Node3D
 var acc := 0.0
 
@@ -175,6 +181,51 @@ func _ready() -> void:
 		d["counter"] = 0x3e7
 		d["push"] = 0
 		doors.append(d)
+	if saved_epoch != KFLevelState.epoch:
+		saved.clear()
+		saved_epoch = KFLevelState.epoch
+	var lv: int = player._level()
+	if saved.has(lv):
+		for d in doors + lifts + gates + walls:
+			if (saved[lv] as Dictionary).has(int(d["slot"])):
+				_set_lock(d, int(saved[lv][int(d["slot"])]))
+	else:
+		take_stream(KFLevelState.decoded(lv))
+
+
+# The object section of a level's stream from a save (KFLevelState.decode),
+# over the doors: 0xfd puts a door's, a lift's, a gate's or a wall's lock
+# (+0x38) back -- the state (+8) is the fresh load's, and the arms take it from
+# there: a gate whose lock opens itself rises, a wall whose lock is 0xff opens.
+# @orig game:0x8005f770 apply_level_state+0x32c  status:partial -- 0xfd's arm over the doors, the lifts, the gates and the hidden walls
+func take_stream(d: Dictionary) -> void:
+	if d.is_empty():
+		return
+	var ops: Array = d["slots"]
+	for o in doors + lifts + gates + walls:
+		var row: Array = ops[int(o["slot"])]
+		if int(row[0]) == 0xFD:
+			_set_lock(o, int(row[1]))
+
+
+# A swinging door and a lift keep their lock as the placement's tail[0], which
+# key_test turns; a gate and a wall have one of their own.
+# @port helper -- the lock, wherever this kind keeps it
+func _set_lock(d: Dictionary, v: int) -> void:
+	if d.has("lock"):
+		d["lock"] = v
+	else:
+		d["tail"][0] = v
+
+
+# @port engine -- every lock, kept for the next load of the level
+func _exit_tree() -> void:
+	if player == null:
+		return
+	var kept := {}
+	for d in doors + lifts + gates + walls:
+		kept[int(d["slot"])] = int(d["lock"]) if d.has("lock") else int(d["tail"][0])
+	saved[player._level()] = kept
 
 
 # @port engine -- USE into _interact, the arms at 15 a second, the nodes turned to the yaw

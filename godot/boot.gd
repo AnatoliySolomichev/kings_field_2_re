@@ -77,10 +77,12 @@ func _exec() -> void:
 			op.shell = self
 			screen.add_child(op)
 		GAME:
-			# GAME.EXE. The port's game is the level the tools build, so this
-			# is where the boot chain hands over to what the rest of the
-			# project already had.
-			get_tree().change_scene_to_file(KFGame.scene_of(KFGame.current_level()))
+			# GAME.EXE. Its game_main asks first what the title menu chose
+			# (loadscreen.gd: a new game, or a save off the card), and then
+			# hands over to the level -- the scene the tools build for it.
+			var ls := preload("res://loadscreen.gd").new()
+			ls.shell = self
+			screen.add_child(ls)
 		END:
 			var l := Label.new()
 			l.text = "END.EXE is not ported. It plays \\OP\\M4.S, M5.S and M6.S."

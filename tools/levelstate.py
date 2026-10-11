@@ -292,34 +292,53 @@ def apply(m, b, rand):
             m[(r + 0x38) & MASK] = b[i]
             i += 1
         elif op in KINDS:
+            n = OPS[op]
+            t = made(bytes([op]) + bytes(b[i:i + n - 1]), rand)
+            i += n - 1
             init_object_record(m, r)
-            m[(r + 4) & MASK] = KINDS[op]
-            _w16(m, r + 6, b[i])
-            i += 1
+            m[(r + 4) & MASK] = t["kind"]
+            _w16(m, r + 6, t["type"])
             if op == 0xF3:
-                m[(r + 0x38) & MASK] = b[i]
-                i += 1
+                m[(r + 0x38) & MASK] = t["lock"]
                 continue
-            x, z = (b[i] | b[i + 1] << 8) << 2, (b[i + 2] | b[i + 3] << 8) << 2
-            y = b[i + 4] | b[i + 5] << 8
-            y -= 0x10000 if y & 0x8000 else 0
-            i += 6
+            x, y, z = t["pos"]
+            ax, ay, az = t["angles"]
             if op == 0xF0:
-                _w16(m, r + 0x28, 0x400)
-                _w16(m, r + 0x26, b[i] << 4)
-                i += 1
+                _w16(m, r + 0x28, az)
+                _w16(m, r + 0x26, ay)
             elif op == 0xF2:
-                _w16(m, r + 0x3A, (b[i] << 2) + (rand() >> 13))
-                i += 1
-                if _u16(m, r + 6) == 0x79:
-                    _w16(m, r + 0x24, 0x400)
+                _w16(m, r + 0x3A, t["rest"])
+                if ax:
+                    _w16(m, r + 0x24, ax)
             _w32(m, r + 0x14, x)
             _w32(m, r + 0x1C, z)
             _w32(m, r + 0x18, y)
-            _w16(m, r + 8, 0x63)
+            _w16(m, r + 8, t["state"])
             m[r & MASK] = 2 if layer(m, x, y, z) else 1
-            m[(r + 0x38) & MASK] = 0xFF
+            m[(r + 0x38) & MASK] = t["lock"]
     return i
+
+
+def made(row, rand):
+    """A creating opcode's thing, as the reader builds it: kind, type, place,
+    the three angles (+0x24, +0x26, +0x28), +8, +0x38 and +0x3a ("rest"). The
+    same fields godot/levelstate.gd made() gives."""
+    op = row[0]
+    t = {"kind": KINDS[op], "type": row[1], "angles": [0, 0, 0], "state": 0x63,
+         "lock": 0xFF, "rest": 0}
+    if op == 0xF3:
+        t["lock"] = row[2]
+        return t
+    y = row[6] | row[7] << 8
+    y -= 0x10000 if y & 0x8000 else 0
+    t["pos"] = [(row[2] | row[3] << 8) << 2, y, (row[4] | row[5] << 8) << 2]
+    if op == 0xF0:
+        t["angles"] = [0, row[8] << 4, 0x400]
+    elif op == 0xF2:
+        t["rest"] = (row[8] << 2) + (rand() >> 13)
+        if row[1] == 0x79:
+            t["angles"] = [0x400, 0, 0]
+    return t
 
 
 def stream_of(area, index, lv):
@@ -523,6 +542,51 @@ def check(out=sys.stdout):
             bad += 1
     print(f"  {ok} of {ok + bad} recorded streams decode exactly", file=out)
     return bad == 0
+
+
+def check_streams():
+    """(label, level, stream) for the self-test: the saves' and the snapshots'
+    streams, the game's own writer's, scrambled as game_check scrambles them."""
+    import memcard
+    out = []
+    rng = random.Random(0x1E5A7E)
+    for path in _game_snapshots():
+        ram = open(path, "rb").read()
+        lv = ram[CURRENT_LEVEL & MASK]
+        name = os.path.basename(path)[:-4]
+        for k in range(2):
+            m = ram if k == 0 else scramble(ram, rng)
+            out.append((name + (" scrambled" if k else ""), lv, encode(m)))
+    for _path, slot, f in memcard.saves():
+        buf = f[memcard.DATA_AT:]
+        area, index = buf[0x108:0x5108], buf[0x5108:0x5148]
+        for lv in range(32):
+            st = stream_of(area, index, lv)
+            if st is not None:
+                out.append((f"slot {slot} level {lv}", lv, st[:0x1000]))
+    return out
+
+
+def export_check(out_dir):
+    """levelstatecheck.json: streams and what this reads in them, for
+    godot/selftest.gd to read again with godot/levelstate.gd -- past a short
+    stream's end both read zeros -- and what each creating opcode makes, the
+    game's rand standing in as an Lcg from 1."""
+    rows = []
+    for label, lv, st in check_streams():
+        a, t, objs, _used = decode(st + bytes(0x1000))
+        lcg = Lcg()
+        mk = {}
+        for s, (op, opr) in enumerate(objs):
+            if op in KINDS:
+                mk[str(s)] = made(bytes([op]) + bytes(opr), lcg)
+        rows.append({"label": label, "level": lv, "hex": st.hex(),
+                     "actors": [list(x) for x in a], "talks": [list(x) for x in t],
+                     "slots": [[op] + list(opr) for op, opr in objs], "made": mk})
+    path = os.path.join(out_dir, "levelstatecheck.json")
+    with open(path, "w") as fh:
+        json.dump({"streams": rows}, fh, separators=(",", ":"))
+    return path
 
 
 def export(out_dir):
