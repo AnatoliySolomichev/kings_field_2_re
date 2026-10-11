@@ -64,6 +64,9 @@ var skins := {}                # slot -> its animated mesh (KFAnim), see _skin
 # @orig game:0x8005f444 apply_level_state  status:partial -- the category-1 states put back from `saved`; reading actorsNN.json, aiNN.json and animNN.json and finding the nodes is the port's
 func _ready() -> void:
 	player = get_node_or_null("../Player")
+	# the level in hand: the scene sets nothing here, and a level other than 0
+	# took level 0's creatures until this was read off KFGame
+	level = KFGame.current_level()
 	actors.resize(SLOTS)
 	var f := FileAccess.open("res://actors%02d.json" % level, FileAccess.READ)
 	if f == null:

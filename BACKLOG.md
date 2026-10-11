@@ -777,6 +777,15 @@ each one is also in its function's marker, as `partial` and what differs:
   `kind_behaviour_with_op` twice. Each copy is marked, and the self-test would
   show one drifting; folding them into one is a refactor nobody has needed yet.
 
+**Found later, and fixed: every level but 0 ran level 0's creatures.**
+`actors.gd` reads `actorsNN.json` and `aiNN.json` by its own `level`, which
+nothing ever set -- the scene does not -- so on level 4 the port took level
+0's 58 creatures, kinds and homes, and laid them over level 4's 41 nodes by
+slot. It reads the level in hand off `KFGame` now: a headless run of
+`world04.tscn` has 41 actors, every one with its node (before: 58, level 0's).
+Nothing compared the port's level-4 creatures with anything, which is how it
+lasted; `tools/ai.py`'s level-4 numbers are the Python model's.
+
 Settled in the same pass rather than listed: a copy of `in_oriented_rect` in
 `objcoll.gd` that nothing called, with arithmetic that was not the game's
 (removed -- `collision.gd` has the faithful one); `_tick` and `_spring` in
