@@ -4498,11 +4498,13 @@ whole record from scratch every time something changes, on its own stack, and
 `apply_level_state` (`0x8005f444`) reads it back at level load. Between them
 they say what the format is, and it has **three sections**.
 
-**One: the actors that are gone.** Walk `actor_table`, 0x88 a slot, stopping
-at the first byte-0 of `0xff`. For each slot whose byte 0 is **1** — category
-1, and no other category — write the slot index and then `3` if the actor's
-`+9` is `3`, otherwise `0`. Terminate with `0xff`. So a category-1 death is
-kept and nothing else's is.
+**One: the actors that are gone.** Walk all 200 slots of `actor_table`,
+0x88 a slot. For each slot whose byte 0 is **1** — category 1, and no other
+category — write the slot index and then `3` if the actor's `+9` is `3`,
+otherwise `0`. Terminate with `0xff`. So a category-1 death is kept and
+nothing else's is. (This said the walk stopped at the first byte 0 of `0xff`.
+It does not: such a slot is skipped like any other category, and the game's
+own routine, run below, settles it.)
 
 **Two: how far each conversation has got.** Walk the 40 entity records; for
 each whose `+0x38` is not null and whose block begins `0x70`, write the entity
@@ -4528,9 +4530,19 @@ is no terminator and no slot is skipped. The opcode is chosen by the object's
 was built**: the decoder calls `init_object_record`, stamps the kind byte
 `0x60`, `0x61` or `0x62`, and then reads the type id and a position — `x` and
 `z` as two bytes each, which it shifts back up by 2 (the encoder wrote
-`x >> 2` and `x >> 10`), `y` as two bytes unshifted, and for `0xf0` an angle
-that it shifts up by 4. So **what you drop is saved as a spawn instruction**,
-and the three kinds are three flavours of it.
+`x >> 2` and `x >> 10`), `y` as two bytes it sign-extends — and puts `0x63` at
+`+8`, `0xff` at `+0x38` and at `+0` the layer `select_cell_layer` finds there
+(2 the upper, 1 the lower). `0xf0` adds an angle it shifts up by 4 and `0x400`
+at `+0x28`; **`0xf2` adds one more byte**, `+0x3a >> 2`, which comes back as
+`(byte << 2) + (rand() >> 13)`, and `0x400` at `+0x24` for type `0x79`. So
+**what you drop is saved as a spawn instruction**, and the three kinds are
+three flavours of it. `0xf3` is the fourth, and short: the kind `0x70` --
+a key on a pedestal -- with only its type and its state.
+
+So the lengths are `0xf0` 9, `0xf1` 8, `0xf2` 9, `0xf3` 3, `0xf4` 3, `0xf5` and
+`0xfd` 2, and every other byte one. **`tools/levelstate.py` had `0xf2` and
+`0xf3` at 8 and 8**, and held 3 of 3 with them only because neither is in
+either recorded stream.
 
 **Checked.** `emu/bp23.lua` logged both ends while the game was played. The
 543-byte stream written on level 0 is **byte for byte** the one
@@ -4545,7 +4557,20 @@ A second, from level 4, decodes the same way and exercises the three-byte
 That last number is the one that mattered. A lockstep reading out by one
 record ends early or runs off the end, and the arm that writes nothing when
 the state is below 2 was the part to distrust for exactly that reason — it
-never fired in either stream, so it remains unexercised rather than wrong.
+never fired in either stream.
+
+**Now both routines are held to the game's own code**, run by
+`tools/mipsrun.py`. `level_state_write` over the 21 snapshots of `GAME.EXE`,
+and over 63 copies of them whose actors, conversations, object states, kinds,
+types, places and the level's own 32 type rows' classes were scrambled from a
+fixed seed, builds **84 of 84 streams, 71 718 of 71 718 bytes,** as the model
+does -- every arm taken, the class-0x53 one that writes nothing 322 times
+among them. And `apply_level_state`, handed those streams, the ones the
+memory card's saves keep and the recorded one, over a fresh load of their
+level (`mipsrun.level_cpu`), leaves RAM as the model's reader does in **90 of
+90**, 51 812 bytes changed and every one the same. A stream a slot short is
+the game's: its reader reads on into whatever follows, and so does the model.
+`tools/levelstate.py --check`.
 
 The same experiment left two things open, and both are settled now (§15, "On
 the card"). It said **`inventory_a` did not appear in the save verbatim, so
@@ -4736,7 +4761,7 @@ what becomes of that slot:
 
 | Opcode | Effect |
 | --- | --- |
-| `0xf0`–`0xf3` | **create an object**: allocate the record through `0x800448b8`, write `0x60`/`0x61`/`0x62`/`0x70` to `+0x04`, then take the type id and five more bytes from the stream |
+| `0xf0`–`0xf3` | **create an object**: allocate the record through `0x800448b8`, write `0x60`/`0x61`/`0x62`/`0x70` to `+0x04`, then take the type id and the rest from the stream -- a position and an angle, a position, a position and a byte, or only the state (§11) |
 | `0xf4` | two bytes into `+0x38`, `+0x39` |
 | `0xf5`, `0xfd` | one byte into `+0x39` / `+0x38` |
 | `0xff` | **empty the slot** — type id becomes `0xffff` |

@@ -1,56 +1,118 @@
 #!/usr/bin/env python3
 """What a level remembers, and the byte stream it remembers it in.
 
-    python3 tools/levelstate.py           the streams that were recorded
-    python3 tools/levelstate.py --check   the model against them
+    python3 tools/levelstate.py            the streams that were recorded
+    python3 tools/levelstate.py --check    the model against them, and against
+                                           the game's own two routines
+    python3 tools/levelstate.py --godot    levelstate.json, for the self-test
 
 `level_state_write` (`0x8005efd4`) builds the whole record from scratch every
 time something changes, on its own stack, and `apply_level_state`
 (`0x8005f444`) reads it back at level load. Between them the format is three
 sections:
 
-**One: the actors that are gone.** Walk `actor_table`, 0x88 a slot, stopping
-at the first byte-0 of `0xff`. For each slot whose byte 0 is **1** -- category
-1, and no other category -- write the slot index and then `3` if the actor's
-`+9` is `3`, otherwise `0`. Terminate with `0xff`.
+**One: the actors that are gone.** Walk all 200 of `actor_table`'s slots,
+0x88 apart. For each whose byte 0 is **1** -- category 1, and no other
+category -- write the slot index and then `3` if the actor's `+9` is `3`,
+otherwise `0`. Terminate with `0xff`. The reader puts the second byte into the
+slot's `+9`. (This said the walk *stopped* at the first byte 0 of 0xff. It
+skips such a slot and goes on; the game's own routine, run below, settles it.)
 
-**Two: how far each conversation has got.** Walk the 40 entity records; for
-each whose `+0x38` is not null and whose block begins `0x70`, write the entity
-index, the program counter at `+0x10` and the retry flag at `+0x13`.
-Terminate with `0xff`.
+**Two: how far each conversation has got.** Walk the 40 entity records,
+stopping at the first whose byte 0 is 0xff; for each whose `+0x38` is not null
+and whose block begins `0x70`, write the entity index, the program counter at
+`+0x10` and the retry flag at `+0x13`. Terminate with `0xff`. The reader puts
+the two back through `+0x38` without asking whether it is null.
 
-**Three: one opcode per object slot**, 396 of them, in lockstep -- the decoder
+**Three: one opcode per object slot**, 396 of them, in lockstep -- the reader
 steps its own pointer by `0x44` once per record and stops at 396, so there is
-no terminator and no slot is skipped. The opcode is chosen by the object's
-class through a 233-arm table at `0x80013298`:
+no terminator. What is written is chosen by the object's class,
+`object_type_table[type]` byte 0, through a 233-arm table at `0x80013298`
+that this reads off the executable:
 
-    0xff       the slot is empty -- its type id is 0xff
-    0xfe       nothing about this slot is worth keeping
-    0xfd n     the object's state byte at +0x38
-    0xf5 n     the byte at +0x39
-    0xf4 s n   the state and the byte after it
-    0xf0..0xf2 an object that was not in the level when it was built: a type
-               id and a position, x and z as `x >> 2` in two bytes each
+    0xff        the slot is empty: its type is 0xff
+    0xfe        nothing about the slot is kept -- 200 classes, and any class
+                past the table
+    0xfd s      the state byte at +0x38 -- 25 classes, the doors, gates, lifts,
+                lids, chests and the hidden walls among them
+    0xf4 s n    the state and the byte after it -- 5, the pedestal 0x18 among
+                them
+    0xf5 n      the byte at +0x39 -- class 0x56
+    (nothing)   class 0x53 with its state below 2: the writer puts no byte at
+                all, so the reader takes the next slot's for this one and is a
+                slot out from there on. It is the game's, and it is kept.
+    class 0x40, a thing, by its kind byte at +4:
+    0xf0 t x x z z y y a   0x60, gold: the type, x >> 2 in two bytes, z the
+                           same, y in two, the angle at +0x26 >> 4
+    0xf1 t x x z z y y     0x61: the same without the angle
+    0xf2 t x x z z y y r   0x62: and +0x3a >> 2
+    0xf3 t s               0x70, a key on a pedestal: the type and the state
+    0xfd s                 any other kind
 
-**Checked.** `emu/bp23.lua` logged both ends while the game was played. The
+The reader, slot by slot: `0xff` puts 0xff in the type; `0xfd`, `0xf5` and
+`0xf4` put their bytes back into +0x38, +0x39 or both; `0xf0`..`0xf3` build the
+slot afresh through `init_object_record` -- the kind, the type, the position
+(x and z shifted back up by 2, y sign-extended), +8 = 0x63, +0x38 = 0xff, and
+byte +0 the layer `select_cell_layer` finds there, 2 for the upper and 1 for
+the lower; `0xf0` adds the angle << 4 and +0x28 = 0x400, `0xf2` adds +0x3a =
+(r << 2) + (rand() >> 13), and +0x24 = 0x400 for type 0x79; `0xf3` takes only
+the type and puts its state byte in +0x38. Any other byte from 0xf0 up, and
+anything below 0xf0, does nothing and is one byte long.
+
+**Withdrawn: the lengths of `0xf2` and `0xf3` were 8 and 8 here.** They are 9
+and 3. The writer's arm for kind 0x62 adds `+0x3a >> 2` after the position, and
+its arm for 0x70 writes only the type and the state. Neither opcode was in
+either recorded stream, which is how "3 of 3" held with the wrong numbers.
+
+**Checked.** `emu/bp23.lua` logged both ends while the game was played: the
 543-byte stream written on level 0 is byte for byte the one read back when
 the player returned, and it decodes to 34 actors with three gone, six
 conversations -- entity 9 stopped at pc 7 with the retry flag set, which is
 where an earlier recording left it -- and **396 object records ending exactly
-on the last byte**. That last number is the one that matters: a lockstep
-reading that is out by one record ends early or runs off the end.
+on the last byte**. And the game's own two routines, run by tools/mipsrun.py:
+`level_state_write` over every snapshot of GAME.EXE, and over copies of them
+whose actors, conversations and objects were scrambled from a fixed seed so
+that every arm is taken, builds the stream `encode` builds from the same RAM,
+byte for byte; `apply_level_state`, handed those streams and the ones the
+memory card's saves hold over a fresh load of their level
+(`mipsrun.level_cpu`), changes RAM exactly as `apply` does. `--check` prints
+the counts.
 """
 import json
 import os
+import random
+import struct
 import sys
 
-ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-SLOTS = 396                    # the decoder's own bound
-END = 0xFF
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# How far each opcode advances, read off level_state_write's arms.
-OPS = {0xF0: 9, 0xF1: 8, 0xF2: 8, 0xF3: 8, 0xF4: 3, 0xF5: 2,
-       0xFD: 2, 0xFE: 1, 0xFF: 1}
+ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+SLOTS = 396                    # the reader's own bound
+END = 0xFF
+MASK = 0x1FFFFF
+
+ACTOR_TABLE, ACTOR_STRIDE, ACTORS = 0x80185DA8, 0x88, 200
+ENTITY_TABLE, ENTITY_STRIDE, ENTITIES = 0x8018C7E8, 0x78, 40
+OBJECT_TABLE, OBJECT_STRIDE = 0x80191A5C, 0x44
+OBJECT_TYPES, TYPE_STRIDE = 0x8018FB3C, 24
+LEVEL_STATE, LEVEL_STATE_INDEX = 0x801BAA88, 0x801BFA88
+LEVEL_GRID = 0x801D4464
+CURRENT_LEVEL = 0x8018FAD9
+CLASS_TABLE, CLASSES = 0x80013298, 233
+WRITE, APPLY = 0x8005EFD4, 0x8005F444
+BUILT = 0x8005F3A4             # level_state_write's call to level_state_unpack: the stream is whole
+RAND = 0x800796C0              # the BIOS's rand, A0:2F
+
+# level_state_write's arms, by where the class table sends a class: read off
+# its listing (tools/rdis.py game 0x8005efd4).
+ARMS = {0x8005F150: "thing", 0x8005F32C: "unless_low", 0x8005F340: "state",
+        0x8005F354: "pair", 0x8005F374: "aux", 0x8005F388: "nothing"}
+
+# How long each opcode is; anything else is one byte.
+OPS = {0xF0: 9, 0xF1: 8, 0xF2: 9, 0xF3: 3, 0xF4: 3, 0xF5: 2, 0xFD: 2}
+# The kind byte each creating opcode stamps at +4, and back.
+KINDS = {0xF0: 0x60, 0xF1: 0x61, 0xF2: 0x62, 0xF3: 0x70}
+CREATES = {v: k for k, v in KINDS.items()}
 
 # What emu/bp23.lua recorded on 2026-09-24: the stream level_state_write
 # built, twice, and the one apply_level_state was handed on the way back.
@@ -60,6 +122,102 @@ RECORDED = [
     {"kind": "apply", "level": 0, "hex": "0000050306030700080009000a000b000c000e0010001100120013001400150016001700180019001a001b031c001d001e00200021002400250026002700280029002f00ff0600000700000800000907010a00000b0000fffefefefefefefd00fefdfffd89fefefefefefefefdfffefdfffdfffefefefefdfefefefefefefefefdc8fefffefefefefefefefefefefd00fefefefefdfffefefefefefdfffd00fefefefd00fefefefefefefefdc8fefefd00fdfffefefefefefefefd00fefefefdfffdfffefd00fefefefefefefefefefefefdfffefefefefefefefefefefdfffdfffdfffefdc8fefefefefefefdfffdfffefdfffdfffefefdfffefd00fefefefe"}
 ]
 
+
+_arms = None
+
+
+def class_arms():
+    """{class: arm} for the 233 classes the table at 0x80013298 has, off the
+    executable."""
+    global _arms
+    if _arms is None:
+        import mips
+        exe = mips.load("game")
+        _arms = {c: ARMS[exe.word(CLASS_TABLE + 4 * c)] for c in range(CLASSES)}
+    return _arms
+
+
+def _u8(m, a):
+    return m[a & MASK]
+
+
+def _u16(m, a):
+    return struct.unpack_from("<H", m, a & MASK)[0]
+
+
+def _u32(m, a):
+    return struct.unpack_from("<I", m, a & MASK)[0]
+
+
+def _w16(m, a, v):
+    struct.pack_into("<H", m, a & MASK, v & 0xFFFF)
+
+
+def _w32(m, a, v):
+    struct.pack_into("<I", m, a & MASK, v & 0xFFFFFFFF)
+
+
+# --- writing --------------------------------------------------------------
+
+def encode(m):
+    """level_state_write's stream, from RAM `m`: the level's actors,
+    conversations and object slots as they stand."""
+    arms = class_arms()
+    out = bytearray()
+    for k in range(ACTORS):
+        a = ACTOR_TABLE + ACTOR_STRIDE * k
+        if _u8(m, a) != 1:                       # 0xff skipped, as any other category
+            continue
+        out += bytes([k, 3 if _u8(m, a + 9) == 3 else 0])
+    out.append(END)
+    for k in range(ENTITIES):
+        e = ENTITY_TABLE + ENTITY_STRIDE * k
+        if _u8(m, e) == 0xFF:
+            break
+        p = _u32(m, e + 0x38)
+        if p == 0 or _u8(m, p) != 0x70:
+            continue
+        out += bytes([k, _u8(m, p + 0x10), _u8(m, p + 0x13)])
+    out.append(END)
+    for s in range(SLOTS):
+        r = OBJECT_TABLE + OBJECT_STRIDE * s
+        typ = _u16(m, r + 6)
+        if typ == 0xFF:
+            out.append(0xFF)
+            continue
+        cls = _u8(m, OBJECT_TYPES + TYPE_STRIDE * typ)
+        arm = arms[cls] if cls < CLASSES else "nothing"
+        st, aux = _u8(m, r + 0x38), _u8(m, r + 0x39)
+        if arm == "state":
+            out += bytes([0xFD, st])
+        elif arm == "unless_low":
+            if st >= 2:
+                out += bytes([0xFD, st])
+        elif arm == "pair":
+            out += bytes([0xF4, st, aux])
+        elif arm == "aux":
+            out += bytes([0xF5, aux])
+        elif arm == "thing":
+            kind = _u8(m, r + 4)
+            op = CREATES.get(kind)
+            if op is None:
+                out += bytes([0xFD, st])
+            elif op == 0xF3:
+                out += bytes([0xF3, typ & 0xFF, st])
+            else:
+                x, y, z = _u32(m, r + 0x14), _u32(m, r + 0x18), _u32(m, r + 0x1C)
+                out += bytes([op, typ & 0xFF, (x >> 2) & 0xFF, (x >> 10) & 0xFF,
+                              (z >> 2) & 0xFF, (z >> 10) & 0xFF, y & 0xFF, (y >> 8) & 0xFF])
+                if op == 0xF0:
+                    out.append((_u16(m, r + 0x26) >> 4) & 0xFF)
+                elif op == 0xF2:
+                    out.append((_u16(m, r + 0x3A) >> 2) & 0xFF)
+        else:
+            out.append(0xFE)
+    return bytes(out)
+
+
+# --- reading --------------------------------------------------------------
 
 def decode(b):
     """(actors, conversations, [(opcode, operands)], bytes consumed)."""
@@ -82,6 +240,263 @@ def decode(b):
         objs.append((op, tuple(b[i + 1:i + n])))
         i += n
     return actors, talks, objs, i
+
+
+def init_object_record(m, r):
+    """0x800448b8, its fourteen stores."""
+    m[(r + 1) & MASK] = 0x80
+    for o in (0x30, 0x2E, 0x2C):
+        _w16(m, r + o, 0x1000)
+    for o in (0xA, 0x28, 0x24, 0x26, 0xE, 0x10):
+        _w16(m, r + o, 0)
+    m[(r + 2) & MASK] = m[r & MASK] = 0
+    m[(r + 4) & MASK] = m[(r + 5) & MASK] = 0xFF
+
+
+def layer(m, x, y, z):
+    """select_cell_layer's answer, 0 or 5, out of the grid in RAM."""
+    import collision
+    if x > 0x27FFF or z > 0x27FFF:
+        return 0
+    c = (LEVEL_GRID + 800 * (z >> 11) + 10 * (x >> 11)) & MASK
+    return collision.layer_of(m[c:c + 10], y)
+
+
+def apply(m, b, rand):
+    """apply_level_state's writes into RAM `m`, handed stream `b`; `rand` is
+    the game's rand(). The bytes it read."""
+    i = 0
+    while b[i] != END:
+        m[(ACTOR_TABLE + ACTOR_STRIDE * b[i] + 9) & MASK] = b[i + 1]
+        i += 2
+    i += 1
+    while b[i] != END:
+        p = _u32(m, ENTITY_TABLE + ENTITY_STRIDE * b[i] + 0x38)
+        m[(p + 0x10) & MASK] = b[i + 1]
+        m[(p + 0x13) & MASK] = b[i + 2]
+        i += 3
+    i += 1
+    for s in range(SLOTS):
+        r = OBJECT_TABLE + OBJECT_STRIDE * s
+        op = b[i]
+        i += 1
+        if op == 0xFF:
+            _w16(m, r + 6, 0xFF)
+        elif op == 0xF4:
+            m[(r + 0x38) & MASK], m[(r + 0x39) & MASK] = b[i], b[i + 1]
+            i += 2
+        elif op == 0xF5:
+            m[(r + 0x39) & MASK] = b[i]
+            i += 1
+        elif op == 0xFD:
+            m[(r + 0x38) & MASK] = b[i]
+            i += 1
+        elif op in KINDS:
+            init_object_record(m, r)
+            m[(r + 4) & MASK] = KINDS[op]
+            _w16(m, r + 6, b[i])
+            i += 1
+            if op == 0xF3:
+                m[(r + 0x38) & MASK] = b[i]
+                i += 1
+                continue
+            x, z = (b[i] | b[i + 1] << 8) << 2, (b[i + 2] | b[i + 3] << 8) << 2
+            y = b[i + 4] | b[i + 5] << 8
+            y -= 0x10000 if y & 0x8000 else 0
+            i += 6
+            if op == 0xF0:
+                _w16(m, r + 0x28, 0x400)
+                _w16(m, r + 0x26, b[i] << 4)
+                i += 1
+            elif op == 0xF2:
+                _w16(m, r + 0x3A, (b[i] << 2) + (rand() >> 13))
+                i += 1
+                if _u16(m, r + 6) == 0x79:
+                    _w16(m, r + 0x24, 0x400)
+            _w32(m, r + 0x14, x)
+            _w32(m, r + 0x1C, z)
+            _w32(m, r + 0x18, y)
+            _w16(m, r + 8, 0x63)
+            m[r & MASK] = 2 if layer(m, x, y, z) else 1
+            m[(r + 0x38) & MASK] = 0xFF
+    return i
+
+
+def stream_of(area, index, lv):
+    """The stream level `lv` keeps in a level_state area and its index, or
+    None: index[lv] is its offset into the area, 0xffff for none."""
+    off = struct.unpack_from("<H", index, 2 * lv)[0]
+    return None if off == 0xFFFF else bytes(area[off:])
+
+
+class Lcg:
+    """The BIOS's rand: next = next * 0x41c64e6d + 0x3039, (next >> 16) & 0x7fff."""
+
+    def __init__(self, seed=1):
+        self.next = seed
+
+    def __call__(self):
+        self.next = (self.next * 0x41C64E6D + 0x3039) & 0xFFFFFFFF
+        return (self.next >> 16) & 0x7FFF
+
+
+# --- the game's own two, run --------------------------------------------------
+
+class _Built(Exception):
+    pass
+
+
+def game_encode(ram, lv):
+    """level_state_write(lv), the game's, over `ram`: the stream it builds."""
+    import mipsrun
+    cpu = mipsrun.CPU(ram)
+    got = []
+
+    def built(c):
+        sp = c.r[29]
+        start = (sp + 0x90) & MASK
+        got.append(bytes(c.ram[start:c.r[16] & MASK]))
+        raise _Built()
+    cpu.watch[BUILT] = built
+    try:
+        cpu.call(WRITE, lv)
+    except _Built:
+        pass
+    return got[0] if got else None
+
+
+def scramble(ram, rng):
+    """A copy of `ram` with the actors' categories and +9, the conversations'
+    pcs and the objects' states, kinds, types and places drawn afresh, so that
+    every arm of the writer and the reader is taken."""
+    m = bytearray(ram)
+    for k in range(ACTORS):
+        a = ACTOR_TABLE + ACTOR_STRIDE * k
+        if _u8(m, a) != 0xFF and rng.randrange(3) == 0:
+            m[a & MASK] = rng.choice((1, 1, 2, 0xFF))
+            m[(a + 9) & MASK] = rng.choice((0, 3, 3, rng.randrange(256)))
+    for k in range(ENTITIES):
+        e = ENTITY_TABLE + ENTITY_STRIDE * k
+        if _u8(m, e) == 0xFF:
+            break
+        p = _u32(m, e + 0x38)
+        if p and _u8(m, p) == 0x70:
+            m[(p + 0x10) & MASK] = rng.randrange(256)
+            m[(p + 0x13) & MASK] = rng.randrange(2)
+    types = [t for t in range(0x14C) if _u8(m, OBJECT_TYPES + TYPE_STRIDE * t) == 0x40]
+    # the level's own 32 rows given classes of every arm, the rare ones (0x53,
+    # 0x56, the pairs) and past the table among them
+    own = list(range(300, 332))
+    for t in own:
+        m[(OBJECT_TYPES + TYPE_STRIDE * t) & MASK] = rng.choice(
+            (0x53, 0x53, 0x56, 0x56, 0x0F, 0x11, 0x18, 0x1A, 0xA7, 0x51, 0x02, 0xE8,
+             rng.randrange(256)))
+    for s in range(SLOTS):
+        r = OBJECT_TABLE + OBJECT_STRIDE * s
+        if _u16(m, r + 6) == 0xFF:
+            continue
+        m[(r + 0x38) & MASK] = rng.choice((0, 1, 2, 0xFE, 0xFF, rng.randrange(256)))
+        m[(r + 0x39) & MASK] = rng.randrange(256)
+        if rng.randrange(6) == 0:
+            _w16(m, r + 6, rng.choice(own))
+        elif types and rng.randrange(4) == 0:
+            _w16(m, r + 6, rng.choice(types))
+            m[(r + 4) & MASK] = rng.choice((0x60, 0x61, 0x62, 0x70, 0x40, 0x06))
+            _w32(m, r + 0x14, rng.randrange(0, 0x28000))
+            _w32(m, r + 0x1C, rng.randrange(0, 0x28000))
+            _w32(m, r + 0x18, rng.randrange(-0x6000, 0x1000))
+            _w16(m, r + 0x26, rng.randrange(0x1000))
+            _w16(m, r + 0x3A, rng.randrange(0x400))
+        elif rng.randrange(40) == 0:
+            _w16(m, r + 6, 0x79 if rng.randrange(2) else 0xFF)
+    return bytes(m)
+
+
+def _game_snapshots():
+    import memcard
+    return memcard._snapshots()
+
+
+def game_check(out=sys.stdout, scrambles=3):
+    """The writer and the reader against the game's own, run."""
+    import mipsrun
+    import memcard
+    ok = True
+    rng = random.Random(0x1E5A7E)
+    streams = []                     # (label, level, stream)
+    n = same = nbytes = sbytes = 0
+    for path in _game_snapshots():
+        ram = open(path, "rb").read()
+        lv = ram[CURRENT_LEVEL & MASK]
+        name = os.path.basename(path)[:-4]
+        for k in range(scrambles + 1):
+            m = ram if k == 0 else scramble(ram, rng)
+            game = game_encode(m, lv)
+            mine = encode(m)
+            n += 1
+            nbytes += max(len(game), len(mine))
+            if game == mine:
+                same += 1
+                sbytes += len(game)
+            else:
+                d = next((i for i in range(min(len(game), len(mine))) if game[i] != mine[i]),
+                         min(len(game), len(mine)))
+                print(f"  {name}{' scrambled' if k else ''}: the game's stream and this one "
+                      f"part at byte {d} of {len(game)}", file=out)
+                ok = False
+            streams.append((name + (f" scrambled {k}" if k else ""), lv, game or mine))
+    print(f"  level_state_write, the game's, over {n} snapshot states ({n // (scrambles + 1)} "
+          f"as taken, the rest scrambled): {same} of {n} streams, {sbytes} of {nbytes} "
+          f"bytes, as encode builds them", file=out)
+
+    for path, slot, f in memcard.saves():
+        buf = f[memcard.DATA_AT:]
+        area, index = buf[0x108:0x5108], buf[0x5108:0x5148]
+        for lv in range(32):
+            st = stream_of(area, index, lv)
+            if st is not None:
+                streams.append((f"slot {slot} level {lv}", lv, st))
+    for r in RECORDED:
+        if r["kind"] == "state" and len(r["hex"]) > 800:
+            streams.append(("bp23", 0, bytes.fromhex(r["hex"])))
+
+    fresh = {}
+    n = same = changed = 0
+    for label, lv, st in streams:
+        if lv not in fresh:
+            fresh[lv] = bytes(mipsrun.level_cpu(lv).ram)
+        base = fresh[lv]
+        cpu = mipsrun.CPU(base)
+        lcg = Lcg()
+        cpu.hooks[RAND] = lambda c, lcg=lcg: lcg()
+        a = LEVEL_STATE & MASK
+        cpu.ram[a:a + len(st)] = st
+        idx = bytearray(b"\xff" * 64)
+        struct.pack_into("<H", idx, 2 * lv, 0)
+        cpu.ram[LEVEL_STATE_INDEX & MASK:(LEVEL_STATE_INDEX & MASK) + 64] = idx
+        before = bytes(cpu.ram)
+        cpu.call(APPLY, lv)
+        mine = bytearray(before)
+        apply(mine, before[a:], Lcg())          # the area as RAM holds it: a stream
+        #                                        a slot short reads on past its end
+        lo, hi = (mipsrun.STACK - 0x400) & MASK, mipsrun.STACK & MASK
+        skip = set(range(lo, hi)) | {x & MASK for a0 in (0x801E6464, 0x801E646E, 0x801E6470)
+                                     for x in range(a0, a0 + 4)}
+        game = cpu.ram
+        diff = [i for i in range(len(before)) if (game[i] != mine[i]) and i not in skip]
+        moved = sum(1 for i in range(len(before)) if game[i] != before[i] and i not in skip)
+        n += 1
+        changed += moved
+        if not diff:
+            same += 1
+        else:
+            ok = False
+            print(f"  {label}: {len(diff)} bytes differ from the game's apply, the first at "
+                  f"{0x80000000 | diff[0]:#x}", file=out)
+    print(f"  apply_level_state, the game's, handed {n} streams over a fresh load of their "
+          f"level: {same} of {n} leave RAM as apply does ({changed} bytes changed, every one "
+          f"the same)", file=out)
+    return ok
 
 
 def check(out=sys.stdout):
@@ -124,7 +539,9 @@ def export(out_dir):
 if __name__ == "__main__":
     a = sys.argv[1] if len(sys.argv) > 1 else None
     if a == "--check":
-        sys.exit(0 if check() else 1)
+        good = check()
+        good = game_check() and good
+        sys.exit(0 if good else 1)
     elif a == "--godot":
         print(export(os.path.join(ROOT, "godot")))
     else:

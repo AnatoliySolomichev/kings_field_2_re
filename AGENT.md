@@ -252,6 +252,8 @@ the player's weapon, against the bp25 recording        817 of 817 frames,
                                                        11 of 11 blows
 the creatures' fences, against the bp16 act= log       5006 of 5006 positions
 the creatures' animation, against the actor caches     11 of 11
+the level's record, against the game's own writer     84 of 84 streams, 71 718
+and reader (level_state_write, apply_level_state)      bytes; 90 of 90 applied
 the saves on the memory card, against the game's own   save_restore 534 566 of
 save_restore and save_serialise                        534 566 bytes, 3 saves and
                                                        20 random buffers;

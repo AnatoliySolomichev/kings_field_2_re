@@ -121,8 +121,9 @@ def main(quick=False, only_check=False):
         "the level's own props, against a RAM snapshot",
         keep=["fields of"])
     run(["tools/levelstate.py", "--check"],
-        "the saved level record, against what was played",
-        keep=["decode exactly"])
+        "the saved level record, against what was played and the game's own two routines",
+        keep=["decode exactly", "level_state_write, the game's", "apply_level_state, the game's",
+              "differ", "part at"])
     run(["tools/memcard.py", "--check"],
         "the saves on the memory card, against the game's own restore and serialise",
         keep=["saves on the cards", "bytes written where", "bytes as this table"])

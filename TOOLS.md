@@ -422,6 +422,20 @@ python3 tools/memcard.py --check     the table against the game's own code
 buffers writes **534 566 of 534 566** bytes where the table says, the second
 over 21 snapshots builds **494 592 of 494 592** bytes as the table does.
 
+**`levelstate.py`** — what a level remembers between visits, the byte stream
+`level_state_write` builds and `apply_level_state` reads (FORMATS.md §11 and
+§14): `encode` from RAM, `decode`, and `apply` into RAM.
+
+```
+python3 tools/levelstate.py          the recorded streams, decoded
+python3 tools/levelstate.py --check  against them, and against the game's own two
+```
+
+`--check` runs both of the game's routines through `tools/mipsrun.py`: the
+writer over every snapshot and 63 scrambled copies, **84 of 84 streams**
+byte for byte; the reader over a fresh load of each stream's level, **90 of
+90** leaving RAM as `apply` does.
+
 **`damage.py`** — what a hit takes off, and the log that settles it.
 
 ```
