@@ -405,6 +405,23 @@ python3 tools/savemap.py             the layout
 python3 tools/savemap.py save1       read those fields out of a snapshot
 ```
 
+**`memcard.py`** — the saves on the emulator's memory cards (`emu/memcard1.mcd`
+and `2`), read the way the game reads them: the card's directory and block
+chains, the file `BASLUS-00255` plus the slot's digit, 0x6000 bytes, the sum
+at `+0x200`, and `save_restore`'s whole table -- 57 fields and ten blocks,
+which `savemap.py`'s agreement had only half of.
+
+```
+python3 tools/memcard.py             every save: slot, title, level, place, HP
+python3 tools/memcard.py 3           slot 3's fields: inventory, spells, flags
+python3 tools/memcard.py --check     the table against the game's own code
+```
+
+`--check` runs `save_restore` and `save_serialise` themselves through
+`tools/mipsrun.py`: the first handed the card's saves and twenty random
+buffers writes **534 566 of 534 566** bytes where the table says, the second
+over 21 snapshots builds **494 592 of 494 592** bytes as the table does.
+
 **`damage.py`** — what a hit takes off, and the log that settles it.
 
 ```

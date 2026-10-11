@@ -4547,12 +4547,16 @@ record ends early or runs off the end, and the arm that writes nothing when
 the state is below 2 was the part to distrust for exactly that reason — it
 never fired in either stream, so it remains unexercised rather than wrong.
 
-Two things the same experiment shows are *not* settled. `inventory_a` does not
-appear in the save verbatim, so the carried items are written in some other
-form. And `story_flags` cannot be judged from this save at all: one non-zero
-byte in sixty-four means a "match" is a match of zeros, which is no evidence.
-The save also assembles in a buffer at `0x801eb9c4` and opens with `SC`, the
-standard PlayStation save header.
+The same experiment left two things open, and both are settled now (§15, "On
+the card"). It said **`inventory_a` did not appear in the save verbatim, so
+the carried items had to be written in some other form. That was wrong**: both
+inventory arrays are in the buffer byte for byte at `+0x5508`, which
+`save_restore` copies straight back -- 534 566 of 534 566 bytes, run over the
+game's own code. And `story_flags` could not be judged from this save, one
+non-zero byte in sixty-four making a "match" a match of zeros; the same
+check's twenty random buffers judge it, at `+0x8`. The save assembles in a
+buffer at `0x801eb9c4` and opens with `SC`, the standard PlayStation save
+header.
 
 ---
 
@@ -4794,8 +4798,52 @@ at `0x801b2508`–`0x801b2530`, `0x801b255c`–`0x801b2578` and
 `0x801b25ab`–`0x801b25e4`. Anything the game bothers to persist is state;
 anything it does not is scratch, and need not be chased.
 
-The card layout is a separate question: the memory-card block is 8192 bytes and
-this buffer is far larger, so the card holds a subset or a packing of it.
+### On the card: three blocks, and the buffer verbatim
+
+The card layout was "a separate question" here, on the reasoning that a card
+block is 8192 bytes and this buffer far larger, so the card must hold a
+subset or a packing of it. **It holds neither: a save is three blocks, and the
+buffer is in them byte for byte.** `0x8002860c`, which the load screen calls
+with the slot picked, opens `bu00:BASLUS-00255` plus the slot's digit
+(`0x80011758`, `0x80081818`, `slot + 0x30`), reads **0x6000 bytes**, and
+believes them only if `0x80028c74` -- the sum of the 0x5c00 bytes from
+`+0x400` -- equals the word at `+0x200`; then `save_restore` is handed
+`+0x400`. The writer, `0x80028750`, zeroes the 0x6000 bytes, serialises into
+`+0x400`, sums, and lays a 0x280-byte header over the front:
+
+| File offset | What |
+| --- | --- |
+| `+0x000` | `SC`, `0x13` (an icon of three frames), 3 (blocks), the title in Shift-JIS -- `KING'S FIELD 2-3 EXP 11 LV 1`, the slot, experience and level put in by `0x80028b70` -- then the icon's palette and frames, stored out of VRAM |
+| `+0x200` | the sum |
+| `+0x204` | the rest of the writer's stack, up to `+0x280`: nothing |
+| `+0x400` | the buffer `save_serialise` fills, 0x5ace bytes of it used |
+
+and `save_restore` is 57 fields one at a time and ten blocks copied whole:
+
+| Buffer offset | Bytes | Into |
+| --- | --- | --- |
+| `+0x0` | 5 | `current_level_block`; its **first** byte is then copied to `current_level` and `0x8018fada`, and is the level loaded |
+| `+0x8` | 0x100 | `story_flags` |
+| `+0x108` | 0x5000 | `level_state` |
+| `+0x5108` | 0x40 | `level_state_index` |
+| `+0x5148` | 0x3c0 | `0x80198588`, the table `build_seq_index` fills at boot |
+| `+0x5508` | 0x12c | `inventory_a` and `inventory_b`, 150 counts each |
+| `+0x5634` | 0x60 | **byte 0 of each of `spell_table`'s 96 records**, 24 bytes apart |
+| `+0x5694` | 0x89 | the player: position, pitch and facing, minutes, experience, gold, HP, MP, the stat and the skills, the timers, the level, what is worn and wielded, the spells in hand, the panel's styles -- the fields above |
+| `+0x571e` | 0x280 | `0x801b56cc`, **`map_mark_seen`'s bits**: 20 bytes for each of 32 maps, one bit for each of the 160 rectangles of `level_map_rects` |
+| `+0x599e` | 0x96 | `0x80081780`, 150 bytes, one an item id, initialised in `GAME.EXE` |
+| `+0x5a34` | 0x96 | `0x80080718`, 150 more, the same |
+| `+0x5aca` | 4 | `0x8009c22c` |
+
+**Checked** both ways round by running the game's own code over a
+snapshot's RAM (`tools/mipsrun.py`). `save_restore` handed the three saves on
+the emulator's card and twenty buffers of random bytes -- in which a field put
+at the wrong offset cannot hide behind a zero -- writes **534 566 of 534 566**
+bytes exactly where and as the table says, and nothing else; `save_serialise`
+over the 21 snapshots of `GAME.EXE` builds **494 592 of 494 592** bytes as the
+table builds them from the same RAM. And all three saves on the card carry the
+game's checksum. `tools/memcard.py` holds the table, reads the card and runs
+both checks.
 
 ### A correction to the function boundaries
 

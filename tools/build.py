@@ -123,6 +123,9 @@ def main(quick=False, only_check=False):
     run(["tools/levelstate.py", "--check"],
         "the saved level record, against what was played",
         keep=["decode exactly"])
+    run(["tools/memcard.py", "--check"],
+        "the saves on the memory card, against the game's own restore and serialise",
+        keep=["saves on the cards", "bytes written where", "bytes as this table"])
     run(["tools/objcoll.py", "--check"],
         "the object collision, against what was played",
         keep=["recorded touches"])

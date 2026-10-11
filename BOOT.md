@@ -478,9 +478,17 @@ inversion, the fourteen binding slots and all eleven schemes.
 * **`END.EXE` is not read.** Its own `play_movie` table names `\OP\M4.S`,
   `M5.S` and `M6.S`, and its symbols file has the library named and nothing
   else.
-* **The save path.** `card_list_saves` finds the saves and `overlay_arg2`
-  carries the answer, but `0x8001fa60` — the screen on the `GAME.EXE` side that
-  reads it — is not read, so the port always starts a new game.
+* **The save path -- read on the `GAME.EXE` side.** `card_list_saves` finds
+  the saves and `overlay_arg2` carries the answer. `read_overlay_arg2`
+  (`0x8001fa60`) answers `-1` for a new game; for CONTINUE it runs the list
+  of saves (`0x8001fc5c`), and the slot picked goes to `save_load_slot`
+  (`0x8002860c`): the file `BASLUS-00255` and the slot's digit, 0x6000 bytes,
+  `save_checksum` against the word at `+0x200`, then `save_restore`. Back in
+  `game_main`, a slot means `save_loaded_fixup` (`0x80028f90`) before
+  `enter_current_level` -- what is worn and wielded put on again, the spells
+  in hand set, the bonus timers' effects respawned, the stats recalculated.
+  FORMATS.md §15, "On the card", has the file; `tools/memcard.py` reads the
+  emulator's cards with it.
 * **The menu's sounds.** `OP.D`'s trailing VAB is extracted and unparsed, so
   the cursor and confirm sounds — ids `0x5a` and `0x3a` into that bank — are
   silent in the port. The title *music* does play: it is `M2.S`'s XA track.

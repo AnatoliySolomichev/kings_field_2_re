@@ -16,10 +16,14 @@ finish, none of them blocking:
 * **`END.EXE` is unread.** Only its Sony library is named, by `tools/psyq.py`.
   Its own `play_movie` table names `\OP\M4.S`, `M5.S` and `M6.S`, so it is
   built like `OPEN.EXE` and should read quickly.
-* **The save path.** `OPEN.EXE` counts the saves on the card and passes the
-  menu's answer in `overlay_arg2`; `0x8001fa60` in `GAME.EXE` is what reads it
-  and it has not been read. Until then the port always starts a new game, and
-  nothing here can load `tools/savemap.py`'s fields back into a running game.
+* **The save path -- read, and the card with it.** `OPEN.EXE` counts the
+  saves on the card and passes the menu's answer in `overlay_arg2`;
+  `read_overlay_arg2` (`0x8001fa60`) runs the list and `save_load_slot`
+  (`0x8002860c`) reads the file, BOOT.md section 8. The file is three card
+  blocks with the save buffer in them verbatim (FORMATS.md §15, "On the
+  card"), and `tools/memcard.py` reads the emulator's cards, checked against
+  the game's own `save_restore` and `save_serialise`. What is left is the
+  port's side: loading a save into it.
 * **Sound.** `OP.D`'s trailing VAB is extracted and unparsed, the title music
   is a streamed XA track inside `\OP\M2.S` that nothing decodes, and the two
   menu sounds are ids `0x3a` and `0x5a` into that bank.

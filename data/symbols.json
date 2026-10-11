@@ -3012,5 +3012,35 @@
   "name": "crossing_shift",
   "kind": "data",
   "evidence": "three s8 bytes, x and z in cells and height in 128s: what level_load hands world_shift, 0x7f in the first for none. object_trigger keeps the crossing object's +0x40..+0x42 here"
+ },
+ "0x8002860c": {
+  "name": "save_load_slot",
+  "kind": "code",
+  "evidence": "(slot) builds bu00: (0x80011758) + BASLUS-00255 (0x80081818) + the digit slot + 0x30, opens it through the BIOS, reads 0x6000 bytes, and only if save_checksum of +0x400 equals the word at +0x200 calls save_restore(+0x400); two tries. tools/memcard.py reads the card the same way"
+ },
+ "0x80028750": {
+  "name": "save_write_slot",
+  "kind": "code",
+  "evidence": "the writer: zeroes the 0x6000-byte buffer, save_serialise into +0x400, save_checksum, and copies a 0x280-byte header built on its stack over the front -- SC, 0x13, 3, the title from 0x80081828 with 0x80028b70's slot, experience and level, the icon stored out of VRAM -- the sum at +0x200"
+ },
+ "0x80028c74": {
+  "name": "save_checksum",
+  "kind": "code",
+  "evidence": "the sum of 0x5c00 bytes from its argument, nine instructions; save_load_slot holds it to the word at +0x200, and all three saves on the emulator's card carry it (tools/memcard.py)"
+ },
+ "0x80028f90": {
+  "name": "save_loaded_fixup",
+  "kind": "code",
+  "evidence": "game_main calls it when read_overlay_arg2 answers with a slot: equip_armour(0xff, 0xff), equip_weapon(equipped_weapon), set_spell_a/b from 0x801b25ab/ac, 0x80028e9c, the effects of the three bonus timers 0x801b256a/c/e respawned, player_recalc_stats, apply_control_scheme"
+ },
+ "0x80198588": {
+  "name": "seq_state",
+  "kind": "data",
+  "evidence": "0x3c0 bytes build_seq_index fills with 0xff, one run per seq_index record at the offset it writes beside the id at 0x8019846c; saved and restored whole at buffer +0x5148 (tools/memcard.py, 534566 of 534566 bytes of save_restore)"
+ },
+ "0x801b56cc": {
+  "name": "map_seen_bits",
+  "kind": "data",
+  "evidence": "map_mark_seen's bits: 20 bytes a map, indexed by 0x8018fadd, one bit for each of the 160 rectangles of level_map_rects, 32 maps; saved and restored whole at buffer +0x571e"
  }
 }
