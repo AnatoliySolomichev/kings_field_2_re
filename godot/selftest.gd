@@ -508,6 +508,7 @@ func _effects() -> bool:
 	var d = JSON.parse_string(FileAccess.get_file_as_string("res://fxcheck.json"))
 	var fx = load("res://effects.gd").new()
 	fx.load_records()
+	fx.coll = coll                    # the game's arithmetic: roots, bearings
 	var rp := FxReplay.new()
 	fx.world = rp
 	var runs := 0
@@ -554,7 +555,6 @@ func _effects() -> bool:
 		if ok:
 			good += 1
 	# effect_aim: the velocity and the yaw
-	fx.coll = coll
 	var aims := 0
 	var aok := 0
 	for c in d.get("aims", []):

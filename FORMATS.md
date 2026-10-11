@@ -5604,10 +5604,10 @@ them**, in RAM, so the game's own code can be put beside it a byte at a time:
 every snapshot of a level, the same scenarios -- bolts at the player from
 round about, aimed as a volley aims them and not, spores beside them -- and
 after every frame **all 128 slots** must be the machine's. **189 of 189 runs,
-4702 of 4702 frames, 3964 of 3964 strikes on the player** handed the same
+5144 of 5144 frames, 4284 of 4284 strikes on the player** handed the same
 arguments; the runs met the tiles, the void, objects and the player.
 `godot/effects.gd` is the same machine, and the self-test runs it on the same
-runs with the world's answers replayed (54 of 54 runs, 1572 of 1572 frames).
+runs with the world's answers replayed (54 of 54 runs, 1868 of 1868 frames).
 
 **`effect_spawn`** (`0x80053c84`), before its kind's arm: `effect_alloc` the
 first free slot from the top -- 0 when none is -- +0 and +1 the flags and the
@@ -5635,13 +5635,18 @@ bit 1 of +0 calls `effect_hurt_player` with the kind's `spell_table` record
 -- +6, +8, +0xa, the effect byte +4, +0xc..+0x14 -- bit 2 the creatures
 (`0x8004ceac`, not read).
 
-### A bolt: kinds 0x23 and 0x24
+### The bolts: kinds 0x1f, 0x22, 0x23 and 0x24
 
-What level 4's model-53 creatures (kind 1, fourteen of them) throw: a volley
-record whose +0xc is 0x23 or 0x24 reaches `actor_animation_effects`' arm for
-0x1f..0x25 (`0x8004fc18`), which aims with `effect_aim` at a speed of 0x12c,
-the spread 0x400 and one pass, and calls `effect_spawn(pct, 0x83, kind,
-point, velocity, the creature's angles)`.
+What level 4's model-53 creatures (kind 1, fourteen of them) throw is 0x23
+and 0x24; its model-67 ones (kind 8) and level 12's models 66, 67 and 63
+throw 0x22 and 0x1f. A volley record whose +0xc is in 0x1f..0x25 reaches
+`actor_animation_effects`' arm for them (`0x8004fc18`), which aims with
+`effect_aim` at a speed of 0x12c, the spread 0x400 and one pass, and calls
+`effect_spawn(pct, 0x83, kind, point, velocity, the creature's angles)`. The
+point is a vertex of the creature's animated model for a plain list entry;
+**an `0x8002 x y z` entry** -- the model-66 and -67 creatures' -- is the
+offset it carries turned by the creature's own angles (`vec_rotate`, no half
+turn), and `0x8004` aims along two vertices (not read further).
 
 * **Setup** (`0x80054be4`, `0x80054c2c`): +8 0 -- **not drawn** -- the life
   0x14 (0x23) or 0x3c (0x24), the angles the creature's, +0xe 0xc0; 0x23 also
@@ -5655,6 +5660,19 @@ point, velocity, the creature's angles)`.
   0, 1, 3)`. The velocity's fourth halfword is whatever the stack held.
 * **The record** (`spell_table` 0x23): stab 50 and the fifth magic 40 (45
   for 0x24), and the effect 3 -- **poison**, as a spore's.
+* **0x22, a dart** (`0x80054b5c`, tick `0x80058bb4`): drawn -- +8 1, the
+  model 0x49 (+3 0x21), +9 5 -- a life of 0x46 and the scale 0x1800, its
+  pitch `ratan2(vy, vec_length_2d(vx, vz))` and its yaw `ratan2(vz, vx)`
+  less a quarter, all off the velocity. Each frame it strikes within the scale
+  >> 4 (0x180) as 0x81, moves as 0x84 -- **the tiles alone** -- is taken back
+  and freed when it meets them, and leaves a puff (+9 5, +0xe 0x100). The
+  record: blow 50 and the fourth attack 40, the effect 1.
+* **0x1f, a bolt that bobs** (`0x80054d50`, tick `0x80058a2c`): the same
+  setting up with the model 0x4a (+3 0x22) and +9 0, but its vertical speed
+  zeroed and +0x44 1. Each frame +0x46 runs by 10 up or down as +0x44 says,
+  the height by +0x46, the direction turning at -0x45 and 0x46; the strike and
+  the move as the dart's, but freed where it stands, and a puff (+9 6, +0xe
+  0x140). The record: slash 50 and the fourth attack 40, the effect 2.
 
 **A puff** (`0x80055738`, tick `0x8005b45c`): `0x80053be4` -- +8 5, +4 0x80,
 +0xc 0x33, +2 and +3 0x16 (model 0x3e), +9 5, +0x12 0x1000 -- the scale 0xe10

@@ -25,6 +25,9 @@ extends Node
 #               player within its scale / 8 each frame, flies until it meets
 #               the tiles, an object or the player, and leaves a puff (0x6f)
 #               where it is, with two fifths of its velocity. Not drawn.
+#   0x1f        a bolt that bobs up and down as it flies (model 0x4a)
+#   0x22        a dart (model 0x49; level 4's model-67 creatures, level 12's)
+#               -- both strike within their scale / 16 and meet the tiles alone
 #   0x26        a spore (level 0's and 4's model-57 creatures)
 #   0x6f        a puff: drifts, rises by +0x46, its scale grows by +0x44
 #
@@ -49,6 +52,7 @@ const OWN := 0x320
 const BODY := 0x6A4
 const EDGE := 0x400
 const MODEL_BASE := 0x28           # model_table[+3 + 0x28]: the resident bank
+const LOOT := preload("res://loot.gd")   # game_basis, the game's turn in Godot's axes
 
 var m := PackedByteArray()         # effect_slots, as the game keeps them
 var current := -1                  # 0x801ba6f0: the slot being run, an offset into m
@@ -179,7 +183,7 @@ func alloc() -> int:
 # effect_spawn(a0, a1, kind, point, ...): `point` the 16 bytes a3 points at
 # (or empty), `args` the stack arguments from the fifth on -- a pointer as the
 # bytes it points at. The slot's offset, or -1 when none is free.
-# @orig game:0x80053c84 effect_spawn  status:partial -- the common setting up and the arms of kinds 0x23, 0x24, 0x26 and 0x6f; 189 of 189 runs of the game's own as tools/effects.py, which the self-test holds this to; the other 126 arms are not here
+# @orig game:0x80053c84 effect_spawn  status:partial -- the common setting up and the arms of kinds 0x1f, 0x22, 0x23, 0x24, 0x26 and 0x6f; 189 of 189 runs of the game's own as tools/effects.py, which the self-test holds this to; the other 124 arms are not here
 func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array) -> int:
 	var s := alloc()
 	if s < 0:
@@ -219,6 +223,15 @@ func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array) -> 
 		w8(s, 0xFF)
 		return s
 	match kind:
+		0x1F:                               # 0x80054d50, a bolt that bobs
+			_aimed(s, 0x22)
+			w8(s + 9, 0)
+			w16(s + 0x3A, 0)
+			w16(s + 0x44, 1)
+			w16(s + 0x46, 0)
+		0x22:                               # 0x80054b5c
+			_aimed(s, 0x21)
+			w8(s + 9, 5)
 		0x23:                               # 0x80054be4
 			w8(s + 8, 0)
 			w16(s + 0x10, 0x14)
@@ -247,6 +260,27 @@ func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array) -> 
 			w8(s, 0xFF)                     # an arm not here: no effect at all
 			KFInfo.note("effect: kind 0x%x is not in the port" % kind)
 	return s
+
+
+# What 0x1f's and 0x22's arms share (0x80054cf4, 0x80054d68): +8 1, +4 0x80,
+# +2 and +3 the model, a life of 0x46, the scale 0x1800, and the angles off the
+# velocity -- the pitch ratan2(vy, vec_length_2d(vx, vz)), the yaw
+# ratan2(vz, vx) less a quarter.
+# @orig game:0x80054cf4 effect_spawn+0x1070  status:verified -- the arms of 0x1f and 0x22 through tools/effects.py, 189 of 189 runs of the game's own
+func _aimed(s: int, model: int) -> void:
+	var vx := s16(s + 0x38)
+	var vz := s16(s + 0x3C)
+	w8(s + 8, 1)
+	w8(s + 4, 0x80)
+	w8(s + 2, model)
+	w8(s + 3, model)
+	w16(s + 0x10, 0x46)
+	for o in [0x34, 0x32, 0x30]:
+		w16(s + o, 0x1800)
+	var ln := coll.isqrt(s32v((vx >> 3) * (vx >> 3) + (vz >> 3) * (vz >> 3)) & 0xFFFFFFFF) << 3
+	w16(s + 0x28, coll.ratan2(s16(s + 0x3A), ln))
+	w16(s + 0x2C, 0)
+	w16(s + 0x2A, coll.ratan2(s16(s + 0x3C), s16(s + 0x38)) - 0x400)
 
 
 # @orig game:0x80053ba8 effect_setup  status:verified -- through the spore's arm, the same 189 runs
@@ -295,9 +329,13 @@ func driver() -> void:
 
 
 # effect_tick's switch on the kind (0x80056908), with the arms the port has.
-# @orig game:0x800568bc effect_tick  status:partial -- the switch, and the arms of kinds 0x23, 0x24, 0x26 and 0x6f; the other 126 do nothing here
+# @orig game:0x800568bc effect_tick  status:partial -- the switch, and the arms of kinds 0x1f, 0x22, 0x23, 0x24, 0x26 and 0x6f; the other 124 do nothing here
 func tick(s: int) -> void:
 	match u8(s + 1):
+		0x1F:
+			_tick_bob(s)
+		0x22:
+			_tick_dart(s)
 		0x23, 0x24:
 			_tick_bolt(s)
 		0x26:
@@ -306,10 +344,9 @@ func tick(s: int) -> void:
 			_tick_puff(s)
 
 
-# A bolt (0x80058f3c): its strike, its flight -- taken back and the slot
-# freed when it meets something -- and the puff it leaves at its point with
-# two fifths of its velocity. The puff's fourth halfword of velocity is the
-# stack's leftover at 0x146 in the game; here it is 0.
+# A bolt (0x80058f3c, kinds 0x23 and 0x24): its strike within a scale of
+# 0x200, its flight -- taken back and the slot freed when it meets the tiles,
+# an object or the player -- and the puff it leaves.
 # @orig game:0x80058f3c effect_tick+0x2680  status:verified -- kinds 0x23 and 0x24; through tools/effects.py, 189 of 189 runs of the game's own
 func _tick_bolt(s: int) -> void:
 	w8(s, 0x81)
@@ -318,11 +355,54 @@ func _tick_bolt(s: int) -> void:
 	if move(0x64, 0xC8, 0) != 0:
 		undo(s)
 		w8(s, 0xFF)
+	_puff(s, 1, 3)
+
+
+# A bolt that bobs (0x80058a2c, kind 0x1f): its height speed +0x46 runs by 10
+# a frame up or down as +0x44 says, turning at -0x45 and 0x46; it strikes
+# within a scale of 0x180, meets the tiles alone -- and is freed there where it
+# stands -- and leaves a puff.
+# @orig game:0x80058a2c effect_tick+0x2170  status:verified -- kind 0x1f; through tools/effects.py, 189 of 189 runs of the game's own
+func _tick_bob(s: int) -> void:
+	w8(s, 0x81)
+	w16(s + 0x46, u16(s + 0x46) + (0xA if s16(s + 0x44) != 0 else -0xA))
+	w32(s + 0x1C, s32(s + 0x1C) + s16(s + 0x46))
+	if s16(s + 0x46) < -0x45 and s16(s + 0x44) == 0:
+		w16(s + 0x44, 1)
+	if s16(s + 0x46) >= 0x46 and s16(s + 0x44) == 1:
+		w16(s + 0x44, 0)
+	strike(s + 0x18, 0, s16(s + 0x30) >> 4, 0x8000, 0x400, 0x1000)
+	w8(s, 0x84)
+	if move(0x64, 0xC8, 0) != 0:
+		w8(s, 0xFF)
+	_puff(s, 2, 5)
+
+
+# A dart (0x80058bb4, kind 0x22): its strike within a scale of 0x180, its
+# flight against the tiles alone -- taken back and freed when it meets them --
+# and a puff.
+# @orig game:0x80058bb4 effect_tick+0x22f8  status:verified -- kind 0x22; through tools/effects.py, 189 of 189 runs of the game's own
+func _tick_dart(s: int) -> void:
+	w8(s, 0x81)
+	strike(s + 0x18, 0, s16(s + 0x30) >> 4, 0x8000, 0x400, 0x1000)
+	w8(s, 0x84)
+	if move(0x64, 0xC8, 0) != 0:
+		undo(s)
+		w8(s, 0xFF)
+	_puff(s, 1, 4)
+
+
+# The puff a bolt leaves at its point (kind 0x6f): two fifths of its velocity
+# and effect_spawn(10, 0, 0x6f, point, v, 0xe10, -0x80, 5, 0x16, 0, b, e) --
+# +9 is b | 4 and +0xe e << 6. The velocity's fourth halfword is the stack's
+# leftover in the game; here it is 0.
+# @port helper -- the trail's spawn the bolts' arms share, with their two last arguments
+func _puff(s: int, b: int, e: int) -> void:
 	var v := PackedByteArray()
 	v.resize(8)
 	for i in 3:
 		v.encode_s16(2 * i, div5(2 * s16(s + 0x38 + 2 * i)))
-	spawn(10, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [v] + TRAIL_ARGS)
+	spawn(10, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [v] + TRAIL_ARGS.slice(0, 5) + [b, e])
 
 
 # A spore (0x80056de8): it swells for +0x44 frames, rises and then sinks,
@@ -560,7 +640,7 @@ static func s16v(v: int) -> int:
 # effect_aim from the point at the player with a speed of 0x12c, the spread
 # 0x400 and one pass, then effect_spawn(pct, 0x83, kind, the point, that
 # velocity, the creature's angles).
-# @orig game:0x8004fc18 actor_animation_effects+0x804  status:transcribed -- the arm for 0x1f to 0x25; of those kinds effect_spawn here has 0x23 and 0x24
+# @orig game:0x8004fc18 actor_animation_effects+0x804  status:transcribed -- the arm for 0x1f to 0x25; of those kinds effect_spawn here has 0x1f, 0x22, 0x23 and 0x24
 func volley_bolt(kind: int, pct: int, point: Vector3i, apitch: int, ayaw: int) -> void:
 	if player == null or coll == null:
 		return
@@ -628,8 +708,8 @@ func _draw_all() -> void:
 			continue
 		node.position = Vector3(float(s32(s + 0x18)) / 1000.0, float(-s32(s + 0x1C)) / 1000.0,
 			float(-s32(s + 0x20)) / 1000.0)
-		var yaw := float((u16(s + 0x2A) + 0x800) & 0xFFF) * TAU / 4096.0
-		node.basis = Basis(Vector3.UP, yaw).scaled_local(Vector3(float(s16(s + 0x30)),
+		node.basis = LOOT.game_basis(u16(s + 0x28) & 0xFFF, (u16(s + 0x2A) + 0x800) & 0xFFF,
+			u16(s + 0x2C) & 0xFFF).scaled_local(Vector3(float(s16(s + 0x30)),
 			float(s16(s + 0x32)), float(s16(s + 0x34))) / 4096.0)
 	for k in nodes.keys():
 		if not live.has(k):

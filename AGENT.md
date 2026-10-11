@@ -241,9 +241,9 @@ the creatures' machine, against the bp16 act= log      level 0: 261 of 261 runs,
                                                        every field logged)
 the spores, against the bp26 recording                 118 of 118 frames,
                                                        118 of 118 strikes
-the effect machine, against the game's own             189 of 189 runs, 4702 of
-effect_spawn and effect_driver over the snapshots      4702 frames all 128 slots,
-                                                       3964 of 3964 strikes;
+the effect machine, against the game's own             189 of 189 runs, 5144 of
+effect_spawn and effect_driver over the snapshots      5144 frames all 128 slots,
+                                                       4284 of 4284 strikes;
                                                        effect_aim 600 of 600
 the walking, against the recording (replay rung 2)     124 891 of 125 116 frames;
                                                        447 of the 455 that touch
@@ -283,7 +283,7 @@ directions 400 of 400
 routines 13858 of 13858
 saves 45 of 45 · level states 46 of 46 streams, 958 of 958 things made,
 42 of 42 states written, 46 of 46 tables read and written again
-effects 54 of 54 runs, 1572 of 1572 frames · aims 300 of 300
+effects 54 of 54 runs, 1868 of 1868 frames · aims 300 of 300
 ```
 
 **Tell the two kinds apart.** Against a recording or a RAM snapshot — the

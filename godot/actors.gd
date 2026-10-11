@@ -285,14 +285,15 @@ func _animate(k: int) -> void:
 
 
 # A volley's fire (actor_animation_effects, 0x8004f414, keyed by the record's
-# +0xc): each entry is a vertex of the creature's animated model -- scaled by
-# +0x48 and turned by the yaw + 0x800 (actor_vertex_point, 0x8004ede0) -- and
-# the arm throws from there: 0x26 a spore, with +0x18's low byte as its
+# +0xc): a plain entry is a vertex of the creature's animated model -- scaled
+# by +0x48 and turned by the yaw + 0x800 (actor_vertex_point, 0x8004ede0) --
+# and an 0x8002 entry carries an offset of its own, turned by the creature's
+# angles as they are (vec_rotate, 0x8004f48c); the arm throws from there: 0x26 a spore, with +0x18's low byte as its
 # percentage (tools/effects.py puts slot 40's spore at the point bp26 logged,
 # to the unit); 0x1f..0x25 a bolt, aimed at the player and flown by the effect
-# machine (effects.gd volley_bolt). Of those, effects.gd has 0x23 and 0x24,
-# level 4's model-53 creatures'.
-# @orig game:0x8004f414 actor_animation_effects  status:partial -- the point off the creature's vertex and the switch, for arms 0x26 and 0x1f..0x25; the entries 0x8002 and 0x8004 (their own points) and the other arms are not here
+# machine (effects.gd volley_bolt). Of those, effects.gd has 0x1f, 0x22, 0x23
+# and 0x24 -- level 4's model-53 and model-67 creatures', and level 12's.
+# @orig game:0x8004f414 actor_animation_effects  status:partial -- the point -- off the creature's vertex, or an 0x8002 entry's offset turned by its angles -- and the switch, for arms 0x26 and 0x1f..0x25; the 0x8004 entry (a point along a limb, 0x8004f49c) and the other arms are not here
 # @orig game:0x8004f6c4 actor_animation_effects+0x2b0  status:verified -- arm 0x26, the spores
 func _launch(a: Dictionary, kind: Dictionary, fired: Array) -> void:
 	var raw: Array = a["rec"]
@@ -307,16 +308,23 @@ func _launch(a: Dictionary, kind: Dictionary, fired: Array) -> void:
 	var pct := KFCreatureAI.u16f(raw, 0x18) & 0xFF
 	var m := int(a["model"])
 	for f in fired:
-		if f.size() != 1:
-			continue
-		var v := Vector3i(0, -(int(a["height"]) >> 1), -int(a["radius"]))
-		if KFAnim.models.has(m):
-			var vs := KFAnim.vertices(m, int(a.get("anim", 0x80)) & 0xFF, int(a["clock"]))
-			if int(f[0]) < vs.size():
-				v = vs[int(f[0])]
-		var sc := int(kind.get("scale", 0x1000))
-		var w := KFWeapon.vec_rotate(coll, 0, (int(a["ry"]) + 0x800) & 0xFFF, 0,
-			[(v.x * sc) >> 12, (v.y * sc) >> 12, (v.z * sc) >> 12])
+		var w: Array
+		if f.size() == 4 and int(f[0]) == 0x8002:
+			# a2 = -1: the offset the entry carries, turned by the creature's
+			# own angles (+0x40, no half turn) through vec_rotate
+			w = KFWeapon.vec_rotate(coll, 0, int(a["ry"]) & 0xFFF, 0,
+				[int(f[1]), int(f[2]), int(f[3])])
+		elif f.size() == 1:
+			var v := Vector3i(0, -(int(a["height"]) >> 1), -int(a["radius"]))
+			if KFAnim.models.has(m):
+				var vs := KFAnim.vertices(m, int(a.get("anim", 0x80)) & 0xFF, int(a["clock"]))
+				if int(f[0]) < vs.size():
+					v = vs[int(f[0])]
+			var sc := int(kind.get("scale", 0x1000))
+			w = KFWeapon.vec_rotate(coll, 0, (int(a["ry"]) + 0x800) & 0xFFF, 0,
+				[(v.x * sc) >> 12, (v.y * sc) >> 12, (v.z * sc) >> 12])
+		else:
+			continue                          # 0x8004, along a limb: not here
 		var point := Vector3i(int(a["px"]) + int(w[0]), int(a["py"]) + int(w[1]),
 			int(a["pz"]) + int(w[2]))
 		if arm == 0x26:

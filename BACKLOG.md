@@ -441,9 +441,12 @@ What is left of movement:
    `tools/effects.py` holds 189 of 189 runs of the game's own `effect_spawn`
    and `effect_driver` slot for slot, and `godot/effects.gd` is the same
    machine; with it level 4's model-53 creatures throw their bolts (0x23,
-   0x24) and the puffs they leave (0x6f), aimed by `effect_aim` (600 of 600).
-   Left: the other arms -- level 4's and 12's 0x1f and 0x22 next (model 67's,
-   and level 12's), then the player's own magic; the creatures' half of
+   0x24), its model-67 ones and level 12's their darts and bobbing bolts
+   (0x22, 0x1f), with the puffs they leave (0x6f), aimed by `effect_aim` (600
+   of 600). Left: the other arms -- 0x20, 0x21 and 0x25 of the same volley
+   arm on later levels, the `0x8004` list entry, then the player's own magic;
+   `player_take_hit`'s effect arms 1 and 2 (the darts' and the bobbing bolts'),
+   which the port does not run; the creatures' half of
    `effect_strike` (`0x8004ceac`); the drawing's matrices (+8 & 0xc), view
    test and light; and a recording -- bp26 on level 4 by a model-53 creature
    -- to hold the bolts' strikes and the damage to what the game did.

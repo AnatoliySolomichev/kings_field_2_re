@@ -495,12 +495,41 @@ class Machine:
         if kind >= 0x82:
             self.w8(s, 0xFF)
             return s
-        arm = {0x23: self._spawn_23, 0x24: self._spawn_24, 0x26: self._spawn_26,
-               TRAIL: self._spawn_6f}.get(kind)
+        arm = {0x1F: self._spawn_1f, 0x22: self._spawn_22, 0x23: self._spawn_23,
+               0x24: self._spawn_24, 0x26: self._spawn_26, TRAIL: self._spawn_6f}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_spawn's arm {kind:#x}")
         arm(s, args)
         return s
+
+    def _aimed(self, s, model):
+        """0x80054cf4 and 0x80054d68: +8 1, +4 0x80, +2 and +3 the model,
+        the life 0x46, the scale 0x1800, and the angles off the velocity --
+        +0x28 its pitch, ratan2(vy, vec_length_2d(vx, vz)), +0x2a its yaw less
+        a quarter, ratan2(vz, vx) - 0x400."""
+        vx, vz = self.s16(s + 0x38), self.s16(s + 0x3C)
+        self.w8(s + 8, 1)
+        self.w8(s + 4, 0x80)
+        self.w8(s + 2, model)
+        self.w8(s + 3, model)
+        self.w16(s + 0x10, 0x46)
+        for o in (0x34, 0x32, 0x30):
+            self.w16(s + o, 0x1800)
+        ln = vec_length_2d(vx, vz)
+        self.w16(s + 0x28, movement.ratan2(self.s16(s + 0x3A), ln))
+        self.w16(s + 0x2C, 0)
+        self.w16(s + 0x2A, movement.ratan2(self.s16(s + 0x3C), self.s16(s + 0x38)) - 0x400)
+
+    def _spawn_1f(self, s, args):           # 0x80054d50, a bobbing bolt
+        self._aimed(s, 0x22)
+        self.w8(s + 9, 0)
+        self.w16(s + 0x3A, 0)
+        self.w16(s + 0x44, 1)
+        self.w16(s + 0x46, 0)
+
+    def _spawn_22(self, s, args):           # 0x80054b5c
+        self._aimed(s, 0x21)
+        self.w8(s + 9, 5)
 
     def _spawn_23(self, s, args):           # 0x80054be4
         self.w8(s + 8, 0)
@@ -573,11 +602,43 @@ class Machine:
         kind = self.u8(s + 1)
         if kind >= 0x82:
             return
-        arm = {0x23: self._tick_23, 0x24: self._tick_23, 0x26: self._tick_26,
-               TRAIL: self._tick_6f}.get(kind)
+        arm = {0x1F: self._tick_1f, 0x22: self._tick_22, 0x23: self._tick_23,
+               0x24: self._tick_23, 0x26: self._tick_26, TRAIL: self._tick_6f}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_tick's arm {kind:#x}")
         arm(s)
+
+    def _puff(self, s, b, e):
+        """The puff a bolt leaves at its point, two fifths of its velocity:
+        effect_spawn(10, 0, 0x6f, point, v, 0xe10, -0x80, 5, 0x16, 0, b, e).
+        The velocity's fourth halfword is whatever the stack held: not kept."""
+        v = [div5(2 * self.s16(s + o)) for o in (0x38, 0x3A, 0x3C)]
+        self.spawn(10, 0, TRAIL, self.get(s + 0x18, 16),
+                   [struct.pack("<4h", *v, 0)] + TRAIL_ARGS[:5] + [b, e])
+
+    def _tick_1f(self, s):                  # 0x80058a2c, a bolt that bobs
+        self.w8(s, 0x81)
+        d = 0xA if self.s16(s + 0x44) != 0 else -0xA
+        self.w16(s + 0x46, self.u16(s + 0x46) + d)
+        self.w32(s + 0x1C, self.s32(s + 0x1C) + self.s16(s + 0x46))
+        if self.s16(s + 0x46) < -0x45 and self.s16(s + 0x44) == 0:
+            self.w16(s + 0x44, 1)
+        if self.s16(s + 0x46) >= 0x46 and self.s16(s + 0x44) == 1:
+            self.w16(s + 0x44, 0)
+        self.strike(s + 0x18, 0, self.s16(s + 0x30) >> 4, 0x8000, 0x400, 0x1000)
+        self.w8(s, 0x84)
+        if self.move(0x64, 0xC8, 0):
+            self.w8(s, 0xFF)
+        self._puff(s, 2, 5)
+
+    def _tick_22(self, s):                  # 0x80058bb4
+        self.w8(s, 0x81)
+        self.strike(s + 0x18, 0, self.s16(s + 0x30) >> 4, 0x8000, 0x400, 0x1000)
+        self.w8(s, 0x84)
+        if self.move(0x64, 0xC8, 0):
+            self.undo(s)
+            self.w8(s, 0xFF)
+        self._puff(s, 1, 4)
 
     def _tick_23(self, s):                  # 0x80058f3c, kinds 0x23 and 0x24
         self.w8(s, 0x81)
@@ -586,10 +647,7 @@ class Machine:
         if self.move(0x64, 0xC8, 0):
             self.undo(s)
             self.w8(s, 0xFF)
-        v = [div5(2 * self.s16(s + o)) for o in (0x38, 0x3A, 0x3C)]
-        # the fourth halfword is whatever the stack held at 0x146: not kept
-        self.spawn(10, 0, TRAIL, self.get(s + 0x18, 16),
-                   [struct.pack("<4h", *v, 0)] + TRAIL_ARGS)
+        self._puff(s, 1, 3)
 
     def _tick_26(self, s):                  # 0x80056de8, the spores
         if self.s16(s + 0x44) != 0:
@@ -864,13 +922,13 @@ def _differ(a, b):
 
 
 def scenarios(ram, rng, n=24):
-    """[(label, [(a0, a1, kind, point, args)])]: bolts (0x23, 0x24) at the
-    player from round about, aimed as the volley aims them and not, and
-    spores (0x26) beside them."""
+    """[(label, [(a0, a1, kind, point, args)])]: bolts (0x1f, 0x22, 0x23,
+    0x24) at the player from round about, aimed as the volley aims them and
+    not, and spores (0x26) beside them."""
     px, py, pz = struct.unpack_from("<3i", ram, PLAYER_POS & MASK)
     out = []
     for i in range(n):
-        kind = (0x23, 0x24, 0x26)[i % 3]
+        kind = (0x23, 0x24, 0x26, 0x1F, 0x22)[i % 5]
         d = rng.choice((900, 1600, 2600, 4200))
         yaw = rng.randrange(0x1000)
         x = px + ((movement.game_sin(yaw) * d) >> 12)

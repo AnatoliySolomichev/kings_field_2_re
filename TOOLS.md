@@ -484,8 +484,8 @@ builds; 3 snapshots' last drawn creature is its blend exactly.
 
 **`effects.py`** — the effects a creature's volley throws, and the machine
 that runs them: `effect_spawn`, `effect_driver` and the arms of `effect_tick`
-for the spores (0x26), the bolts (0x23, 0x24) and the puff a bolt leaves
-(0x6f), over the 128 slots as the game lays them out; and `effect_aim`.
+for the spores (0x26), the bolts (0x1f, 0x22, 0x23, 0x24) and the puff a bolt
+leaves (0x6f), over the 128 slots as the game lays them out; and `effect_aim`.
 
 ```
 python3 tools/effects.py            against emu/bp26.lua, with what differs,
@@ -496,8 +496,8 @@ python3 tools/effects.py --check    the counts alone
 Against bp26: **118 of 118** spore frames, **118 of 118** strikes, 31 of 32
 poison frames (the other resisted). Against the game's own `effect_spawn` and
 `effect_driver`, run by `tools/mipsrun.py` over every snapshot: **189 of 189**
-runs, **4702 of 4702** frames with all 128 slots byte for byte, **3964 of
-3964** strikes handed the same; `effect_aim` **600 of 600**. `export` writes
+runs, **5144 of 5144** frames with all 128 slots byte for byte, **4284 of
+4284** strikes handed the same; `effect_aim` **600 of 600**. `export` writes
 `fxrecords.json` (`spell_table` off the disc) and `fxcheck.json`, the runs
 with the world's answers in order, which `godot/selftest.gd` replays.
 
