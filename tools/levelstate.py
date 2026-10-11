@@ -567,6 +567,48 @@ def check_streams():
     return out
 
 
+# What level_state_write reads of a slot, in the order godot/levelstate.gd's
+# table keeps it: type, class, kind (+4), x, y, z, +0x26, +0x38, +0x39, +0x3a.
+TABLE = ("type", "cls", "op", "x", "y", "z", "a26", "lock", "aux", "w3a")
+
+
+def table_of(m):
+    """The 396 slots of RAM `m` as that table: a row for each, or None for an
+    empty one (type 0xff)."""
+    out = []
+    for s in range(SLOTS):
+        r = OBJECT_TABLE + OBJECT_STRIDE * s
+        typ = _u16(m, r + 6)
+        if typ == 0xFF:
+            out.append(None)
+            continue
+        out.append([typ, _u8(m, OBJECT_TYPES + TYPE_STRIDE * typ), _u8(m, r + 4),
+                    struct.unpack_from("<i", m, (r + 0x14) & MASK)[0],
+                    struct.unpack_from("<i", m, (r + 0x18) & MASK)[0],
+                    struct.unpack_from("<i", m, (r + 0x1C) & MASK)[0],
+                    _u16(m, r + 0x26), _u8(m, r + 0x38), _u8(m, r + 0x39), _u16(m, r + 0x3A)])
+    return out
+
+
+def actors_of(m):
+    """[slot, category, +9] of every actor slot that is not 0xff."""
+    return [[k, _u8(m, ACTOR_TABLE + ACTOR_STRIDE * k), _u8(m, ACTOR_TABLE + ACTOR_STRIDE * k + 9)]
+            for k in range(ACTORS) if _u8(m, ACTOR_TABLE + ACTOR_STRIDE * k) != 0xFF]
+
+
+def talks_of(m):
+    """[entity, pc, retry] of each conversation the writer lists."""
+    out = []
+    for k in range(ENTITIES):
+        e = ENTITY_TABLE + ENTITY_STRIDE * k
+        if _u8(m, e) == 0xFF:
+            break
+        p = _u32(m, e + 0x38)
+        if p and _u8(m, p) == 0x70:
+            out.append([k, _u8(m, p + 0x10), _u8(m, p + 0x13)])
+    return out
+
+
 def export_check(out_dir):
     """levelstatecheck.json: streams and what this reads in them, for
     godot/selftest.gd to read again with godot/levelstate.gd -- past a short
@@ -583,19 +625,56 @@ def export_check(out_dir):
         rows.append({"label": label, "level": lv, "hex": st.hex(),
                      "actors": [list(x) for x in a], "talks": [list(x) for x in t],
                      "slots": [[op] + list(opr) for op, opr in objs], "made": mk})
+    # the writer over each state a snapshot (or a scrambled copy) holds, as
+    # the port's table, actors and conversations would hold it
+    writes = []
+    rng = random.Random(0x1E5A7E)
+    for path in _game_snapshots():
+        ram = open(path, "rb").read()
+        name = os.path.basename(path)[:-4]
+        for k in range(2):
+            m = ram if k == 0 else scramble(ram, rng)
+            writes.append({"label": name + (" scrambled" if k else ""), "table": table_of(m),
+                           "actors": actors_of(m), "talks": talks_of(m), "want": encode(m).hex()})
+    # the reader over a fresh load of each stream's level, as the table: what
+    # it was and what it becomes; and the objects' section written again
+    import mipsrun
+    fresh, reads = {}, []
+    for label, lv, st in check_streams():
+        if lv not in fresh:
+            fresh[lv] = bytes(mipsrun.level_cpu(lv).ram)
+        m = bytearray(fresh[lv])
+        apply(m, st + bytes(0x1000), Lcg())
+        again = encode(m)
+        i = 0                            # past the first two sections' ends
+        while again[i] != END:
+            i += 2
+        i += 1
+        while again[i] != END:
+            i += 3
+        i += 1
+        reads.append({"label": label, "level": lv, "before": table_of(fresh[lv]),
+                      "after": table_of(m), "again": again[i:].hex(),
+                      "classes": [_u8(fresh[lv], OBJECT_TYPES + TYPE_STRIDE * t)
+                                  for t in range(332)]})
     path = os.path.join(out_dir, "levelstatecheck.json")
     with open(path, "w") as fh:
-        json.dump({"streams": rows}, fh, separators=(",", ":"))
+        json.dump({"streams": rows, "writes": writes, "reads": reads}, fh,
+                  separators=(",", ":"))
     return path
 
 
 def export(out_dir):
     path = os.path.join(out_dir, "levelstate.json")
+    arms = class_arms()
     with open(path, "w") as fh:
         json.dump({"_note": "level_state_write's byte stream: the actors that "
                             "are gone, each conversation's pc and retry flag, "
-                            "then one opcode per object slot, 396 in lockstep",
+                            "then one opcode per object slot, 396 in lockstep; "
+                            "and the writer's arm for each of the 233 classes, "
+                            "off the table at 0x80013298",
                    "slots": SLOTS, "ops": {str(k): v for k, v in OPS.items()},
+                   "arms": [arms[c] for c in range(CLASSES)],
                    "recorded": RECORDED}, fh, separators=(",", ":"))
     return path
 

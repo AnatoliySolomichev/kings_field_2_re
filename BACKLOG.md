@@ -24,11 +24,17 @@ finish, none of them blocking:
   card"), and `tools/memcard.py` reads the emulator's cards, checked against
   the game's own `save_restore` and `save_serialise`. **The port loads them
   now**: CONTINUE lists the emulator's saves and puts one back (BOOT.md
-  section 7). What is left: the list is not drawn as the game draws it
-  (`ui_panel` mode 8, `ui_prompt` kind 6); the port keeps its own record of a
-  level it has left (`saved` in `actors.gd`, `loot.gd`, `doors.gd`) rather
-  than writing the game's stream, so it loses what it does not keep -- the
-  things a creature dropped, a key on a pedestal -- and cannot save; and
+  section 7). And a level the port leaves is remembered in the game's own
+  stream: `godot/levelstate.gd` keeps a table of what `level_state_write`
+  reads of each of the 396 slots -- the placement, the stream applied over
+  it, the port's objects written in as the level is left -- and writes it as
+  the game does (the self-test: 42 of 42 states written as
+  `tools/levelstate.py` writes them, 46 of 46 tables read and written again),
+  so the things a creature dropped, a key on a pedestal, a gate's lock and a
+  door a key opened now last between visits, as in the game. What is left:
+  the list is not drawn as the game draws it (`ui_panel` mode 8, `ui_prompt`
+  kind 6); the port cannot write a save yet -- the streams are kept, the
+  area's packing (`0x8001939c`) and `save_serialise`'s file are not made; and
   `save_loaded_fixup`'s bonus timers, `seq_state`, `map_seen_bits` and the
   two 150-byte tables are read and not used.
 * **Sound.** `OP.D`'s trailing VAB is extracted and unparsed, the title music
@@ -783,6 +789,14 @@ each one is also in its function's marker, as `partial` and what differs:
   (`collision.gd`, `doors.gd`, `actors.gd`), `facing_test` and
   `kind_behaviour_with_op` twice. Each copy is marked, and the self-test would
   show one drifting; folding them into one is a refactor nobody has needed yet.
+
+**Found later, and fixed: a death reloaded the level in hand.** The game
+loads level 0 after a death either way -- `level_state_writer(0, ...)` at
+`0x80031e70`, after the crystal's `level_state_write` for the level left or a
+new character's `reset_story_flags` -- and the port reloaded whatever level
+the player died on, so a revive on level 4 stood the player at level 0's
+crystal spot in level 4. It loads level 0 now, and the new character's path
+clears the levels' records and the flags, and sets flag 9, as the game does.
 
 **Found later, and fixed: every level but 0 ran level 0's creatures.**
 `actors.gd` reads `actorsNN.json` and `aiNN.json` by its own `level`, which

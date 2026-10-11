@@ -277,7 +277,8 @@ fences 600 of 600 · animation 288 of 288 · spores 120 of 120
 equipment 16 of 16
 directions 400 of 400
 routines 13858 of 13858
-saves 45 of 45 · level states 46 of 46 streams, 958 of 958 things made
+saves 45 of 45 · level states 46 of 46 streams, 958 of 958 things made,
+42 of 42 states written, 46 of 46 tables read and written again
 ```
 
 **Tell the two kinds apart.** Against a recording or a RAM snapshot — the

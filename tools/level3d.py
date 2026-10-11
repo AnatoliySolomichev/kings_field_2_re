@@ -848,7 +848,11 @@ def build_objects_gltf(lv, out="out/godot"):
     items += build_pedestals(lv, load, look, prims_of, pedestal_rows, keys)
     with open(f"{out}/loot{lv:02d}.json", "w") as f:
         json.dump({"rows": loot_rows, "spawn": spawn, "pedestals": pedestal_rows,
-                   "keys": keys, "find": find_rows(load)}, f, separators=(",", ":"))
+                   "keys": keys, "find": find_rows(load),
+                   # the class (byte 0) of each of the level's 332 type rows,
+                   # which level_state_write looks a thing's arm up by
+                   "classes": [r[0] if r else 0 for r in load.rows[:332]]},
+                  f, separators=(",", ":"))
     for o, bags in doors:
         dp, dn = prims_of(bags)
         ntri += dn
@@ -1065,13 +1069,16 @@ def find_rows(load):
     """find_object's view of every object the level places: [slot, class,
     type, x, y, z, yaw, the record's +0xc, the type's +6 and +8] -- what it
     tests a point against, for godot/loot.gd find_object -- and the opcode
-    and the lock (+0x38) key_test asks of what it finds."""
+    and the lock (+0x38) key_test asks of what it finds; then +0x39 and the
+    halfword at +0x3a, which with the rest are what level_state_write reads of
+    a slot (godot/levelstate.gd's table)."""
     out = []
     for k, o in sorted(load.recs.items()):
         tr = load.rows[o["type"]]
         out.append([k, o["cls"], o["type"], o["x"], o["y"], o["z"], o["angles"][1],
                     o["height"], struct.unpack_from("<H", tr, 6)[0],
-                    struct.unpack_from("<H", tr, 8)[0], o["op"], o["tail"][0]])
+                    struct.unpack_from("<H", tr, 8)[0], o["op"], o["tail"][0],
+                    o["tail"][1], struct.unpack_from("<H", bytes(o["tail"]), 2)[0]])
     return out
 
 

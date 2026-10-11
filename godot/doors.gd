@@ -118,12 +118,12 @@ var doors: Array = []
 var lifts: Array = []
 var gates: Array = []
 var walls: Array = []
-# Each door's, lift's, gate's and wall's lock (+0x38) by level, kept when the
-# level is left -- level_state_write's 0xfd for classes 0..5 and 0x54 -- for
-# the next load; a key that opened one stays turned. A save loaded since
-# (KFLevelState.epoch) makes it stale: the save's streams stand instead.
-static var saved := {}
-static var saved_epoch := 0
+# Each door's, lift's, gate's and wall's lock (+0x38) goes into the level's
+# table when the level is left -- level_state_write's 0xfd for classes 0..5 and
+# 0x54 -- and comes back out of its stream: a key that opened one stays
+# turned. The epoch this scene was made in, as actors.gd's.
+var made_epoch := -1
+var level := -1                    # this scene's level; KFGame's is the next one's as it goes
 var player: Node3D
 var acc := 0.0
 
@@ -140,7 +140,7 @@ func _ready() -> void:
 	if typeof(rows) != TYPE_ARRAY:
 		return
 	var objs := get_node_or_null("../Objects")
-	var level := get_node_or_null("../Level")
+	var geometry := get_node_or_null("../Level")
 	for row in rows:
 		var d: Dictionary = row
 		if int(d["op"]) in GATE_OPS:
@@ -155,7 +155,7 @@ func _ready() -> void:
 			continue
 		if int(d["op"]) in LIFT_OPS or int(d["op"]) in WALL_OPS:
 			d["node"] = objs.find_child("l%03d" % int(d["slot"]), true, false) if objs else null
-			d["tiles"] = level.find_child("t%03d" % int(d["slot"]), true, false) if level else null
+			d["tiles"] = geometry.find_child("t%03d" % int(d["slot"]), true, false) if geometry else null
 			d["state"] = 0
 			d["counter"] = 0
 			d["scale"] = 0
@@ -181,20 +181,13 @@ func _ready() -> void:
 		d["counter"] = 0x3e7
 		d["push"] = 0
 		doors.append(d)
-	if saved_epoch != KFLevelState.epoch:
-		saved.clear()
-		saved_epoch = KFLevelState.epoch
-	var lv: int = player._level()
-	if saved.has(lv):
-		for d in doors + lifts + gates + walls:
-			if (saved[lv] as Dictionary).has(int(d["slot"])):
-				_set_lock(d, int(saved[lv][int(d["slot"])]))
-	else:
-		take_stream(KFLevelState.decoded(lv))
+	made_epoch = KFLevelState.epoch
+	level = player._level()
+	take_stream(KFLevelState.decoded(level))
 
 
-# The object section of a level's stream from a save (KFLevelState.decode),
-# over the doors: 0xfd puts a door's, a lift's, a gate's or a wall's lock
+# The object section of a level's stream (KFLevelState.decode), over the
+# doors: 0xfd puts a door's, a lift's, a gate's or a wall's lock
 # (+0x38) back -- the state (+8) is the fresh load's, and the arms take it from
 # there: a gate whose lock opens itself rises, a wall whose lock is 0xff opens.
 # @orig game:0x8005f770 apply_level_state+0x32c  status:partial -- 0xfd's arm over the doors, the lifts, the gates and the hidden walls
@@ -218,14 +211,17 @@ func _set_lock(d: Dictionary, v: int) -> void:
 		d["tail"][0] = v
 
 
-# @port engine -- every lock, kept for the next load of the level
+# @port engine -- every lock into the level's table (KFLevelState), for level_state_write
 func _exit_tree() -> void:
-	if player == null:
+	if player == null or made_epoch != KFLevelState.epoch:
 		return
-	var kept := {}
+	var table: Array = KFLevelState.tables.get(level, [])
+	if table.is_empty():
+		return
 	for d in doors + lifts + gates + walls:
-		kept[int(d["slot"])] = int(d["lock"]) if d.has("lock") else int(d["tail"][0])
-	saved[player._level()] = kept
+		var e = table[int(d["slot"])]
+		if e != null:
+			e[7] = int(d["lock"]) if d.has("lock") else int(d["tail"][0])
 
 
 # @port engine -- USE into _interact, the arms at 15 a second, the nodes turned to the yaw

@@ -40,10 +40,9 @@ const FREE := 0xFF
 
 # What 0x8005efd4 writes for a level when the player leaves it -- slot and 3-or-0
 # for every category-1 actor -- and apply_level_state puts back on the next
-# load. Static, so it outlives world.tscn being loaded again. A save loaded
-# since (KFLevelState.epoch) makes it stale: the save's streams stand instead.
-static var saved := {}
-static var saved_epoch := 0
+# load: KFLevelState keeps it, in the level's stream. The epoch this scene was
+# made in, so that one made before a save was put back writes nothing.
+var made_epoch := -1
 
 var level := 0
 var actors := []               # a Dictionary per slot, null where empty
@@ -63,7 +62,7 @@ var kinds := {}                # kind -> its fields and behaviours, aiNN.json
 var skins := {}                # slot -> its animated mesh (KFAnim), see _skin
 
 
-# @orig game:0x8005f444 apply_level_state  status:partial -- the first section: the category-1 states put back, from `saved` or from a save's stream (KFLevelState); reading actorsNN.json, aiNN.json and animNN.json and finding the nodes is the port's
+# @orig game:0x8005f444 apply_level_state  status:partial -- the first section: the category-1 states put back from the level's stream (KFLevelState); reading actorsNN.json, aiNN.json and animNN.json and finding the nodes is the port's
 func _ready() -> void:
 	player = get_node_or_null("../Player")
 	# the level in hand: the scene sets nothing here, and a level other than 0
@@ -126,28 +125,26 @@ func _ready() -> void:
 	if KFAnim.load_from("res://anim%02d.json" % level):
 		for k in nodes:
 			_skin(k)
-	if saved_epoch != KFLevelState.epoch:
-		saved.clear()
-		saved_epoch = KFLevelState.epoch
-	if not saved.has(level):              # the save's stream, if it has the level
-		var st := KFLevelState.decoded(level)
-		if not st.is_empty():
-			saved[level] = st["actors"]
-	if saved.has(level):
-		for pair in saved[level]:
-			if int(pair[0]) < SLOTS and actors[int(pair[0])] != null:
-				actors[int(pair[0])]["st"] = int(pair[1])
+	made_epoch = KFLevelState.epoch
+	var st := KFLevelState.decoded(level)     # the level's stream, if it was left or saved
+	for pair in st.get("actors", []):
+		if int(pair[0]) < SLOTS and actors[int(pair[0])] != null:
+			actors[int(pair[0])]["st"] = int(pair[1])
 	refresh()
 
 
-# @orig game:0x8005efd4 level_state_write  status:partial -- slot and 3-or-0 for each category-1 actor, into `saved`
+# level_state_write's first section: the slot and +9 of each category-1
+# actor, which KFLevelState.encode writes as 3 or 0.
+# @orig game:0x8005f00c level_state_write+0x38  status:transcribed -- the walk over the 200 slots for category 1; the stream is KFLevelState's
 func _exit_tree() -> void:
+	if made_epoch != KFLevelState.epoch:
+		return
 	var keep := []
 	for k in SLOTS:
 		var a = actors[k]
-		if a != null and a["cat"] == 1:
-			keep.append([k, GONE if a["st"] == GONE else DORMANT])
-	saved[level] = keep
+		if a != null and int(a["cat"]) == 1:
+			keep.append([k, int(a["st"])])
+	KFLevelState.actor_parts[level] = keep
 
 
 # @port engine -- runs _pass at the game's 15 frames a second

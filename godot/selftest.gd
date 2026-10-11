@@ -797,11 +797,54 @@ func _level_states() -> bool:
 				mok += 1
 			elif first == "":
 				first = "%s slot %d: made %s, tools/levelstate.py %s" % [st["label"], s, str(m), str(w)]
-	print("level states: %d of %d streams read as tools/levelstate.py reads them (whose reader 90 of 90 runs of the game's hold), %d of %d things made alike" % [
-		ok, n, mok, mn])
-	if ok != n or mok != mn:
+	# the writer, over each state a snapshot holds and scrambled copies
+	var wn := 0
+	var wok := 0
+	for w in doc.get("writes", []):
+		wn += 1
+		var pairs := []
+		for a in w["actors"]:
+			if int(a[1]) == 1:
+				pairs.append([int(a[0]), int(a[2])])
+		var got := KFLevelState.encode(pairs, ints.call(w["talks"]), _table(w["table"]))
+		if got.hex_encode() == str(w["want"]):
+			wok += 1
+		elif first == "":
+			first = "%s: written otherwise" % w["label"]
+	# the reader over the table of a fresh load, and the objects written again
+	var by := {}
+	for st in doc["streams"]:
+		by[str(st["label"])] = st
+	var rn := 0
+	var rok := 0
+	for r in doc.get("reads", []):
+		rn += 1
+		var table := _table(r["before"])
+		var lcg := [1]
+		var rand := func() -> int:
+			lcg[0] = (int(lcg[0]) * 0x41C64E6D + 0x3039) & 0xFFFFFFFF
+			return (int(lcg[0]) >> 16) & 0x7FFF
+		var d := KFLevelState.decode((by[str(r["label"])]["hex"] as String).hex_decode())
+		KFLevelState.apply_table(table, d, (r["classes"] as Array).map(func(v): return int(v)), rand)
+		var again := KFLevelState.encode([], [], table).slice(2)
+		if table == _table(r["after"]) and again.hex_encode() == str(r["again"]):
+			rok += 1
+		elif first == "":
+			first = "%s: the table after, or the objects written again, otherwise" % r["label"]
+	print("level states: %d of %d streams read as tools/levelstate.py reads them (whose reader 90 of 90 runs of the game's hold), %d of %d things made alike; %d of %d states written as its writer writes them (84 of 84 the game's own), %d of %d tables read and written again alike" % [
+		ok, n, mok, mn, wok, wn, rok, rn])
+	var good := ok == n and mok == mn and wok == wn and rok == rn
+	if not good:
 		print("  first difference: " + first)
-	return ok == n and mok == mn
+	return good
+
+
+# A table as levelstatecheck.json has it: a row of ten for each slot, or null.
+func _table(rows: Array) -> Array:
+	var t := []
+	for r in rows:
+		t.append(null if r == null else (r as Array).map(func(v): return int(v)))
+	return t
 
 
 # The chests and object_give, loot.gd against tools/chests.py: the lid's 82

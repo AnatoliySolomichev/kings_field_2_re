@@ -90,12 +90,16 @@ var press := 0                     # a press latched for its next frame
 var reading = null                 # the document up, load_entry's frames
 var resume := 0                    # where object_interact goes on after it
 var talking := {}                  # script_interpreter's call while it runs (KFTalk)
-# What was opened and taken, by level, across the reload a revive makes:
-# {level: {slot: [type, lock, +0]}} -- the game keeps it in level_state. A
-# save loaded since (KFLevelState.epoch) makes it stale: the save's streams
-# stand instead.
-static var saved := {}
-static var saved_epoch := 0
+# What was opened, taken, dropped and set down goes where the game keeps it,
+# the level's stream (KFLevelState): out of it when the level loads, into the
+# level's table when it is left. The epoch this scene was made in, so that one
+# made before a save was put back writes nothing; and the level's type rows'
+# classes (lootNN.json's), which a thing made again is looked up in.
+var made_epoch := -1
+var classes: Array = []
+# The level this scene is of. A crossing names the next one in KFGame before
+# the scene goes, so leaving asks this, not KFGame.
+var level := -1
 # What a creature can leave when it dies (lootNN.json's "spawn"): type ->
 # {the type row's fields, the hidden tNNN node a drop is copied from}.
 var templates := {}
@@ -168,32 +172,40 @@ func _ready() -> void:
 		rows[int(r["slot"])] = r
 	slots = rows.keys()
 	slots.sort()
-	if saved_epoch != KFLevelState.epoch:
-		saved.clear()
-		saved_epoch = KFLevelState.epoch
-	if not saved.has(player._level()):     # the save's stream, if it has the level
-		take_stream(KFLevelState.decoded(player._level()))
-	var kept: Dictionary = saved.get(player._level(), {})
-	for k in kept:
-		if rows.has(k):
-			rows[k]["type"] = int(kept[k][0])
-			rows[k]["lock"] = int(kept[k][1])
-			rows[k]["b0"] = int(kept[k][2])
+	classes = (doc.get("classes", []) as Array).map(func(v): return int(v))
+	# the level's stream -- a table left last time written into it first --
+	# over a fresh table of the placement, kept as the level in hand's
+	made_epoch = KFLevelState.epoch
+	var lv: int = player._level()
+	level = lv
+	var d := KFLevelState.decoded(lv)
+	var table := KFLevelState.fresh_table(finds)
+	KFLevelState.apply_table(table, d, classes, _rand_fn())
+	KFLevelState.tables[lv] = table
+	take_stream(d)
 
 
-# The object section of a level's stream from a save (KFLevelState.decode),
-# over what this file keeps: an emptied slot's thing gone (its type 0xff), a
-# lock put back (0xfd) -- a lid opened is 0xfe -- a pedestal's lock and its
-# key's place in the ring (0xf4), and a thing made since the level was built
-# made again (0xf0..0xf3). A slot of a class this file does not keep is
-# doors.gd's, or nobody's yet.
-# @orig game:0x8005f520 apply_level_state+0xdc  status:partial -- the object section over the chests, the things, the pedestals and the keys; 0xf5 (class 0x56) and the classes the port does not run are not put anywhere
+# The game's rand, for the reader's 0xf2: actors.gd's, which is the game's
+# generator, when there is one.
+# @port helper -- a Callable for rand()
+func _rand_fn() -> Callable:
+	var act := get_node_or_null("../Actors")
+	if act and act.has_method("_rand"):
+		return Callable(act, "_rand")
+	return func() -> int: return 0
+
+
+# The object section of a level's stream (KFLevelState.decode), over what this
+# file keeps: an emptied slot's thing gone (its type 0xff), a lock put back
+# (0xfd) -- a lid opened is 0xfe -- a pedestal's lock and its key's place in
+# the ring (0xf4), and a thing made since the level was built made again
+# (0xf0..0xf3), as apply_table made it. A slot of a class this file does not
+# keep is doors.gd's, or only the table's.
+# @orig game:0x8005f520 apply_level_state+0xdc  status:partial -- the object section over the chests, the things, the pedestals and the keys; 0xf5 (class 0x56) and the classes the port does not run are only in the table
 func take_stream(d: Dictionary) -> void:
 	if d.is_empty():
 		return
-	var act := get_node_or_null("../Actors")
-	var rand := Callable(act, "_rand") if act and act.has_method("_rand") \
-		else func() -> int: return 0
+	var made: Dictionary = d.get("made", {})
 	var ops: Array = d["slots"]
 	for s in ops.size():
 		var row: Array = ops[s]
@@ -210,7 +222,7 @@ func take_stream(d: Dictionary) -> void:
 					pd["lock"] = int(row[1])
 					pd["ring"] = int(row[2])
 		elif KFLevelState.KINDS.has(op):
-			_made(s, KFLevelState.made(row, rand))
+			_made(s, made[s] if made.has(s) else KFLevelState.made(row, _rand_fn()))
 
 
 # A thing the stream makes, in slot `s` (KFLevelState.made): its model off the
@@ -258,15 +270,40 @@ func _made(s: int, t: Dictionary) -> void:
 	KFInfo.note("save: type %d made again in slot %d" % [typ, s])
 
 
-# @port data -- what was opened and taken, kept for the next load of the level
+# What the chests, the things and the pedestals are as the level is left, into
+# its table: a thing taken is an empty slot, the rest their type, kind, place,
+# yaw and lock -- and +0x3a for kind 0x62, the angle it comes to rest at -- and
+# a pedestal its lock and its key's place; then the table is final, and
+# KFLevelState writes it into the level's stream when the level is next asked
+# for (level_state_write, which object_trigger and player_controller call as
+# the level is left).
+# @port engine -- the port's objects into the writer's table
 func _exit_tree() -> void:
-	if player == null or rows.is_empty():
+	if player == null or made_epoch != KFLevelState.epoch:
 		return
-	var kept := {}
+	var lv := level
+	var table: Array = KFLevelState.tables.get(lv, [])
+	if table.is_empty():
+		return
 	for k in rows:
 		var r: Dictionary = rows[k]
-		kept[k] = [int(r["type"]), int(r["lock"]), int(r["b0"])]
-	saved[player._level()] = kept
+		var typ := int(r["type"])
+		if typ == GONE:
+			table[k] = null
+			continue
+		var e = table[k]
+		var old: Array = e if e != null else [GONE, 0x40, 0, 0, 0, 0, 0, FREE, 0, 0]
+		var op := int(r.get("op", old[2]))
+		var p: Vector3i = r["pos"]
+		table[k] = [typ, int(classes[typ]) if typ < classes.size() else int(old[1]), op,
+			p.x, p.y, p.z, int(r["angles"][1]) & 0xFFFF, int(r["lock"]), int(old[8]),
+			int(r["rest"]) if op == 0x62 else int(old[9])]
+	for pd in pedestals:
+		var e = table[int(pd["slot"])]
+		if e != null:
+			e[7] = int(pd["lock"])
+			e[8] = int(pd["ring"])
+	KFLevelState.left[lv] = true
 
 
 # @port engine -- USE into _interact, the arms at 15 a second, and object_give's own frames while it runs

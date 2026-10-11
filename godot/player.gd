@@ -955,7 +955,7 @@ func _throw(pv) -> void:
 # with item 107 the crystal revives -- a fixed spot on level 0, the item taken,
 # HP and MP full (0x8002b3a8) -- else a new character (0x8002b468) and the
 # story flags cleared, and level 0 loaded either way (level_state_writer).
-# @orig game:0x80031c54 player_controller+0xc88  status:transcribed -- a label inside player_controller; the inventory and the gold kept across the revive's reload are the port's way of keeping them
+# @orig game:0x80031c54 player_controller+0xc88  status:transcribed -- a label inside player_controller; the inventory and the gold kept across the revive's reload are the port's way of keeping them; the level 0 it loads either way (it reloaded the level in hand until this was read)
 func _dying() -> void:
 	hp = 0
 	tilt_vel[0] = coll._s16(_spring_to(-0x400, coll._s16(int(tilt[0])), int(tilt_vel[0]), 8, 4))
@@ -972,21 +972,27 @@ func _dying() -> void:
 		return
 	var revive: bool = inventory.has_item(REVIVE_ITEM)
 	if revive:
+		# level_state_write for the level left (0x80031df4): the scene's
+		# objects write its table as they leave, and KFLevelState its stream
 		inventory.take_item(REVIVE_ITEM)
 		respawn = [REVIVE_POS.x, REVIVE_POS.y, REVIVE_POS.z, REVIVE_FACING]
 		carried = [inventory, gold, character, weapon_id, worn, [spell_a, spell_b, item_b]]
 	else:
 		# a new character (0x8002b468), where it puts a new game: bp25's session
-		# began at (0x1f000, -0x3c00, 0x4000) too
+		# began at (0x1f000, -0x3c00, 0x4000) too; reset_story_flags
+		# (0x80031e2c) clears the flags and every level's record, and
+		# story_flags + 9 is set again (0x80031e3c)
 		respawn = [0x1F000, -0x3C00, 0x4000, 0]
-		var an := get_node_or_null("../Actors")
-		if an:
-			an.saved.clear()        # the story flags and the levels' records
-		var lt := get_node_or_null("../Loot")
-		if lt:
-			lt.saved.clear()
+		KFLevelState.clear()
+		KFTalk.flags = []
+		KFTalk.states = {}
+		KFTalk.load_level(0)
+		KFTalk.flags[9] = 1
 	fade = 0
-	get_tree().reload_current_scene()
+	# either way level 0 (level_state_writer(0, ...), 0x80031e70)
+	KFGame.level = 0
+	KFGame.block = [0, 0, 0, 0, 0]
+	get_tree().change_scene_to_file(KFGame.scene_of(0))
 
 
 # Where _ready puts the player after a death reloads the level: the crystal's

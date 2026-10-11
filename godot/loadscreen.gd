@@ -87,6 +87,8 @@ func _enter(slot: int) -> void:
 			return
 		get_tree().change_scene_to_file(scene)
 		return
+	KFTalk.load_level(0)                  # a new game: story_flags + 9 set (0x80014ea4)
+	KFTalk.flags[9] = 1
 	get_tree().change_scene_to_file(KFGame.scene_of(KFGame.current_level()))
 
 
