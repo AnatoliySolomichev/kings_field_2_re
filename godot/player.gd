@@ -581,7 +581,7 @@ func _poison() -> void:
 # The effect's low nibble picks player_take_hit's arm -- 3, the poison, is the
 # only one here: (100 * rand()) >> 15 against the resistance. Then the damage,
 # which is 0 for a spore, and apply_damage from its point.
-# @orig game:0x8002ab18 player_take_hit  status:partial -- the poison of the effects' seven; tools/effects.py
+# @orig game:0x8002ab18 player_take_hit  status:partial -- the poison of the effects' seven; tools/effects.py; not the two things that let nothing through, the weapon's guard (0x801b25b4, held_item_tick) and the bonus timer 0x801b256c
 func take_effect(attacks: Array, effect: int, scale: int, pct: int, point: Vector3i) -> void:
 	if (effect & 0xF) == 3:
 		var roll := (100 * (randi() & 0x7FFF)) >> 15

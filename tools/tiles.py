@@ -52,7 +52,7 @@ from tarc import TArc                                                # noqa: E40
 FDAT = "extract/CD/COM/FDAT.T"
 GRID = 64000
 SCALE = 0x1000
-SHAPES = 254
+SHAPES = 256        # every entry the table has -- 255 is the void shape (below)
 
 # opcode -> total bytes, taken from each handler's own `addiu $t1, $t1, N`
 LEN = {0x10: 4, 0x11: 6, 0x17: 4, 0x18: 4, 0x19: 4,

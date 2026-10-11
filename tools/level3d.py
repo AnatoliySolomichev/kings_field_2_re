@@ -633,12 +633,16 @@ def build_actors_gltf(lv, out="out/godot"):
     return path
 
 
-EFFECT_MODELS = (0x40,)     # the resident models effects draw: 0x40 the spore
+# The resident models effects draw: render_walk hands draw_model_plain
+# model_table[slot +3 + 0x28] (0x80041794) -- 0x4c the spore (+3 0x24), 0x3e
+# the puff a bolt leaves (+3 0x16). This said 0x40 for the spore, which is its
+# +0xe, a value render_walk puts in the scratchpad (0x1f800084), not a model.
+EFFECT_MODELS = (0x3E, 0x4C)
 
 
 def build_effects_gltf(lv, out="out/godot"):
-    """The resident models the effects draw (+0xe), one node each, `mNNN`,
-    for godot/effects.gd to copy: model 0x40 is the spore. Lit by the level's
+    """The resident models the effects draw (model_table[+3 + 0x28]), one
+    node each, `mNNN`, for godot/effects.gd to copy. Lit by the level's
     lighting class 0 -- which class the effect draw uses is not read yet."""
     import modelbank
     vram = object_vram(lv)
@@ -1803,7 +1807,7 @@ def verify(out="out/godot"):
                             "fences:",
                             "creature run:",
                             "levels:", "skills:", "angles:",
-                            "scripts:", "damage:", "equipment:", "player_recalc_stats:", "knock-back:", "weapon:", "animation:", "spores:", "lift doors:", "chests:", "inscriptions:", "conversations:", "menus:", "routines:", "saves:", "level states:", "FAIL", "  first",
+                            "scripts:", "damage:", "equipment:", "player_recalc_stats:", "knock-back:", "weapon:", "animation:", "effects:", "lift doors:", "chests:", "inscriptions:", "conversations:", "menus:", "routines:", "saves:", "level states:", "FAIL", "  first",
                             "  level case", "  angle (", "  script level",
                             "  hit ")):
             print("   " + line.strip())

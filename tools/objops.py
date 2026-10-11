@@ -4,6 +4,10 @@
     python3 tools/objops.py             every opcode, with what its arm touches
     python3 tools/objops.py --actors    the same for the creatures' own machine
     python3 tools/objops.py --player    and for what a button press becomes
+    python3 tools/objops.py --effects [k]   effect_tick's arms, or kind k's
+    python3 tools/objops.py --spawn [k]     effect_spawn's: how kind k is made
+    python3 tools/objops.py --volley [k]    actor_animation_effects': what a
+                                            volley record's +0xc throws
     python3 tools/objops.py 0x1f        one opcode in full
     python3 tools/objops.py --census    which opcodes level 0 actually uses
     python3 tools/objops.py --doc       regenerate OBJECTS.md
@@ -84,6 +88,17 @@ MACHINES = {
     "player": {"routine": 0x8002C30C, "table": 0x800117E8,
                "byte": "the first argument",
                "records": "no table -- player_turn calls it with an action"},
+    # The effects: three switches of 130 arms on the same kind byte, which is
+    # also the effect's record in spell_table (24 bytes a kind).
+    "effects": {"routine": 0x800568BC, "table": 0x80012EBC,
+                "byte": "slot[+1], the kind",
+                "records": "effect_slots, 128 slots of 0x4c"},
+    "spawn": {"routine": 0x80053C84, "table": 0x80012CB4,
+              "byte": "the kind effect_spawn is handed",
+              "records": "no table -- an effect being made"},
+    "volley": {"routine": 0x8004F414, "table": 0x800126E8,
+               "byte": "the first argument, a volley record's +0xc",
+               "records": "no table -- what a creature's volley throws"},
 }
 
 _W = None
@@ -529,6 +544,8 @@ if __name__ == "__main__":
         report(None, sys.stdout, "actors")
     elif a and a[0] == "--player":
         report(None, sys.stdout, "player")
+    elif a and a[0] in ("--effects", "--spawn", "--volley"):
+        report(int(a[1], 0) if len(a) > 1 else None, sys.stdout, a[0][2:])
     elif a and a[0] == "--types":
         print(ROW.strip())
         print()

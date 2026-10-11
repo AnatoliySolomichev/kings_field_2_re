@@ -51,8 +51,7 @@ def export(lv, out="out/godot"):
             c = lvl.cell(cx, cz)
             for layer in (0, 5):
                 sid = c[layer + 3]
-                if sid != 255:
-                    used.add(sid)
+                used.add(sid)               # 255 too: the void shape
                 cells += [sid, c[layer + 2] & 3, c[layer + 1]]
             # collide_query's flag 2: byte +4 of a layer with 0x40 is a wall to
             # the creatures (tools/ai.py fenced); bit 0 layer 0, bit 1 layer 5

@@ -158,9 +158,13 @@ class Level:
         return bytes(objload.Load(lv).grid)
 
     def shape(self, sid):
+        # Shape 255 is not "no shape": its table entry points at the last
+        # eight bytes of the level's block, a floor 32000 above the cell's base
+        # -- the void every empty cell is, which nothing walks into but an
+        # effect flies into (tools/effects.py). tile_collision reads it like
+        # any other.
         if sid not in self.cache:
-            self.cache[sid] = (tiles.shape(self.tail, self.offs[sid])
-                               if sid != 255 else (None, []))
+            self.cache[sid] = tiles.shape(self.tail, self.offs[sid])
         return self.cache[sid]
 
     def cell(self, cx, cz):

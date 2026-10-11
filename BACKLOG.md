@@ -436,9 +436,17 @@ What is left of movement:
    hit on the player with its caller. Level 0's kind-3 creatures (model 57,
    cells (40,29), (26,27), (27,25), (15,20)...) cast effect 0x81/0x26 at the
    player through `actor_animation_effects` arm 0x26: spores that poison
-   (FORMATS.md, "The spores") -- checked against bp26 and in the port. Left:
-   the other 129 arms of actor_animation_effects and of effect_tick, and the
-   lighting class an effect is drawn with.
+   (FORMATS.md, "The spores") -- checked against bp26 and in the port. **The
+   effect machine is in, byte for byte** (FORMATS.md, "The effect machine"):
+   `tools/effects.py` holds 189 of 189 runs of the game's own `effect_spawn`
+   and `effect_driver` slot for slot, and `godot/effects.gd` is the same
+   machine; with it level 4's model-53 creatures throw their bolts (0x23,
+   0x24) and the puffs they leave (0x6f), aimed by `effect_aim` (600 of 600).
+   Left: the other arms -- level 4's and 12's 0x1f and 0x22 next (model 67's,
+   and level 12's), then the player's own magic; the creatures' half of
+   `effect_strike` (`0x8004ceac`); the drawing's matrices (+8 & 0xc), view
+   test and light; and a recording -- bp26 on level 4 by a model-53 creature
+   -- to hold the bolts' strikes and the damage to what the game did.
    **The player hits back too** (tools/weapon.py, godot/weapon.gd): the swing,
    the probe, the damage, the flinch, the dying and the push -- checked against
    `emu/bp25.lua`'s recording (817 of 817 frames). The weapon in the hand is
@@ -789,6 +797,13 @@ each one is also in its function's marker, as `partial` and what differs:
   (`collision.gd`, `doors.gd`, `actors.gd`), `facing_test` and
   `kind_behaviour_with_op` twice. Each copy is marked, and the self-test would
   show one drifting; folding them into one is a refactor nobody has needed yet.
+
+**Found later, and fixed: shape 255 is the void, not nothing.** Every
+empty cell carries it, and the tools and the port answered nothing there;
+`tile_collision` reads the level's last shape for it, a floor 32000 above the
+cell -- everything in an empty cell is under the floor. A bolt flying into
+one showed it (FORMATS.md, "Shape 255 is the void"); nothing the player does
+reaches one, so no number changed.
 
 **Found later, and fixed: a death reloaded the level in hand.** The game
 loads level 0 after a death either way -- `level_state_writer(0, ...)` at

@@ -275,7 +275,7 @@ func _init() -> void:
 	if not _anim():
 		quit(1)
 		return
-	if not _spores():
+	if not _effects():
 		quit(1)
 		return
 	if not _lifts():
@@ -495,52 +495,112 @@ func _anim() -> bool:
 	return bad == 0
 
 
-# The spores bp26 recorded, effects.gd against tools/effects.py: each from its
-# first frame with the player where the log has them -- life, height, scale,
-# growth, strike and where it goes.
-func _spores() -> bool:
-	if not FileAccess.file_exists("res://effectcheck.json"):
-		print("spores: no cases to check against")
+# The effect machine, effects.gd against tools/effects.py, whose machine the
+# game's own effect_spawn and effect_driver hold slot for slot: the same runs
+# over snapshots -- bolts, spores and the puffs they leave -- with the world's
+# answers replayed in the order the Python machine asked for them. Every
+# frame: the same questions asked, the same strikes on the player, and the 128
+# slots byte for byte (an md5 of their hex).
+func _effects() -> bool:
+	if not FileAccess.file_exists("res://fxcheck.json"):
+		print("effects: no cases to check against")
 		return true
-	var d = JSON.parse_string(FileAccess.get_file_as_string("res://effectcheck.json"))
+	var d = JSON.parse_string(FileAccess.get_file_as_string("res://fxcheck.json"))
 	var fx = load("res://effects.gd").new()
-	fx.coll = coll
-	var n := 0
-	var bad := 0
+	fx.load_records()
+	var rp := FxReplay.new()
+	fx.world = rp
+	var runs := 0
+	var good := 0
+	var frames := 0
+	var fgood := 0
 	var first := ""
 	for run in d["runs"]:
-		var st: Dictionary = run["start"]
-		var e := {"f0": 0x81, "kind": 0x26, "pct": int(st["pct"]), "grace": int(st["grace"]),
-			"half": int(st["half"]), "life": int(st["life"]), "x": int(st["x"]),
-			"y": int(st["y"]), "z": int(st["z"]),
-			"scale": [int(st["scale"][0]), int(st["scale"][1]), int(st["scale"][2])],
-			"vel": [int(st["vel"][0]), int(st["vel"][1]), int(st["vel"][2])],
-			"count": int(st["count"]), "node": null}
-		for i in run["frames"].size():
-			var q: Array = run["path"][i]
-			var alive: bool = fx._tick(e, Vector3i(int(q[0]), int(q[1]), int(q[2])))
-			var want: Array = run["frames"][i]
-			var sc: Array = e["scale"]
-			var got := [int(e["life"]), int(e["y"]), int(sc[0]), int(sc[1]), int(sc[2]),
-				int(e["count"]), int(e.get("hit", -1)), 0 if alive else 1]
-			n += 1
-			var w := []
-			for v in want:
-				w.append(int(v))
-			if not alive and int(want[7]) == 1:
-				continue          # gone in both: what is left of it does not matter
-			if got != w:
-				bad += 1
+		runs += 1
+		fx.clear()
+		rp.layer_offset = int(run["layer0"])
+		for sp in run["spawns"]:
+			var args := []
+			for v in sp[4]:
+				if v == null:
+					args.append(null)
+				elif typeof(v) == TYPE_DICTIONARY:
+					args.append((v["b"] as String).hex_decode())
+				else:
+					args.append(int(v))
+			fx.spawn(int(sp[0]), int(sp[1]), int(sp[2]), (sp[3] as String).hex_decode(), args)
+		var ok := true
+		for f in run["frames"]:
+			frames += 1
+			rp.calls = f["q"]
+			rp.i = 0
+			rp.bad = ""
+			rp.hurts = []
+			fx.driver()
+			var want_h := []
+			for h in f["h"]:
+				want_h.append(str(h).replace(".0", ""))
+			var got_h := rp.hurts.map(func(h): return str(h))
+			var same: bool = rp.bad == "" and rp.i == (f["q"] as Array).size() \
+				and got_h == want_h and fx.m.hex_encode().md5_text() == str(f["md5"])
+			if same:
+				fgood += 1
+			elif ok:
+				ok = false
 				if first == "":
-					first = "frame %d: godot %s python %s" % [i, str(got), str(w)]
-				break
-			if not alive:
-				break
+					first = "%s, frame %d: %s" % [run["label"], frames,
+						rp.bad if rp.bad != "" else ("strikes %s, python %s" % [str(got_h), str(want_h)]
+							if got_h != want_h else "the slots differ")]
+		if ok:
+			good += 1
+	# effect_aim: the velocity and the yaw
+	fx.coll = coll
+	var aims := 0
+	var aok := 0
+	for c in d.get("aims", []):
+		var v: Array = (c as Array).map(func(x): return int(x))
+		aims += 1
+		var got: Array = fx.aim(v[0], v[1], Vector3i(v[2], v[3], v[4]), v[5],
+			Vector3i(v[6], v[7], v[8]), v[9])
+		if got == [v[10], v[11], v[12], v[13]]:
+			aok += 1
+		elif first == "":
+			first = "aim %s: godot %s" % [str(v.slice(0, 10)), str(got)]
 	fx.free()
-	print("spores: %d of %d frames of bp26's spores match tools/effects.py" % [n - bad, n])
-	if bad > 0:
+	print("effects: %d of %d runs, %d of %d frames of the effect machine as tools/effects.py's (whose machine the game's own effect_spawn and effect_driver hold: 189 of 189 runs); %d of %d aims as its effect_aim (600 of 600 the game's)" % [
+		good, runs, fgood, frames, aok, aims])
+	if first != "":
 		print("  first difference: " + first)
-	return bad == 0
+	return good == runs and aok == aims
+
+
+# What the effects ask of the game, answered from a run tools/effects.py made:
+# collide_query's answer and the layer it leaves, in order, and the strikes
+# effect_hurt_player is handed, kept.
+class FxReplay:
+	var calls: Array = []
+	var i := 0
+	var layer_offset := 0
+	var hurts: Array = []
+	var bad := ""
+
+	func collide_query(x: int, y: int, z: int, r: int, h: int, flags: int) -> int:
+		if i >= calls.size():
+			if bad == "":
+				bad = "an extra query (%d, %d, %d)" % [x, y, z]
+			return 0
+		var c: Array = calls[i]
+		i += 1
+		var asked := [x, y, z, r, h, flags]
+		for k in 6:
+			if int(c[k]) != int(asked[k]) and bad == "":
+				bad = "query %s, python %s" % [str(asked), str(c.slice(0, 6))]
+		layer_offset = int(c[7])
+		return int(c[6])
+
+	func hurt_player(p: Vector3i, a1: int, radius: int, mode: int, edge: int, attacks: Array,
+			effect: int, more: Array, scale: int, pct: int) -> void:
+		hurts.append([p.x, p.y, p.z, a1, radius, mode, edge, attacks, effect, more, scale, pct])
 
 
 # The lift doors' arm, doors.gd's lift_step against tools/doors.py

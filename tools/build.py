@@ -170,8 +170,9 @@ def main(quick=False, only_check=False):
         "the creatures' animation, against every snapshot's actor caches",
         keep=["caches hold", "last drawn"])
     run(["tools/effects.py", "--check"],
-        "the spores, against what was played",
-        keep=["frames of a spore", "strikes a frame after"])
+        "the effects, against what was played and the game's own code",
+        keep=["frames of a spore", "strikes a frame after", "effect_aim, the game's",
+              "effect_spawn and effect_driver, the game's"])
     run(["tools/knock.py", "--check"],
         "the knock-back, against what was played",
         keep=["knock-backs", "landings", "frames of a knock-back",

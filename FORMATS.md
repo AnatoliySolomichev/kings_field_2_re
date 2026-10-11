@@ -5544,7 +5544,9 @@ with arguments -- through `actor_animation_effects`; `actor_finish` at 0xfff;
 it back -- a record whose +0xc is 0x27 lifts that. The port had taken it for
 the default arm and had no tick for it, so a creature that chose it stood
 still for good; both are in now. The effects it launches are the effect
-system's (`effect_tick`, 4584 instructions) and are not.
+system's (`effect_tick`, 5326 instructions): the spores (0x26) and the bolts
+(0x23, 0x24) are in -- "The effect machine, byte for byte", below -- and the
+other kinds are not.
 
 ### The spores
 
@@ -5557,8 +5559,11 @@ strike the player has lost 1 HP (the other: the roll resisted). Slot 40's
 spore starts at the point bp26 logged, to the unit: its animated vertex 45
 at clock 1080, turned by its yaw 0xc00 + 0x800. The collision asks at the
 point's y **plus half the height** -- the point is the middle. The port draws
-the spore with resident model 0x40, lit by the level's class 0 (the class the
-effect draw uses is not read yet).
+the spore with resident model 0x4c, lit by the level's class 0 (the class the
+effect draw uses is not read yet). **This said model 0x40**, which is the
+spore's +0xe: `render_walk` puts +0xe in the scratchpad (`0x1f800084`) and
+hands `draw_model_plain` `model_table[+3 + 0x28]` (`0x80041794`), and the
+spore's +3 is 0x24.
 
 * **Launch.** The volley's list entry (0x2d) goes to `actor_animation_effects`
   as a vertex number: `0x8004ede0` takes that vertex of the creature's
@@ -5568,8 +5573,8 @@ effect draw uses is not read yet).
   the grace count +0xb to 0.
 * **Setup** (`effect_spawn` arm 0x26, `0x80054338`): `0x80053ba8` -- +8 1,
   +4 0x80, +0xc 0x34, +2 and +3 0x24, +9 5, +0x12 0x1000, the scale 0x400 --
-  then the model +0xe 0x40, a life +0x10 of 0x32 frames, the half-step test
-  +0xd 1, growth +0x44 0x14 frames, and 200 higher.
+  then +0xe 0x40 (not the model, above), a life +0x10 of 0x32 frames, the
+  half-step test +0xd 1, growth +0x44 0x14 frames, and 200 higher.
 * **Each frame** (`effect_driver` counts +0x10 down and frees the slot at -1;
   `effect_tick` arm 0x26, `0x80056de8`): while +0x44 lasts, +0x30 and +0x34
   grow 0x96; +0x32 grows 0x96 to 0x1000; it rises 0x28 a frame until the
@@ -5589,6 +5594,98 @@ effect draw uses is not read yet).
   0x384 is itself a multiple of 30, so a spore that strikes every frame,
   setting it back each time, **takes 1 HP every frame** -- which is what the
   recording shows: 50 down to 40 in ten frames.
+
+### The effect machine, byte for byte
+
+`tools/effects.py` now runs `effect_spawn`, `effect_driver` and the arms of
+`effect_tick` it has over the 128 slots of 0x4c bytes **where the game keeps
+them**, in RAM, so the game's own code can be put beside it a byte at a time:
+`tools/mipsrun.py` runs the game's `effect_spawn` and `effect_driver` over
+every snapshot of a level, the same scenarios -- bolts at the player from
+round about, aimed as a volley aims them and not, spores beside them -- and
+after every frame **all 128 slots** must be the machine's. **189 of 189 runs,
+4702 of 4702 frames, 3964 of 3964 strikes on the player** handed the same
+arguments; the runs met the tiles, the void, objects and the player.
+`godot/effects.gd` is the same machine, and the self-test runs it on the same
+runs with the world's answers replayed (54 of 54 runs, 1572 of 1572 frames).
+
+**`effect_spawn`** (`0x80053c84`), before its kind's arm: `effect_alloc` the
+first free slot from the top -- 0 when none is -- +0 and +1 the flags and the
+kind; the 16 bytes at a3, the point, into +0x18; +0xa 3; the eight bytes the
+fifth argument points at into +0x38 (velocity, and a fourth halfword), else
+0; the three scales 0x1000; +7 0, +6 the first argument, the angles 0, +0x14
+0, +5 0, +8 1; the grace count +0xb 8 when the flags have 0x40 and
+`player_state` is 1, else 1; +0x12 0, +9 0, +0xc 0xff, the life -1; the
+half-step test +0xd when the speed squared is past 0xc5c10; +0xe 0; a kind
+past 0x81 frees it again. `effect_alloc` does not clear the slot, so what an
+arm leaves unwritten is the slot's last tenant's.
+
+**The walk** (`effect_driver`, `0x8005bc50`) runs slot 0 to 127; a slot made
+during it lands in the first free one from the top, so one above the slot
+that made it is run in the same frame and one below waits.
+
+**`effect_collide`** (`0x80053310`) asks after the grace count -- each ask
+spends one -- `collide_query` at the point's y plus half the height with the
+flags +0 & 7 chooses: 1 0xa1 (the tiles, the objects, the player), 2 0x31,
+3 0xb1, 4 1 (the tiles); **0 answers 1 and 5..7 answer 4 without asking**.
+`effect_move` (`0x800566d4`) adds the velocity, collides, and with +0xd asks
+again half a step back; +0xa is then 2 or 1 by the layer the tiles were asked
+in, and +0x2c turns by its third argument. `effect_strike` (`0x80053850`):
+bit 1 of +0 calls `effect_hurt_player` with the kind's `spell_table` record
+-- +6, +8, +0xa, the effect byte +4, +0xc..+0x14 -- bit 2 the creatures
+(`0x8004ceac`, not read).
+
+### A bolt: kinds 0x23 and 0x24
+
+What level 4's model-53 creatures (kind 1, fourteen of them) throw: a volley
+record whose +0xc is 0x23 or 0x24 reaches `actor_animation_effects`' arm for
+0x1f..0x25 (`0x8004fc18`), which aims with `effect_aim` at a speed of 0x12c,
+the spread 0x400 and one pass, and calls `effect_spawn(pct, 0x83, kind,
+point, velocity, the creature's angles)`.
+
+* **Setup** (`0x80054be4`, `0x80054c2c`): +8 0 -- **not drawn** -- the life
+  0x14 (0x23) or 0x3c (0x24), the angles the creature's, +0xe 0xc0; 0x23 also
+  the half-step test.
+* **Each frame** (`0x80058f3c`): as 0x81, `effect_strike` with the scale x
+  >> 3 -- 0x200 -- edge 0x400; as 0x81 again, `effect_move(0x64, 0xc8)`:
+  meeting the tiles, an object or the player, the move is taken back
+  (`0x80056800`) and the slot freed; and either way **a puff**, kind 0x6f,
+  is made at its point with two fifths of its velocity (`x * 2 / 5` through
+  0x66666667) -- `effect_spawn(10, 0, 0x6f, point, v, 0xe10, -0x80, 5, 0x16,
+  0, 1, 3)`. The velocity's fourth halfword is whatever the stack held.
+* **The record** (`spell_table` 0x23): stab 50 and the fifth magic 40 (45
+  for 0x24), and the effect 3 -- **poison**, as a spore's.
+
+**A puff** (`0x80055738`, tick `0x8005b45c`): `0x80053be4` -- +8 5, +4 0x80,
++0xc 0x33, +2 and +3 0x16 (model 0x3e), +9 5, +0x12 0x1000 -- the scale 0xe10
+shrinking 0x80 a frame (+0x44), a life of 5, +0x46 0, +0xe 0xc0; each frame
+the vertical speed by +0x46, the place by the speed, the three scales by
++0x44. No strike, no collision.
+
+**`effect_aim`** (`0x8004f1d0`): `vec_to_angles` from the point to the
+target's eye (0x640 above its feet) -- the yaw `vec_angle(dx, dz)`, the pitch
+`-vec_angle(dy, vec_length_2d(dx, dz))`; the yaw pulled towards the
+creature's own (+0x42) by `angle_lerp` with t = the distance between them
+over the spread, at most 0x1000; the pitch by its own distance from the
+creature's (+0x40) as t; `direction_from_angles` and `vec_scale` by the
+speed. With more than one pass it leads the target by its velocity
+(`0x801b2600`). **600 of 600** random cases of the game's own as
+`tools/effects.py aim`, once its `vec_length_2d` went through the game's own
+root: `tools/movement.py vlen` takes `math.isqrt`, and the game's comes back
+one short on a square.
+
+### Shape 255 is the void
+
+The grid's empty cells carry shape 255 in both layers, and every tool here,
+and the port, read 255 as "no shape" and answered nothing. **`tile_collision`
+reads it like any other**: the level's table of 256 offsets (the tools read
+254) gives 255 the last eight bytes of the level's block -- a floor 32000
+above the cell's base, so anything in an empty cell is under the floor: mask
+4. Nothing walks into one, which is how 8075 of 8078 held; a bolt flies into
+one and stops there, which is how the effect machine found it.
+`tools/tiles.py` reads all 256 now, and `tools/collision.py`,
+`tools/gdcoll.py` and `godot/collision.gd` keep the void shape; the numbers
+above are unchanged.
 
 **The creatures are drawn at their kind's scale.** `render_walk` hands
 `draw_model_plain` the actor's +0x48, which `actor_copy_kind` fills from the

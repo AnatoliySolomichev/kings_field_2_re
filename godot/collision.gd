@@ -405,7 +405,7 @@ func query(x: int, y: int, z: int, ymid := 0x7FFFFFFF) -> Dictionary:
 	var base := -128 * cells[i + 2]
 	out["ceil"] = base + CEIL_START
 	out["at"] = i                    # the cell and layer, what 0x801e6468 holds
-	if sid == 255 or not shapes.has(key):
+	if not shapes.has(key):             # 255 is a shape too: the void (tools/collision.py Level.shape)
 		return out
 	var sh: Dictionary = shapes[key]
 	var rot := cells[i + 1]
