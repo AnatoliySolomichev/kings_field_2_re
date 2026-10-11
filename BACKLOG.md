@@ -550,6 +550,15 @@ movement model is being finished:
 
 Neither has been looked for. Recorded so the observation is not lost.
 
+*Since:* the speed cap is not a stat. `player_controller` writes 200 into it
+every frame (`0x80031180`) and then changes it four ways only: **the run** --
+USE held two frames, up to 336 (FORMATS "The run: USE held"; 150 129 of
+150 129 logged frames, in the port as `frame_caps`) -- the slowing
+(`turn_slow_timer`), the paralysis (`0x801b2568`) and a halving while
+`0x801b25b4` is set, the one of the four the port leaves out: only
+`equip_weapon` is seen clearing it and what sets it is not read. A faster walk
+"as the character levels" would be the run, then.
+
 ## 5a'. The menu -- begun
 
 `pause_menu` and its "use item" screen are read and in the port

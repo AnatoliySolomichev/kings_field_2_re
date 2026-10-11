@@ -865,6 +865,11 @@ The rungs: **height only** gives the game's ground move and asks about Y alone;
 three — the turn rate is in `0x8002fe1c` and is not transcribed, and putting an
 unread layer under a checked one would spoil the point of the ladder.
 
+It also replays the run -- `player_controller`'s caps and `player_turn`'s
+flag, USE held two frames (FORMATS "The run: USE held") -- over every logged
+cap, 150 129 of 150 129, and `export_caps` writes those frames to
+`runcheck.json` for the self-test.
+
 `player_horizontal` is in whole -- the objects, a steep ramp's push, the
 ceiling -- and rung 2 stands at 124 891 of 125 116. A run in player state 0x10
 is a knock-back and goes through `tools/knock.py`'s frame, the push predicted

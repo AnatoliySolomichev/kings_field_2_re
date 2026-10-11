@@ -316,6 +316,42 @@ def ramp(rows):
     return ok, bad
 
 
+# The run (player_controller 0x800311b4, player_turn 0x8003005c): the speed
+# cap is 200 and grows by mod / 0x1000 of itself, mod ramping by 0x320 to 0xaf0
+# while 0x801b24f5 is 0 and falling by 0x320 to 0 while not -- and player_turn,
+# after the caps are made, counts 0x801b24f5 down to 0 while USE has been held
+# two frames running and sets it to 1 otherwise. A new character starts both
+# at 0, which in a log is the jump to its start (0x1f000, -0x3c00, 0x4000).
+NEW_START = (0x1F000, -0x3C00, 0x4000)
+
+
+def run_caps(rows, binds):
+    """[(frame, the cap the model gives, the logged cap)] for every frame
+    with one before it, and the model's state carried across."""
+    use = binds.get("b7", 0x40)
+    out = []
+    mod = run = None
+    prev = None
+    for r in rows:
+        if prev is None or r["f"] != prev["f"] + 1:
+            mod, run = None, None
+        if mod is not None and r["p"] == NEW_START and prev["p"] != NEW_START:
+            mod, run = 0, 0
+        if mod is None:
+            mod = ((r["max"] - 200) * 4096 + 199) // 200 if r["max"] > 200 else 0
+            run = 1
+        else:
+            mod = max(mod - 0x320, 0) if run else min(mod + 0x320, 0xAF0)
+            out.append((r["f"], 200 + ((mod * 200) >> 12), r["max"],
+                        bool(r["btn"] & use and r["prev"] & use)))
+        if r["btn"] & use and r["prev"] & use:
+            run = max(run - 1, 0)
+        else:
+            run = 1
+        prev = r
+    return out
+
+
 def look_rate(rows, binds):
     """The pitch rate `player_look` (`0x8002f5c0`) drives, frame by frame.
 
@@ -388,6 +424,11 @@ def report(path="out/lua_bp16.log"):
 
     ok, bad = ramp(rows)
     print(f"speed ramp: {ok} of {ok + bad} frames reproduced by accelerate()")
+    caps = run_caps(rows, binds)
+    good = sum(1 for _f, g, w, _u in caps if g == w)
+    ran = sum(1 for _f, _g, w, _u in caps if w > 200)
+    print(f"the run: {good} of {len(caps)} frames' speed caps as player_controller makes "
+          f"them ({ran} above 200, USE held)")
 
     runs = [r for r in runs_of(rows) if r[0]["lv"] == lv]
     if not runs:
@@ -434,6 +475,33 @@ def report(path="out/lua_bp16.log"):
                   f"run into a logged creature come out exact")
             for (cx, cz), n in cells.most_common(3):
                 print(f"     cell ({cx},{cz}) {n}x")
+
+
+def export_caps(out_dir):
+    """runcheck.json: every frame of bp16 as [a cut, a new character, USE held
+    two frames, walking, the logged cap], for godot/selftest.gd to run
+    player.gd's frame_caps and run_flag over -- run_caps's walk, frame for
+    frame."""
+    import json
+    rows, binds = load()
+    if not rows:
+        return None
+    use = binds.get("b7", 0x40)
+    fb = BIND["forward"] | BIND["back"]
+    seq, prev = [], None
+    for r in rows:
+        cut = prev is None or r["f"] != prev["f"] + 1
+        fresh = not cut and r["p"] == NEW_START and prev["p"] != NEW_START
+        seq.append([1 if cut else 0, 1 if fresh else 0,
+                    1 if (r["btn"] & use and r["prev"] & use) else 0,
+                    1 if r["btn"] & fb else 0, r["max"]])
+        prev = r
+    path = os.path.join(out_dir, "runcheck.json")
+    with open(path, "w") as fh:
+        json.dump({"_note": "bp16's frames: [a cut, a new character, USE held "
+                            "two frames, walking, the speed cap logged]",
+                   "frames": seq}, fh, separators=(",", ":"))
+    return path
 
 
 if __name__ == "__main__":

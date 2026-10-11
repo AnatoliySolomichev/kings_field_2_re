@@ -308,6 +308,9 @@ func _init() -> void:
 	if not _saves():
 		quit(1)
 		return
+	if not _run():
+		quit(1)
+		return
 	if not _level_states():
 		quit(1)
 		return
@@ -752,6 +755,45 @@ func _routines() -> bool:
 	if bad > 0:
 		print("  first difference: " + first)
 	return bad == 0
+
+
+# The run, player.gd against bp16's own speed caps: frame_caps and run_flag
+# over the frames round every run the log holds -- the state carried from frame
+# to frame and taken off the log's cap again where the stretch is cut, both at
+# 0 for a new character.
+func _run() -> bool:
+	if not FileAccess.file_exists("res://runcheck.json"):
+		print("the run: no frames to check against")
+		return true
+	var d = JSON.parse_string(FileAccess.get_file_as_string("res://runcheck.json"))
+	var script = load("res://player.gd")
+	var c := {"run": 1, "mod": 0, "slow": 0, "paralysis": 0}
+	var n := 0
+	var ok := 0
+	var ran := 0
+	var first := ""
+	for row in d["frames"]:
+		var v: Array = (row as Array).map(func(x): return int(x))
+		if v[0] == 1:
+			c = {"run": 1, "mod": ((v[4] - 200) * 4096 + 199) / 200 if v[4] > 200 else 0,
+				"slow": 0, "paralysis": 0}
+		else:
+			if v[1] == 1:
+				c["run"] = 0
+				c["mod"] = 0
+			var got: Array = script.frame_caps(c, v[3] == 1)
+			n += 1
+			if v[4] > 200:
+				ran += 1
+			if int(got[0]) == v[4]:
+				ok += 1
+			elif first == "":
+				first = "frame %d: godot %d, the game %d" % [n, int(got[0]), v[4]]
+		script.run_flag(c, v[2] == 1)
+	print("the run: %d of %d frames' speed caps as bp16 logged them (%d above 200, USE held)" % [ok, n, ran])
+	if first != "":
+		print("  first difference: " + first)
+	return ok == n
 
 
 # The memory card, card.gd against tools/memcard.py: save_restore's table

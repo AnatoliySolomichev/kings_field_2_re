@@ -1700,6 +1700,11 @@ def project(lv, out="out/godot", start=(57, 4)):
     except Exception as e:                       # no recording, no streams
         print(f"level state skipped: {e}")
     try:
+        import replay
+        replay.export_caps(out)
+    except Exception as e:                       # no bp16 log, no runs
+        print(f"run caps skipped: {e}")
+    try:
         import memcard
         memcard.export(out)
     except Exception as e:                       # no card, nothing to continue
@@ -1808,7 +1813,7 @@ def verify(out="out/godot"):
                             "fences:",
                             "creature run:",
                             "levels:", "skills:", "angles:",
-                            "scripts:", "damage:", "equipment:", "player_recalc_stats:", "knock-back:", "weapon:", "animation:", "effects:", "lift doors:", "chests:", "inscriptions:", "conversations:", "menus:", "routines:", "saves:", "level states:", "FAIL", "  first",
+                            "scripts:", "damage:", "equipment:", "player_recalc_stats:", "knock-back:", "weapon:", "animation:", "effects:", "lift doors:", "chests:", "inscriptions:", "conversations:", "menus:", "routines:", "saves:", "level states:", "the run:", "FAIL", "  first",
                             "  level case", "  angle (", "  script level",
                             "  hit ")):
             print("   " + line.strip())

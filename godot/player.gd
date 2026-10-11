@@ -56,8 +56,8 @@ const UNIT := 1000.0
 const CELL := 2048.0
 const SPEED_MAX := 200               # 0x801b2664 in the recorded session; the
                                      # acceleration is a quarter of it, the decay an eighth
-const SPEED_MAX_RUN := 400           # not the game's -- there is no run button, this is
-                                     # for getting about the level quickly
+const SPEED_MAX_RUN := 400           # not the game's -- its run is USE held, to 336
+                                     # (frame_caps); Shift is for getting about quickly
 const FLY := 9000.0
 const STEP_UP := 0x500               # player_horizontal: the most a step may climb
 const SHRINK := 0x16                 # and how much shorter each retry is
@@ -116,8 +116,9 @@ const EYE_UNITS := 1600.0            # 0x640 at 0x80028e10
 # faster when you are not walking. Out of 0x1000 to the circle, 0x20 is 2.81
 # degrees a frame and 0x28 is 3.52.
 #
-# There is a third case not reproduced here: while the counter at 0x801b2566
-# is running, 0x80031254 halves the cap every frame and counts it down.
+# And a third: while turn_slow_timer (0x801b2566, player_take_hit's effect 5)
+# is running, 0x80031254 halves the cap every frame and counts it down --
+# frame_caps, with the run.
 # Dying, out of player_controller. All 128 ai_slots go to 0xff, and then
 # either item 107 -- "this crystal gives total recovery to the injured body and
 # mind" -- is consumed and the player is put back at a fixed spot, or the
@@ -235,6 +236,17 @@ var poison := 0
 var resist := 0
 var magic_pause := 0
 var use_prev := false
+# What player_controller makes of the frame's caps (0x800311b4..0x800313ec),
+# and the run: while USE has been held two frames running, player_turn counts
+# 0x801b24f5 down to 0, and the next frame player_controller ramps 0x801b24f6
+# by 0x320 to 0xaf0 -- the speed cap 200 grows by 0xaf0 / 0x1000 of itself,
+# to 336, and the turn by half that; let go, it sets 0x801b24f5 back to 1 and
+# the ramp falls back. turn_slow_timer (0x801b2566) runs it the other way, to
+# -0xce4, with the turn halved; and 0x801b2568, the paralysis, stops both.
+# A new character and a loaded save start them at 0 (sub_80028e9c).
+var caps := {"run": 0, "mod": 0, "slow": 0, "paralysis": 0}
+var speed_cap := SPEED_MAX
+var turn_cap := TURN_MAX_STILL
 # The creatures in the way this frame, as [x, y, z, radius, height, flags]:
 # actors.gd's awake ones, taken before the step because the game moves the
 # player before actor_tick_driver.
@@ -365,6 +377,8 @@ func take_save(f: Dictionary) -> void:
 	fwd_speed = 0
 	stf_speed = 0
 	magic_meter = 0
+	caps = {"run": 0, "mod": 0, "slow": KFCard.halves(f, "timers")[4],
+		"paralysis": KFCard.halves(f, "timers")[5]}   # 0x801b2566, 0x801b2568 off the save
 	equip_weapon(KFCard.num(f, "weapon"))       # the meter 0, the pause, the stats
 	rotation.y = float(facing) * TAU / 4096.0
 	_to_godot()
@@ -615,6 +629,13 @@ func _frame(dir: Vector3) -> void:
 		attack_latch = false
 		_weapon()
 		return
+	var held := KFPad.held(KFPad.FORWARD) or KFPad.held(KFPad.BACK)
+	var c := frame_caps(caps, held)
+	speed_cap = int(c[0])
+	turn_cap = int(c[1])
+	if int(c[2]):                     # the paralysis halves the speeds
+		fwd_speed = coll._s16(fwd_speed) >> 1
+		stf_speed = coll._s16(stf_speed) >> 1
 	_use()
 	# player_turn (0x80030424): a swing begins on the attack button's edge
 	# when the pause after the last blow is over (0x8002c040).
@@ -624,7 +645,7 @@ func _frame(dir: Vector3) -> void:
 			and not KFGame.follow:
 		KFWeapon.start(wstate, KFWeapon.records[weapon_id])
 	attack_latch = false
-	var cap := SPEED_MAX_RUN if Input.is_key_pressed(KEY_SHIFT) else SPEED_MAX
+	var cap := SPEED_MAX_RUN if Input.is_key_pressed(KEY_SHIFT) else speed_cap
 	# The controller's own order, off its call list: player_turn (the button
 	# edges), player_look (the turn and the pitch), player_walk (the speeds),
 	# then player_vertical or player_move. So the facing for this frame's step
@@ -669,16 +690,75 @@ func _frame(dir: Vector3) -> void:
 	_weapon()
 
 
+# player_controller's caps for the frame, before player_turn runs (0x80031180
+# on): the speed 200 and the turn 0x20 walking or 0x28 standing; then
+# 0x801b24f6 -- under turn_slow_timer down by 0x64 to -0xce4 (up again once
+# the timer is under 0x40) with the turn halved and the timer counted down,
+# else up by 0x320 to 0xaf0 while 0x801b24f5 is 0 and down to 0 while not --
+# grows the speed by mod / 0x1000 and the turn by mod / 0x2000 of themselves;
+# and the paralysis (0x801b2568) makes both 0, counts down and halves the two
+# speeds. [speed cap, turn cap, paralysed].
+# @orig game:0x800311b4 player_controller+0x1e8  status:verified -- the run: tools/replay.py, 150129 of 150129 frames of bp16's speed caps, and the self-test this to it; the slowing and the paralysis transcribed, their screen flash (0x8003d8ec) and the guard (0x801b25b4) not here
+static func frame_caps(c: Dictionary, walking: bool) -> Array:
+	var speed := 0xC8
+	var turn := TURN_MAX_MOVING if walking else TURN_MAX_STILL
+	var mod := int(c["mod"])
+	if int(c["slow"]) != 0:
+		if int(c["slow"]) < 0x40:
+			mod = KFWeapon.s16(mod + 0x64)
+			if mod > 0:
+				mod = 0
+		else:
+			mod = KFWeapon.s16(mod - 0x64)
+			if mod < -0xCE4:
+				mod = -0xCE4
+		turn >>= 1
+		c["slow"] = int(c["slow"]) - 1
+	elif int(c["run"]) == 0:
+		mod = KFWeapon.s16(mod + 0x320)
+		if mod > 0xAF0:
+			mod = 0xAF0
+	else:
+		mod = KFWeapon.s16(mod - 0x320)
+		if mod < 0:
+			mod = 0
+	c["mod"] = mod
+	speed += (mod * speed) >> 12
+	turn += (mod * turn) >> 13
+	var para := int(c["paralysis"]) != 0
+	if para:
+		speed = 0
+		turn = 0
+		c["paralysis"] = int(c["paralysis"]) - 1
+	return [speed, turn, 1 if para else 0]
+
+
+# player_turn on 0x801b24f5: USE held this frame and the last counts it down to
+# 0 -- and with ring 0x4c worn (0x801b25d8) USE held does nothing at all --
+# else it is 1 again (0x800302a8).
+# @orig game:0x8003005c player_turn+0x240  status:verified -- through frame_caps, the same 150129 frames
+static func run_flag(c: Dictionary, held: bool) -> void:
+	if held:
+		if int(c["run"]) != 0:
+			c["run"] = int(c["run"]) - 1
+	else:
+		c["run"] = 1
+
+
 # player_turn's middle (0x80030010): the USE button held this frame and the
 # last takes 500 from each meter and sets each pause to 1 -- 60 when a meter
 # empties -- and lowers damage_scale by 0x80 to 0x400; otherwise the magic
 # meter's pause counts down, or it refills by meter_gain(the five working
 # skills' average, 0) a frame, and damage_scale climbs back by 0x80 to 0x1000.
+# Ring 0x4c in the fifth slot (0x801b25d8) takes the held branch away. The run's
+# flag is run_flag's.
 # tools/weapon.py use_held: with the swing, 817 of 817 frames of bp25.
-# @orig game:0x80030010 player_turn+0x1f4  status:transcribed -- a label inside player_turn; the rings (0x4d, 0x4f) and a spell's rate are not here
+# @orig game:0x80030010 player_turn+0x1f4  status:transcribed -- a label inside player_turn; the rings 0x4d and 0x4f and a spell's rate are not here
 func _use() -> void:
 	var now := KFPad.held(KFPad.USE)
-	if now and use_prev:
+	var held := now and use_prev and int(worn[4]) != 0x4C
+	run_flag(caps, held)
+	if held:
 		wstate["pause"] = 1
 		var m := coll._s16(int(wstate["meter"]) - 0x1F4)
 		if m <= 0:
@@ -1253,8 +1333,7 @@ static func _trunc12(v: int) -> int:
 # facing at the end, the way ghost.gd reads the game's own.
 # @orig game:0x8002f5c0 player_look  status:transcribed -- the yaw here, the pitch in _look
 func _turn() -> void:
-	var cap := TURN_MAX_MOVING if (KFPad.held(KFPad.FORWARD)
-		or KFPad.held(KFPad.BACK)) else TURN_MAX_STILL
+	var cap := turn_cap                               # 0x801b2668, frame_caps'
 	var step := cap >> 2
 	if KFPad.held(KFPad.LEFT_SLOT):                   # 0x8002f5e0
 		turn_rate += step

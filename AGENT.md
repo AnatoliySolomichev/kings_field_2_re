@@ -249,6 +249,8 @@ the walking, against the recording (replay rung 2)     124 891 of 125 116 frames
                                                        447 of the 455 that touch
                                                        an object, 76 of 76 a
                                                        creature
+the run (USE held), against bp16's speed caps          150 129 of 150 129 frames,
+                                                       92 of them above 200
 the knock-back, against the bp16 recording             171 of 171 frames, 7 of 7
                                                        lengths, 6 of 6 landings
 the creatures' HP, against 13 snapshots                69 of 69
@@ -284,6 +286,7 @@ routines 13858 of 13858
 saves 45 of 45 · level states 46 of 46 streams, 958 of 958 things made,
 42 of 42 states written, 46 of 46 tables read and written again
 effects 54 of 54 runs, 1868 of 1868 frames · aims 300 of 300
+the run 150129 of 150129 frames
 ```
 
 **Tell the two kinds apart.** Against a recording or a RAM snapshot — the

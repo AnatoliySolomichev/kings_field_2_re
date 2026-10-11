@@ -1402,14 +1402,54 @@ write when either is down). Out of `0x1000` to the circle that is 2.81 degrees a
 frame walking and 3.52 standing still: **you turn about a fifth faster when you
 stop**.
 
-There is a third case, not in the port: while the counter at `0x801b2566` is
-running, `0x80031254` halves the cap every frame and `0x8003125c` counts it
-down. What starts it is not read yet.
+There is a third case: while `turn_slow_timer` (`0x801b2566`) is running,
+`0x80031254` halves the cap every frame and `0x8003125c` counts it down. It is
+`player_take_hit`'s effect 5 that starts it -- see "The run" below.
 
 The order the four run in is off `player_controller`'s own call list —
 `player_turn` (the button edges), `player_look` (the turn and the pitch),
 `player_walk` (the speeds), then `player_vertical` or `player_move`. So the
 facing a step uses is *this* frame's turn, which is what the port now does.
+
+### The run: USE held
+
+Both caps -- the speed's `0x801b2664` and the turn's `0x801b2668` -- are only
+where `player_controller` starts each frame (`0x80031180`, 200 and the turn
+above). Before `player_turn` runs it grows both by a signed half,
+**`0x801b24f6`**, which it ramps by one of three rules (`0x800311b4`):
+
+```
+turn_slow_timer (0x801b2566) running:
+    under 0x40 left   mod += 0x64, to at most 0
+    else              mod -= 0x64, to at least -0xce4
+    turn cap >>= 1, the timer -= 1
+0x801b24f5 == 0       mod += 0x320, to at most 0xaf0
+else                  mod -= 0x320, to at least 0
+speed cap += mod * speed cap >> 12                     0x80031318
+turn cap  += mod * turn cap >> 13                      0x80031330
+0x801b2568 running    both caps 0, the timer -= 1, the forward and strafe
+                      speeds halved                    0x80031344
+```
+
+and `player_turn`, later the same frame, sets the flag: **USE held this frame
+and the last** (`0x801b265c`, `0x801b265e`, `bind_use`) counts `0x801b24f5`
+down to 0 (`0x8003005c`), anything else puts it back to 1 (`0x800302a8`). So
+holding USE for two frames runs: from the third, the cap climbs 39 a frame to
+**336** (`200 + 0xaf0 * 200 >> 12`) and the turn to `0x20 + 0x15`; let go and
+it falls back as fast. With ring `0x4c` in the fifth slot (`0x801b25d8`) the
+held branch is skipped altogether, so that ring cannot run. The same branch is
+what drains both meters by 500 a frame and lowers `damage_scale` -- the
+running costs stamina and defence (see "The player's blow").
+
+`turn_slow_timer` is `player_take_hit`'s effect 5 and `0x801b2568` its effect
+4 ("What a hit takes off"): the one slows the player to `200 - 0xce4 *
+200 >> 12` = 39 and halves the turn, the other stops both. A new character
+and a loaded save start the flag and the ramp at 0.
+
+`tools/replay.py` replays the rule over bp16's logged caps, **150 129 of
+150 129 frames**, 92 of them above 200; `godot/player.gd` copies it as
+`frame_caps` and `run_flag`, and `godot/selftest.gd` runs those over the same
+frames (`runcheck.json`), 150 129 of 150 129.
 
 ### The head bob
 
