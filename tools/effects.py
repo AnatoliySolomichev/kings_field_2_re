@@ -439,6 +439,9 @@ def export(out_dir):
                                 pz + frng.randrange(-0x400, 0x400), 0)
             d = movement.direction_from_angles(frng.randrange(-0x100, 0x100) & 0xFFF, yaw)
             vel = struct.pack("<4h", *[_s16_((c * 0x384) >> 12) for c in d], 0)
+            if frng.randrange(2) == 0:                       # water just under the path
+                struct.pack_into("<i", m, SURFACE & MASK, py - 0x640 - frng.randrange(0, 0x1F4))
+            s18 = struct.unpack_from("<i", m, SURFACE & MASK)[0]
             w = StandIn(7)
             log = []
             ask = w.collide_query
@@ -448,14 +451,21 @@ def export(out_dir):
                 log.append([_s32(x), _s32(y), _s32(z), r, h & 0xFFFFFFFF, flags, v, w.layer_offset])
                 return v
             w.collide_query = cq
-            mach = Machine(m, w)
+            drawn = []
+            lcg = levelstate.Lcg()
+
+            def rnd(lcg=lcg, drawn=drawn):
+                v = lcg()
+                drawn.append(v)
+                return v
+            mach = Machine(m, w, rnd)
             try:
                 mach.spawn(0xA, 0x42, FIRE_BALL, point, [vel])
                 frames = []
                 for _f in range(60):
-                    del log[:], w.hits[:]
+                    del log[:], w.hits[:], drawn[:]
                     mach.driver()
-                    frames.append({"q": [list(x) for x in log],
+                    frames.append({"q": [list(x) for x in log], "rand": list(drawn),
                                    "hits": [[h[0], h[1], h[2], h[3], h[4], [_s32(v) for v in h[5]]]
                                             for h in w.hits],
                                    "md5": hashlib.md5(_slots(m).hex().encode()).hexdigest()})
@@ -464,7 +474,7 @@ def export(out_dir):
             except NotImplementedError:
                 continue
             fires.append({"label": f"{os.path.basename(path)[:-4]} fire ball", "layer0": 7,
-                          "fields": dict({"px": px}, **{f"w{k}": working[k] for k in range(5)}),
+                          "fields": dict({"px": px, "s18": s18}, **{f"w{k}": working[k] for k in range(5)}),
                           "spawns": [[0xA, 0x42, FIRE_BALL, point.hex(), [{"b": vel.hex()}]]],
                           "frames": frames})
     # and effect_aim: a creature's angles, the target, the speed, the point and
@@ -508,9 +518,13 @@ SLOW, PARALYSIS = 0x801B2566, 0x801B2568
 B56A, B56C, B56E = 0x801B256A, 0x801B256C, 0x801B256E
 TILE_LOOK = 0x801AEEFC
 FIRE_BALL = 0x00
+SPLASH = 0x70
+VBLANK, SPLASH_SOUND = 0x801C12E8, 0x8009C214 + 0x1DC   # vblank_count, gp + 0x1dc
 WORKING = 0x801B2526             # the five working skills
 SURFACE = 0x801E647C             # surface_plane_18, the water's top
 COLLIDE_QUERY, ATTACK_HIT, SOUND_AT = 0x80033F38, 0x800533E8, 0x80015688
+ACTORS, ACTOR_STRIDE, ACTOR_N = 0x80185DA8, 0x88, 200
+ACTOR_SKIP, CURRENT_ACTOR, COLLIDE_ACTOR = 0x8018FAA8, 0x8018FAB4, 0x801E648C
 PLAYER_FIELDS = (HP, POISON, CURSE_LV, CURSE_T, DARK_LV, DARK_T, SLOW, PARALYSIS)
 LAYER_OFFSET = 0x801E646E        # collision_layer_offset, select_cell_layer's answer
 GRID, CELL_BYTES = 0x801D4464, 10
@@ -622,11 +636,33 @@ class Machine:
                0x24: self._spawn_24, 0x26: self._spawn_26, TRAIL: self._spawn_6f,
                0x17: self._spawn_17, 0x19: self._spawn_19, 0x1A: self._spawn_1a,
                0x1B: self._spawn_1b, 0x1C: self._spawn_1c, 0x1E: self._spawn_1e,
-               FIRE_BALL: self._spawn_00}.get(kind)
+               FIRE_BALL: self._spawn_00, SPLASH: self._spawn_70}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_spawn's arm {kind:#x}")
         arm(s, args)
         return s
+
+    def _spawn_70(self, s, args):           # 0x800557dc, a splash
+        self.w8(s + 8, 1)
+        self.w8(s + 4, 0x80)
+        self.w8(s + 2, 0x2A)
+        self.w8(s + 3, 0x2A)
+        self.w16(s + 0x32, 0)
+        self.w16(s + 0x34, args[1])
+        self.w16(s + 0x30, args[1])
+        self.w16(s + 0x44, args[2])
+        now = self.s32(VBLANK)                # its sound, at most every 30 blanks
+        if _s32(self.s32(SPLASH_SOUND) - now) < 0:
+            self.w32(SPLASH_SOUND, now + 0x1E)
+
+    def _tick_70(self, s):                  # 0x8005b598, a splash
+        """Eight frames rising and falling: its height scale sin(phase << 8)
+        times +0x44."""
+        ph = (self.u8(s + 7) + 1) & 0xFF
+        self.w8(s + 7, ph)
+        self.w16(s + 0x32, _s32(movement.game_sin(ph << 8) * self.s16(s + 0x44)) >> 12)
+        if ph >= 8:
+            self.w8(s, 0xFF)
 
     def _spawn_00(self, s, args):           # 0x80053e98, the fire ball
         self.particle(s, 9, 0x1000, 5)
@@ -786,7 +822,7 @@ class Machine:
                0x24: self._tick_23, 0x26: self._tick_26, TRAIL: self._tick_6f,
                0x17: self._tick_17, 0x19: self._tick_19, 0x1A: self._tick_1a,
                0x1B: self._tick_1b, 0x1C: self._tick_1c, 0x1E: self._tick_1e,
-               FIRE_BALL: self._tick_00}.get(kind)
+               FIRE_BALL: self._tick_00, SPLASH: self._tick_70}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_tick's arm {kind:#x}")
         arm(s)
@@ -904,13 +940,24 @@ class Machine:
                 total += self.u16(WORKING + 2 * k)
         return ((total & 0xFFFF) // n) & 0xFFFF if n else total & 0xFFFF
 
-    def splash(self, point, n, spread, a, b, c):   # 0x80056580
-        """Splashes on the water when the point is within 0x1f4 under its
-        surface (0x801e647c); not in the machine yet."""
+    def splash(self, point, n, spread, size, bob, wobble):   # 0x80056580
+        """Splashes on the water, when the point is within 0x1f4 under the
+        surface the last query found (surface_plane_18): n of kind 0x70 on
+        the surface, the first at the point and the rest within `spread` of
+        it, each sized by random_spread(wobble) + 0x1000 -- `size` across,
+        `bob` its rise. Their velocity is the stack's leftover."""
         y, surf = self.s32(point + 4), self.s32(SURFACE)
         if y < surf or surf + 0x1F4 < y:
             return 0
-        raise NotImplementedError("the fire ball's splash (kind 0x70)")
+        dx = dz = 0
+        for _ in range(n):
+            pt = struct.pack("<3i", self.s32(point) + dx, surf, self.s32(point + 8) + dz) + bytes(4)
+            r = ((self.rand() + self.rand() - 0x8000) * wobble) >> 15
+            v = r + 0x1000
+            self.spawn(0xA, 0, SPLASH, pt, [bytes(8), _s32(size * v) >> 12, _s32(bob * v) >> 12])
+            dx = ((self.rand() * spread) >> 14) - spread
+            dz = ((self.rand() * spread) >> 14) - spread
+        return 1
 
     def _mark(self, s, timer, turn):
         if self.s16(timer) == 0:
@@ -1134,21 +1181,62 @@ class RamWorld:
         mask = 0
         cx, cz = x >> 11, z >> 11
         inside = 0 <= x <= movement.GRID_MAX and 0 <= z <= movement.GRID_MAX
+        hm = h & 0x0FFFFFFF                 # the top bits are flags (0x80033f9c)
         if flags & 1:
-            mask, _cur = movement.query(self.lvl, x, y, z, radius=r, body=h)
+            extra = {}
+            mask, _cur = movement.query(self.lvl, x, y, z, radius=r, body=h,   # its flags too
+                                        extra=extra)
+            for a in (0x801E647C, 0x801E6480, 0x801E6484):   # seeded 100000 (0x8003265c)
+                struct.pack_into("<i", self.m, a & MASK, extra.get(a, 100000))
             ymid = y - (((h << 4) & 0xFFFFFFFF) >> 5)
             self.layer_offset = collision.layer_of(self.lvl.cell(cx, cz), ymid) if inside else 0
         if flags & 6:
-            raise NotImplementedError("collide_query's fence and creatures")
+            raise NotImplementedError("collide_query's fence")
+        self.collide_actor = -1
         if not inside or not self.lvl.cell(cx, cz)[2] & 0xFC:
             return mask
-        if flags & 0x10 or flags & 0x40:
-            raise NotImplementedError("collide_query's creatures")
-        if flags & 0x20 and movement.object_collide(self.objs, x, y, z, r, h) is not None:
+        if flags & 0x10:
+            self.collide_actor = self.spot_taken(x, y, z, r, hm)
+            if self.collide_actor != -1:
+                mask |= 0x10
+        elif flags & 0x40:
+            raise NotImplementedError("collide_query's actor_in_range")
+        if flags & 0x20 and movement.object_collide(self.objs, x, y, z, r, hm) is not None:
             mask |= 0x20
-        if flags & 0x80 and movement.in_range(self.player, x, y, z, r + 0x320, 0x6A4, h) != -1:
+        if flags & 0x80 and movement.in_range(self.player, x, y, z, r + 0x320, 0x6A4, hm) != -1:
             mask |= 0x80
         return mask
+
+    def spot_taken(self, x, y, z, r, own):
+        """actor_spot_taken (0x8004d644): the first awake creature, not
+        dying, not masked by actor_skip_mask, not the one acting, whose place
+        -- +0x26 higher for a follower not the one 0x8018fac0 names -- is
+        within the asker's radius and its own +0x1c, heights +0x1e and the
+        asker's. The slot, or -1."""
+        m = self.m
+
+        def u(a, n=4, signed=False):
+            return int.from_bytes(m[a & MASK:(a & MASK) + n], "little", signed=signed)
+        skip = m[ACTOR_SKIP & MASK]
+        cur = u(CURRENT_ACTOR)
+        named = u(0x8018FAC0, 4, True)
+        for k in range(ACTOR_N):
+            a = ACTORS + ACTOR_STRIDE * k
+            if m[(a + 9) & MASK] != 1 or m[(a + 0xE) & MASK] == 3:
+                continue
+            flags = u(a + 0x28)
+            if skip & flags or a == cur:
+                continue
+            pos = [u(a + 0x2C, 4, True), u(a + 0x30, 4, True), u(a + 0x34, 4, True)]
+            if flags & 0x10:
+                if u(a + 0x22, 2, True) == named:
+                    continue
+                pos[1] += u(a + 0x26, 2, True)
+            elif flags & 0x400000:
+                raise NotImplementedError("a creature tracked by a model's vertex")
+            if movement.in_range(pos, x, y, z, u(a + 0x1C, 2) + r, u(a + 0x1E, 2), own) != -1:
+                return k
+        return -1
 
     def hurt_player(self, point, a1, radius, mode, edge, attacks, effect, more, scale, pct):
         self.hurts.append([point[0], point[1], point[2], a1, radius, mode, edge,
@@ -1222,18 +1310,28 @@ def _slots(m):
     return bytes(m[o:o + STRIDE * COUNT])
 
 
+def _leftover(x, i):
+    """Whether byte i of the game's slot x is the stack's leftover the
+    machine cannot know: a puff's velocity's fourth halfword and a sparkle's
+    point's fourth word while it lives; a splash's velocity, the half-step
+    flag made of it and its point's fourth word, freed or not."""
+    if x[1] == TRAIL and x[0] != 0xFF:
+        return i in (0x3E, 0x3F, 0x24, 0x25, 0x26, 0x27)
+    if x[1] == SPLASH:
+        return i in (0x24, 0x25, 0x26, 0x27, 0xD) or 0x38 <= i < 0x40
+    return False
+
+
 def _differ(a, b):
-    """The bytes of two slot arrays that differ, leaving out a puff's +0x3e
-    and +0x24 -- the stack's leftovers its velocity and a sparkle's point
-    carry."""
+    """The bytes of two slot arrays that differ, leaving out the stack's
+    leftovers (_leftover)."""
     bad = []
     for k in range(COUNT):
         x, y = a[k * STRIDE:(k + 1) * STRIDE], b[k * STRIDE:(k + 1) * STRIDE]
         if x == y:
             continue
         for i in range(STRIDE):
-            if x[i] != y[i] and not (i in (0x3E, 0x3F, 0x24, 0x25, 0x26, 0x27)
-                                     and x[1] == TRAIL and x[0] != 0xFF):
+            if x[i] != y[i] and not _leftover(x, i):
                 bad.append((k, i, x[i], y[i]))
     return bad
 
@@ -1418,6 +1516,100 @@ class StandIn:
         self.hits.append([code, flags, strength, stat, pct, [v & 0xFFFFFFFF for v in back]])
 
 
+def fire_world_check(out=sys.stdout, per=10, frames=60):
+    """The fire ball in the game's own world: effect_spawn, effect_driver and
+    collide_query the game's, over every snapshot, each ball sent at one of
+    its creatures or anywhere; only the sound and actor_attack_player stood
+    in for. All 128 slots every frame, and every hit -- what it met, the
+    creature collide_query left at 0x801e648c, the strength and the point."""
+    import random
+    import memcard
+    import levelstate
+    rng = random.Random(0xF1E1D)
+    runs = good = nframes = fgood = skipped = creature_hits = 0
+    first = []
+    for path in memcard._snapshots():
+        base = bytearray(open(path, "rb").read())
+        o = SLOTS & MASK
+        base[o:o + STRIDE * COUNT] = bytes(STRIDE * COUNT)
+        for k in range(COUNT):
+            base[o + STRIDE * k] = 0xFF
+        lv = base[0x8018FAD9 & MASK]
+        px, py, pz = struct.unpack_from("<3i", base, PLAYER_POS & MASK)
+        awake = [k for k in range(ACTOR_N) if base[(ACTORS + ACTOR_STRIDE * k + 9) & MASK] == 1]
+        for _ in range(per):
+            ram = bytearray(base)
+            for k in range(5):
+                struct.pack_into("<H", ram, (WORKING & MASK) + 2 * k, rng.randrange(0, 200))
+            start = (px + rng.randrange(-0x200, 0x200), py - 0x640, pz + rng.randrange(-0x200, 0x200))
+            if awake and rng.randrange(3):
+                a = ACTORS + ACTOR_STRIDE * rng.choice(awake)
+                t = struct.unpack_from("<3i", ram, (a + 0x2C) & MASK)
+                ang = vec_to_angles(t[0] - start[0], t[1] - 0x300 - start[1], t[2] - start[2])
+                pitch, yaw = ang[0], ang[1]
+            else:
+                pitch, yaw = rng.randrange(-0x100, 0x100) & 0xFFF, rng.randrange(0x1000)
+            d = movement.direction_from_angles(pitch, yaw)
+            vel = struct.pack("<4h", *[_s16_((c * 0x384) >> 12) for c in d], 0)
+            point = struct.pack("<4i", *start, 0)
+            sp = (0xA, 0x42, FIRE_BALL, point, [vel])
+            cpu = _game(bytes(ram))
+            g_hits = []
+            cpu.hooks[SOUND_AT] = lambda c: 0
+
+            def hit(c, g_hits=g_hits):
+                sp_ = c.r[29]
+                pt = c.rd(sp_ + 0x3C, 4)
+                code = c.r[4]
+                g_hits.append([code, c.r[5] & 0xFF, c.r[7], c.rd(sp_ + 0x10, 4),
+                               c.rd(sp_ + 0x14, 4), [c.rd(pt + 4 * i, 4) for i in range(3)],
+                               _s32(c.rd(COLLIDE_ACTOR, 4)) if code & 0x10 else None])
+                return 0
+            cpu.hooks[ATTACK_HIT] = hit
+            m = bytearray(ram)
+            w = RamWorld(m, lv)
+            w.hits = []
+
+            def attack_hit(code, flags, kind, strength, stat, pct, back, w=w):
+                w.hits.append([code, flags, strength, stat, pct, [v & 0xFFFFFFFF for v in back],
+                               w.collide_actor if code & 0x10 else None])
+            w.attack_hit = attack_hit
+            mach = Machine(m, w, levelstate.Lcg())
+            try:
+                game_spawn(cpu, *sp)
+                mach.spawn(*sp)
+                runs += 1
+                ok = True
+                for f in range(frames):
+                    del g_hits[:], w.hits[:]
+                    _call(cpu, DRIVER, [])
+                    mach.driver()
+                    bad = _differ(_slots(cpu.ram), _slots(m))
+                    same = not bad and g_hits == w.hits
+                    creature_hits += sum(1 for h in g_hits if h[6] is not None and h[6] != -1)
+                    nframes += 1
+                    fgood += same
+                    if not same and ok:
+                        ok = False
+                        if len(first) < 4:
+                            first.append(f"  {os.path.basename(path)} frame {f}: " + (
+                                f"slot {bad[0][0]} +{bad[0][1]:#x} game {bad[0][2]:#x} here {bad[0][3]:#x}"
+                                if bad else f"hits {g_hits} / {w.hits}"))
+                    if all(cpu.rd(SLOTS + STRIDE * k, 1) == 0xFF for k in range(COUNT)):
+                        break
+                good += ok
+            except NotImplementedError:
+                skipped += 1
+                runs -= 1
+    for line in first:
+        print(line, file=out)
+    print(f"  the fire ball in the game's own world (collide_query and its creatures): "
+          f"{good} of {runs} runs, {fgood} of {nframes} frames with all 128 slots and every "
+          f"hit alike, {creature_hits} of them on a creature" + (
+              f" ({skipped} splashing on water, not in the machine)" if skipped else ""), file=out)
+    return good == runs
+
+
 def fire_check(out=sys.stdout, per=8, frames=60):
     """The fire ball (kind 0) against the game's own effect_spawn and
     effect_driver over every snapshot, collide_query, its sound and
@@ -1448,6 +1640,8 @@ def fire_check(out=sys.stdout, per=8, frames=60):
             d = movement.direction_from_angles(rng.randrange(-0x100, 0x100) & 0xFFF, yaw)
             vel = struct.pack("<4h", *[_s16_((c * 0x384) >> 12) for c in d], 0)
             sp = (0xA, 0x42, FIRE_BALL, point, [vel])
+            if rng.randrange(3) == 0:                       # water just under the path
+                struct.pack_into("<i", ram, SURFACE & MASK, py - 0x640 - rng.randrange(0, 0x1F4))
             cpu = _game(bytes(ram))
             g_asked, g_hits = [], []
 
@@ -1547,4 +1741,5 @@ if __name__ == "__main__":
     good = machine_check() and good
     good = magic_check() and good
     good = fire_check() and good
+    good = fire_world_check() and good
     sys.exit(0 if good else 1)

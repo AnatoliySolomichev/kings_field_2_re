@@ -407,6 +407,7 @@ func _layer(i: int, ymid: int) -> int:
 # The game keeps them at 0x801e6484, 0x801e647c and 0x801e6480 and nothing but
 # sync_player_pos reads them.
 var surfaces := {}
+var flags := 0                       # the fifth argument's top nibble, which only 0x18 reads
 
 
 # @orig game:0x8003260c tile_collision  status:verified -- 8075 of 8078 logged calls, through tools/collision.py
@@ -439,12 +440,13 @@ func query(x: int, y: int, z: int, ymid := 0x7FFFFFFF) -> Dictionary:
 	var ceil := base + CEIL_START
 	var push := 0
 	var push_angle := 0
+	var locked := false              # [sp+0x10]: 0x18 sets it, 0x10 obeys it
 	surfaces.clear()
 
 	for ins in sh["ins"]:
 		var op := int(ins[0])
 		var a: Array = ins[1]
-		if op == 0x10 and a.size() >= 1:
+		if op == 0x10 and a.size() >= 1 and not locked:
 			var h := int(a[0]) + base
 			cur = int(min(cur, h))
 			if cur < y:
@@ -536,10 +538,23 @@ func query(x: int, y: int, z: int, ymid := 0x7FFFFFFF) -> Dictionary:
 		elif (op == 0x17 or op == 0x18 or op == 0x19) and a.size() >= 1:
 			# The three planes that do something to you when you are under
 			# them. The game publishes each into its own slot and compares it
-			# with the eye in sync_player_pos (0x80028d54); 0x18 also takes
-			# part in the mask, but only when the caller sets the top bits of
-			# its fifth argument, which nothing in this port does yet.
-			surfaces[op] = int(a[0]) + base
+			# with the eye in sync_player_pos (0x80028d54); 0x18, the water,
+			# also takes part in the mask when the caller sets the top bits of
+			# its fifth argument (`flags`): 0x80000000 makes it the floor --
+			# set, not lowered, and 0x10 no longer heard -- 0x40000000 the
+			# ceiling (0x80033a30). A fire ball bursts on water so.
+			var h := int(a[0]) + base
+			surfaces[op] = h
+			if op == 0x18:
+				if flags & 0x80000000:
+					cur = h
+					if h < y:
+						mask |= FLOOR_BIT
+						locked = true
+				if flags & 0x40000000:
+					ceil = h
+					if not (h < s3):
+						mask |= CEIL_BIT
 		elif (op == 0x20 or op == 0x21 or op == 0x22) and a.size() >= 4:
 			var f := (int(a[3]) + rot) & 3
 			var op0 := int(a[0])

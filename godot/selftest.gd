@@ -640,9 +640,10 @@ func _effects() -> bool:
 			rp.i = 0
 			rp.bad = ""
 			rp.hits = []
+			rp.rands = (f.get("rand", []) as Array).map(func(x): return int(x))
 			fx.driver()
 			var same: bool = rp.bad == "" and rp.i == (f["q"] as Array).size() \
-				and str(rp.hits) == str(_ints(f["hits"])) \
+				and rp.rands.is_empty() and str(rp.hits) == str(_ints(f["hits"])) \
 				and fx.m.hex_encode().md5_text() == str(f["md5"])
 			if same:
 				fgood += 1

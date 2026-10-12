@@ -3786,11 +3786,34 @@ port's `isqrt` read them now: 5010 of 5010 inputs as the game's own.
 
 **Against the game's own `effect_spawn` and `effect_driver`**, `collide_query`,
 the sound and `actor_attack_player` stood in for on both sides and what they
-are handed compared: **168 of 168 runs, 782 of 782 frames**, all 128 slots,
+are handed compared: **168 of 168 runs, 914 of 914 frames**, all 128 slots,
 every query, every hit with its strength and point (`tools/effects.py
-fire_check`). The port has it (`effects.gd _tick_fire`), but its
-`collide_query` keeps no creatures, so a fire ball bursts on walls and
-objects and passes through a creature.
+fire_check`, water laid under a third of the paths so the splash is in).
+
+**And in the game's own world.** What the ball meets is `collide_query`'s,
+flags `0x31`: the tiles; where the cell is marked, the creatures --
+`actor_spot_taken`: the first awake one, not dying, not masked by
+`actor_skip_mask` (0 while effects run: the controller clears it at
+`0x80032104`), not the one acting, its place `+0x26` higher for a follower,
+within the asker's radius and its own `+0x1c`, heights its own `+0x1e` and
+the asker's -- left at `0x801e648c` for `actor_attack_player`; then the
+objects. **The height's top bits are flags**, and only shape opcode `0x18`,
+the water's plane, reads them (`0x80033a30`): with `0x80000000` the surface
+is the floor -- set, not lowered, and opcode `0x10` no longer heard -- so a
+fire ball bursts on water; with `0x40000000` it is the ceiling. Every query
+also leaves the three planes (`0x801e647c` the water) in RAM, seeded 100000,
+which is where the splash looks. The **splash**, kind `0x70`, three of them on
+the surface within 0x190 of the point (rand), each sized by
+`random_spread(0x400)` + 0x1000 -- 0x2000 across, 0x2000 its rise -- and
+bobbing its height scale by `sin(phase << 8)` for eight frames; their
+velocity is the stack's leftover. **Against the game's own code with its own
+`collide_query`**, the balls sent at the snapshots' creatures or anywhere:
+**210 of 210 runs, 2512 of 2512 frames**, 34 hits on a creature, the splash
+among them (`fire_world_check`). The port's `collide_query` asks the
+creatures now (`actors.gd spot_taken`, a cell counting as marked within a
+creature's radius + 0x800) and its tile query reads the flags, so a fire
+ball meets a creature, bursts on water and splashes; what the hit then does
+to the creature is the next piece.
 
 **At `player_controller`'s end** (`0x80031f0c`), after the poison:
 `0x801b256a`, `256c` and `256e` count down and recalculate the stats at 0;

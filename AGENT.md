@@ -260,8 +260,11 @@ player_take_hit and sub_80030e14 over the snapshots    hits; sub_80030e14 84 of 
 the healing spells' effects, against the game's own     126 of 126 runs, 2698 of
 effect_spawn and effect_driver                         2698 frames, slots, fields
                                                        and lighting
-the fire ball, against the game's own effect_spawn    168 of 168 runs, 782 of
-and effect_driver (its world stood in for)             782 frames, queries, hits
+the fire ball, against the game's own effect_spawn    168 of 168 runs, 914 of
+and effect_driver (its world stood in for)             914 frames, queries, hits;
+                                                       with its own collide_query
+                                                       210 of 210, 2512 frames,
+                                                       34 hits on a creature
 the attacking arms, against the game's own             840 of 840 casts, every
 player_action (aim, creature in sight, spawns)         spawn and argument
 casting, against the game's own cast_spell,            1260 of 1260 of each:
@@ -301,7 +304,7 @@ directions 400 of 400
 routines 13858 of 13858
 saves 45 of 45 · level states 46 of 46 streams, 958 of 958 things made,
 42 of 42 states written, 46 of 46 tables read and written again
-effects 102 of 102 runs, 2464 of 2464 frames · aims 300 of 300
+effects 102 of 102 runs, 2482 of 2482 frames · aims 300 of 300
 the run 150129 of 150129 frames
 player_take_hit 300 of 300 · the status 40 of 40 runs, 6312 of 6312 frames
 casting 1000 of 1000 · the attacking arms 240 of 240

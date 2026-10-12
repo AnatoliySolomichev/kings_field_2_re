@@ -574,6 +574,42 @@ func _spawn(k: int) -> void:
 	_place(k)
 
 
+# actor_spot_taken as collide_query's bit 0x10 asks it for an effect: the
+# first awake creature, not dying (+0xe 3), whose place -- +0x26 higher for a
+# follower -- is within the asker's radius and its own, heights its own and
+# the asker's. actor_skip_mask is 0 while the effects run (player_controller
+# clears it at 0x80032104) and no creature is the one acting. The slot, or -1.
+# @orig game:0x8004d644 actor_spot_taken  status:verified -- as collide_query asks it for the effects: tools/effects.py fire_world_check, 210 of 210 runs of the game's own, 34 hits on a creature; not the creatures a model's vertex places (flag 0x400000)
+func spot_taken(x: int, y: int, z: int, r: int, own: int) -> int:
+	for j in SLOTS:
+		var o = actors[j]
+		if o == null or o["st"] != ACTIVE or int(o.get("op", 0)) == 3:
+			continue
+		var ay := int(o["py"])
+		if int(o.get("eflags", 0)) & 0x10:
+			ay += int(o.get("lift", 0))
+		if _in_range(o["px"], ay, o["pz"], x, y, z, int(o["radius"]) + r, o["height"],
+				own) != -1:
+			return j
+	return -1
+
+
+# Whether an awake creature has the cell marked: grid_mark (0x80033c4c) from
+# actor_wake, actor_activate and actor_tick marks every cell within its
+# radius + 0x800 of where it stands, which is what lets collide_query ask
+# there after the creatures and the objects.
+# @port helper -- a creature's grid_mark marks, asked by a cell
+func marks_cell(cx: int, cz: int) -> bool:
+	for o in actors:
+		if o == null or o["st"] != ACTIVE:
+			continue
+		var reach := int(o["radius"]) + 0x800
+		if cx >= (int(o["px"]) - reach) >> 11 and cx <= (int(o["px"]) + reach) >> 11 \
+				and cz >= (int(o["pz"]) - reach) >> 11 and cz <= (int(o["pz"]) + reach) >> 11:
+			return true
+	return false
+
+
 # 0x8004d644: another creature that is up and overlaps this one's place
 # @orig game:0x8004d644 actor_spot_taken  status:transcribed
 func _taken(k: int) -> int:

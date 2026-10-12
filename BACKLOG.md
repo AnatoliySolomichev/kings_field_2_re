@@ -825,10 +825,11 @@ each one is also in its function's marker, as `partial` and what differs:
   sight, the spawns), all held to the game's own code, and the fire ball's
   effect. Not yet: the other attacking kinds' effects (an attacking spell
   but the fire ball spends its MP and spawns nothing that stays);
-  `collide_query`'s creatures in the port, so nothing an effect throws hits a
-  creature, and `actor_attack_player`'s creature half (`actor_take_hit` with
-  a spell's flags and strength, `skill_practice` on a hit); the fire ball's
-  splash (kind 0x70); meteor's collision test (the port answers no) (the healing and protecting six are in), the
+  `actor_attack_player`'s creature half (`actor_take_hit` with a spell's
+  flags and strength, `skill_practice` on a hit) -- a fire ball meets a
+  creature now and does nothing to it; meteor's collision test (the port
+  answers no); creatures a model's vertex places (flag 0x400000) in
+  `actor_spot_taken` (the healing and protecting six are in), the
   drawing of everything with `+8 & 0xc` set -- the protecting marks and the
   sparkles, in front of the eye -- the weapons' magic (`0x36`..`0x4c`, `spell_begin`,
   `held_item_tick`'s `0x801b25b2`), and the button's thing (`use_item` from

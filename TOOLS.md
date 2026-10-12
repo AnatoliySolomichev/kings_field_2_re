@@ -546,8 +546,12 @@ frame, **126 of 126** runs and **2698 of 2698** frames, and `fxcheck.json`
 carries 24 such runs with the fields, the draws and the lighting calls.
 And the fire ball (kind 0): `fire_check` stands `collide_query`, the sound and
 `actor_attack_player` in on both sides (`StandIn`) and compares what each is
-handed -- **168 of 168** runs, **782 of 782** frames; 24 runs in
-`fxcheck.json`.
+handed -- **168 of 168** runs, **914 of 914** frames, water laid under some
+paths for the splash (kind 0x70); 24 runs in `fxcheck.json`.
+`fire_world_check` lets the game's own `collide_query` answer, against
+`RamWorld`'s, which now has the creatures (`spot_taken`, actor_spot_taken)
+and leaves the planes in RAM: **210 of 210** runs, 2512 frames, 34 hits on
+a creature.
 
 **`weapon.py`** — the player's weapon: the swing, what it reaches, what a hit
 does to a creature.

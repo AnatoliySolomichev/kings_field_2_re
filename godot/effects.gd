@@ -43,6 +43,7 @@ const STRIDE := 0x4C
 const FAST := 0xC5C10              # a speed squared past it gets the half-step test
 const TRAIL := 0x6F
 const FIRE_BALL := 0x00
+const SPLASH := 0x70
 const TRAIL_ARGS := [0xE10, -0x80, 5, 0x16, 0, 1, 3]   # 0x80058f50's, after the velocity
 const QUERY := {1: 0xA1, 2: 0x31, 3: 0xB1, 4: 0x01}    # effect_collide: +0 & 7 -> flags
 const GROW := 0x96
@@ -61,6 +62,8 @@ var records := {}                  # kind -> its spell_table record (24 bytes)
 var layer_offset := 0              # collision_layer_offset after the last tile query
 var world = null                   # what the effects ask of the game; this node, or a stand-in
 var pulse := []                     # this frame's lighting from an effect: [near, far, k, rgb]
+var collide_actor := -1             # 0x801e648c: the creature the last query met
+var surface18 := 100000             # 0x801e647c: the water the last query found
 var acc := 0.0
 var player: Node3D
 var coll: KFCollision
@@ -252,6 +255,15 @@ func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array) -> 
 			w8(s + 0xD, 1)
 			w16(s + 0x44, 0x14)
 			w32(s + 0x1C, s32(s + 0x1C) - 0xC8)
+		SPLASH:                             # 0x800557dc
+			w8(s + 8, 1)
+			w8(s + 4, 0x80)
+			w8(s + 2, 0x2A)
+			w8(s + 3, 0x2A)
+			w16(s + 0x32, 0)
+			w16(s + 0x34, int(args[1]))
+			w16(s + 0x30, int(args[1]))
+			w16(s + 0x44, int(args[2]))      # and its sound, every 30 blanks at most: not here
 		FIRE_BALL:                          # 0x80053e98
 			particle(s, 9, 0x1000, 5)
 			w16(s + 0xE, 0x40)
@@ -399,6 +411,8 @@ func tick(s: int) -> void:
 			_tick_puff(s)
 		FIRE_BALL:
 			_tick_fire(s)
+		SPLASH:
+			_tick_splash(s)
 		0x1A:
 			_mark(s, "b56a", 0x40)
 		0x1B:
@@ -414,19 +428,20 @@ func tick(s: int) -> void:
 
 
 # The fire ball (0x80056910): in flight (+7 0) effect_move at radius 0xb4 and
-# the height's top bit, turning 0x12c a frame; a hit -- after the water's
-# splash, which is not here -- steps it back, half its velocity when
+# the height's top bit, turning 0x12c a frame; a hit splashes on water within
+# 0x1f4 under its surface, steps it back, half its velocity when
 # game_isqrt((x - the player's x) ^ 2), the compiler's xor, is under 0x400,
 # all of it otherwise, and hands what it hit to actor_attack_player from 8
 # velocities back with 0x1388 and the caster's strength; then it grows by
 # 0x800 two frames, +4 0x80 + the phase, and is gone at phase 3.
-# @orig game:0x80056910 effect_tick+0x54  status:verified -- tools/effects.py fire_check, 168 of 168 runs of the game's own, collide_query and actor_attack_player stood in for; the self-test this to it; not the splash (0x80056580's kind 0x70)
+# @orig game:0x80056910 effect_tick+0x54  status:verified -- tools/effects.py fire_world_check, 210 of 210 runs of the game's own with its own collide_query, 34 hits on a creature and the splash among them; fire_check with the world stood in for; the self-test this to it
 func _tick_fire(s: int) -> void:
 	var ph := u8(s + 7)
 	if ph == 0:
 		var hit := move(0xB4, 0x80000000, -0x12C)
 		if hit == 0:
 			return
+		_splash(s + 0x18, 3, 0x190, 0x2000, 0x2000, 0x400)
 		var dx := (s32(s + 0x18) - int(world.field("px"))) & 0xFFFFFFFF
 		if coll.isqrt(dx ^ 2) < 0x400:
 			for i in 3:
@@ -447,6 +462,46 @@ func _tick_fire(s: int) -> void:
 	for o in [0x30, 0x32, 0x34]:
 		w16(s + o, sc)
 	w8(s + 7, u8(s + 7) + 1)
+
+
+# sub_80056580: splashes on the water, when the point is within 0x1f4 under
+# the surface the last query found (surface_plane_18): n of kind 0x70 on the
+# surface, the first at the point and the rest within `spread` of it, each
+# sized by random_spread(wobble) + 0x1000 -- `size` across, `bob` its rise.
+# Their velocity is the stack's leftover in the game, nothing here.
+# @orig game:0x80056580 sub_80056580  status:verified -- through the fire ball, tools/effects.py fire_world_check and fire_check
+func _splash(point: int, n: int, spread: int, size: int, bob: int, wobble: int) -> int:
+	var y := s32(point + 4)
+	var surf := int(world.field("s18"))
+	if y < surf or surf + 0x1F4 < y:
+		return 0
+	var dx := 0
+	var dz := 0
+	for i in n:
+		var pt := PackedByteArray()
+		pt.resize(16)
+		pt.encode_s32(0, s32(point) + dx)
+		pt.encode_s32(4, surf)
+		pt.encode_s32(8, s32(point + 8) + dz)
+		var r := ((int(world.rand()) + int(world.rand()) - 0x8000) * wobble) >> 15
+		var v := r + 0x1000
+		var vel := PackedByteArray()
+		vel.resize(8)
+		spawn(0xA, 0, SPLASH, pt, [vel, s32v(size * v) >> 12, s32v(bob * v) >> 12])
+		dx = ((int(world.rand()) * spread) >> 14) - spread
+		dz = ((int(world.rand()) * spread) >> 14) - spread
+	return 1
+
+
+# A splash (0x8005b598): eight frames, its height scale sin(phase << 8) times
+# +0x44, then gone.
+# @orig game:0x8005b598 effect_tick+0x4cdc  status:verified -- through the fire ball's splashes, the same runs
+func _tick_splash(s: int) -> void:
+	var ph := (u8(s + 7) + 1) & 0xFF
+	w8(s + 7, ph)
+	w16(s + 0x32, s32v(coll.game_sin(ph << 8) * s16(s + 0x44)) >> 12)
+	if ph >= 8:
+		w8(s, 0xFF)
 
 
 # sub_80053624: a player's effect (+0 0x40) strikes with the mean of the
@@ -585,6 +640,7 @@ func field(name: String) -> int:
 		"b56c": return int(player.get("shielded"))
 		"b56e": return int(player.get("bonus")[1])
 		"px": return int(player.get("gx"))
+		"s18": return surface18
 		"w0", "w1", "w2", "w3", "w4":
 			return int(player.get("working")[int(name.substr(1))])
 	return 0
@@ -787,9 +843,12 @@ func collide_query(x: int, y: int, z: int, r: int, h: int, flags: int) -> int:
 		var keep_b := coll.body
 		coll.radius = r
 		coll.body = h & 0x0FFFFFFF          # tile_collision's mask: the top bits are flags
+		coll.flags = h & 0xF0000000
 		var q := coll.query(x, y, z)
+		coll.flags = 0
 		coll.radius = keep_r
 		coll.body = keep_b
+		surface18 = int(coll.surfaces.get(0x18, 100000))   # seeded 100000 (0x8003265c)
 		mask = int(q["mask"])
 		var at := int(q["at"])
 		layer_offset = 5 if at >= 0 and at % 6 != 0 else 0
@@ -804,13 +863,21 @@ func collide_query(x: int, y: int, z: int, r: int, h: int, flags: int) -> int:
 		var pz := int(player.get("gz"))
 		marked = cx >= (px - 0x320) >> 11 and cx <= (px + 0x320) >> 11 \
 			and cz >= (pz - 0x320) >> 11 and cz <= (pz + 0x320) >> 11
+	var an := get_node_or_null("../Actors")
+	if not marked and an and an.has_method("marks_cell"):
+		marked = bool(an.call("marks_cell", cx, cz))
+	collide_actor = -1
 	if (coll.occ.is_empty() or coll.occ[c] == 0) and not marked:
 		return mask
+	if flags & 0x10 and an and an.has_method("spot_taken"):
+		collide_actor = int(an.call("spot_taken", x, y, z, r, h & 0x0FFFFFFF))
+		if collide_actor != -1:
+			mask |= 0x10
 	if flags & 0x20:
 		var keep_r := coll.radius
 		var keep_b := coll.body
 		coll.radius = r
-		coll.body = h
+		coll.body = h & 0x0FFFFFFF
 		var o := coll.object_collide(x, y, z)
 		coll.radius = keep_r
 		coll.body = keep_b
@@ -818,7 +885,7 @@ func collide_query(x: int, y: int, z: int, r: int, h: int, flags: int) -> int:
 			mask |= 0x20
 	if flags & 0x80 and player:
 		if coll.in_range(int(player.get("gx")), int(player.get("gy")), int(player.get("gz")),
-				x, y, z, r + 0x320, 0x6A4, h) != -1:
+				x, y, z, r + 0x320, 0x6A4, h & 0x0FFFFFFF) != -1:
 			mask |= 0x80
 	return mask
 
