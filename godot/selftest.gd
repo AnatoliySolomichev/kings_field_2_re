@@ -323,6 +323,9 @@ func _init() -> void:
 	if not _attacks():
 		quit(1)
 		return
+	if not _creature_hits():
+		quit(1)
+		return
 	if not _level_states():
 		quit(1)
 		return
@@ -1102,6 +1105,71 @@ func _attacks() -> bool:
 	print("the attacking arms: %d of %d casts as tools/magic.py makes them (whose model the game's own holds, 840 of 840)" % [ok, n])
 	if first != "":
 		print("  first difference: " + first.substr(0, 1200))
+	return ok == n
+
+
+# actor_take_hit, actors.gd's take_hit_flags against tools/hit.py's (whose
+# model the game's own holds, 1260 of 1260): the creature's fields after,
+# what it gives the player, and the kill flags.
+func _creature_hits() -> bool:
+	if not FileAccess.file_exists("res://hitcheck.json"):
+		print("creature hits: no cases to check against")
+		return true
+	var d = JSON.parse_string(FileAccess.get_file_as_string("res://hitcheck.json"))
+	var an = load("res://actors.gd").new()
+	an.coll = coll
+	an.level = -1
+	var ok := 0
+	var n := 0
+	var first := ""
+	var keep_flags: Array = KFTalk.flags.duplicate()
+	KFTalk.flags.resize(KFTalk.FLAG_COUNT)
+	for c in d["cases"]:
+		var kd: Dictionary = _ints(c["kind"])
+		var kind := {"defence": kd["defence"], "exp": kd["exp"], "weight": kd["weight"],
+			"arc_back": kd["arc_back"], "behaviours": kd["behaviours"]}
+		var a: Dictionary = _ints(c["actor"])
+		a["kind"] = 0
+		var ri := int(a["rec"])
+		a["rec"] = kind["behaviours"][ri] if ri >= 0 else null
+		an.kinds = {0: kind}
+		an.actors = [a]
+		an.rand_next = int(c["seed"])
+		KFTalk.flags[0x79] = int(c["kills"][0])
+		KFTalk.flags[0x7A] = int(c["kills"][1])
+		var pt = null
+		if c["point"] != null:
+			pt = Vector3i(int(c["point"][0]), int(c["point"][1]), int(c["point"][2]))
+		var dmg := KFWeapon.creature_damage(int(c["stat"]), _ints(c["att"]), kind["defence"],
+			int(c["strength"]))
+		var out: Dictionary = an.take_hit_flags(0, dmg, int(c["strength"]), int(c["flags"]), pt)
+		var want: Dictionary = _ints(c["after"])
+		var calls := []
+		if int(out.get("exp", 0)) != 0 or (int(out.get("damage", 0)) > 0 and int(a["hp"]) == 0
+				and int(c["actor"]["hp"]) != 0 and (int(c["flags"]) & 0xC0) == 0x40):
+			calls.append("exp")
+		if bool(out.get("practice", false)):
+			calls.append("practice")
+		if bool(out.get("strong", false)):
+			calls.append("strong")
+		calls.sort()
+		var got := {}
+		for k in want:
+			got[k] = a.get(k, 0)
+		got["rec"] = (kind["behaviours"] as Array).find(a["rec"]) if a["rec"] != null else -1
+		var same: bool = str(got) == str(want) and str(calls) == str(c["calls"]) \
+			and [int(KFTalk.flags[0x79]), int(KFTalk.flags[0x7A])] == _ints(c["kills_after"])
+		n += 1
+		if same:
+			ok += 1
+		elif first == "":
+			first = "case %d flags 0x%x: godot %s %s, python %s %s" % [n, int(c["flags"]), str(got),
+				str(calls), str(want), str(c["calls"])]
+	KFTalk.flags = keep_flags
+	an.free()
+	print("creature hits: %d of %d as tools/hit.py takes them (whose model the game's own holds)" % [ok, n])
+	if first != "":
+		print("  first difference: " + first.substr(0, 1000))
 	return ok == n
 
 

@@ -6241,6 +6241,62 @@ and K climbs back to 0x1000. A new character's skills are [0, 0, 0, 0, 10]
 snapshot has them. The self-test holds `weapon.gd` to the Python on 2336
 cases.
 
+### A creature takes a hit: actor_take_hit whole
+
+`actor_take_hit` (`0x8004c668`) takes (slot, the striker's stat, eight
+attacks, strength, flags, the striker's spell record, the point). The blow's
+path (flags 0x50) is above; all of it (`tools/hit.py`):
+
+```
+nothing for models (+1) 0x6e, 1, 2, 0x1d, 0x16; a part (+0 3) passes the
+  hit to the actor its +0x22 names
+dying (op 3, +0x18 at 0x60c or past) or op 0x1a: nothing; op 0x15: +0x70
+  to 2 if 0, nothing more; op 6: +0x70 to 2 if 0
+flags & 0xc0 0x80 (a creature's) against +0x28 bit 0x100000: nothing
+damage: creature_type_damage x 8 against the kind's +0x20.., summed to
+  0x68db7 at most, * strength / 5000, + 0x80, >> 4; the level's hook
+  (level_hooks + 0x48) may change it; 0 is nothing
+HP left and flags 0x40 (the player's): 0x20 skill_practice(the record),
+  0x10 at strength 2500 or more strong_blow
+a blow (0x10) on op 0x13 with +0x70 0x10: no HP lost
+a spell (0x20): +0x28 bit 0x40000 is immune; a kind with a behaviour 0x16
+  whose yaw faces the point within 0x200 switches to it and loses no HP
+the player's blow: weapon 0x1f rolls 0x80030c4c(rand * 9 >> 15 + 1);
+  weapon 0x20 takes all the HP of models 0x3b-0x3d, 0x3f, 0x42, 0x43,
+  0x4f, 0x58, 0x59, 0x5b
+HP left <= 0: award_exp(kind +0x1e) for the player's hit (flags & 0xc0
+  exactly 0x40) on a creature that had HP; kill_flag and kill_count (story
+  flags 0x79, 0x7a) for a model under 0x2b; opcode 3; HP 0
+else: the first of its sixteen behaviours of op 2 whose +0xc the damage
+  reaches and whose chance (+2: 0xff always, else rand >> 7 under it) comes
+  up; one it does not reach sets +0x28 bit 0x200000 and +0x84 0
+the push (tools/weapon.py knock) unless the kind's weight is 0xf0 or more
+  -- a follower's handed to its leader, opcode 2 unless dying -- and +0xd
+  0x10
+```
+
+**Against the game's own**, run over every snapshot's creatures with random
+hits on every flag path (a behaviour 0x16 laid into some kinds, which no
+snapshot's have), only the leaves stood in for: **1260 of 1260**, all 200
+actors' bytes and every call out. The port's blow went without the kill
+flags; `actors.gd take_hit_flags` is the whole routine now and the blow
+goes through it: 400 of 400 in the self-test, the weapon's 2336 unchanged.
+
+**`actor_attack_player`** (`0x800533e8`) is what an effect's hit is handed
+to: code 0x80 the player (`player_take_hit`, the record's attacks and
+effect, the strength as its scale); 0x10 the creature at `0x801e648c` --
+nothing when the point is outside its back arc (`facing_test` against the
+kind's `+0x18`), else the record's eight attacks at the caster's strength
+(`sub_80053624`) into `actor_take_hit` with flags `+0 & 0xc0` and 0x20 (0x10
+for code bit 0x20000), and code bit 0x10000 sets its `+0x28` bit 0x800. A
+code with other bits -- a creature and a wall met at once -- does nothing.
+**The fire ball end to end**, the game's own `collide_query`,
+`actor_attack_player` and `actor_take_hit` over the snapshots, the balls sent
+at their creatures: **84 of 84 runs, 988 of 988 frames**, all 128 slots and
+all 200 creatures alike, 15 frames a creature struck, 11 killed
+(`tools/effects.py fire_hit_check`). In the port a fire ball now hurts,
+flinches and kills, practises the caster's fire and gives the experience.
+
 ### The player's death
 
 `apply_damage` that leaves no HP calls `player_throw` (`0x80030a6c`) with the

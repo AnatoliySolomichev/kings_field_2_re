@@ -180,6 +180,9 @@ def main(quick=False, only_check=False):
     run(["tools/magic.py", "--check"],
         "casting, against the game's own cast_spell, player_action, player_turn and the controller's end",
         keep=["casting, against", "attacking arms", "first difference"])
+    run(["tools/hit.py", "--check"],
+        "a creature's hit, against the game's own actor_take_hit",
+        keep=["actor_take_hit, against", "first difference"])
     run(["tools/knock.py", "--check"],
         "the knock-back, against what was played",
         keep=["knock-backs", "landings", "frames of a knock-back",

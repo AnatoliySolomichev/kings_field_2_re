@@ -496,6 +496,20 @@ every arm's spawns -- to the game's own `player_action` over the snapshots'
 creatures, the routines it calls stood in for: 840 of 840; `export_attacks`
 writes `attackcheck.json`. FORMATS.md, "Casting".
 
+**`hit.py`** — a creature takes a hit.
+
+```
+python3 tools/hit.py --check     against the game's own actor_take_hit
+```
+
+`actor_take_hit` whole on the actor's own bytes -- every flag path: the
+player's blow and spell, a creature's, the immune, the behaviour 0x16, the
+flinch, the death, the push -- and `actor_attack_player`, which an effect's
+hit goes to. Held to the game's own over every snapshot's creatures, **1260
+of 1260**; `export` writes `hitcheck.json` in actors.gd's form.
+`tools/effects.py fire_hit_check` runs the fire ball through both, against
+the game's own end to end.
+
 **`knock.py`** — what a blow does to the player after the HP, and the recording.
 
 ```

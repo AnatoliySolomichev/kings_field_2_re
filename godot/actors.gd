@@ -417,17 +417,40 @@ func _spot(q: Vector3i) -> int:
 	return -1
 
 
-# actor_take_hit (0x8004c668) after the damage, for the player's blow (flags
-# 0x50): the level's hook (level 0's spares slot 0x20 any blow that would not
-# kill it), the HP at +0x1a, and at 0 the experience and the kind's opcode 3
-# (dying); short of that the first opcode-2 behaviour the damage reaches and
-# the roll allows (a flinch). Then the push from the player's point, and the
-# vertical state 0x10 either way. tools/weapon.py take_hit.
-# @orig game:0x8004c668 actor_take_hit  status:transcribed -- the player's blow; the special weapons 0x1f and 0x20 and the followers' leader are not here
+# actor_take_hit (0x8004c668) after the damage, for the player's blow: flags
+# 0x50 through take_hit_flags.
+# @port helper -- the blow's actor_take_hit, flags 0x50
 func _take_hit(k: int, dmg: int, strength: int, point) -> Dictionary:
+	return take_hit_flags(k, dmg, strength, 0x50, point)
+
+
+const UNHIT := [0x6E, 1, 2, 0x1D, 0x16]           # models nothing hurts
+const SLAIN_BY_0X20 := [0x3B, 0x3C, 0x3D, 0x3F, 0x42, 0x43, 0x4F, 0x58, 0x59, 0x5B]
+const KILL_FLAG := 0x79                           # story flags 0x801baa01, 0x801baa02
+const KILL_COUNT := 0x7A
+
+
+# actor_take_hit whole after the damage, tools/hit.py's: models 0x6e, 1, 2,
+# 0x1d and 0x16 take nothing; dying (op 3, clock 0x60c on) or op 0x1a nothing;
+# op 0x15 +0x70 to 2 and nothing more, op 6 +0x70 to 2; a creature's hit
+# (flags & 0xc0 0x80) on bit 0x100000 nothing; the level's hook (level 0's
+# spares slot 0x20 a blow that would not kill it); with HP left the
+# player's spell (0x20) practises and blow (0x10) at strength 2500 counts;
+# a blow on op 0x13 with +0x70 0x10 and a spell on bit 0x40000 take no HP; a
+# kind's behaviour 0x16 facing the point within 0x200 takes the spell; weapon
+# 0x1f's roll, weapon 0x20's kill of ten models; at 0 HP the player's
+# experience, kill_flag and kill_count for a model under 0x2b, opcode 3;
+# else the first behaviour of op 2 the damage reaches and its chance allows,
+# bit 0x200000 and +0x84 0 for one it does not reach; then the push and
+# vertical state 0x10. {damage, exp, strong, practice, special, hp}.
+# @orig game:0x8004c668 actor_take_hit  status:verified -- tools/hit.py, 1260 of 1260 hits of the game's own on the snapshots' creatures, every flag path; the self-test this to it; not a part (+0 3) passing it to its actor, nor a follower's push handed to its leader
+func take_hit_flags(k: int, dmg: int, strength: int, flags: int, point) -> Dictionary:
 	var a: Dictionary = actors[k]
 	var kind: Dictionary = kinds[int(a["kind"])]
-	var out := {"damage": 0, "exp": 0, "strong": false, "hp": int(a.get("hp", 0))}
+	var out := {"damage": 0, "exp": 0, "strong": false, "practice": false, "special": 0,
+		"hp": int(a.get("hp", 0))}
+	if int(a.get("model", 0)) in UNHIT:
+		return out
 	var op := int(a.get("op", 0))
 	if op == 0x1A or (op == 3 and int(a["clock"]) >= 0x60C):
 		return out
@@ -437,23 +460,62 @@ func _take_hit(k: int, dmg: int, strength: int, point) -> Dictionary:
 		return out
 	if op == 6 and int(a["sub"]) == 0:
 		a["sub"] = 2
+	var s7 := flags & 0xC0
+	var s1 := flags & 0x30
+	if s7 == 0x80 and int(a.get("eflags", 0)) & 0x100000:
+		return out
 	KFWeapon.load_from()
 	if KFWeapon.guard.get(level, -1) == k and dmg < int(a["hp"]):
 		dmg = 0
 	if dmg == 0:
 		return out
 	out["damage"] = dmg
-	out["strong"] = int(a["hp"]) != 0 and strength >= KFWeapon.STRONG
-	if not (op == 0x13 and int(a["sub"]) == 0x10):
-		var left := int(a["hp"]) - dmg
+	var hp := int(a["hp"])
+	if hp != 0 and s7 & 0x40:
+		if s1 & 0x20:
+			out["practice"] = true
+		elif s1 & 0x10 and strength >= KFWeapon.STRONG:
+			out["strong"] = true
+	var skip := false
+	if s1 & 0x10:
+		skip = int(a.get("op", 0)) == 0x13 and int(a["sub"]) == 0x10
+	elif s1 & 0x20:
+		if int(a.get("eflags", 0)) & 0x40000:
+			skip = true
+		else:
+			var rec = _with_op(kind, 0x16)
+			if rec != null and point != null:
+				var b := coll.vec_angle(int(a["px"]) - point.x, int(a["pz"]) - point.z)
+				if KFCreatureAI.facing_test(int(a["ry"]), KFCreatureAI.s16(b), 0x200):
+					KFCreatureAI.switch_to(a, rec)
+					skip = true
+	if not skip:
+		if s7 & 0x40 and s1 & 0x10:
+			var pl := get_node_or_null("../Player")
+			var wpn := int(pl.get("weapon_id")) if pl and pl.get("weapon_id") != null else -1
+			if wpn == 0x1F:
+				out["special"] = ((_rand() * 9) >> 15) + 1
+			elif wpn == 0x20 and int(a.get("model", 0)) in SLAIN_BY_0X20 and hp != 0:
+				dmg = hp
+		var left := hp - dmg
 		if left <= 0:
-			if int(a["hp"]) != 0:
+			if hp != 0 and s7 == 0x40:
 				out["exp"] = int(kind["exp"])
+			if int(a.get("model", 0)) < 0x2B:
+				if KFTalk.flags.size() < KFTalk.FLAG_COUNT:
+					KFTalk.flags.resize(KFTalk.FLAG_COUNT)
+				if int(KFTalk.flags[KILL_FLAG]) == 0:
+					KFTalk.flags[KILL_FLAG] = 1
+				KFTalk.flags[KILL_COUNT] = (int(KFTalk.flags[KILL_COUNT]) + 1) & 0xFF
 			KFCreatureAI.switch_to(a, _with_op(kind, 3))
 			a["hp"] = 0
 		else:
 			for rec in kind["behaviours"]:
-				if int(rec[0]) != 2 or dmg < KFCreatureAI.u16f(rec, 0xC):
+				if int(rec[0]) != 2:
+					continue
+				if dmg < KFCreatureAI.u16f(rec, 0xC):
+					a["eflags"] = int(a.get("eflags", 0)) | 0x200000
+					a["b84"] = 0
 					continue
 				if int(rec[2]) == 0xFF or (_rand() >> 7) < int(rec[2]):
 					KFCreatureAI.switch_to(a, rec)
@@ -470,6 +532,29 @@ func _take_hit(k: int, dmg: int, strength: int, point) -> Dictionary:
 	out["hp"] = int(a["hp"])
 	KFInfo.note("actors: f%d  slot %d  model %d  struck for %d, %d HP left%s" % [
 		frame, k, a["model"], dmg, int(a["hp"]), "  -- dying" if int(a["hp"]) == 0 else ""])
+	return out
+
+
+# actor_attack_player's creature half (0x800534cc), an effect's hit on the
+# creature collide_query met: nothing when the point is outside its back arc
+# (+0x18); else the damage of the record's eight attacks at the caster's
+# stat and the strength, actor_take_hit with flags +0 & 0xc0 and 0x20 (0x10
+# for code bit 0x20000), and code bit 0x10000 its +0x28 bit 0x800.
+# @orig game:0x800534cc actor_attack_player+0xe4  status:verified -- tools/effects.py fire_hit_check, the fire ball end to end against the game's own, 84 of 84 runs, all 200 creatures; not the code with other bits, which does nothing
+func take_spell(k: int, stat: int, attacks: Array, strength: int, flags: int, point, hi: int) -> Dictionary:
+	var a = actors[k] if k >= 0 and k < actors.size() else null
+	if a == null or not kinds.has(int(a["kind"])):
+		return {}
+	var kind: Dictionary = kinds[int(a["kind"])]
+	if point != null:
+		var b := coll.vec_angle(int(a["px"]) - point.x, int(a["pz"]) - point.z) + 0x800
+		if not KFCreatureAI.facing_test(int(a["ry"]), KFCreatureAI.s16(b), int(kind["arc_back"])):
+			return {}
+	var f := (flags & 0xC0) | (0x10 if hi & 0x20000 else 0x20)
+	var dmg := KFWeapon.creature_damage(stat, attacks, kind["defence"], strength)
+	var out := take_hit_flags(k, dmg, strength, f, point)
+	if hi & 0x10000:
+		a["eflags"] = int(a.get("eflags", 0)) | 0x800
 	return out
 
 

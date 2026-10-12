@@ -521,12 +521,34 @@ func magic_strength(s: int) -> int:
 	return ((total & 0xFFFF) / n) & 0xFFFF if n > 0 else total & 0xFFFF
 
 
-# What an effect's hit hands actor_attack_player (0x800533e8): the player
-# (code 0x80) or the creature collide_query met (0x10). The port's
-# collide_query keeps no creatures, so nothing reaches one yet.
-# @port helper -- actor_attack_player from an effect, in the port: a note
-func attack_hit(code: int, _flags: int, kind: int, _strength: int, stat: int, _pct: int, _back: Array) -> void:
-	KFInfo.note("effect: kind 0x%x hit 0x%x, strength %d" % [kind, code, stat])
+# What an effect's hit hands actor_attack_player (0x800533e8): code 0x80
+# the player -- player_take_hit with the record's attacks and effect, the
+# strength its scale -- 0x10 the creature collide_query met (actors.gd
+# take_spell), whose practice and experience go to the player. A code with
+# other bits does nothing.
+# @orig game:0x800533e8 actor_attack_player  status:verified -- tools/effects.py fire_hit_check, 84 of 84 runs of the game's own end to end; the player's half through player_take_hit
+func attack_hit(code: int, flags: int, kind: int, strength: int, stat: int, pct: int, back: Array) -> void:
+	var rec: PackedByteArray = records.get(kind, PackedByteArray())
+	if rec.size() < 0x16:
+		return
+	var att := []
+	for o in [6, 8, 0xA, 0xC, 0xE, 0x10, 0x12, 0x14]:
+		att.append(rec.decode_u16(o))
+	var lo := code & 0xFFF0FFFF
+	var point := Vector3i(int(back[0]), int(back[1]), int(back[2]))
+	if lo == 0x80:
+		if player and player.has_method("take_effect"):
+			player.call("take_effect", att, int(rec[4]), strength & 0xFFFF, pct, point)
+		return
+	if lo != 0x10 or collide_actor < 0:
+		return
+	var an := get_node_or_null("../Actors")
+	if an == null or not an.has_method("take_spell"):
+		return
+	var out: Dictionary = an.call("take_spell", collide_actor, stat, att, strength, flags,
+		point, code & 0xF0000)
+	if not out.is_empty() and player and player.has_method("spell_struck"):
+		player.call("spell_struck", out, kind)
 
 
 # The protecting spells' marks (0x8005b5e4, 0x8005b610, 0x8005b63c): gone

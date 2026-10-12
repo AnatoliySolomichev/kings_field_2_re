@@ -1655,7 +1655,29 @@ func _blow(rec: PackedByteArray, strength: int, push_back: bool) -> void:
 			strong_hits = 0
 			character["stat36"] = mini(int(character["stat36"]) + 1, 999)
 			recalc_stats()
-	if int(r.get("exp", 0)) > 0:
+	_award(int(r.get("exp", 0)))
+
+
+# What an effect's hit on a creature leaves the player (actor_take_hit's calls
+# out): skill_practice with the spell's record when it was the player's spell
+# and the creature had HP, the experience when it died.
+# @port helper -- a spell's hit's practice and experience, from effects.gd
+func spell_struck(out: Dictionary, kind: int) -> void:
+	if bool(out.get("practice", false)):
+		var recs := _spell_records()
+		if recs.has(kind):
+			var st := _magic_state()
+			var calls := []
+			skill_practice(st, recs[kind], calls)
+			_magic_put(st, calls)
+	_award(int(out.get("exp", 0)))
+
+
+# award_exp (0x8002a310) through levelup.gd, and its banners and the stats.
+# @port helper -- the experience a creature's death gives, with its banners and the stats
+func _award(exp: int) -> void:
+	if exp > 0:
+		var r := {"exp": exp}
 		var before := int(character["level"])
 		character = KFLevels.award(character, int(r["exp"]), KFTalk.flags)
 		hp_max = int(character["hp_max"])

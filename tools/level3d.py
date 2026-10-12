@@ -1713,6 +1713,8 @@ def project(lv, out="out/godot", start=(57, 4)):
         import magic
         magic.export(out)
         magic.export_attacks(out)
+        import hit
+        hit.export(out)
     except Exception as e:                       # no snapshot of a fresh character
         print(f"take_hit cases skipped: {e}")
     try:
@@ -1829,7 +1831,7 @@ def verify(out="out/godot"):
                             "fences:",
                             "creature run:",
                             "levels:", "skills:", "angles:",
-                            "scripts:", "damage:", "equipment:", "player_recalc_stats:", "knock-back:", "weapon:", "animation:", "effects:", "lift doors:", "chests:", "inscriptions:", "conversations:", "menus:", "routines:", "saves:", "level states:", "the run:", "player_take_hit:", "the status:", "casting:", "the attacking arms:", "FAIL", "  first",
+                            "scripts:", "damage:", "equipment:", "player_recalc_stats:", "knock-back:", "weapon:", "animation:", "effects:", "lift doors:", "chests:", "inscriptions:", "conversations:", "menus:", "routines:", "saves:", "level states:", "the run:", "player_take_hit:", "the status:", "casting:", "the attacking arms:", "creature hits:", "FAIL", "  first",
                             "  level case", "  angle (", "  script level",
                             "  hit ")):
             print("   " + line.strip())

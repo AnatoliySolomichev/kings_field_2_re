@@ -518,6 +518,7 @@ SLOW, PARALYSIS = 0x801B2566, 0x801B2568
 B56A, B56C, B56E = 0x801B256A, 0x801B256C, 0x801B256E
 TILE_LOOK = 0x801AEEFC
 FIRE_BALL = 0x00
+SCRATCH_POINT = 0x801FF0C0          # where the check lays a hit's point back
 SPLASH = 0x70
 VBLANK, SPLASH_SOUND = 0x801C12E8, 0x8009C214 + 0x1DC   # vblank_count, gp + 0x1dc
 WORKING = 0x801B2526             # the five working skills
@@ -1516,6 +1517,113 @@ class StandIn:
         self.hits.append([code, flags, strength, stat, pct, [v & 0xFFFFFFFF for v in back]])
 
 
+def fire_hit_check(out=sys.stdout, per=10, frames=60):
+    """The fire ball end to end in the game's own world: collide_query,
+    actor_attack_player and actor_take_hit the game's, over every snapshot,
+    the balls sent at its creatures; only rand's seed shared and the leaves
+    -- skill_practice, award_exp, strong_blow, player_take_hit, the level's
+    hook, the sound -- stood in for. All 128 slots and all 200 creatures
+    every frame, and every call out."""
+    import random
+    import memcard
+    import levelstate
+    import hit
+    rng = random.Random(0xF1E2)
+    runs = good = nframes = fgood = skipped = 0
+    hurt = killed = 0
+    first = []
+    oa = ACTORS & MASK
+    for path in memcard._snapshots():
+        base = bytearray(open(path, "rb").read())
+        o = SLOTS & MASK
+        base[o:o + STRIDE * COUNT] = bytes(STRIDE * COUNT)
+        for k in range(COUNT):
+            base[o + STRIDE * k] = 0xFF
+        lv = base[0x8018FAD9 & MASK]
+        hook_at = hit._level_hook(base)
+        px, py, pz = struct.unpack_from("<3i", base, PLAYER_POS & MASK)
+        awake = [k for k in range(ACTOR_N) if base[(ACTORS + ACTOR_STRIDE * k + 9) & MASK] == 1]
+        if not awake:
+            continue
+        for _ in range(per):
+            ram = bytearray(base)
+            for k in range(5):
+                struct.pack_into("<H", ram, (WORKING & MASK) + 2 * k, rng.randrange(0, 200))
+            start = (px + rng.randrange(-0x200, 0x200), py - 0x640, pz + rng.randrange(-0x200, 0x200))
+            a = ACTORS + ACTOR_STRIDE * rng.choice(awake)
+            t = struct.unpack_from("<3i", ram, (a + 0x2C) & MASK)
+            ang = vec_to_angles(t[0] - start[0], t[1] - 0x300 - start[1], t[2] - start[2])
+            d = movement.direction_from_angles(ang[0], ang[1])
+            vel = struct.pack("<4h", *[_s16_((c * 0x384) >> 12) for c in d], 0)
+            point = struct.pack("<4i", *start, 0)
+            sp = (0xA, 0x42, FIRE_BALL, point, [vel])
+            seed = rng.randrange(1 << 30)
+            cpu = _game(bytes(ram))
+            lcg = levelstate.Lcg(seed)
+            cpu.hooks[RAND] = lambda c, lcg=lcg: lcg()
+            g_calls = []
+            cpu.hooks[SOUND_AT] = lambda c: 0
+            cpu.hooks[hit.SKILL_PRACTICE] = lambda c, g=g_calls: g.append(("practice", c.r[4]))
+            cpu.hooks[hit.STRONG_BLOW] = lambda c, g=g_calls: g.append(("strong",))
+            cpu.hooks[hit.AWARD_EXP] = lambda c, g=g_calls: g.append(("exp", hit._s16(c.r[4])))
+            cpu.hooks[hit.PLAYER_TAKE_HIT] = lambda c, g=g_calls: g.append(("player",))
+            cpu.hooks[hook_at] = lambda c: None
+            m = bytearray(ram)
+            w = RamWorld(m, lv)
+            m_calls = []
+            r = hit.Ram(m)
+            mlcg = levelstate.Lcg(seed)
+
+            def attack_hit(code, flags, kind, strength, stat, pct, back, w=w, r=r,
+                           m_calls=m_calls, mlcg=mlcg):
+                struct.pack_into("<i", r.m, COLLIDE_ACTOR & MASK, w.collide_actor)
+                pt = SCRATCH_POINT
+                struct.pack_into("<3i", r.m, pt & MASK, *[_s32(v) for v in back])
+                hit.actor_attack_player(r, code, flags, SPELL_TABLE + RECORD * kind, strength,
+                                        stat, pct, pt, mlcg, m_calls, lambda actor, dd: dd)
+                m_calls[:] = [c if c[0] != "player" else ("player",) for c in m_calls]
+            w.attack_hit = attack_hit
+            mach = Machine(m, w, mlcg)
+            try:
+                game_spawn(cpu, *sp)
+                mach.spawn(*sp)
+                runs += 1
+                ok = True
+                for f in range(frames):
+                    del g_calls[:], m_calls[:]
+                    before = bytes(cpu.ram[oa:oa + ACTOR_STRIDE * ACTOR_N])
+                    _call(cpu, DRIVER, [])
+                    mach.driver()
+                    bad = _differ(_slots(cpu.ram), _slots(m))
+                    acts = bytes(cpu.ram[oa:oa + ACTOR_STRIDE * ACTOR_N]) == bytes(m[oa:oa + ACTOR_STRIDE * ACTOR_N])
+                    if before != bytes(cpu.ram[oa:oa + ACTOR_STRIDE * ACTOR_N]):
+                        hurt += 1
+                    killed += sum(1 for c in g_calls if c[0] == "exp")
+                    same = not bad and acts and g_calls == m_calls
+                    nframes += 1
+                    fgood += same
+                    if not same and ok:
+                        ok = False
+                        if len(first) < 4:
+                            first.append(f"  {os.path.basename(path)} frame {f}: " + (
+                                f"slot {bad[0][0]} +{bad[0][1]:#x} game {bad[0][2]:#x} here {bad[0][3]:#x}"
+                                if bad else "the creatures differ" if not acts
+                                else f"calls {g_calls} / {m_calls}"))
+                    if all(cpu.rd(SLOTS + STRIDE * k, 1) == 0xFF for k in range(COUNT)):
+                        break
+                good += ok
+            except NotImplementedError:
+                skipped += 1
+                runs -= 1
+    for line in first:
+        print(line, file=out)
+    print(f"  the fire ball end to end, the game's own collide_query, actor_attack_player "
+          f"and actor_take_hit: {good} of {runs} runs, {fgood} of {nframes} frames with all "
+          f"128 slots, all 200 creatures and every call alike; {hurt} frames a creature "
+          f"was struck, {killed} killed", file=out)
+    return good == runs
+
+
 def fire_world_check(out=sys.stdout, per=10, frames=60):
     """The fire ball in the game's own world: effect_spawn, effect_driver and
     collide_query the game's, over every snapshot, each ball sent at one of
@@ -1742,4 +1850,5 @@ if __name__ == "__main__":
     good = magic_check() and good
     good = fire_check() and good
     good = fire_world_check() and good
+    good = fire_hit_check() and good
     sys.exit(0 if good else 1)
