@@ -490,7 +490,11 @@ arms, `player_turn`'s pending action and its USE stretch, and the timers at
 `mipsrun.py` over every snapshot with the deciding fields at random -- the
 two stretches by running from their first address to their last (`_stretch`),
 the routines they call hooked and recorded. 1260 of 1260 of each; `export`
-writes `magiccheck.json` for the self-test. FORMATS.md, "Casting".
+writes `magiccheck.json` for the self-test. `attack_check` holds the
+attacking arms -- `sub_8002c164`'s aim, `sub_8004d3c4`'s creature in sight,
+every arm's spawns -- to the game's own `player_action` over the snapshots'
+creatures, the routines it calls stood in for: 840 of 840; `export_attacks`
+writes `attackcheck.json`. FORMATS.md, "Casting".
 
 **`knock.py`** — what a blow does to the player after the HP, and the recording.
 

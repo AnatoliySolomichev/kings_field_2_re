@@ -3714,6 +3714,51 @@ spawned as `player_action` spawns them over every snapshot, the player hurt,
 poisoned, cursed or not: **126 of 126 runs, 2698 of 2698 frames**, all 128
 slots, the player's fields and the 48 lighting records alike.
 
+**The attacking arms** -- spells 0 to `0x16` and the weapons' `0x36` to
+`0x4c` -- each aim through **`sub_8002c164`** and spawn effects. The aim: the
+start is the cast offset (`0x801b2630`) turned by the view's angles, the
+pitch negated, from the eye (0x640 above the feet); the velocity the view's
+direction (`direction_from_angles`) times the arm's speed (`vec_scale`); and
+between them **`sub_8004d3c4`** picks the creature in sight -- awake (`+9`
+1), not `+0xe` 3, within 0x55f0 (twice that with flag `0x20000`), its
+bearing and pitch from the player within 0x200 of the view's (flag `0x20000`
+instead: a quarter of the distance and 0x200 off each), the least of the two
+differences and the distance over 128 -- leaves it at `0x8018fad0` and wakes
+it with its behaviour `0x82` (`kind_behaviour_with_op`, `actor_switch`)
+unless its `+0x28` has `0x100`. The arms (speed; what they spawn besides the
+velocity):
+
+```
+fire ball 0 0x384; stone 6, 0x37, 0x46 (and 0), 0x36 (four, the offset's z
+800 * 3..0) 0x1f4; 0x3e 0x2ee; 0x40 0x1b8; 0x4c 0x1c2; 0x3c 0x140; 0x3a 0x226;
+0x4b 0x2d0; orladin 0x15 0x104                                  -- the velocity
+wind cutter 0xd, 0x38, 0x39 0x2bc; flame 4, thedek 5, shudom 9, freeze 0x10,
+walwind 0x11 0xfa; 0x42 0x384                         -- and view_angles
+0x44 kind 0x7c, 0x45 kind 0x7b (and view_angles), 0x3e8
+fire wall 1     0x23a, and view_angles; the offset's x 1000 on each shot
+fire storm 2    0x1f4, the creature's slot (0xff none) and the shots left
+earth wave 7    kind 7 at the player's feet, 0x43: 0, 0x1000, 0x100, 0x1000, 1
+meteor 8        kind 0x5f (0x43), 0x1b58 ahead -- on the creature, led by its
+                velocity (+0x50.. << 14 over 650) unless that collides
+bortecth 0xc    kind 0xc on the creature, or 0x1b58 ahead at the feet
+haze 0xb        0x104, the velocity jittered by rand, 0xe - the shots left
+tornado 0xf     two, 0x540 lower, flat, and view_angles, 0 and 1
+lightning 0x13  kind 0x71, flat, the creature's distance / 600 - 8 (2 at
+                least; 10 with none)
+flash 0x14, 0x47  0xaa from the yaw less twice the offset's x (then x + 100),
+                and view_angles, 0x258, 0x3c, 0x80, 0x8c, 0xa0
+0x48, 0x49/0x4a a weapon's: kind 0x78 / 0x7a from (0, 0, 100) and four more,
+                0x5c / 0x5d, from (+-1500, 0, 0) and (+-3000, 0, -2000),
+                handed the first's slot
+```
+
+**Against the game's own `player_action`**, its effect_spawn,
+`kind_behaviour_with_op`, `actor_switch` and `collide_wrapper_actor` stood
+in for and what they are handed compared, over every snapshot and its
+creatures: **840 of 840 casts** -- every spawn's point, velocity and
+argument, the creature woken, and the state left (`tools/magic.py
+attack_check`). The effects these spawn are not in the port yet.
+
 **At `player_controller`'s end** (`0x80031f0c`), after the poison:
 `0x801b256a`, `256c` and `256e` count down and recalculate the stats at 0;
 `0x801b2576` counts down **holding MP at its most** every frame, announce

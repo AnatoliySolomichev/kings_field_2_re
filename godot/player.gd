@@ -652,6 +652,9 @@ const CAST_ARMS := {
 const ONE_SHOT := [0x00, 0x05, 0x06, 0x0C, 0x0F, 0x10, 0x13, 0x15, 0x1D, 0x36, 0x37,
 	0x3A, 0x3C, 0x3E, 0x44, 0x45, 0x46, 0x48, 0x49, 0x4B]
 const TIMED := {0x1A: ["b56a", 0x708, 2], 0x1C: ["b56e", 0x708, 2], 0x1B: ["b56c", 0xC8, 1]}
+# The weapons' five marks' offsets (0x800818e4): x, y, z, 0
+const WEAPON_MARKS := [[0, 0, 100, 0], [-1500, 0, 0, 0], [-3000, 0, -2000, 0],
+	[1500, 0, 0, 0], [3000, 0, -2000, 0]]
 
 
 # cast_spell, tools/magic.py's: nothing while an action is pending; the cost
@@ -828,6 +831,287 @@ static func timers_tick(st: Dictionary, calls: Array) -> void:
 			calls.append(["announce", 0x1B])
 
 
+# --- the attacking arms --------------------------------------------------------
+
+const AIM_PLAIN := {
+	0x00: [0x384, -1, []], 0x06: [0x1F4, -1, []], 0x37: [0x1F4, -1, []],
+	0x40: [0x1B8, -1, []], 0x4C: [0x1C2, -1, []], 0x3C: [0x140, -1, []],
+	0x3A: [0x226, -1, []], 0x3E: [0x2EE, -1, []], 0x4B: [0x2D0, -1, []],
+	0x46: [0x1F4, -1, [0]], 0x15: [0x104, -1, []],
+	0x38: [0x2BC, -1, ["view"]], 0x39: [0x2BC, -1, ["view"]], 0x0D: [0x2BC, -1, ["view"]],
+	0x04: [0xFA, -1, ["view"]], 0x09: [0xFA, -1, ["view"]], 0x11: [0xFA, -1, ["view"]],
+	0x10: [0xFA, -1, ["view"]], 0x05: [0xFA, -1, ["view"]], 0x42: [0x384, -1, ["view"]],
+	0x44: [0x3E8, 0x7C, []], 0x45: [0x3E8, 0x7B, ["view"]],
+}
+
+
+# sub_8004d3c4: the awake creature (not +0xe 3) within `reach` -- twice it for
+# flag 0x20000 -- whose bearing and pitch from `point` are nearest `yaw` and
+# `pitch`: inside the two cones, or for flag 0x20000 a quarter of the distance
+# and 0x200 off each instead; scored by the two differences and the distance
+# over 128. `list` is the awake creatures in slot order, [slot, +0xe, +0x28,
+# x, y, z, ...]; [its entry or null, the distance or -1].
+# @orig game:0x8004d3c4 sub_8004d3c4  status:verified -- through spell_aim; tools/magic.py attack_check, 840 of 840 casts of the game's own player_action; not the noise (rand) no spell asks for
+static func sight(c: KFCollision, list: Array, point: Array, yaw: int, pitch: int,
+		reach: int, ycone: int, pcone: int) -> Array:
+	var best := 0x7530
+	var chosen = null
+	var dist := -1
+	for e in list:
+		if int(e[1]) == 3:
+			continue
+		var flags := int(e[2])
+		var r := reach << 1 if flags & 0x20000 else reach
+		var d := c.in_range(int(e[3]), int(e[4]), int(e[5]), int(point[0]), 0xFFFF,
+			int(point[2]), r, 0, 0)
+		if d == -1:
+			continue
+		var dx := _s32(int(e[3]) - int(point[0]))
+		var dy := _s32(int(e[4]) - int(point[1]))
+		var dz := _s32(int(e[5]) - int(point[2]))
+		var ayaw := KFWeapon.s16(c.vec_angle(dx, dz))
+		var ln := c.isqrt(_s32((dx >> 3) * (dx >> 3) + (dz >> 3) * (dz >> 3)) & 0xFFFFFFFF) << 3
+		var apitch := (-c.vec_angle(dy, ln)) & 0xFFF
+		var by := (ayaw - yaw) & 0xFFF
+		if by >= 0x800:
+			by = 0x1000 - by
+		var bp := (apitch - pitch) & 0xFFF
+		if bp >= 0x800:
+			bp = 0x1000 - bp
+		if flags & 0x20000:
+			d >>= 2
+			by = KFWeapon.s16(by - 0x200)
+			bp = KFWeapon.s16(bp - 0x200)
+		elif ycone < by or pcone < bp:
+			continue
+		var score := by + bp + (d >> 7)
+		if score < best:
+			best = score
+			chosen = e
+			dist = d
+	return [chosen, dist]
+
+
+# sub_8002c164: a spell's start -- the cast offset turned by the view's
+# angles (the pitch negated) from the eye, 0x640 above the feet -- the
+# creature in sight within 0x55f0 and 0x200 either way, woken by its
+# behaviour 0x82 unless its +0x28 has 0x100, and the velocity, the view's
+# direction times `speed`. [point, velocity, the creature's entry or null,
+# its distance].
+# @orig game:0x8002c164 sub_8002c164  status:verified -- tools/magic.py attack_check, 840 of 840 casts of the game's own; the self-test this to it
+static func spell_aim(st: Dictionary, speed: int, w, c: KFCollision, calls: Array) -> Array:
+	var view: Array = st["view"]
+	var pos: Array = st["pos"]
+	var v := KFWeapon.vec_rotate(c, KFWeapon.s16(-int(view[0])), int(view[1]), int(view[2]),
+		[int(st["off_x"]), int(st["off_y"]), int(st["off_z"])])
+	var point := [_s32(int(v[0]) + int(pos[0])), _s32(int(v[1]) - 0x640 + int(pos[1])),
+		_s32(int(v[2]) + int(pos[2]))]
+	var found := sight(c, w.sight_list(), pos, KFWeapon.s16(int(view[1])),
+		KFWeapon.s16(int(view[0])), 0x55F0, 0x200, 0x200)
+	var t = found[0]
+	st["target"] = int(t[0]) if t != null else -1
+	if t != null:
+		var rec = w.kind_op(int(t[0]), 0x82)
+		if rec != null and (int(t[2]) & 0x100) == 0:
+			w.actor_switch(int(t[0]), rec)
+			calls.append(["switch", int(t[0])])
+	var d := c.direction_from_angles(int(view[0]), int(view[1]))
+	var vel := []
+	for i in 3:
+		vel.append(KFWeapon.s16((int(d[i]) * KFWeapon.s16(speed)) >> 12))
+	return [point, vel, t, int(found[1])]
+
+
+# player_action's attacking arms (0x8002c364 on): each aims and spawns its
+# effects -- ["spawn", a1, kind, point, [["vel", x, y, z], "view" or a
+# number ...]] -- as tools/magic.py attack makes them. Meteor (8) leads its
+# creature by its velocity and keeps it where the lead would collide;
+# lightning (0x13) sends kind 0x71 with the distance / 600 - 8 (2 least, 10
+# with no creature); fire storm (2) its creature's slot; the weapons' 0x48,
+# 0x49 and 0x4a a mark and four more round it, from offsets at 0x800818e4.
+# `w` answers the world: sight_list, kind_op, actor_switch, collide, spawn
+# (the slot, or 0), rand.
+# @orig game:0x8002c364 player_action+0x58  status:verified -- the attacking arms; tools/magic.py attack_check, 840 of 840 casts of the game's own, every spawn, the creature woken, the state left; the self-test this to it
+static func attack_action(st: Dictionary, action: int, w, c: KFCollision, calls: Array) -> void:
+	if AIM_PLAIN.has(action):
+		var arm: Array = AIM_PLAIN[action]
+		var r := spell_aim(st, int(arm[0]), w, c, calls)
+		_spawn(w, calls, 0x42, action if int(arm[1]) < 0 else int(arm[1]), r[0],
+			[["vel"] + (r[1] as Array)] + (arm[2] as Array))
+		return
+	match action:
+		0x36:
+			for i in 4:
+				st["off_z"] = KFWeapon.s16(800 * (3 - i))
+				var r := spell_aim(st, 0x1F4, w, c, calls)
+				_spawn(w, calls, 0x42, 0x36, r[0], [["vel"] + (r[1] as Array), 3 - i])
+		0x0F:
+			var r := spell_aim(st, 0x12C, w, c, calls)
+			var pt: Array = r[0]
+			pt[1] = _s32(int(pt[1]) + 0x540)
+			var vel: Array = r[1]
+			vel[1] = 0
+			_spawn(w, calls, 0x42, 0x0F, pt, [["vel"] + vel, "view", 0])
+			_spawn(w, calls, 0x42, 0x0F, pt, [["vel"] + vel, "view", 1])
+		0x07:
+			_spawn(w, calls, 0x43, 0x07, st["pos"], [0, 0x1000, 0x100, 0x1000, 1])
+		0x08, 0x0C:
+			var r := spell_aim(st, 0x1B58, w, c, calls)
+			var pt: Array = r[0]
+			var vel: Array = r[1]
+			var t = r[2]
+			if t == null:
+				pt = [_s32(int(pt[0]) + int(vel[0])), int(st["pos"][1]), _s32(int(pt[2]) + int(vel[2]))]
+			elif action == 0x0C:
+				pt = [int(t[3]), int(t[4]), int(t[5])]
+			else:
+				pt = []
+				for i in 3:
+					var v := _s32(int(t[6 + i]) << 14)
+					var q := (v * 0x64D319FF) >> 32
+					pt.append(_s32((q >> 8) - (v >> 31) + int(t[3 + i])))
+				calls.append(["collide", int(pt[0]), int(pt[1]), int(pt[2])])
+				if w.collide(int(pt[0]), int(pt[1]), int(pt[2])):
+					pt = [int(t[3]), int(t[4]), int(t[5])]
+			_spawn(w, calls, 0x43 if action == 0x08 else 0x42, 0x5F if action == 0x08 else 0x0C,
+				pt, [0])
+		0x0B:
+			var r := spell_aim(st, 0x104, w, c, calls)
+			var vel: Array = r[1]
+			vel[0] = KFWeapon.s16(int(vel[0]) - 0x10 + (int(w.rand()) >> 10))
+			vel[1] = KFWeapon.s16(int(vel[1]) - 0x10 + (int(w.rand()) >> 10))
+			_spawn(w, calls, 0x42, 0x0B, r[0], [["vel"] + vel, _s32(0xE - int(st["count"]))])
+		0x13:
+			var r := spell_aim(st, 0x258, w, c, calls)
+			var d := int(r[3])
+			if d != -1:
+				d = d / 600 - 8
+				if d < 2:
+					d = 2
+			else:
+				d = 0xA
+			var vel: Array = r[1]
+			vel[1] = 0
+			_spawn(w, calls, 0x42, 0x71, r[0], [["vel"] + vel, d])
+		0x02:
+			var r := spell_aim(st, 0x1F4, w, c, calls)
+			var t = r[2]
+			_spawn(w, calls, 0x42, 0x02, r[0], [["vel"] + (r[1] as Array),
+				int(t[0]) if t != null else 0xFF, int(st["count"])])
+		0x01:
+			var r := spell_aim(st, 0x23A, w, c, calls)
+			_spawn(w, calls, 0x42, 0x01, r[0], [["vel"] + (r[1] as Array), "view"])
+			st["off_x"] = KFWeapon.s16(int(st["off_x"]) + 0x3E8)
+		0x14, 0x47:
+			var view: Array = st["view"]
+			var yaw := int(view[1])
+			st["view"] = [int(view[0]), (yaw - 2 * int(st["off_x"])) & 0xFFFF, int(view[2])]
+			var r := spell_aim(st, 0xAA, w, c, calls)
+			st["off_x"] = KFWeapon.s16(int(st["off_x"]) + 0x64)
+			st["view"] = [int(view[0]), yaw, int(view[2])]
+			_spawn(w, calls, 0x42, action, r[0], [["vel"] + (r[1] as Array), "view",
+				0x258, 0x3C, 0x80, 0x8C, 0xA0])
+		0x48, 0x49, 0x4A:
+			var kind := 0x78 if action == 0x48 else 0x7A
+			var child := 0x5C if action == 0x48 else 0x5D
+			var offs: Array = st["offsets"]
+			_set_off(st, offs[0])
+			var r := spell_aim(st, 0x258, w, c, calls)
+			var got := _spawn(w, calls, 0x42, kind, r[0], [["vel"] + (r[1] as Array), "view"])
+			if got != 0:
+				for i in range(1, 5):
+					_set_off(st, offs[i])
+					var r2 := spell_aim(st, 0x258, w, c, calls)
+					_spawn(w, calls, 0x42, child, r2[0], [["vel"] + (r2[1] as Array), got - 1])
+
+
+# @port helper -- an arm's spawn: recorded, and handed to the world; the slot's number + 1, or 0
+static func _spawn(w, calls: Array, a1: int, kind: int, point: Array, args: Array) -> int:
+	calls.append(["spawn", a1, kind, point.duplicate(), args.duplicate(true)])
+	return int(w.spawn(a1, kind, point, args))
+
+
+# @port helper -- the cast offset off one of the weapons' marks at 0x800818e4
+static func _set_off(st: Dictionary, o: Array) -> void:
+	st["off_x"] = int(o[0])
+	st["off_y"] = int(o[1])
+	st["off_z"] = int(o[2])
+	st["off_w"] = int(o[3])
+
+
+# The world the attacking arms ask, when the player casts: the creatures from
+# actors.gd, their behaviour 0x82 and the switch to it, the effects' spawn.
+# @port helper -- the awake creatures for sight, in slot order
+func sight_list() -> Array:
+	var out := []
+	var an := get_node_or_null("../Actors")
+	if an == null or an.get("actors") == null:
+		return out
+	var list: Array = an.get("actors")
+	for k in list.size():
+		var a = list[k]
+		if a == null or int(a.get("st", 0)) != 1:
+			continue
+		out.append([k, int(a.get("op", 0)), int(a.get("eflags", 0)), int(a["px"]), int(a["py"]),
+			int(a["pz"]), int(a.get("vx", 0)), int(a.get("vy", 0)), int(a.get("vz", 0))])
+	return out
+
+
+# @port helper -- kind_behaviour_with_op for a creature, by its slot
+func kind_op(slot: int, op: int):
+	var an := get_node_or_null("../Actors")
+	if an and an.has_method("behaviour_of"):
+		return an.call("behaviour_of", slot, op)
+	return null
+
+
+# @port helper -- actor_switch on a creature, by its slot
+func actor_switch(slot: int, rec) -> void:
+	var an := get_node_or_null("../Actors")
+	if an and an.get("actors") != null and an.get("actors")[slot] != null:
+		KFCreatureAI.switch_to(an.get("actors")[slot], rec)
+
+
+# @port helper -- collide_wrapper_actor for meteor's lead: not in the port yet, so never
+func collide(_x: int, _y: int, _z: int) -> bool:
+	return false
+
+
+# @port helper -- an arm's effect into effects.gd; its slot's number + 1, or 0
+func spawn(a1: int, kind: int, point: Array, args: Array) -> int:
+	var fx := get_node_or_null("../Effects")
+	if fx == null:
+		return 0
+	var pt := PackedByteArray()
+	pt.resize(16)
+	for i in 3:
+		pt.encode_s32(4 * i, int(point[i]))
+	var out := []
+	for a in args:
+		if a is Array:
+			var b := PackedByteArray()
+			b.resize(8)
+			for i in 3:
+				b.encode_s16(2 * i, int(a[1 + i]))
+			out.append(b)
+		elif a is String:
+			var b := PackedByteArray()
+			b.resize(8)
+			b.encode_s16(0, view_pitch_now())
+			b.encode_s16(2, facing)
+			b.encode_s16(4, 0)
+			out.append(b)
+		else:
+			out.append(int(a))
+	var s := int(fx.call("spawn", 0xA, a1, kind, pt, out))
+	return s / 0x4C + 1 if s >= 0 else 0
+
+
+# @port helper -- the BIOS's rand, for haze
+func rand() -> int:
+	return randi() & 0x7FFF
+
+
 # @port helper -- the player's casting fields as tools/magic.py's state
 func _magic_state() -> Dictionary:
 	return {"pending": pending, "count": shots, "interval": shot_gap,
@@ -880,6 +1164,22 @@ func _magic_put(st: Dictionary, calls: Array) -> void:
 				var more := []
 				player_action(st, int(c[1]), more)
 				_magic_put(st, more)
+				_attack(int(c[1]))
+
+
+# player_action's attacking arms on the player: the view, the place, the cast
+# offset and the shots as the arms read them, and the offset as they leave it.
+# @port helper -- attack_action on the player's fields, the player as its world
+func _attack(action: int) -> void:
+	if not (AIM_PLAIN.has(action) or action in [0x36, 0x0F, 0x07, 0x08, 0x0C, 0x0B,
+			0x13, 0x02, 0x01, 0x14, 0x47, 0x48, 0x49, 0x4A]):
+		return
+	var st := {"view": [view_pitch_now() & 0xFFFF, facing & 0xFFFF, 0], "pos": [gx, gy, gz],
+		"off_x": cast_off[0], "off_y": cast_off[1], "off_z": cast_off[2], "off_w": 0,
+		"count": shots, "offsets": WEAPON_MARKS, "target": -1}
+	var calls := []
+	attack_action(st, action, self, coll, calls)
+	cast_off = [int(st["off_x"]), int(st["off_y"]), int(st["off_z"])]
 
 
 # @port helper -- spell_table's records, as the effects hold them (fxrecords.json)

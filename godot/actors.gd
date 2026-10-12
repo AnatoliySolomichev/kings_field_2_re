@@ -473,6 +473,16 @@ func _take_hit(k: int, dmg: int, strength: int, point) -> Dictionary:
 	return out
 
 
+# kind_behaviour_with_op for the creature in a slot, as a spell's aim asks
+# it (0x8002c274): its kind's first behaviour with the opcode, or null.
+# @port helper -- _with_op by a creature's slot
+func behaviour_of(slot: int, op: int):
+	var a = actors[slot] if slot < actors.size() else null
+	if a == null or not kinds.has(int(a["kind"])):
+		return null
+	return _with_op(kinds[int(a["kind"])], op)
+
+
 # 0x8004c068: the kind's first behaviour with that opcode.
 # @orig game:0x8004c068 kind_behaviour_with_op  status:transcribed
 func _with_op(kind: Dictionary, op: int):

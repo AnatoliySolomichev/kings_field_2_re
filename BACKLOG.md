@@ -821,10 +821,11 @@ each one is also in its function's marker, as `partial` and what differs:
 
 * **Casting is in; most of what it casts is not.** `player.gd` has the
   buttons, `cast_spell`, the pending action, `skill_practice`, the USE
-  stretch and the timers, all held to the game's own code. Not yet: the
-  attacking spells' arms of `player_action` (0 to `0x16`: `sub_8002c164`'s
-  aim and `effect_spawn` of the spell's own kind), the effects' arms of the
-  attacking spells' kinds (the healing and protecting six are in), the
+  stretch, the timers and the attacking arms (the aim, the creature in
+  sight, the spawns), all held to the game's own code. Not yet: the effects'
+  arms of the attacking spells' kinds -- so an attacking spell spends its MP
+  and spawns nothing that stays -- meteor's collision test (the port answers
+  no) (the healing and protecting six are in), the
   drawing of everything with `+8 & 0xc` set -- the protecting marks and the
   sparkles, in front of the eye -- the weapons' magic (`0x36`..`0x4c`, `spell_begin`,
   `held_item_tick`'s `0x801b25b2`), and the button's thing (`use_item` from

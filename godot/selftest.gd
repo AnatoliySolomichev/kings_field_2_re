@@ -320,6 +320,9 @@ func _init() -> void:
 	if not _casting():
 		quit(1)
 		return
+	if not _attacks():
+		quit(1)
+		return
 	if not _level_states():
 		quit(1)
 		return
@@ -1018,6 +1021,87 @@ func _casting() -> bool:
 	if first != "":
 		print("  first difference: " + first)
 	return ok == n
+
+
+# player_action's attacking arms, player.gd's attack_action against
+# tools/magic.py's (whose model the game's own holds, 840 of 840): the
+# creatures awake, the answers the stand-ins gave, and the spawns, the
+# creature woken and the state left.
+func _attacks() -> bool:
+	if not FileAccess.file_exists("res://attackcheck.json"):
+		print("the attacking arms: no cases to check against")
+		return true
+	var d = JSON.parse_string(FileAccess.get_file_as_string("res://attackcheck.json"))
+	var script = load("res://player.gd")
+	var ok := 0
+	var n := 0
+	var first := ""
+	for c in d["cases"]:
+		var w := AttackReplay.new()
+		w.actors = _ints(c["actors"])
+		w.kinds = _ints(c["kinds"])
+		w.collides = _ints(c["collides"])
+		w.rands = _ints(c["rands"])
+		w.spawned = int(c["spawned"])
+		var off: Array = _ints(c["off"])
+		var st := {"view": _ints(c["view"]), "pos": _ints(c["pos"]), "off_x": off[0],
+			"off_y": off[1], "off_z": off[2], "off_w": off[3], "count": int(c["count"]),
+			"offsets": _ints(c["offsets"]), "target": -1}
+		var calls := []
+		script.attack_action(st, int(c["action"]), w, coll, calls)
+		var after: Dictionary = _ints(c["after"])
+		var same: bool = str(_ints(calls)) == str(_ints(c["calls"])) \
+			and [st["off_x"], st["off_y"], st["off_z"], st["off_w"]] == after["off"] \
+			and str(_ints(st["view"])) == str(after["view"]) and int(st["target"]) == int(after["target"]) \
+			and w.bad == ""
+		n += 1
+		if same:
+			ok += 1
+		elif first == "":
+			first = "action 0x%x: godot %s target %d, python %s %s %s" % [int(c["action"]), str(calls),
+				int(st["target"]), str(c["calls"]), str(after), w.bad]
+	print("the attacking arms: %d of %d casts as tools/magic.py makes them (whose model the game's own holds, 840 of 840)" % [ok, n])
+	if first != "":
+		print("  first difference: " + first.substr(0, 1200))
+	return ok == n
+
+
+# What the attacking arms ask of the world, answered as tools/magic.py's
+# stand-ins answered: the creatures awake, then each answer in turn.
+class AttackReplay:
+	var actors: Array = []
+	var kinds: Array = []
+	var collides: Array = []
+	var rands: Array = []
+	var spawned := 0
+	var bad := ""
+
+	func sight_list() -> Array:
+		return actors
+
+	func kind_op(_slot: int, _op: int):
+		if kinds.is_empty():
+			bad = "an extra kind_behaviour_with_op"
+			return null
+		return 1 if int(kinds.pop_front()) else null
+
+	func actor_switch(_slot: int, _rec) -> void:
+		pass
+
+	func collide(_x: int, _y: int, _z: int) -> bool:
+		if collides.is_empty():
+			bad = "an extra collide"
+			return false
+		return int(collides.pop_front()) != 0
+
+	func spawn(_a1: int, _kind: int, _point: Array, _args: Array) -> int:
+		return spawned + 1
+
+	func rand() -> int:
+		if rands.is_empty():
+			bad = "an extra rand"
+			return 0
+		return int(rands.pop_front())
 
 
 # @port check -- JSON's floats back to ints, all the way down

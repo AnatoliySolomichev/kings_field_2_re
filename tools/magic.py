@@ -386,6 +386,206 @@ def use_tick(st, ram):
     return True
 
 
+# --- the attacking arms of player_action ---------------------------------------
+
+VIEW = 0x801B2608                # view_angles: pitch, yaw, roll
+CAST_OFF = 0x801B2630
+PLAYER_POS = 0x801B25F0
+ACTORS, ACTOR_STRIDE, ACTOR_N = 0x80185DA8, 0x88, 200
+CURRENT_ACTOR = 0x8018FAB4
+TARGET = 0x8018FAD0
+ENTITY_TABLE = 0x8018C7E8
+KIND_OP, ACTOR_SWITCH = 0x8004C068, 0x8004B94C
+COLLIDE_ACTOR = 0x80033D08
+OFFSETS = 0x800818E4             # the weapons' marks: five (x, y, z, 0)
+SLOTS, SLOT = 0x801B80EC, 0x4C
+
+
+def _u32(ram, a):
+    return struct.unpack_from("<I", ram, a & MASK)[0]
+
+
+def _i32(ram, a):
+    return struct.unpack_from("<i", ram, a & MASK)[0]
+
+
+def _h(ram, a):
+    return struct.unpack_from("<h", ram, a & MASK)[0]
+
+
+def sight(ram, point, yaw, pitch, reach, ycone, pcone, noise=0, rand=None):
+    """sub_8004d3c4: the awake creature (+9 1, +0xe not 3, not the one
+    acting) within `reach` (twice it for flag 0x20000) whose bearing and
+    pitch from `point` are nearest `yaw` and `pitch` -- inside the cones, or
+    for flag 0x20000 a quarter of the distance and 0x200 off each instead --
+    scored by the two differences and the distance / 128. (actor, distance),
+    (0, -1) for none."""
+    import effects
+    import movement
+    best, chosen, dist = 0x7530, 0, -1
+    cur = _u32(ram, CURRENT_ACTOR)
+    for k in range(ACTOR_N):
+        a = ACTORS + k * ACTOR_STRIDE
+        if ram[(a + 9) & MASK] != 1 or ram[(a + 0xE) & MASK] == 3 or a == cur:
+            continue
+        flags = _u32(ram, a + 0x28)
+        r = reach << 1 if flags & 0x20000 else reach
+        pos = (_i32(ram, a + 0x2C), _i32(ram, a + 0x30), _i32(ram, a + 0x34))
+        d = movement.in_range(pos, point[0], 0xFFFF, point[2], r, 0, 0)
+        if d == -1:
+            continue
+        ang = effects.vec_to_angles(_s32(pos[0] - point[0]), _s32(pos[1] - point[1]),
+                                    _s32(pos[2] - point[2]))
+        dy = (ang[1] - yaw) & 0xFFF
+        if dy >= 0x800:
+            dy = 0x1000 - dy
+        dp = (ang[0] - pitch) & 0xFFF
+        if dp >= 0x800:
+            dp = 0x1000 - dp
+        if flags & 0x20000 and noise >= 0:
+            d >>= 2
+            dy = _s16(dy - 0x200)
+            dp = _s16(dp - 0x200)
+        elif ycone < dy or pcone < dp:
+            continue
+        score = dy + dp + (d >> 7)
+        if noise > 0:
+            score += _s32(rand() * noise) >> 15
+        if score < best:
+            best, chosen, dist = score, a, d
+    return chosen, dist
+
+
+def spell_aim(st, ram, speed, calls, kind_op):
+    """sub_8002c164: the start -- the cast offset turned by the view's
+    angles (the pitch negated) from the eye, 0x640 above the feet -- the
+    creature in sight within 0x55f0 and 0x200 either way (woken: its
+    behaviour 0x82, unless +0x28 has 0x100), the velocity the view's
+    direction times `speed`. (point, velocity, the creature, its distance)."""
+    import movement
+    import weapon
+    pitch, yaw, roll = st["view"]
+    px, py, pz = st["pos"]
+    v = weapon.vec_rotate((_s16(-pitch), yaw, roll), (st["off_x"], st["off_y"], st["off_z"]))
+    point = [_s32(v[0] + px), _s32(v[1] - 0x640 + py), _s32(v[2] + pz)]
+    chosen, dist = sight(ram, (px, py, pz), _s16(yaw), _s16(pitch), 0x55F0, 0x200, 0x200)
+    st["target"] = chosen
+    if chosen:
+        kind = ENTITY_TABLE + 120 * ram[(chosen + 2) & MASK]
+        rec = kind_op(kind, 0x82)
+        calls.append(("kind_op", kind, 0x82))
+        if rec and not _u32(ram, chosen + 0x28) & 0x100:
+            calls.append(("switch", chosen, rec))
+    d = movement.direction_from_angles(pitch, yaw)
+    vel = [_s16((c * _s16(speed)) >> 12) for c in d]
+    return point, vel, chosen, dist
+
+
+# arm -> (speed, the kind spawned, the arguments after the velocity)
+PLAIN = {0x00: (0x384, None, []), 0x06: (0x1F4, None, []), 0x37: (0x1F4, None, []),
+         0x40: (0x1B8, None, []), 0x4C: (0x1C2, None, []), 0x3C: (0x140, None, []),
+         0x3A: (0x226, None, []), 0x3E: (0x2EE, None, []), 0x4B: (0x2D0, None, []),
+         0x46: (0x1F4, None, [0]), 0x15: (0x104, None, []),
+         0x38: (0x2BC, None, ["view"]), 0x39: (0x2BC, None, ["view"]),
+         0x0D: (0x2BC, None, ["view"]), 0x04: (0xFA, None, ["view"]),
+         0x09: (0xFA, None, ["view"]), 0x11: (0xFA, None, ["view"]),
+         0x10: (0xFA, None, ["view"]), 0x05: (0xFA, None, ["view"]),
+         0x42: (0x384, None, ["view"]), 0x44: (0x3E8, 0x7C, []),
+         0x45: (0x3E8, 0x7B, ["view"])}
+
+
+def attack(st, ram, action, calls, kind_op, collide, spawn_ret, rand):
+    """player_action's attacking arms: what each spawns -- ("spawn", a0, a1,
+    kind, the point, [the velocity as ("vel", x, y, z), "view" for
+    view_angles, or a number]) -- and what it changes."""
+    def spawn(a1, kind, point, args):
+        calls.append(("spawn", 0xA, a1, kind, tuple(point), args))
+        return spawn_ret
+
+    def aim(speed):
+        return spell_aim(st, ram, speed, calls, kind_op)
+
+    if action in PLAIN:
+        speed, kind, more = PLAIN[action]
+        point, vel, _t, _d = aim(speed)
+        spawn(0x42, kind if kind is not None else action, point, [("vel", *vel)] + more)
+    elif action == 0x36:
+        for i in range(4):
+            st["off_z"] = _s16(800 * (3 - i))
+            point, vel, _t, _d = aim(0x1F4)
+            spawn(0x42, 0x36, point, [("vel", *vel), 3 - i])
+    elif action == 0x0F:                                    # tornado
+        point, vel, _t, _d = aim(0x12C)
+        point[1] = _s32(point[1] + 0x540)
+        vel[1] = 0
+        spawn(0x42, 0x0F, point, [("vel", *vel), "view", 0])
+        spawn(0x42, 0x0F, point, [("vel", *vel), "view", 1])
+    elif action == 0x07:                                    # earth wave
+        spawn(0x43, 0x07, st["pos"], [0, 0x1000, 0x100, 0x1000, 1])
+    elif action in (0x08, 0x0C):                            # meteor, bortecth
+        point, vel, t, _d = aim(0x1B58)
+        if not t:
+            point = [_s32(point[0] + vel[0]), st["pos"][1], _s32(point[2] + vel[2])]
+        elif action == 0x0C:
+            point = [_i32(ram, t + 0x2C), _i32(ram, t + 0x30), _i32(ram, t + 0x34)]
+        else:
+            ahead = []
+            for o, w in ((0x50, 0x2C), (0x52, 0x30), (0x54, 0x34)):
+                v = _s32(_h(ram, t + o) << 14)
+                q = (v * 0x64D319FF) >> 32
+                ahead.append(_s32((q >> 8) - (v >> 31) + _i32(ram, t + w)))
+            point = ahead
+            if collide(*point, 0xA, 0xA):
+                calls.append(("collide", *point))
+                point = [_i32(ram, t + 0x2C), _i32(ram, t + 0x30), _i32(ram, t + 0x34)]
+            else:
+                calls.append(("collide", *point))
+        spawn(0x43 if action == 0x08 else 0x42, 0x5F if action == 0x08 else 0x0C, point, [0])
+    elif action == 0x0B:                                    # haze
+        point, vel, _t, _d = aim(0x104)
+        vel[0] = _s16(vel[0] - 0x10 + (rand() >> 10))
+        vel[1] = _s16(vel[1] - 0x10 + (rand() >> 10))
+        spawn(0x42, 0x0B, point, [("vel", *vel), _s32(0xE - st["count"])])
+    elif action == 0x13:                                    # lightning bolt
+        point, vel, _t, d = aim(0x258)
+        if d != -1:
+            d = d // 600 - 8
+            if d < 2:
+                d = 2
+        else:
+            d = 0xA
+        vel[1] = 0
+        spawn(0x42, 0x71, point, [("vel", *vel), d])
+    elif action == 0x02:                                    # fire storm
+        point, vel, t, _d = aim(0x1F4)
+        idx = (t - ACTORS) // ACTOR_STRIDE if t else 0xFF
+        spawn(0x42, 0x02, point, [("vel", *vel), idx, st["count"]])
+    elif action == 0x01:                                    # fire wall
+        point, vel, _t, _d = aim(0x23A)
+        spawn(0x42, 0x01, point, [("vel", *vel), "view"])
+        st["off_x"] = _s16(st["off_x"] + 0x3E8)
+    elif action in (0x14, 0x47):                            # flash
+        yaw = st["view"][1]
+        st["view"] = (st["view"][0], (yaw - 2 * st["off_x"]) & 0xFFFF, st["view"][2])
+        point, vel, _t, _d = aim(0xAA)
+        st["off_x"] = _s16(st["off_x"] + 0x64)
+        st["view"] = (st["view"][0], yaw, st["view"][2])
+        spawn(0x42, action, point, [("vel", *vel), "view", 0x258, 0x3C, 0x80, 0x8C, 0xA0])
+    elif action in (0x48, 0x49, 0x4A):                      # a weapon's five
+        kind, child = (0x78, 0x5C) if action == 0x48 else (0x7A, 0x5D)
+        offs = [struct.unpack_from("<4h", ram, (OFFSETS + 8 * i) & MASK) for i in range(5)]
+        st["off_x"], st["off_y"], st["off_z"], st["off_w"] = offs[0]
+        point, vel, _t, _d = aim(0x258)
+        got = spawn(0x42, kind, point, [("vel", *vel), "view"])
+        if got:
+            parent = (got - SLOTS) // SLOT
+            for i in range(1, 5):
+                st["off_x"], st["off_y"], st["off_z"], st["off_w"] = offs[i]
+                point, vel, _t, _d = aim(0x258)
+                spawn(0x42, child, point, [("vel", *vel), parent])
+    return
+
+
 # --- against the game ---------------------------------------------------------
 
 def _cpu(ram, calls):
@@ -461,6 +661,215 @@ def _vary(ram, rng):
 def _same(a, b):
     keys = list(FIELDS) + ["practice", "skills", "working"]
     return [k for k in keys if a[k] != b[k]]
+
+
+ATTACKS = sorted(set(PLAIN) | {0x36, 0x0F, 0x07, 0x08, 0x0C, 0x0B, 0x13, 0x02, 0x01,
+                                0x14, 0x47, 0x48, 0x49, 0x4A})
+SPAWNED = SLOTS + 7 * SLOT       # what the check's effect_spawn hands back
+
+
+def _kind_op(kind, op):
+    """The check's stand-in for kind_behaviour_with_op: a record for some
+    kinds and none for the others, the same on both sides."""
+    return 0x80100000 | (kind & 0xFFF) if (kind >> 3) & 1 else 0
+
+
+def _collide(x, y, z, a3, a4):
+    return 1 if ((x ^ z) >> 9) & 1 else 0
+
+
+def attack_state(ram):
+    return {"view": tuple(struct.unpack_from("<3H", ram, VIEW & MASK)),
+            "pos": tuple(struct.unpack_from("<3i", ram, PLAYER_POS & MASK)),
+            "off_x": _h(ram, CAST_OFF), "off_y": _h(ram, CAST_OFF + 2),
+            "off_z": _h(ram, CAST_OFF + 4), "off_w": _h(ram, CAST_OFF + 6),
+            "count": ram[0x801B25EA & MASK], "target": _u32(ram, TARGET)}
+
+
+def _attack_cpu(ram, calls, lcg):
+    import mipsrun
+    cpu = mipsrun.CPU(ram)
+    cpu.hooks[RAND] = lambda c: lcg()
+
+    def spawn(c):
+        sp = c.r[29]
+        words = [c.rd(sp + 0x10 + 4 * i, 4) for i in range(8)]
+        pt = tuple(mipsrun.s32(c.rd(c.r[7] + 4 * i, 4)) for i in range(3))
+        calls.append(["spawn", c.r[4] & 0xFF, c.r[5] & 0xFF, c.r[6] & 0xFF, pt, words, sp])
+        return SPAWNED
+    cpu.hooks[EFFECT_SPAWN] = spawn
+
+    def kind_op(c):
+        calls.append(("kind_op", c.r[4], c.r[5]))
+        return _kind_op(c.r[4], c.r[5])
+    cpu.hooks[KIND_OP] = kind_op
+    cpu.hooks[ACTOR_SWITCH] = lambda c: calls.append(("switch", c.r[4], c.r[5]))
+
+    def collide(c):
+        x, y, z = (mipsrun.s32(c.r[4]), mipsrun.s32(c.r[5]), mipsrun.s32(c.r[6]))
+        calls.append(("collide", x, y, z))
+        return _collide(x, y, z, 0, 0)
+    cpu.hooks[COLLIDE_ACTOR] = collide
+    return cpu
+
+
+def _same_spawns(game, model, cpu):
+    """The game's calls against the model's, a spawn's stack words read as
+    the model's arguments say -- the velocity's three halfwords where it
+    points, view_angles' address, or a number."""
+    import mipsrun
+    if len(game) != len(model):
+        return False
+    for g, m in zip(game, model):
+        if g[0] != m[0]:
+            return False
+        if g[0] != "spawn":
+            if tuple(g) != tuple(m):
+                return False
+            continue
+        if tuple(g[1:5]) != tuple(m[1:5]):
+            return False
+        words = g[5]
+        for i, a in enumerate(m[5]):
+            w = words[i]
+            if isinstance(a, tuple) and a[0] == "vel":
+                got = tuple(mipsrun.s32(cpu.rd(w + 2 * k, 2) << 16) >> 16 for k in range(3))
+                if got != a[1:]:
+                    return False
+            elif a == "view":
+                if w != VIEW:
+                    return False
+            elif mipsrun.s32(w) != a:
+                return False
+    return True
+
+
+def attack_check(out=sys.stdout, per=40):
+    """player_action's attacking arms against the game's own over every
+    snapshot -- its creatures in sight or not -- with effect_spawn,
+    kind_behaviour_with_op, actor_switch and collide_wrapper_actor stood in
+    for and what they are handed compared: the spawns (point, velocity, kind
+    and every argument), the creature woken, and the state left."""
+    import random
+    import memcard
+    import levelstate
+    rng = random.Random(0xA77AC)
+    ok = n = 0
+    first = None
+    for path in memcard._snapshots():
+        base = bytearray(open(path, "rb").read())
+        for _ in range(per):
+            ram = bytearray(base)
+            struct.pack_into("<3H", ram, VIEW & MASK, rng.choice((0, rng.randrange(-0x180, 0x180) & 0xFFFF)),
+                             rng.randrange(0x1000), rng.choice((0, 0, rng.randrange(0x1000))))
+            struct.pack_into("<4h", ram, CAST_OFF & MASK, rng.choice((-0xC8, rng.randrange(-0x800, 0x800))),
+                             rng.choice((0xC8, 0x1F4, rng.randrange(-0x800, 0x800))),
+                             rng.choice((0x190, rng.randrange(0, 0x1000))), 0)
+            ram[0x801B25EA & MASK] = rng.randrange(0, 12)
+            action = rng.choice(ATTACKS)
+            seed = rng.randrange(1 << 30)
+            g_calls = []
+            cpu = _attack_cpu(ram, g_calls, levelstate.Lcg(seed))
+            cpu.call(PLAYER_ACTION, action)
+            st = attack_state(ram)
+            m_calls = []
+            attack(st, ram, action, m_calls, _kind_op, _collide, SPAWNED, levelstate.Lcg(seed))
+            g_st = attack_state(cpu.ram)
+            same = _same_spawns(g_calls, m_calls, cpu) and g_st == st
+            n += 1
+            ok += same
+            if not same and first is None:
+                first = (f"{os.path.basename(path)} action {action:#x}: game {g_calls} {g_st}; "
+                         f"model {m_calls} {st}")
+    print(f"player_action's attacking arms, against the game's own: {ok} of {n} casts, "
+          f"every spawn's point, velocity and arguments, the creature woken and the "
+          f"state left", file=out)
+    if first:
+        print("  first difference: " + first[:1500], file=out)
+    return ok == n
+
+
+def _norm(calls, ram):
+    """The model's calls as godot/selftest.gd compares them: a creature by
+    its slot, a spawn's arguments as numbers and ["vel", x, y, z] / "view"."""
+    out = []
+    for c in calls:
+        if c[0] == "spawn":
+            out.append(["spawn", c[2], c[3], list(c[4]),
+                        [list(a) if isinstance(a, tuple) else a for a in c[5]]])
+        elif c[0] == "switch":
+            out.append(["switch", (c[1] - ACTORS) // ACTOR_STRIDE])
+        elif c[0] == "collide":
+            out.append(["collide", c[1], c[2], c[3]])
+    return out
+
+
+def export_attacks(out_dir, n=240):
+    """attackcheck.json: casts of the attacking arms over the first snapshots,
+    each with the creatures awake (slot, +0xe, +0x28, position, +0x50..),
+    the answers the stand-ins gave in order, and the calls and state the
+    model leaves, for godot/selftest.gd."""
+    import json
+    import random
+    import memcard
+    import levelstate
+    rng = random.Random(0xA77E)
+    cases = []
+    paths = memcard._snapshots()[:6]
+    for i in range(n):
+        ram = bytearray(open(paths[i % len(paths)], "rb").read())
+        struct.pack_into("<3H", ram, VIEW & MASK, rng.choice((0, rng.randrange(-0x180, 0x180) & 0xFFFF)),
+                         rng.randrange(0x1000), rng.choice((0, 0, rng.randrange(0x1000))))
+        struct.pack_into("<4h", ram, CAST_OFF & MASK, rng.choice((-0xC8, rng.randrange(-0x800, 0x800))),
+                         rng.choice((0xC8, 0x1F4, rng.randrange(-0x800, 0x800))),
+                         rng.choice((0x190, rng.randrange(0, 0x1000))), 0)
+        ram[0x801B25EA & MASK] = rng.randrange(0, 12)
+        action = ATTACKS[i % len(ATTACKS)]
+        actors = []
+        for k in range(ACTOR_N):
+            a = ACTORS + k * ACTOR_STRIDE
+            if ram[(a + 9) & MASK] == 1:
+                actors.append([k, ram[(a + 0xE) & MASK], _u32(ram, a + 0x28),
+                               _i32(ram, a + 0x2C), _i32(ram, a + 0x30), _i32(ram, a + 0x34),
+                               _h(ram, a + 0x50), _h(ram, a + 0x52), _h(ram, a + 0x54)])
+        st = attack_state(ram)
+        before = dict(st)
+        kinds, cols, rands = [], [], []
+
+        def kind_op(kind, op):
+            v = _kind_op(kind, op)
+            kinds.append(1 if v else 0)
+            return v
+
+        def collide(x, y, z, a, b):
+            v = _collide(x, y, z, a, b)
+            cols.append(v)
+            return v
+        lcg = levelstate.Lcg(i + 1)
+
+        def rand():
+            v = lcg()
+            rands.append(v)
+            return v
+        calls = []
+        attack(st, ram, action, calls, kind_op, collide, SPAWNED, rand)
+        cases.append({"action": action, "actors": actors,
+                      "view": list(before["view"]), "pos": list(before["pos"]),
+                      "off": [before["off_x"], before["off_y"], before["off_z"], before["off_w"]],
+                      "count": before["count"], "offsets": [list(struct.unpack_from(
+                          "<4h", ram, (OFFSETS + 8 * j) & MASK)) for j in range(5)],
+                      "kinds": kinds, "collides": cols, "rands": rands,
+                      "spawned": (SPAWNED - SLOTS) // SLOT,
+                      "calls": _norm(calls, ram),
+                      "after": {"off": [st["off_x"], st["off_y"], st["off_z"], st["off_w"]],
+                                "view": list(st["view"]),
+                                "target": (st["target"] - ACTORS) // ACTOR_STRIDE if st["target"] else -1}})
+    path = os.path.join(out_dir, "attackcheck.json")
+    with open(path, "w") as fh:
+        json.dump({"_note": "player_action's attacking arms as tools/magic.py makes them "
+                            "(whose model the game's own holds)", "cases": cases},
+                  fh, separators=(",", ":"))
+    return path
 
 
 def check(out=sys.stdout, per=60):
@@ -576,5 +985,7 @@ def export(out_dir, n=200):
 
 if __name__ == "__main__":
     if "--check" in sys.argv:
-        sys.exit(0 if check() else 1)
+        a = check()
+        b = attack_check()
+        sys.exit(0 if a and b else 1)
     print(__doc__)
