@@ -4007,9 +4007,18 @@ runs, 13 057 of 13 057 frames**, every field, both screen records and all 48
 lighting records byte for byte. In the port (`player.gd` `take_hit`,
 `status_tick`): 300 of 300 hits and 40 of 40 runs (6312 frames) as the model
 has them. The darkness's and the light's near and far go to the world's
-shader (`scroll.gd`) and are blended vertex by vertex the same way; their
-background colour does not, since the port bakes each record's into the
-vertex colours.
+shader (`scroll.gd`) and are blended vertex by vertex the same way, and so
+does their background colour: `tools/level3d.py` bakes the light with the
+class's background in it and puts the background's byte in the vertex
+colour's alpha, which nothing else reads; the shader moves that byte toward
+the darkness's (10, 10, 10), the light's (0xdc, 0xdc, 0xa0) or an effect's
+pulse colour by `fixed_madd`, as `sub_80034394` moves the record's `+0x64`, and
+adds 16 times the change over 0x1000 to the colour -- what the GTE's `BK`
+term does. Every class a level's cells use (0, 2, 3, 4, 47) is among the 48
+the game blends; the one tinted background, class 54's (30, 25, 20), is past
+them and no cell uses it. What the bake cannot keep is a colour
+already clamped at full light, which the darkness then dims from 1 rather
+than from above it.
 
 ### The 191 opcodes that share a target are not doing nothing
 

@@ -59,7 +59,7 @@ var current := -1                  # 0x801ba6f0: the slot being run, an offset i
 var records := {}                  # kind -> its spell_table record (24 bytes)
 var layer_offset := 0              # collision_layer_offset after the last tile query
 var world = null                   # what the effects ask of the game; this node, or a stand-in
-var pulse := []                     # this frame's lighting from an effect: [near, far, k]
+var pulse := []                     # this frame's lighting from an effect: [near, far, k, rgb]
 var acc := 0.0
 var player: Node3D
 var coll: KFCollision
@@ -543,7 +543,7 @@ func rand() -> int:
 # the frame, the driver hands it on.
 # @port helper -- an effect's lighting, for scroll.gd
 func lighting(rgb: Array, near: int, far: int, k: int) -> void:
-	pulse = [near, far, k]
+	pulse = [near, far, k, rgb]
 
 
 # A bolt (0x80058f3c, kinds 0x23 and 0x24): its strike within a scale of

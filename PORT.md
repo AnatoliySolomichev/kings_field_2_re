@@ -623,14 +623,14 @@ The whole file is the port's own: **check** — labels for comparing the two win
 |  | `game:0x8001d8a4` menu_ratings | transcribed |
 | [`_use`](godot/menu.gd#L1055) | `game:0x8001b254` item_consume | transcribed |
 |  | `game:0x8005d748` use_item+0xb68 | partial |
-| [`_set_button`](godot/menu.gd#L1118) | `game:0x8002ba38` set_spell_b | partial |
+| [`_set_button`](godot/menu.gd#L1121) | `game:0x8002ba38` set_spell_b | partial |
 |  | `game:0x8002bb5c` set_button_item | transcribed |
-| [`_spell_table`](godot/menu.gd#L1128) | — port's own, *helper*: spell_table's 96 records as the lists read them: +0 the unlocked flag off the character | |
-| [`_equip_state`](godot/menu.gd#L1143) | — port's own, *helper*: the slots equip_names reads, out of the player | |
-| [`_equip`](godot/menu.gd#L1151) | `game:0x8001cfa0` ui_equip_page+0x3e8 | transcribed |
-| [`_status`](godot/menu.gd#L1159) | — port's own, *helper*: what ui_status_page reads, out of the player: the paralysis, the curse, the slowing and the dark are not in the port | |
-| [`_build`](godot/menu.gd#L1169) | — port's own, *engine*: the screen up now, as primitives | |
-| [`_draw`](godot/menu.gd#L1207) | — port's own, *engine*: the GPU's drawing of SPRT and POLY_FT4, on a 320 x 240 screen centred in the window | |
+| [`_spell_table`](godot/menu.gd#L1131) | — port's own, *helper*: spell_table's 96 records as the lists read them: +0 the unlocked flag off the character | |
+| [`_equip_state`](godot/menu.gd#L1146) | — port's own, *helper*: the slots equip_names reads, out of the player | |
+| [`_equip`](godot/menu.gd#L1154) | `game:0x8001cfa0` ui_equip_page+0x3e8 | transcribed |
+| [`_status`](godot/menu.gd#L1162) | — port's own, *helper*: what ui_status_page reads, out of the player: the paralysis, the curse, the slowing and the dark are not in the port | |
+| [`_build`](godot/menu.gd#L1172) | — port's own, *engine*: the screen up now, as primitives | |
+| [`_draw`](godot/menu.gd#L1210) | — port's own, *engine*: the GPU's drawing of SPRT and POLY_FT4, on a 320 x 240 screen centred in the window | |
 
 ### [`godot/messages.gd`](godot/messages.gd)
 
@@ -788,13 +788,13 @@ The whole file is the port's own: **check** — labels for comparing the two win
 
 | function | in the game | status |
 | --- | --- | --- |
-| [`_ready`](godot/scroll.gd#L122) | — port's own, *engine*: puts the shader in CODE on every material of the world | |
-| [`_swap`](godot/scroll.gd#L134) | `game:0x80035358` fog_range_set | transcribed |
+| [`_ready`](godot/scroll.gd#L138) | — port's own, *engine*: puts the shader in CODE on every material of the world | |
+| [`_swap`](godot/scroll.gd#L150) | `game:0x80035358` fog_range_set | transcribed |
 |  | `game:0x8003abfc` draw_tmd_object+0xf8 | transcribed |
-| [`_unhandled_input`](godot/scroll.gd#L172) | — port's own, *check*: F2: the darkening off and on, the port's own switch | |
-| [`set_lights`](godot/scroll.gd#L184) | `game:0x8003456c` sub_8003456c | partial |
-| [`set_pulse`](godot/scroll.gd#L197) | `game:0x8003456c` sub_8003456c | partial |
-| [`_process`](godot/scroll.gd#L210) | `game:0x800351fc` texture_scroll_step | transcribed |
+| [`_unhandled_input`](godot/scroll.gd#L189) | — port's own, *check*: F2: the darkening off and on, the port's own switch | |
+| [`set_lights`](godot/scroll.gd#L201) | `game:0x8003456c` sub_8003456c | transcribed |
+| [`set_pulse`](godot/scroll.gd#L214) | `game:0x8003456c` sub_8003456c | transcribed |
+| [`_process`](godot/scroll.gd#L230) | `game:0x800351fc` texture_scroll_step | transcribed |
 
 ### [`godot/selftest.gd`](godot/selftest.gd)
 
@@ -939,7 +939,7 @@ The whole file is the port's own: **check** — a model browser for naming thing
 | `game:0x8001c7a8` menu_equipment | [`godot/menu.gd:528`](godot/menu.gd#L528) | `func equipment_list` | partial |
 | `game:0x8001c9c0` equip_names | [`godot/menu.gd:503`](godot/menu.gd#L503) | `func equip_names` | transcribed |
 | `game:0x8001cbb8` ui_equip_page | [`godot/menu.gd:539`](godot/menu.gd#L539) | `func equip_list` | partial |
-| `game:0x8001cfa0` ui_equip_page+0x3e8 | [`godot/menu.gd:1150`](godot/menu.gd#L1150) | `func _equip` | transcribed |
+| `game:0x8001cfa0` ui_equip_page+0x3e8 | [`godot/menu.gd:1153`](godot/menu.gd#L1153) | `func _equip` | transcribed |
 | `game:0x8001d0c4` sub_8001d0c4 | [`godot/menu.gd:586`](godot/menu.gd#L586) | `func magic_list` | partial |
 | `game:0x8001d3a0` sub_8001d3a0 | [`godot/menu.gd:611`](godot/menu.gd#L611) | `func button_list` | partial |
 | `game:0x8001d784` menu_records | [`godot/menu.gd:917`](godot/menu.gd#L917) | `func _step` | partial |
@@ -996,8 +996,8 @@ The whole file is the port's own: **check** — a model browser for naming thing
 | `game:0x8002b330` camera_pose | [`godot/player.gd:1797`](godot/player.gd#L1797) | `func _view` | partial |
 | `game:0x8002b468` new_character | [`godot/levelup.gd:217`](godot/levelup.gd#L217) | `func fresh` | partial |
 | `game:0x8002b6f0` clear_movement_state | [`godot/player.gd:2094`](godot/player.gd#L2094) | `func clear_movement` | partial |
-| `game:0x8002ba38` set_spell_b | [`godot/menu.gd:1116`](godot/menu.gd#L1116) | `func _set_button` | partial |
-| `game:0x8002bb5c` set_button_item | [`godot/menu.gd:1117`](godot/menu.gd#L1117) | `func _set_button` | transcribed |
+| `game:0x8002ba38` set_spell_b | [`godot/menu.gd:1119`](godot/menu.gd#L1119) | `func _set_button` | partial |
+| `game:0x8002bb5c` set_button_item | [`godot/menu.gd:1120`](godot/menu.gd#L1120) | `func _set_button` | transcribed |
 | `game:0x8002bb84` equip_armour | [`godot/player.gd:472`](godot/player.gd#L472) | `func equip_armour` | partial |
 | `game:0x8002bdc0` equip_weapon | [`godot/player.gd:458`](godot/player.gd#L458) | `func equip_weapon` | partial |
 | `game:0x8002c040` swing_start | [`godot/weapon.gd:86`](godot/weapon.gd#L86) | `func start` | transcribed |
@@ -1061,12 +1061,12 @@ The whole file is the port's own: **check** — a model browser for naming thing
 | `game:0x80033f38` collide_query | [`godot/player.gd:1503`](godot/player.gd#L1503) | `func _query31` | partial |
 | `game:0x80033f94` collide_query+0x5c | [`godot/collision.gd:685`](godot/collision.gd#L685) | `func fenced` | verified |
 | `game:0x80034394` sub_80034394 | [`godot/player.gd:1697`](godot/player.gd#L1697) | `func light_blend` | verified |
-| `game:0x8003456c` sub_8003456c | [`godot/scroll.gd:183`](godot/scroll.gd#L183) | `func set_lights` | partial |
-| `game:0x8003456c` sub_8003456c | [`godot/scroll.gd:196`](godot/scroll.gd#L196) | `func set_pulse` | partial |
-| `game:0x800351fc` texture_scroll_step | [`godot/scroll.gd:209`](godot/scroll.gd#L209) | `func _process` | transcribed |
-| `game:0x80035358` fog_range_set | [`godot/scroll.gd:132`](godot/scroll.gd#L132) | `func _swap` | transcribed |
+| `game:0x8003456c` sub_8003456c | [`godot/scroll.gd:200`](godot/scroll.gd#L200) | `func set_lights` | transcribed |
+| `game:0x8003456c` sub_8003456c | [`godot/scroll.gd:213`](godot/scroll.gd#L213) | `func set_pulse` | transcribed |
+| `game:0x800351fc` texture_scroll_step | [`godot/scroll.gd:229`](godot/scroll.gd#L229) | `func _process` | transcribed |
+| `game:0x80035358` fog_range_set | [`godot/scroll.gd:148`](godot/scroll.gd#L148) | `func _swap` | transcribed |
 | `game:0x80035ca4` model_prims | [`godot/compass.gd:129`](godot/compass.gd#L129) | `func _draw` | transcribed |
-| `game:0x8003abfc` draw_tmd_object+0xf8 | [`godot/scroll.gd:133`](godot/scroll.gd#L133) | `func _swap` | transcribed |
+| `game:0x8003abfc` draw_tmd_object+0xf8 | [`godot/scroll.gd:149`](godot/scroll.gd#L149) | `func _swap` | transcribed |
 | `game:0x8003c1b8` draw_terrain+0x1e8 | [`godot/doors.gd:580`](godot/doors.gd#L580) | `func _draw_lift` | transcribed |
 | `game:0x8003c35c` draw_model_cell_lit | [`godot/compass.gd:128`](godot/compass.gd#L128) | `func _draw` | transcribed |
 | `game:0x8003c9dc` load_data_screen | [`godot/cutscene.gd:47`](godot/cutscene.gd#L47) | `func _ready` | partial |

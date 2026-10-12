@@ -1069,8 +1069,11 @@ func _use(id: int) -> void:
 			0x6B:
 				player.hp = player.hp_max
 				player.mp = int(player.character.get("mp_max", player.mp))
-			0x6C:
-				pass                                    # 0x801b2568 and turn_slow_timer: not in the port
+			0x6C:                                       # the blood stone (0x8001b350)
+				if int(player.caps["paralysis"]) > 0:
+					player.caps["paralysis"] = 0
+				if int(player.caps["slow"]) >= 0x41:
+					player.caps["slow"] = 0x40
 			0x6D:
 				player.mp += 0x28
 				player.mp = mini(player.mp, int(player.character.get("mp_max", player.mp)))

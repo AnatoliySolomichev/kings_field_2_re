@@ -134,7 +134,12 @@ def light_class(look, cls, rot):
 def shade(normal, llm, lcm, bk):
     """One face's colour, as the GTE computes it. Never reaches black: the
     background term is added after the light, which is why nothing in the real
-    game is unlit and why an engine light on top of this would be wrong."""
+    game is unlit and why an engine light on top of this would be wrong.
+
+    The fourth value is the class's background byte (its red, +0x64) over
+    255, 254 at most -- the vertex colour's alpha, which nothing else reads --
+    so godot/scroll.gd can move it as sub_80034394 moves the record's
+    (the darkness, the light, an effect's pulse) and the colour with it."""
     ir = [max(0, min(0x7FFF, (llm[r][0] * normal[0] + llm[r][1] * normal[1]
                               + llm[r][2] * normal[2]) >> 12)) for r in range(3)]
     out = []
@@ -142,6 +147,7 @@ def shade(normal, llm, lcm, bk):
         v = (bk[r] * 4096 + lcm[r][0] * ir[0] + lcm[r][1] * ir[1]
              + lcm[r][2] * ir[2]) >> 12
         out.append(max(0.0, min(1.0, v / 4096.0)))
+    out.append(min(bk[0] // 16, 254) / 255.0)
     return out
 
 
@@ -314,7 +320,7 @@ def build_gltf(lv, out="out/godot", limit=None):
                         bag[1].append(nrm)
                         u, v = pr.uvs[i]
                         bag[2].append((u / 256.0, v / 256.0))
-                        bag[3].append((rgb[0], rgb[1], rgb[2], 1.0))
+                        bag[3].append((rgb[0], rgb[1], rgb[2], rgb[3] if len(rgb) > 3 else 1.0))
                         bag[4].append(fog)
 
     ntri, mats = 0, {}
@@ -548,7 +554,7 @@ def emit_object(objs, place, colour, groups, normal_of=None, fog=(0, 0)):
                     bag[1].append(nrm)
                     u, v = pr.uvs[i]
                     bag[2].append((u / 256.0, v / 256.0))
-                    bag[3].append((rgb[0], rgb[1], rgb[2], 1.0))
+                    bag[3].append((rgb[0], rgb[1], rgb[2], rgb[3] if len(rgb) > 3 else 1.0))
                     bag[4].append(fog)
 
 

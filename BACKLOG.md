@@ -796,12 +796,10 @@ each one is also in its function's marker, as `partial` and what differs:
 * **What a hit leaves is whole; two of its inputs are not.** `0x801b25b4`,
   which lets no hit through and halves both of the walk's caps, is cleared by
   `equip_weapon` and set by something not read yet (the summary had it as a
-  weapon's guard; unconfirmed). `0x801b256c`, the other way out, is one of the
-  bonus timers above. And the darkness's and the light's background colour
-  (`+0x64` of the lighting records) is not in the port: the vertex colours are
-  baked with the record's own, so the darkness there is its near and far
-  alone -- the world goes black past 0x1770 -- and the light only pushes the
-  far out.
+  weapon's guard; unconfirmed). `0x801b256c`, the other way out, is the
+  refusal spell's timer. The lighting's background colour moves now (the
+  vertex colour's alpha carries the class's; FORMATS, "What a hit leaves
+  behind") -- untested by eye: the port's shaders compile only in a window.
 * **`give_item` and `take_item` call the level's own hook** after the count
   changes (`level_hooks+0x18`, `+0x2c`); `godot/items.gd` does not.
 * **`new_character` does much more than `KFLevels.fresh`**: the gold, the
@@ -828,8 +826,7 @@ each one is also in its function's marker, as `partial` and what differs:
   aim and `effect_spawn` of the spell's own kind), the effects' arms of the
   attacking spells' kinds (the healing and protecting six are in), the
   drawing of everything with `+8 & 0xc` set -- the protecting marks and the
-  sparkles, in front of the eye -- the lighting pulses' background colour,
-  the weapons' magic (`0x36`..`0x4c`, `spell_begin`,
+  sparkles, in front of the eye -- the weapons' magic (`0x36`..`0x4c`, `spell_begin`,
   `held_item_tick`'s `0x801b25b2`), and the button's thing (`use_item` from
   `0x8002ff28`). The equipment screen's MAGIC and BUTTON lines are in
   (light goes on the button: magic A lists the attacking spells alone); not

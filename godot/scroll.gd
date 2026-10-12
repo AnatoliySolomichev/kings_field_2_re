@@ -58,6 +58,12 @@ const CUE_OFF := 32000.0             # a near this far means no cue at all
 const DARK_NEAR := 5000.0
 const DARK_FAR := 6000.0
 const LIGHT_FAR := 18000.0
+# and the background colour toward: the darkness's (10, 10, 10), the light's
+# (0xdc, 0xdc, 0xa0). The vertex colour's alpha is the class's own (its red
+# byte; tools/level3d.py shade), moved as the record's is and the colour with
+# it -- 16 times the byte over 0x1000 of light, as the GTE adds BK.
+const DARK_BK := 10.0
+const LIGHT_BK := Vector3(220.0, 220.0, 160.0)
 
 const CODE := """
 shader_type spatial;
@@ -72,9 +78,19 @@ uniform bool pulse_on = false;
 uniform float pulse_near = 0.0;
 uniform float pulse_far = 0.0;
 uniform float pulse_k = 0.0;
+uniform vec3 pulse_rgb = vec3(0.0);
 varying float cue;
+varying vec3 shift;
 void vertex() {
 	float z = -(MODELVIEW_MATRIX * vec4(VERTEX, 1.0)).z * 1000.0;
+	float b0 = floor(COLOR.a * 255.0 + 0.5);
+	vec3 bk = vec3(b0);
+	if (b0 < 255.0) {
+		if (dark_k >= 0.0) { bk += floor((vec3(%.1f) - bk) * dark_k / 4096.0); }
+		if (light_k >= 0.0) { bk += floor((vec3(%.1f, %.1f, %.1f) - bk) * light_k / 4096.0); }
+		if (pulse_on) { bk += floor((pulse_rgb - bk) * pulse_k / 4096.0); }
+	}
+	shift = (bk - vec3(b0)) * 16.0 / 4096.0;
 	float nearz = UV2.x;
 	float farz = UV2.y;
 	if (dark_k >= 0.0) {
@@ -102,7 +118,7 @@ void fragment() {
 		px.y = %.1f + mod(px.y - %.1f - offset, %.1f);
 	}
 	vec4 c = texture(page, px / 256.0);
-	vec3 lit = COLOR.rgb;
+	vec3 lit = clamp(COLOR.rgb + shift, 0.0, 1.0);
 	ALBEDO = c.rgb * max(lit + cue * (vec3(%.6f) - lit), vec3(0.0));
 	%s
 }
@@ -152,7 +168,8 @@ func _swap(n: Node, shaders: Dictionary) -> void:
 			var key := "%s %s %s" % [cull, blend, semi]
 			if not shaders.has(key):
 				var sh := Shader.new()
-				sh.code = CODE % [cull, blend, DARK_NEAR, DARK_FAR, LIGHT_FAR,
+				sh.code = CODE % [cull, blend, DARK_BK, LIGHT_BK.x, LIGHT_BK.y, LIGHT_BK.z,
+					DARK_NEAR, DARK_FAR, LIGHT_FAR,
 					CUE_OFF, CUE_CAP, X0, Y0, Y0 + SIZE,
 					Y0, Y0, SIZE, FAR_COLOUR, MIXED if semi else CUT]
 				shaders[key] = sh
@@ -177,10 +194,11 @@ func _unhandled_input(e: InputEvent) -> void:
 
 
 # The darkness's and the light's intensities this frame (-1: none), which the
-# shader blends every vertex's near and far by, as sub_80034394 blends the
-# record's. Their background colours are not here: the vertex colours are
-# baked with the record's own.
-# @orig game:0x8003456c sub_8003456c  status:partial -- the near and the far, per vertex; not the background colour (+0x64), which the baked vertex colours carry
+# shader blends every vertex's near, far and background colour by, as
+# sub_80034394 blends the record's -- the background off the vertex colour's
+# alpha, the class's red byte (the one tinted background, class 54's, is
+# past the 48 blended and no cell's).
+# @orig game:0x8003456c sub_8003456c  status:transcribed -- the near, the far and the background colour per vertex; the clamp at full light lost once baked
 func set_lights(dark_k: int, light_k: int) -> void:
 	if lights == [dark_k, light_k]:
 		return
@@ -191,9 +209,9 @@ func set_lights(dark_k: int, light_k: int) -> void:
 
 
 # An effect's lighting this frame -- earth heal's, antidote's, blessings' --
-# [near, far, k], or [] for none: blended after the darkness and the light,
-# as effect_driver runs after player_controller.
-# @orig game:0x8003456c sub_8003456c  status:partial -- an effect's call, the near and the far per vertex; not the background colour
+# [near, far, k, rgb], or [] for none: blended after the darkness and the
+# light, as effect_driver runs after player_controller.
+# @orig game:0x8003456c sub_8003456c  status:transcribed -- an effect's call: the near, the far and the background colour per vertex, as sub_80034394 moves the record's
 func set_pulse(p: Array) -> void:
 	if p == pulse:
 		return
@@ -204,6 +222,9 @@ func set_pulse(p: Array) -> void:
 			s.set_shader_parameter("pulse_near", float(p[0]))
 			s.set_shader_parameter("pulse_far", float(p[1]))
 			s.set_shader_parameter("pulse_k", float(p[2]))
+			if p.size() > 3:
+				s.set_shader_parameter("pulse_rgb", Vector3(float(p[3][0]), float(p[3][1]),
+					float(p[3][2])))
 
 
 # @orig game:0x800351fc texture_scroll_step  status:transcribed -- delay 0, step 1, wrapped at 32; the shader samples the square the way its MoveImages leave it
