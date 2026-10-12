@@ -33,30 +33,65 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 EXES = ("boot", "open", "game", "end")
 
 
-def run(args, why, out=sys.stdout, keep=None):
-    """One step. Prints the lines worth keeping and returns them."""
+def _exec(args):
+    """One step's process: (its return code or the error, its lines, seconds)."""
     t = time.time()
     try:
         r = subprocess.run([sys.executable] + args, cwd=ROOT,
                            capture_output=True, text=True, timeout=3600)
     except Exception as e:
-        print(f"  {why}: could not run -- {e}", file=out)
+        return e, [], time.time() - t
+    return r.returncode, (r.stdout + r.stderr).splitlines(), time.time() - t
+
+
+def _report(why, res, out=sys.stdout, keep=None, timed=False):
+    """What a step said worth keeping; its lines."""
+    rc, lines, dt = res
+    took = f" [{dt:.0f}s]" if timed else ""
+    if isinstance(rc, Exception):
+        print(f"  {why}{took}: could not run -- {rc}", file=out)
         return []
-    lines = (r.stdout + r.stderr).splitlines()
-    if r.returncode != 0:
-        print(f"  {why}: failed", file=out)
+    if rc != 0:
+        print(f"  {why}{took}: failed", file=out)
         for line in lines[-4:]:
             print(f"      {line}", file=out)
         return lines
     shown = [x for x in lines if keep is None or any(k in x for k in keep)]
-    head = f"  {why}"
+    head = f"  {why}{took}"
     if shown:
         print(f"{head}: {shown[0].strip()}", file=out)
         for line in shown[1:12]:
             print(f"      {line.strip()}", file=out)
     else:
-        print(f"{head}: done in {time.time() - t:.1f}s", file=out)
+        print(f"{head}: done in {dt:.1f}s", file=out)
     return lines
+
+
+def run(args, why, out=sys.stdout, keep=None):
+    """One step. Prints the lines worth keeping and returns them."""
+    return _report(why, _exec(args), out, keep)
+
+
+def run_all(steps, out=sys.stdout):
+    """Steps that only read and report, side by side on every core; said in
+    their own order, each with the seconds it took. Whether all went."""
+    import concurrent.futures
+    t = time.time()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count() or 4) as pool:
+        futs = [pool.submit(_exec, args) for args, _why, _keep in steps]
+        res = [f.result() for f in futs]
+    good = True
+    for (args, why, keep), r in zip(steps, res):
+        _report(why, r, out, keep, timed=True)
+        good = good and r[0] == 0
+    print(f"  -- {len(steps)} steps side by side in {time.time() - t:.0f}s", file=out)
+    return good
+
+
+def effect_parts():
+    """tools/effects.py's checks by name (--parts), or the whole as one."""
+    rc, lines, _dt = _exec(["tools/effects.py", "--parts"])
+    return lines[-1].split() if rc == 0 and lines else None
 
 
 def main(quick=False, only_check=False):
@@ -97,118 +132,128 @@ def main(quick=False, only_check=False):
         run(["tools/portmap.py", "--doc"], "PORT.md", keep=["wrote"])
 
     print("\nWhat has to still be true")
-    run(["tools/collision.py"], "the collision, against the game's own answers",
-        keep=["reproduced"])
-    run(["tools/levelup.py"], "the level table, against the snapshots",
-        keep=["snapshots match", "snapshots have unlocked"])
-    run(["tools/movement.py", "bp15"], "the movement, against the watchpoint",
-        keep=["of 48", "of 15"])
-    run(["tools/escript.py", "check"], "the conversations, against what was played",
-        keep=["reproduced"])
-    run(["tools/equip.py", "--check", "out/ram.bin"],
+    steps = []
+    steps.append((["tools/collision.py"], "the collision, against the game's own answers",
+        ["reproduced"]))
+    steps.append((["tools/levelup.py"], "the level table, against the snapshots",
+        ["snapshots match", "snapshots have unlocked"]))
+    steps.append((["tools/movement.py", "bp15"], "the movement, against the watchpoint",
+        ["of 48", "of 15"]))
+    steps.append((["tools/escript.py", "check"], "the conversations, against what was played",
+        ["reproduced"]))
+    steps.append((["tools/equip.py", "--check", "out/ram.bin"],
         "the equipment tables, against a RAM snapshot",
-        keep=["match RAM", "reproduced", "player_recalc_stats over"])
-    run(["tools/actors.py", "0", "--check"],
+        ["match RAM", "reproduced", "player_recalc_stats over"]))
+    steps.append((["tools/actors.py", "0", "--check"],
         "the creatures of level 0, against a RAM snapshot",
-        keep=["of 200", "match", "slots"])
-    run(["tools/levelmap.py", "--check"],
+        ["of 200", "match", "slots"]))
+    steps.append((["tools/levelmap.py", "--check"],
         "the level maps, against the floor they should cover",
-        keep=["open cells covered"])
-    run(["tools/modelbank.py", "--check"],
+        ["open cells covered"]))
+    steps.append((["tools/modelbank.py", "--check"],
         "the resident model bank, against a RAM snapshot",
-        keep=["model pointers"])
-    run(["tools/props.py", "--check"],
+        ["model pointers"]))
+    steps.append((["tools/props.py", "--check"],
         "the level's own props, against a RAM snapshot",
-        keep=["fields of"])
-    run(["tools/levelstate.py", "--check"],
+        ["fields of"]))
+    steps.append((["tools/levelstate.py", "--check"],
         "the saved level record, against what was played and the game's own two routines",
-        keep=["decode exactly", "level_state_write, the game's", "apply_level_state, the game's",
-              "differ", "part at"])
-    run(["tools/memcard.py", "--check"],
+        ["decode exactly", "level_state_write, the game's", "apply_level_state, the game's",
+              "differ", "part at"]))
+    steps.append((["tools/memcard.py", "--check"],
         "the saves on the memory card, against the game's own restore and serialise",
-        keep=["saves on the cards", "bytes written where", "bytes as this table"])
-    run(["tools/objcoll.py", "--check"],
+        ["saves on the cards", "bytes written where", "bytes as this table"]))
+    steps.append((["tools/objcoll.py", "--check"],
         "the object collision, against what was played",
-        keep=["recorded touches"])
-    run(["tools/lighting.py", "--check"],
+        ["recorded touches"]))
+    steps.append((["tools/lighting.py", "--check"],
         "the lighting table, against every snapshot with a level",
-        keep=["over every snapshot"])
-    run(["tools/rtim.py", "--check"],
+        ["over every snapshot"]))
+    steps.append((["tools/rtim.py", "--check"],
         "the video memory, against every snapshot with a level",
-        keep=["over every snapshot"])
-    run(["tools/hud.py", "--check"],
+        ["over every snapshot"]))
+    steps.append((["tools/hud.py", "--check"],
         "the panel's sprite table, against every snapshot's RAM",
-        keep=["fields of the live sprite table"])
-    run(["tools/ai.py", "--check"],
+        ["fields of the live sprite table"]))
+    steps.append((["tools/ai.py", "--check"],
         "the creatures' behaviours, against every snapshot's RAM",
-        keep=["bytes of the kinds", "runs of one behaviour", "creature frames exact",
-              "the hold (+0x28 bit 0x800)"])
-    run(["tools/doors.py", "--check"],
+        ["bytes of the kinds", "runs of one behaviour", "creature frames exact",
+              "the hold (+0x28 bit 0x800)"]))
+    steps.append((["tools/doors.py", "--check"],
         "the doors, the gates and the hidden wall, against what was played and the game's code",
-        keep=["steps of a moving door", "steps of a lift door", "more at 0x14",
+        ["steps of a moving door", "steps of a lift door", "more at 0x14",
               "doorway answers", "no out/lua_bp27", "steps of a gate", "no gate lines",
-              "game's own gate arm", "game's own hidden-wall arm"])
-    run(["tools/crossing.py", "--check"],
+              "game's own gate arm", "game's own hidden-wall arm"]))
+    steps.append((["tools/crossing.py", "--check"],
         "the crossings between levels, against what was played",
-        keep=["crossings the model makes"])
-    run(["tools/mipsrun.py", "--check"],
+        ["crossings the model makes"]))
+    steps.append((["tools/mipsrun.py", "--check"],
         "the game's own code, run over a snapshot",
-        keep=["exactly", "NOT"])
-    run(["tools/ui.py", "--check"],
+        ["exactly", "NOT"]))
+    steps.append((["tools/ui.py", "--check"],
         "the menus' drawing, against the menu snapshots' frames",
-        keep=["primitive for primitive"])
-    run(["tools/talk.py", "--check"],
+        ["primitive for primitive"]))
+    steps.append((["tools/talk.py", "--check"],
         "the conversations a USE at a time, against what was played",
-        keep=["recorded conversations", "calls bp21 caught"])
-    run(["tools/chests.py", "--check"],
+        ["recorded conversations", "calls bp21 caught"]))
+    steps.append((["tools/chests.py", "--check"],
         "the chests' lids, the drops and the pedestals, against every snapshot",
-        keep=["opened lids", "things lying", "Silviera's key", "pedestal lines",
-              "game's own pedestal arm"])
-    run(["tools/weapon.py", "--check"],
+        ["opened lids", "things lying", "Silviera's key", "pedestal lines",
+              "game's own pedestal arm"]))
+    steps.append((["tools/weapon.py", "--check"],
         "the creatures' HP and the player's weapon, against snapshots and bp25",
-        keep=["awake creatures", "frames of the weapon", "blows landed"])
-    run(["tools/anim.py", "--check"],
+        ["awake creatures", "frames of the weapon", "blows landed"]))
+    steps.append((["tools/anim.py", "--check"],
         "the creatures' animation, against every snapshot's actor caches",
-        keep=["caches hold", "last drawn"])
-    run(["tools/effects.py", "--check"],
-        "the effects, against what was played and the game's own code",
-        keep=["frames of a spore", "strikes a frame after", "effect_aim, the game's",
-              "effect_spawn and effect_driver, the game's",
-              "the healing and protecting spells' effects", "the fire ball",
-              "end to end, the game's own collide_query"])
-    run(["tools/status.py", "--check"],
+        ["caches hold", "last drawn"]))
+    fx_keep = ["frames of a spore", "strikes a frame after", "effect_aim, the game's",
+               "effect_spawn and effect_driver, the game's",
+               "the healing and protecting spells' effects", "the fire ball",
+               "end to end, the game's own collide_query"]
+    names = effect_parts()
+    if names:
+        for name in names:
+            steps.append((["tools/effects.py", "--part", name],
+                          f"the effects ({name}), against what was played and the game's own code",
+                          fx_keep))
+    else:
+        steps.append((["tools/effects.py", "--check"],
+                      "the effects, against what was played and the game's own code", fx_keep))
+    steps.append((["tools/status.py", "--check"],
         "what a hit leaves behind, against the game's own player_take_hit and sub_80030e14",
-        keep=["player_take_hit:", "sub_80030e14:", "first difference"])
-    run(["tools/magic.py", "--check"],
+        ["player_take_hit:", "sub_80030e14:", "first difference"]))
+    steps.append((["tools/magic.py", "--check"],
         "casting, against the game's own cast_spell, player_action, player_turn and the controller's end",
-        keep=["casting, against", "attacking arms", "first difference"])
-    run(["tools/hit.py", "--check"],
+        ["casting, against", "attacking arms", "first difference"]))
+    steps.append((["tools/hit.py", "--check"],
         "a creature's hit, against the game's own actor_take_hit",
-        keep=["actor_take_hit, against", "first difference"])
-    run(["tools/knock.py", "--check"],
+        ["actor_take_hit, against", "first difference"]))
+    steps.append((["tools/knock.py", "--check"],
         "the knock-back, against what was played",
-        keep=["knock-backs", "landings", "frames of a knock-back",
-              "player_velocity what", "pushes predicted"])
-    run(["tools/compass.py", "--check"],
+        ["knock-backs", "landings", "frames of a knock-back",
+              "player_velocity what", "pushes predicted"]))
+    steps.append((["tools/compass.py", "--check"],
         "the compass's records, against every snapshot's RAM",
-        keep=["switches, pitches"])
-    run(["tools/objload.py", "--check"],
+        ["switches, pitches"]))
+    steps.append((["tools/objload.py", "--check"],
         "the object loader, against every snapshot with a level and the game's own",
-        keep=["over every snapshot", "load_object_placement leaves them", "differs:"])
-    run(["tools/objops.py", "--types"],
+        ["over every snapshot", "load_object_placement leaves them", "differs:"]))
+    steps.append((["tools/objops.py", "--types"],
         "the object type table, against a RAM snapshot",
-        keep=["of 7968", "rows"])
-    run(["tools/quest.py", "--check"],
+        ["of 7968", "rows"]))
+    steps.append((["tools/quest.py", "--check"],
         "the conversation hooks, two readings of the same table",
-        keep=["agree"])
-    run(["tools/portmap.py"], "the port, function by function, against the game",
-        keep=["functions in", "markers,", "every function", "problems", "godot/"])
+        ["agree"]))
+    steps.append((["tools/portmap.py"], "the port, function by function, against the game",
+        ["functions in", "markers,", "every function", "problems", "godot/"]))
+    good = run_all(steps)
     if not quick and not only_check:
         print("\nThe Godot build")
         run(["tools/level3d.py", "0"], "level 0",
             keep=["godot loads", "movement:", "levels:", "problems"])
+    return good
 
 
 if __name__ == "__main__":
     a = sys.argv[1:]
-    main(quick="--quick" in a, only_check="--check" in a)
+    sys.exit(0 if main(quick="--quick" in a, only_check="--check" in a) else 1)

@@ -58,6 +58,14 @@ snapshots, every frame of the movement recording reproduced, and every marker
 in the port resolving. A step that cannot run — no disc, no Godot — says so and
 does not stop the rest.
 
+Those checks only read and report, so they run side by side on every core and
+are said in their own order, each with the seconds it took; `tools/effects.py`
+goes as its parts (`--parts` names them, `--part NAME` runs one: the spores,
+`effect_aim`, the machine, the healing spells, the fire ball twice, and each
+attacking spell sent at the creatures). The whole `--check` takes about five
+minutes where one after another it took twenty-five, walwind's end to end the
+longest. A failed step makes it exit 1.
+
 ## Naming things
 
 **`syms.py`** — the address book. `data/symbols.json` holds a name, a kind and
@@ -709,7 +717,8 @@ uses, so X uses, Z attacks and D opens the menu in both windows. The port's own
 keys keep off those: **F1** walks or flies, **F2** turns the distance
 darkening off and on, **G** shows the collision, **PgUp/PgDn**
 rise and sink while flying, **Shift** hurries, **Escape** frees the mouse,
-**F9** resyncs the compare, **F10** kills the nearest creature. Flying passes through
+**F9** resyncs the compare, **F10** kills the nearest creature, **F11** learns
+every spell and raises the MP to 999 (to try late spells on level 0). Flying passes through
 everything on purpose — this level has rooms the game never lets you into. The
 readout names the cell you are in, in the game's own numbering, so anything
 found there can be pointed at in the data.

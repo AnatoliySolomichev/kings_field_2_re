@@ -2606,7 +2606,26 @@ def aim_check(out=sys.stdout, n=600):
           f"{ok} of {n} velocities and yaws as aim() makes them", file=out)
     return ok == n
 
+def parts():
+    """The checks one at a time, by name, for tools/build.py to run side by
+    side: the spores, effect_aim, the machine, the healing spells, the fire
+    ball against stand-ins and in the world, and each attacking spell sent."""
+    out = [("spores", lambda: check(verbose=False)), ("aim", aim_check),
+           ("machine", machine_check), ("magic", magic_check), ("fire", fire_check),
+           ("fire_world", fire_world_check)]
+    for kind, speed, name, more, n in SPELLS_SENT:
+        out.append((f"{kind:#x}", lambda kind=kind, speed=speed, name=name, more=more, n=n:
+                    fire_hit_check(sys.stdout, 6, n, kind, speed, name, more)))
+    return out
+
+
 if __name__ == "__main__":
+    if "--parts" in sys.argv:                       # the names --part takes
+        print(" ".join(name for name, _f in parts()))
+        sys.exit(0)
+    if "--part" in sys.argv:
+        want = sys.argv[sys.argv.index("--part") + 1]
+        sys.exit(0 if dict(parts())[want]() else 1)
     good = check(verbose="--check" not in sys.argv)
     good = aim_check() and good
     good = machine_check() and good
