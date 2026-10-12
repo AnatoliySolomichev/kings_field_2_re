@@ -544,6 +544,10 @@ pulse), which reach the player's fields, `rand` and the lighting records;
 `magic_check` holds them to the game's own code with all three compared every
 frame, **126 of 126** runs and **2698 of 2698** frames, and `fxcheck.json`
 carries 24 such runs with the fields, the draws and the lighting calls.
+And the fire ball (kind 0): `fire_check` stands `collide_query`, the sound and
+`actor_attack_player` in on both sides (`StandIn`) and compares what each is
+handed -- **168 of 168** runs, **782 of 782** frames; 24 runs in
+`fxcheck.json`.
 
 **`weapon.py`** — the player's weapon: the swing, what it reaches, what a hit
 does to a creature.

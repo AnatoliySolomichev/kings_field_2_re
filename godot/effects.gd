@@ -42,6 +42,7 @@ const COUNT := 128
 const STRIDE := 0x4C
 const FAST := 0xC5C10              # a speed squared past it gets the half-step test
 const TRAIL := 0x6F
+const FIRE_BALL := 0x00
 const TRAIL_ARGS := [0xE10, -0x80, 5, 0x16, 0, 1, 3]   # 0x80058f50's, after the velocity
 const QUERY := {1: 0xA1, 2: 0x31, 3: 0xB1, 4: 0x01}    # effect_collide: +0 & 7 -> flags
 const GROW := 0x96
@@ -251,6 +252,11 @@ func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array) -> 
 			w8(s + 0xD, 1)
 			w16(s + 0x44, 0x14)
 			w32(s + 0x1C, s32(s + 0x1C) - 0xC8)
+		FIRE_BALL:                          # 0x80053e98
+			particle(s, 9, 0x1000, 5)
+			w16(s + 0xE, 0x40)
+			w16(s + 0x10, 0x32)             # sub_800532d4's sound between, not here
+			w8(s + 0xD, 1)
 		0x1A:                               # 0x8005585c, fire resist's mark
 			var i := int(args[1]) if args.size() > 1 and args[1] != null else 0
 			orbit(s, 0x18, i << 11, 14 * i - 7)
@@ -391,6 +397,8 @@ func tick(s: int) -> void:
 			_tick_spore(s)
 		TRAIL:
 			_tick_puff(s)
+		FIRE_BALL:
+			_tick_fire(s)
 		0x1A:
 			_mark(s, "b56a", 0x40)
 		0x1B:
@@ -403,6 +411,67 @@ func tick(s: int) -> void:
 			_tick_antidote(s)
 		0x1E:
 			_tick_blessings(s)
+
+
+# The fire ball (0x80056910): in flight (+7 0) effect_move at radius 0xb4 and
+# the height's top bit, turning 0x12c a frame; a hit -- after the water's
+# splash, which is not here -- steps it back, half its velocity when
+# game_isqrt((x - the player's x) ^ 2), the compiler's xor, is under 0x400,
+# all of it otherwise, and hands what it hit to actor_attack_player from 8
+# velocities back with 0x1388 and the caster's strength; then it grows by
+# 0x800 two frames, +4 0x80 + the phase, and is gone at phase 3.
+# @orig game:0x80056910 effect_tick+0x54  status:verified -- tools/effects.py fire_check, 168 of 168 runs of the game's own, collide_query and actor_attack_player stood in for; the self-test this to it; not the splash (0x80056580's kind 0x70)
+func _tick_fire(s: int) -> void:
+	var ph := u8(s + 7)
+	if ph == 0:
+		var hit := move(0xB4, 0x80000000, -0x12C)
+		if hit == 0:
+			return
+		var dx := (s32(s + 0x18) - int(world.field("px"))) & 0xFFFFFFFF
+		if coll.isqrt(dx ^ 2) < 0x400:
+			for i in 3:
+				var h := s16(s + 0x38 + 2 * i)
+				w32(s + 0x18 + 4 * i, s32(s + 0x18 + 4 * i) - (-((-h) >> 1) if h < 0 else h >> 1))
+		else:
+			undo(s)
+		var back := []
+		for i in 3:
+			back.append(s32(s + 0x18 + 4 * i) - (s16(s + 0x38 + 2 * i) << 3))
+		world.attack_hit(hit, u8(s), u8(s + 1), 0x1388, magic_strength(s), u8(s + 6), back)
+		w8(s + 7, 1)
+	elif ph >= 3:
+		w8(s, 0xFF)
+		return
+	w8(s + 4, (ph - 0x80) & 0xFF)
+	var sc := (u16(s + 0x30) + 0x800) & 0xFFFF
+	for o in [0x30, 0x32, 0x34]:
+		w16(s + o, sc)
+	w8(s + 7, u8(s + 7) + 1)
+
+
+# sub_80053624: a player's effect (+0 0x40) strikes with the mean of the
+# working skills whose bit its spell's group (+5) has; any other with 5.
+# @orig game:0x80053624 sub_80053624  status:verified -- through the fire ball's hits, the same 168 runs
+func magic_strength(s: int) -> int:
+	if (u8(s) & 0x40) == 0:
+		return 5
+	var rec: PackedByteArray = records.get(u8(s + 1), PackedByteArray())
+	var group := int(rec[5]) if rec.size() > 5 else 0
+	var n := 0
+	var total := 0
+	for k in range(4, -1, -1):
+		if group & (1 << k):
+			n += 1
+			total += int(world.field("w%d" % k))
+	return ((total & 0xFFFF) / n) & 0xFFFF if n > 0 else total & 0xFFFF
+
+
+# What an effect's hit hands actor_attack_player (0x800533e8): the player
+# (code 0x80) or the creature collide_query met (0x10). The port's
+# collide_query keeps no creatures, so nothing reaches one yet.
+# @port helper -- actor_attack_player from an effect, in the port: a note
+func attack_hit(code: int, _flags: int, kind: int, _strength: int, stat: int, _pct: int, _back: Array) -> void:
+	KFInfo.note("effect: kind 0x%x hit 0x%x, strength %d" % [kind, code, stat])
 
 
 # The protecting spells' marks (0x8005b5e4, 0x8005b610, 0x8005b63c): gone
@@ -515,6 +584,9 @@ func field(name: String) -> int:
 		"b56a": return int(player.get("bonus")[0])
 		"b56c": return int(player.get("shielded"))
 		"b56e": return int(player.get("bonus")[1])
+		"px": return int(player.get("gx"))
+		"w0", "w1", "w2", "w3", "w4":
+			return int(player.get("working")[int(name.substr(1))])
 	return 0
 
 
@@ -714,7 +786,7 @@ func collide_query(x: int, y: int, z: int, r: int, h: int, flags: int) -> int:
 		var keep_r := coll.radius
 		var keep_b := coll.body
 		coll.radius = r
-		coll.body = h
+		coll.body = h & 0x0FFFFFFF          # tile_collision's mask: the top bits are flags
 		var q := coll.query(x, y, z)
 		coll.radius = keep_r
 		coll.body = keep_b
@@ -885,12 +957,12 @@ func spawn_spore(point: Vector3i, pct: int) -> void:
 # render_walk's third loop: a slot whose +8 & 3 is not 0 is drawn by
 # draw_model_plain, model_table[+3 + 0x28] at +0x18, turned by +0x28.. with
 # 0x800 on the yaw, through the scale +0x30..+0x34.
-# @orig game:0x8004165c render_walk+0xb78  status:partial -- the model, the place, the turn and the scale of +8 & 0xc 0, the world's; not the view test (+8 & 3, view_bits_at), the three other matrices +8 & 0xc chooses (the marks and sparkles in front of the eye are not drawn), nor +0xe and the light
+# @orig game:0x8004165c render_walk+0xb78  status:partial -- the model, the place, the turn and the scale of +8 & 0xc 0, the world's; not the view test (+8 & 3, view_bits_at), the other matrices +8 & 0xc chooses -- 4 (the particles) drawn as the world's, 0xc (the marks and sparkles in front of the eye) not at all, nor +0xe and the light
 func _draw_all() -> void:
 	var live := {}
 	for k in COUNT:
 		var s := k * STRIDE
-		if m[s] == 0xFF or (m[s + 8] & 3) == 0 or (m[s + 8] & 0xC) != 0:
+		if m[s] == 0xFF or (m[s + 8] & 3) == 0 or (m[s + 8] & 0xC) == 0xC:
 			continue
 		var model := u8(s + 3) + MODEL_BASE
 		var n = nodes.get(k)

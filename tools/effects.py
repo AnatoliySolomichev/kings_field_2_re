@@ -418,6 +418,55 @@ def export(out_dir):
                                       [{"b": v.hex()} if isinstance(v, (bytes, bytearray)) else v
                                        for v in args]] for a0, a1, kd, pt, args in spawns],
                           "frames": frames})
+    # and the fire ball, collide_query and actor_attack_player stood in for
+    # as fire_check stands them in: the answers, and the hits handed over
+    fires = []
+    frng = random.Random(0xF1E)
+    for path in memcard._snapshots()[:6]:
+        base = bytearray(open(path, "rb").read())
+        o = SLOTS & MASK
+        base[o:o + STRIDE * COUNT] = bytes(STRIDE * COUNT)
+        for k in range(COUNT):
+            base[o + STRIDE * k] = 0xFF
+        px, py, pz = struct.unpack_from("<3i", base, PLAYER_POS & MASK)
+        for _ in range(4):
+            m = bytearray(base)
+            working = [frng.randrange(0, 200) for _k in range(5)]
+            for k in range(5):
+                struct.pack_into("<H", m, (WORKING & MASK) + 2 * k, working[k])
+            yaw = frng.randrange(0x1000)
+            point = struct.pack("<4i", px + frng.randrange(-0x400, 0x400), py - 0x640,
+                                pz + frng.randrange(-0x400, 0x400), 0)
+            d = movement.direction_from_angles(frng.randrange(-0x100, 0x100) & 0xFFF, yaw)
+            vel = struct.pack("<4h", *[_s16_((c * 0x384) >> 12) for c in d], 0)
+            w = StandIn(7)
+            log = []
+            ask = w.collide_query
+
+            def cq(x, y, z, r, h, flags, ask=ask, log=log, w=w):
+                v = ask(x, y, z, r, h, flags)
+                log.append([_s32(x), _s32(y), _s32(z), r, h & 0xFFFFFFFF, flags, v, w.layer_offset])
+                return v
+            w.collide_query = cq
+            mach = Machine(m, w)
+            try:
+                mach.spawn(0xA, 0x42, FIRE_BALL, point, [vel])
+                frames = []
+                for _f in range(60):
+                    del log[:], w.hits[:]
+                    mach.driver()
+                    frames.append({"q": [list(x) for x in log],
+                                   "hits": [[h[0], h[1], h[2], h[3], h[4], [_s32(v) for v in h[5]]]
+                                            for h in w.hits],
+                                   "md5": hashlib.md5(_slots(m).hex().encode()).hexdigest()})
+                    if all(m[o + STRIDE * k] == 0xFF for k in range(COUNT)):
+                        break
+            except NotImplementedError:
+                continue
+            fires.append({"label": f"{os.path.basename(path)[:-4]} fire ball", "layer0": 7,
+                          "fields": dict({"px": px}, **{f"w{k}": working[k] for k in range(5)}),
+                          "spawns": [[0xA, 0x42, FIRE_BALL, point.hex(), [{"b": vel.hex()}]]],
+                          "frames": frames})
     # and effect_aim: a creature's angles, the target, the speed, the point and
     # the spread, and the velocity and yaw aim() gives -- the game's own, 600
     # of 600 (aim_check)
@@ -435,7 +484,8 @@ def export(out_dir):
     with open(path, "w") as fh:
         json.dump({"_note": "the effect machine of tools/effects.py over snapshots, the "
                             "world's answers in order; and effect_aim's cases",
-                   "runs": runs, "aims": aims, "heals": heals}, fh, separators=(",", ":"))
+                   "runs": runs, "aims": aims, "heals": heals, "fires": fires},
+                  fh, separators=(",", ":"))
     return path
 
 # --- the machine, byte for byte ---------------------------------------------
@@ -457,6 +507,10 @@ CURSE_LV, CURSE_T, DARK_LV, DARK_T = 0x801B255E, 0x801B2560, 0x801B2562, 0x801B2
 SLOW, PARALYSIS = 0x801B2566, 0x801B2568
 B56A, B56C, B56E = 0x801B256A, 0x801B256C, 0x801B256E
 TILE_LOOK = 0x801AEEFC
+FIRE_BALL = 0x00
+WORKING = 0x801B2526             # the five working skills
+SURFACE = 0x801E647C             # surface_plane_18, the water's top
+COLLIDE_QUERY, ATTACK_HIT, SOUND_AT = 0x80033F38, 0x800533E8, 0x80015688
 PLAYER_FIELDS = (HP, POISON, CURSE_LV, CURSE_T, DARK_LV, DARK_T, SLOW, PARALYSIS)
 LAYER_OFFSET = 0x801E646E        # collision_layer_offset, select_cell_layer's answer
 GRID, CELL_BYTES = 0x801D4464, 10
@@ -567,11 +621,18 @@ class Machine:
         arm = {0x1F: self._spawn_1f, 0x22: self._spawn_22, 0x23: self._spawn_23,
                0x24: self._spawn_24, 0x26: self._spawn_26, TRAIL: self._spawn_6f,
                0x17: self._spawn_17, 0x19: self._spawn_19, 0x1A: self._spawn_1a,
-               0x1B: self._spawn_1b, 0x1C: self._spawn_1c, 0x1E: self._spawn_1e}.get(kind)
+               0x1B: self._spawn_1b, 0x1C: self._spawn_1c, 0x1E: self._spawn_1e,
+               FIRE_BALL: self._spawn_00}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_spawn's arm {kind:#x}")
         arm(s, args)
         return s
+
+    def _spawn_00(self, s, args):           # 0x80053e98, the fire ball
+        self.particle(s, 9, 0x1000, 5)
+        self.w16(s + 0xE, 0x40)
+        self.w16(s + 0x10, 0x32)            # sub_800532d4's sound between
+        self.w8(s + 0xD, 1)
 
     def orbit(self, s, model, angle, y):    # 0x80053c20
         """What the three protecting spells' marks share: drawn by mode 0xe,
@@ -724,7 +785,8 @@ class Machine:
         arm = {0x1F: self._tick_1f, 0x22: self._tick_22, 0x23: self._tick_23,
                0x24: self._tick_23, 0x26: self._tick_26, TRAIL: self._tick_6f,
                0x17: self._tick_17, 0x19: self._tick_19, 0x1A: self._tick_1a,
-               0x1B: self._tick_1b, 0x1C: self._tick_1c, 0x1E: self._tick_1e}.get(kind)
+               0x1B: self._tick_1b, 0x1C: self._tick_1c, 0x1E: self._tick_1e,
+               FIRE_BALL: self._tick_00}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_tick's arm {kind:#x}")
         arm(s)
@@ -793,6 +855,62 @@ class Machine:
         for o in (0x30, 0x34, 0x32):
             self.w16(s + o, sc)
         self.w32(s + 0x1C, self.s32(s + 0x1C) + self.s16(s + 0x3A))
+
+    def _tick_00(self, s):                  # 0x80056910, the fire ball
+        """In flight (+7 0) effect_move at radius 0xb4, the height's top bit,
+        turning 0x12c a frame; a hit splashes on water within 0x1f4 under its
+        surface, steps the ball back -- half its velocity when (x - the
+        player's x) ^ 2, the compiler's xor, has a root under 0x400, all of it
+        otherwise -- and hands what it hit to actor_attack_player from 8
+        velocities back with 0x1388 and the caster's strength; then it grows by
+        0x800 two frames (+7 2 and 3), +4 0x80 + the phase, and is gone."""
+        ph = self.u8(s + 7)
+        if ph == 0:
+            hit = self.move(0xB4, 0x80000000, -0x12C)
+            if not hit:
+                return
+            self.splash(s + 0x18, 3, 0x190, 0x2000, 0x2000, 0x400)
+            dx = (self.s32(s + 0x18) - self.s32(PLAYER_POS)) & 0xFFFFFFFF
+            if movement.game_isqrt(dx ^ 2) < 0x400:
+                for o, v in ((0x18, 0x38), (0x1C, 0x3A), (0x20, 0x3C)):
+                    h = self.s16(s + v)
+                    self.w32(s + o, self.s32(s + o) - (int(h / 2) if h < 0 else h >> 1))
+            else:
+                self.undo(s)
+            back = [self.s32(s + o) - (self.s16(s + v) << 3)
+                    for o, v in ((0x18, 0x38), (0x1C, 0x3A), (0x20, 0x3C))]
+            self.w.attack_hit(hit, self.u8(s), self.u8(s + 1), 0x1388,
+                              self.magic_strength(s), self.u8(s + 6), back)
+            self.w8(s + 7, 1)
+        elif ph >= 3:
+            self.w8(s, 0xFF)
+            return
+        self.w8(s + 4, (ph - 0x80) & 0xFF)
+        sc = (self.u16(s + 0x30) + 0x800) & 0xFFFF
+        for o in (0x30, 0x32, 0x34):
+            self.w16(s + o, sc)
+        self.w8(s + 7, self.u8(s + 7) + 1)
+
+    def magic_strength(self, s):            # 0x80053624
+        """A player's effect (+0 0x40): the mean of the working skills whose
+        bit its spell's group has; any other, 5."""
+        if not self.u8(s) & 0x40:
+            return 5
+        group = self.u8(SPELL_TABLE + RECORD * self.u8(s + 1) + 5)
+        n = total = 0
+        for k in range(4, -1, -1):
+            if group & (1 << k):
+                n += 1
+                total += self.u16(WORKING + 2 * k)
+        return ((total & 0xFFFF) // n) & 0xFFFF if n else total & 0xFFFF
+
+    def splash(self, point, n, spread, a, b, c):   # 0x80056580
+        """Splashes on the water when the point is within 0x1f4 under its
+        surface (0x801e647c); not in the machine yet."""
+        y, surf = self.s32(point + 4), self.s32(SURFACE)
+        if y < surf or surf + 0x1F4 < y:
+            return 0
+        raise NotImplementedError("the fire ball's splash (kind 0x70)")
 
     def _mark(self, s, timer, turn):
         if self.s16(timer) == 0:
@@ -1278,6 +1396,114 @@ def magic_check(out=sys.stdout, per=6, frames=40):
     return good == runs
 
 
+class StandIn:
+    """collide_query and actor_attack_player as the fire ball's check stands
+    them in on both sides: a hit now and then, by where it asks, and what is
+    handed over, kept."""
+
+    def __init__(self, layer):
+        self.layer_offset = layer
+        self.asked = []
+        self.hits = []
+
+    @staticmethod
+    def answer(x, y, z):
+        return (0, 0, 0, 0, 0, 0, 1, 0x10, 0x20, 0, 0, 0)[((x ^ y ^ z) >> 6) % 12]
+
+    def collide_query(self, x, y, z, r, h, flags):
+        self.asked.append([x & 0xFFFFFFFF, y & 0xFFFFFFFF, z & 0xFFFFFFFF, r, h & 0xFFFFFFFF, flags])
+        return self.answer(_s32(x), _s32(y), _s32(z))
+
+    def attack_hit(self, code, flags, kind, strength, stat, pct, back):
+        self.hits.append([code, flags, strength, stat, pct, [v & 0xFFFFFFFF for v in back]])
+
+
+def fire_check(out=sys.stdout, per=8, frames=60):
+    """The fire ball (kind 0) against the game's own effect_spawn and
+    effect_driver over every snapshot, collide_query, its sound and
+    actor_attack_player stood in for on both sides: all 128 slots every frame,
+    every query asked and every hit handed over."""
+    import random
+    import memcard
+    import levelstate
+    import mipsrun
+    rng = random.Random(0xF12E)
+    runs = good = nframes = fgood = skipped = 0
+    first = []
+    for path in memcard._snapshots():
+        base = bytearray(open(path, "rb").read())
+        o = SLOTS & MASK
+        base[o:o + STRIDE * COUNT] = bytes(STRIDE * COUNT)
+        for k in range(COUNT):
+            base[o + STRIDE * k] = 0xFF
+        px, py, pz = struct.unpack_from("<3i", base, PLAYER_POS & MASK)
+        layer = struct.unpack_from("<H", base, LAYER_OFFSET & MASK)[0]
+        for _ in range(per):
+            ram = bytearray(base)
+            for k in range(5):
+                struct.pack_into("<H", ram, (WORKING & MASK) + 2 * k, rng.randrange(0, 200))
+            yaw = rng.randrange(0x1000)
+            point = struct.pack("<4i", px + rng.randrange(-0x400, 0x400), py - 0x640,
+                                pz + rng.randrange(-0x400, 0x400), 0)
+            d = movement.direction_from_angles(rng.randrange(-0x100, 0x100) & 0xFFF, yaw)
+            vel = struct.pack("<4h", *[_s16_((c * 0x384) >> 12) for c in d], 0)
+            sp = (0xA, 0x42, FIRE_BALL, point, [vel])
+            cpu = _game(bytes(ram))
+            g_asked, g_hits = [], []
+
+            def query(c, g_asked=g_asked):
+                sp_ = c.r[29]
+                x, y, z = c.r[4], c.r[5], c.r[6]
+                g_asked.append([x, y, z, c.r[7], c.rd(sp_ + 0x10, 4), c.rd(sp_ + 0x14, 4)])
+                return StandIn.answer(mipsrun.s32(x), mipsrun.s32(y), mipsrun.s32(z))
+            cpu.hooks[COLLIDE_QUERY] = query
+            cpu.hooks[SOUND_AT] = lambda c: 0
+
+            def hit(c, g_hits=g_hits):
+                sp_ = c.r[29]
+                pt = c.rd(sp_ + 0x3C, 4)
+                g_hits.append([c.r[4], c.r[5] & 0xFF, c.r[7], c.rd(sp_ + 0x10, 4),
+                               c.rd(sp_ + 0x14, 4), [c.rd(pt + 4 * i, 4) for i in range(3)]])
+                return 0
+            cpu.hooks[ATTACK_HIT] = hit
+            m = bytearray(ram)
+            w = StandIn(layer)
+            mach = Machine(m, w, levelstate.Lcg())
+            try:
+                game_spawn(cpu, *sp)
+                mach.spawn(*sp)
+                runs += 1
+                ok = True
+                for f in range(frames):
+                    del g_asked[:], g_hits[:], w.asked[:], w.hits[:]
+                    _call(cpu, DRIVER, [])
+                    mach.driver()
+                    bad = _differ(_slots(cpu.ram), _slots(m))
+                    same = not bad and g_asked == w.asked and g_hits == w.hits
+                    nframes += 1
+                    fgood += same
+                    if not same and ok:
+                        ok = False
+                        if len(first) < 4:
+                            first.append(f"  {os.path.basename(path)} frame {f}: " + (
+                                f"slot {bad[0][0]} +{bad[0][1]:#x} game {bad[0][2]:#x} here {bad[0][3]:#x}"
+                                if bad else f"queries {g_asked} / {w.asked}, hits {g_hits} / {w.hits}"))
+                    if all(cpu.rd(SLOTS + STRIDE * k, 1) == 0xFF for k in range(COUNT)):
+                        break
+                good += ok
+            except NotImplementedError:
+                skipped += 1
+                runs -= 1
+    for line in first:
+        print(line, file=out)
+    print(f"  the fire ball, the game's own effect_spawn and effect_driver over the "
+          f"snapshots: {good} of {runs} runs, {fgood} of {nframes} frames with all 128 "
+          f"slots, every query and every hit alike" + (f" ({skipped} splashing on water, "
+                                                       f"not in the machine)" if skipped else ""),
+          file=out)
+    return good == runs
+
+
 def aim_check(out=sys.stdout, n=600):
     """effect_aim, the game's, against aim() on random creatures, targets and
     points: the velocity and the yaw it answers."""
@@ -1320,4 +1546,5 @@ if __name__ == "__main__":
     good = aim_check() and good
     good = machine_check() and good
     good = magic_check() and good
+    good = fire_check() and good
     sys.exit(0 if good else 1)

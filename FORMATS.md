@@ -3759,6 +3759,39 @@ creatures: **840 of 840 casts** -- every spawn's point, velocity and
 argument, the creature woken, and the state left (`tools/magic.py
 attack_check`). The effects these spawn are not in the port yet.
 
+**The fire ball** (kind 0), the first of these effects in the machine.
+Spawned as a particle (`sub_80053be4`: model 9 -- `model_table[0x31]` -- mode
+5, scale 0x1000), `+0xe` 0x40, its sound (`sub_800532d4`), a life of 0x32,
+`+0xd` 1. In flight (`+7` 0) `effect_move` at radius 0xb4 with the height's
+top bit set and nothing below it (`effect_collide` takes the low twelve
+bits for the half-height, `tile_collision` the low 28), turning 0x12c a
+frame. A hit: `sub_80056580` splashes on the water (kind 0x70) when the
+point is within 0x1f4 under `surface_plane_18`; then the ball steps back --
+**half** its velocity when `game_isqrt((x - the player's x) ^ 2)` is under
+0x400, the whole of it otherwise (`0x80056968`: the compiler's `xori`, a
+square the source must have meant) -- and `sub_800536f8` hands what it hit
+to `actor_attack_player` with its record's attacks, 0x1388 and the caster's
+strength (`sub_80053624`: the mean of the working skills whose bit the
+spell's group has; 5 for a creature's effect), from eight velocities back.
+Then two frames of growth -- `+4` 0x80 + the phase, the scale 0x800 more each
+-- and at phase 3 it is gone. `actor_attack_player` is a creature's
+`actor_take_hit` for code 0x10 (the creature `collide_query` met, at
+`0x801e648c`), `player_take_hit` for 0x80.
+
+**`game_isqrt` and a negative word.** The GTE's `LZCR` counts the leading
+*ones* of a negative input and the shift keeps it negative, so the root
+reads the 192 halfwords 640 bytes before its table (another table, 446 to
+512); `0xfffffff0` gives 0, `0x80000010` 0xdf0. `tools/movement.py` and the
+port's `isqrt` read them now: 5010 of 5010 inputs as the game's own.
+
+**Against the game's own `effect_spawn` and `effect_driver`**, `collide_query`,
+the sound and `actor_attack_player` stood in for on both sides and what they
+are handed compared: **168 of 168 runs, 782 of 782 frames**, all 128 slots,
+every query, every hit with its strength and point (`tools/effects.py
+fire_check`). The port has it (`effects.gd _tick_fire`), but its
+`collide_query` keeps no creatures, so a fire ball bursts on walls and
+objects and passes through a creature.
+
 **At `player_controller`'s end** (`0x80031f0c`), after the poison:
 `0x801b256a`, `256c` and `256e` count down and recalculate the stats at 0;
 `0x801b2576` counts down **holding MP at its most** every frame, announce

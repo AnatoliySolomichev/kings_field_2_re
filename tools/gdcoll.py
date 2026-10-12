@@ -85,6 +85,7 @@ def export(lv, out="out/godot"):
         # is speed^2 / isqrt(speed^2) and this root is a unit short on a perfect
         # square, so a port using an exact one walks at the wrong speed.
         "isqrt": list(movement._isqrt_table()),
+        "isqrt_below": list(movement._isqrt_below()),
         # And its trigonometry: one quarter wave, reflected four ways. The step
         # is a product shifted right by 12, so a rounding difference between
         # this and a float sine lands in the position as a whole unit.

@@ -50,6 +50,7 @@ var shapes := {}
 var radius := 800
 var body := 1700
 var isqrt_table := PackedInt32Array()
+var isqrt_below := PackedInt32Array()   # the 192 halfwords 640 bytes before it
 var sin_table := PackedInt32Array()
 var ratan_table := PackedInt32Array()
 var occ := PackedInt32Array()        # each cell's occupancy count, byte +2 >> 2
@@ -75,6 +76,8 @@ func load_from(path: String) -> bool:
 	body = int(d["body"])
 	if d.has("isqrt"):
 		isqrt_table = PackedInt32Array(d["isqrt"])
+	if d.has("isqrt_below"):
+		isqrt_below = PackedInt32Array(d["isqrt_below"])
 	if d.has("sin"):
 		sin_table = PackedInt32Array(d["sin"])
 	if d.has("ratan"):
@@ -230,25 +233,42 @@ func vec_angle(u: int, v: int) -> int:
 # 0x80074508: the game's integer square root, through the GTE leading-zero count
 # and a 192-entry table. NOT floor(sqrt(x)) -- a perfect square comes back one
 # short, isqrt(40000) = 199, and the walking step depends on that unit.
-# @orig game:0x80074508 game_isqrt  status:verified -- 607 of 607 calls of the game's own, through its GTE leading-zero count (tools/routines.py)
+# The input is a 32-bit word: the GTE's LZCR counts the leading ones of a
+# negative one, and the shift keeps it negative, so such an input reads the
+# 192 halfwords 640 bytes before the table (isqrt_below) -- the fire ball's
+# (dx ^ 2) hands it some.
+# @orig game:0x80074508 game_isqrt  status:verified -- 607 of 607 calls of the game's own, through its GTE leading-zero count (tools/routines.py); and 5010 of 5010 32-bit inputs, the negative ones among them (tools/movement.py)
 func isqrt(x: int) -> int:
-	if x <= 0 or isqrt_table.is_empty():
+	x &= 0xFFFFFFFF
+	if isqrt_table.is_empty():
 		return 0
-	var lzc := 32
-	var v := x
-	while v > 0:
-		v >>= 1
-		lzc -= 1
+	var sign := (x >> 31) & 1
+	var lzc := 0
+	var bit := 31
+	while bit >= 0 and ((x >> bit) & 1) == sign:
+		lzc += 1
+		bit -= 1
 	if lzc == 0x20:
 		return 0
 	var t2 := lzc & ~1
 	var t1 := (0x1F - t2) >> 1
 	var t3 := t2 - 0x18
-	var t4 := (x << t3) & 0xFFFFFFFF if t3 >= 0 else x >> (0x18 - t2)
+	var t4: int
+	if t3 >= 0:
+		t4 = (x << t3) & 0xFFFFFFFF
+		if t4 & 0x80000000:
+			t4 -= 0x100000000
+	else:
+		t4 = (x - 0x100000000 if sign else x) >> (0x18 - t2)
 	var idx := t4 - 0x40
-	if idx < 0 or idx >= isqrt_table.size():
+	var v := 0
+	if idx >= 0 and idx < isqrt_table.size():
+		v = isqrt_table[idx]
+	elif idx >= -320 and idx < -128 and isqrt_below.size() == 192:
+		v = isqrt_below[idx + 320]
+	else:
 		return 0
-	return ((isqrt_table[idx] << t1) & 0xFFFFFFFF) >> 12
+	return ((v << t1) & 0xFFFFFFFF) >> 12
 
 
 # @orig game:0x800328c0 tile_op_20_wall  status:verified -- opcode 0x20's face test, which 0x21 and 0x22 make on two faces; 1427 of 1430, 83 of 83 and 143 of 143 logged calls on cells carrying them

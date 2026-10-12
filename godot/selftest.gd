@@ -621,8 +621,40 @@ func _effects() -> bool:
 			hgood += 1
 	runs += heals
 	good += hgood
+	# the fire ball: collide_query answered as tools/effects.py's stand-in
+	# answered, the hits handed to actor_attack_player compared
+	for run in d.get("fires", []):
+		runs += 1
+		fx.clear()
+		rp.layer_offset = int(run["layer0"])
+		rp.fields = {}
+		for k in run["fields"]:
+			rp.fields[k] = int(run["fields"][k])
+		for sp in run["spawns"]:
+			fx.spawn(int(sp[0]), int(sp[1]), int(sp[2]), (sp[3] as String).hex_decode(),
+				[(sp[4][0]["b"] as String).hex_decode()])
+		var ok := true
+		for f in run["frames"]:
+			frames += 1
+			rp.calls = f["q"]
+			rp.i = 0
+			rp.bad = ""
+			rp.hits = []
+			fx.driver()
+			var same: bool = rp.bad == "" and rp.i == (f["q"] as Array).size() \
+				and str(rp.hits) == str(_ints(f["hits"])) \
+				and fx.m.hex_encode().md5_text() == str(f["md5"])
+			if same:
+				fgood += 1
+			elif ok:
+				ok = false
+				if first == "":
+					first = "%s, frame %d: %s" % [run["label"], frames, rp.bad if rp.bad != "" else
+						"hits %s, python %s" % [str(rp.hits), str(f["hits"])]]
+		if ok:
+			good += 1
 	fx.free()
-	print("effects: %d of %d runs, %d of %d frames of the effect machine as tools/effects.py's (whose machine the game's own effect_spawn and effect_driver hold: 189 of 189 runs, and the healing spells' 126 of 126); %d of %d aims as its effect_aim (600 of 600 the game's)" % [
+	print("effects: %d of %d runs, %d of %d frames of the effect machine as tools/effects.py's (whose machine the game's own effect_spawn and effect_driver hold: 189 of 189 runs, the healing spells' 126 of 126, the fire ball's 168 of 168); %d of %d aims as its effect_aim (600 of 600 the game's)" % [
 		good, runs, fgood, frames, aok, aims])
 	if first != "":
 		print("  first difference: " + first)
@@ -657,6 +689,12 @@ class FxReplay:
 
 	func lighting(_rgb: Array, near: int, far: int, k: int) -> void:
 		lit.append([near, far, k])
+
+	var hits: Array = []
+
+	func attack_hit(code: int, flags: int, _kind: int, strength: int, stat: int, pct: int,
+			back: Array) -> void:
+		hits.append([code, flags, strength, stat, pct, back])
 
 	func collide_query(x: int, y: int, z: int, r: int, h: int, flags: int) -> int:
 		if i >= calls.size():

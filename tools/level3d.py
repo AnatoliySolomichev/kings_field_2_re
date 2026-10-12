@@ -642,9 +642,10 @@ def build_actors_gltf(lv, out="out/godot"):
 # The resident models effects draw: render_walk hands draw_model_plain
 # model_table[slot +3 + 0x28] (0x80041794) -- 0x4c the spore (+3 0x24), 0x3e
 # the puff a bolt leaves (+3 0x16), 0x4a the bobbing bolt 0x1f (+3 0x22), 0x49
-# the dart 0x22 (+3 0x21). This said 0x40 for the spore, which is its +0xe, a
-# value render_walk puts in the scratchpad (0x1f800084), not a model.
-EFFECT_MODELS = (0x3E, 0x49, 0x4A, 0x4C)
+# the dart 0x22 (+3 0x21), 0x31 the fire ball (+3 9). This said 0x40 for the
+# spore, which is its +0xe, a value render_walk puts in the scratchpad
+# (0x1f800084), not a model.
+EFFECT_MODELS = (0x31, 0x3E, 0x49, 0x4A, 0x4C)
 
 
 def build_effects_gltf(lv, out="out/godot"):

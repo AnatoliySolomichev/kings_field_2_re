@@ -323,28 +323,52 @@ def _isqrt_table():
     return struct.unpack_from("<192h", text, ISQRT_TABLE - base)
 
 
+def _isqrt_below():
+    """The 192 halfwords 640 bytes before the root's table, which a negative
+    input reaches (indices -320..-129): another table, 446..512 and a 0."""
+    import struct
+    import disasm
+    base, _entry, text = disasm.load_text()
+    return struct.unpack_from("<192h", text, ISQRT_TABLE - 640 - base)
+
+
 _IS = None
+_IB = None
 
 
 def game_isqrt(x):
-    """`0x80074508`. Exact transcription, table and all."""
-    global _IS
+    """`0x80074508`. Exact transcription, table and all -- for every 32-bit
+    input: the GTE's LZCR counts leading ones of a negative word, which the
+    shift right then keeps negative, so such an input reads 640 to 258 bytes
+    before the table (the fire ball's (dx ^ 2) hands it some)."""
+    global _IS, _IB
     if _IS is None:
         _IS = _isqrt_table()
+        _IB = _isqrt_below()
     x &= 0xFFFFFFFF
-    if x == 0:
-        return 0
-    lzc = 32 - x.bit_length()          # what the GTE leaves in LZCR
+    if x & 0x80000000:
+        lzc = 32 - ((~x) & 0xFFFFFFFF).bit_length()      # leading ones
+    else:
+        lzc = 32 - x.bit_length()                        # what LZCR leaves
     if lzc == 0x20:
         return 0
     t2 = lzc & ~1
     t1 = (0x1F - t2) >> 1
     t3 = t2 - 0x18
-    t4 = (x << t3) & 0xFFFFFFFF if t3 >= 0 else x >> (0x18 - t2)
+    sx = x - 0x100000000 if x & 0x80000000 else x
+    if t3 >= 0:
+        t4 = (x << t3) & 0xFFFFFFFF
+        t4 = t4 - 0x100000000 if t4 & 0x80000000 else t4
+    else:
+        t4 = sx >> (0x18 - t2)
     idx = t4 - 0x40
-    if not 0 <= idx < 192:
+    if 0 <= idx < 192:
+        v = _IS[idx]
+    elif -320 <= idx < -128:
+        v = _IB[idx + 320]
+    else:
         return 0
-    return ((_IS[idx] << t1) & 0xFFFFFFFF) >> 12
+    return ((v << t1) & 0xFFFFFFFF) >> 12
 
 
 def step_distances(strafe_speed, forward_speed):
