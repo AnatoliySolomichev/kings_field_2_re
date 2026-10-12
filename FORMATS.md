@@ -6406,6 +6406,55 @@ only strike of these with bit 1 in `+0`. The port has all five
 cases of `strike_creatures` in the self-test, every mode, every creature
 after; the machine's runs 222 of 222.
 
+### Earth wave, bortecth, and a creature held
+
+```
+earth wave (7)   cast with +0 0x43 at the player's feet and (0, 0x1000,
+  -- and 0x16,   0x100, 0x1000, 1): model 0xe, +0x44 how far (0x1000),
+  the same arms) +0x46 how fast (0x100), +0x48 the strike's scale, +0xe the
+                 last << 6; its sound 0x23. A ring growing +0x46 a frame;
+                 from 0x300 it strikes between 4 * (size - 0x100) and
+                 4 * size - 1 from its point 0x3e8 lower, mode 0x7d0 (a flat
+                 ring, heights overlapping), edge 0x1000; gone past +0x44 --
+                 17 frames. Bit 1 of 0x43 strikes the player too, who stands
+                 at its middle, always nearer than it reaches.
+bortecth (0xc)   put down at the creature in sight (its feet), else ahead;
+                 effect_setup(0x1f, 0xaf0, 5), +0x32 0x1400, life 0x3c,
+                 +0xe 0x80, its sound 0x95. Its first frame asks
+                 collide_query(its point, 0x400, its scale 0xaf0, 0x30) --
+                 the creatures and the objects; a creature alone (the mask
+                 exactly 0x10) is handed actor_attack_player (sub_800536f8)
+                 with code 0x10010, 0x1388 and no point: the hit, and +0x28
+                 bit 0x800. Then its child, 0x65, with collide_actor. It
+                 turns 0x1a4 a frame.
+  hold (0x65)    effect_setup(0x20, 0x1b58, 5), +0x32 0, life 0x3c, +0xe
+                 0x40, +0x46 the creature. Rising 0x1b8 a frame while its
+                 count is under 12, a puff (0x6f) a frame from 12 to 47 --
+                 its velocity ((rand << 9) / 0x7fff - 0x100, -(rand << 8) /
+                 0x7fff, the first again) -- and from 48 sinking and
+                 clearing the creature's bit 0x800. It turns -0x190 a frame.
+```
+
+**The hold** is `actor_tick`'s: a flinch (op 2) at its sub 2 or past with
+`+0x28` bit 0x800 runs no `actor_clock` (`0x80050438`), so its second half
+waits; a death (op 3) at sub 0 with its clock at 0x400 or past goes straight
+to the tail the arms share (`0x8005063c` to `0x80052c14`) -- no clock, no
+drop, no brake -- until it is let go. So bortecth's creature, if the hit
+flinches it, stands frozen mid-flinch for 48 frames; if it kills it, its
+death stops at the clock's 0x400 and the drop waits. Against **the game's
+own `actor_tick`**, run by `tools/mipsrun.py` on every snapshot's awake
+creatures put into a flinch or a death at three subs and clocks, held and
+not (`tools/ai.py hold_check`): **1680 of 1680** frames, 560 of them held
+-- the clock, sub, opcode, phase and step, and the held death's velocity and
+place. The self-test holds `ai.gd` to it on level 0's, 1500 of 1500.
+
+Both spells end to end the way the others are (`spell_hit_check`):
+earth wave **126 of 126** runs, 2142 frames, 102 with a creature struck, 73
+killed; bortecth **126 of 126**, 7686 frames, 208 with a creature changed
+(the hit, the hold, the letting go), 98 killed. The port has the four kinds
+(`effects.gd`, 270 of 270 machine runs in the self-test) and the hold
+(`ai.gd`).
+
 ### The player's death
 
 `apply_damage` that leaves no HP calls `player_throw` (`0x80030a6c`) with the

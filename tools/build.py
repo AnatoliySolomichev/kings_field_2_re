@@ -141,7 +141,8 @@ def main(quick=False, only_check=False):
         keep=["fields of the live sprite table"])
     run(["tools/ai.py", "--check"],
         "the creatures' behaviours, against every snapshot's RAM",
-        keep=["bytes of the kinds", "runs of one behaviour", "creature frames exact"])
+        keep=["bytes of the kinds", "runs of one behaviour", "creature frames exact",
+              "the hold (+0x28 bit 0x800)"])
     run(["tools/doors.py", "--check"],
         "the doors, the gates and the hidden wall, against what was played and the game's code",
         keep=["steps of a moving door", "steps of a lift door", "more at 0x14",

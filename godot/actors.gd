@@ -603,6 +603,15 @@ func strike_area(p: Array, near: int, radius: int, mode: int, edge: int, stat: i
 	return outs
 
 
+# A hold let go (bortecth's child, 0x80057dd0): the creature's +0x28 bit
+# 0x800, which keeps a flinch's second half and a death past 0x400 still.
+# @port helper -- the effect's write on a creature, by its slot
+func release(k: int) -> void:
+	var a = actors[k] if k >= 0 and k < actors.size() else null
+	if a != null:
+		a["eflags"] = int(a.get("eflags", 0)) & ~0x800
+
+
 # kind_behaviour_with_op for the creature in a slot, as a spell's aim asks
 # it (0x8002c274): its kind's first behaviour with the opcode, or null.
 # @port helper -- _with_op by a creature's slot

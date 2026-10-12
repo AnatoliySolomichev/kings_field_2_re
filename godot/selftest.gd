@@ -182,6 +182,54 @@ func _ai_run() -> bool:
 	return ok
 
 
+# Bortecth's hold in a flinch or a death: ai.gd's tick against tools/ai.py's
+# (whose hold the game's own actor_tick holds, hold_check) on level 0's
+# snapshots' creatures, held and not -- the clock, sub, opcode, phase and
+# step, and held and dying past 0x400 the velocity and place.
+# @port check -- KFCreatureAI.tick's hold against ai00.json's holds
+func _ai_holds() -> bool:
+	var f := FileAccess.open("res://ai00.json", FileAccess.READ)
+	if f == null:
+		return true
+	var d = JSON.parse_string(f.get_as_text())
+	if typeof(d) != TYPE_DICTIONARY or not d.has("holds"):
+		print("creature holds: none in ai00.json")
+		return true
+	var brain := KFCreatureAI.new()
+	brain.coll = coll
+	brain.rand = Callable(self, "_lcg")
+	var ok := 0
+	var n := 0
+	var first := ""
+	for c in d["holds"]:
+		var kd: Dictionary = d["kinds"][str(int(c["kind"]))]
+		var recs := []
+		for r in kd["behaviours"]:
+			recs.append((r as Array).map(func(x): return int(x)))
+		var kind := {"accel": int(kd["accel"]), "turn_accel": int(kd["turn_accel"]),
+			"fall": int(kd["fall"]), "radius": int(kd["radius"]),
+			"height": int(kd["height"]), "behaviours": recs}
+		var a: Dictionary = _ints(c["a"])
+		a["rec"] = recs[int(a["rec"])]
+		_seed = int(c["seed"])
+		var p: Array = _ints(c["player"])
+		brain.tick(a, kind, Vector3i(p[0], p[1], p[2]), [a])
+		var want: Array = _ints(c["want"])
+		var got := [int(a["clock"]), KFCreatureAI.s16(int(a["sub"])), int(a["op"]) & 0xFF,
+			int(a["phase"]) & 0xFF, int(a["step"])]
+		if want.size() > 5:
+			got += [int(a["vx"]), int(a["vz"]), int(a["px"]), int(a["pz"])]
+		n += 1
+		if got == want:
+			ok += 1
+		elif first == "":
+			first = "case %d: godot %s, python %s" % [n, str(got), str(want)]
+	print("creature holds: %d of %d flinches and deaths, held and not, as tools/ai.py steps them (whose hold the game's own actor_tick holds)" % [ok, n])
+	if first != "":
+		print("  first difference: " + first)
+	return ok == n
+
+
 func _one_run(d: Dictionary, run: Dictionary) -> bool:
 	var kd: Dictionary = d["kinds"][str(int(run["kind"]))]
 	var recs := []
@@ -252,6 +300,9 @@ func _init() -> void:
 		quit(1)
 		return
 	if not _ai_run():
+		quit(1)
+		return
+	if not _ai_holds():
 		quit(1)
 		return
 	if not _levels():
@@ -655,12 +706,14 @@ func _effects() -> bool:
 			rp.hits = []
 			rp.hurts = []
 			rp.strikes = []
+			rp.released = []
 			rp.rands = (f.get("rand", []) as Array).map(func(x): return int(x))
 			fx.driver()
 			var same: bool = rp.bad == "" and rp.i == (f["q"] as Array).size() \
 				and rp.rands.is_empty() and str(rp.hits) == str(_ints(f["hits"])) \
 				and str(rp.hurts) == str(_ints(f.get("hurts", []))) \
 				and str(rp.strikes) == str(_ints(f.get("strikes", []))) \
+				and str(rp.released) == str(_ints(f.get("released", []))) \
 				and fx.m.hex_encode().md5_text() == str(f["md5"])
 			if same:
 				fgood += 1
@@ -713,7 +766,7 @@ class FxReplay:
 	var hits: Array = []
 
 	func attack_hit(code: int, flags: int, _kind: int, strength: int, stat: int, pct: int,
-			back: Array) -> void:
+			back) -> void:
 		hits.append([code, flags, strength, stat, pct, back])
 
 	var strikes: Array = []
@@ -735,7 +788,14 @@ class FxReplay:
 			if int(c[k]) != int(asked[k]) and bad == "":
 				bad = "query %s, python %s" % [str(asked), str(c.slice(0, 6))]
 		layer_offset = int(c[7])
+		collide_actor = int(c[8]) if c.size() > 8 else -1
 		return int(c[6])
+
+	var collide_actor := -1
+	var released: Array = []
+
+	func release(c: int) -> void:
+		released.append(c)
 
 	func hurt_player(p: Vector3i, a1: int, radius: int, mode: int, edge: int, attacks: Array,
 			effect: int, more: Array, scale: int, pct: int) -> void:

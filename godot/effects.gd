@@ -51,6 +51,9 @@ const SHUDOM := 0x09
 const WALWIND := 0x11
 const RING := 0x5E                 # shudom's
 const WAVE := 0x59                 # walwind's
+const EARTH_WAVE := 0x07           # and 0x16, the same arms
+const BORTECTH := 0x0C
+const HOLD := 0x65                 # bortecth's
 const TRAIL_ARGS := [0xE10, -0x80, 5, 0x16, 0, 1, 3]   # 0x80058f50's, after the velocity
 const QUERY := {1: 0xA1, 2: 0x31, 3: 0xB1, 4: 0x01}    # effect_collide: +0 & 7 -> flags
 const GROW := 0x96
@@ -329,6 +332,34 @@ func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array) -> 
 			w16(s + 0x10, 0x50)
 			w16(s + 0x44, 0)
 			w8(s + 0xB, 5)
+		EARTH_WAVE, 0x16:                   # 0x80054ef4
+			w8(s + 8, 1)
+			w8(s + 4, 0x80)
+			w8(s + 2, 0xE)
+			w8(s + 3, 0xE)
+			w8(s + 0xC, 0x34)
+			w16(s + 0x12, 0x1000)
+			w16(s + 0x34, 0)
+			w16(s + 0x30, 0)
+			w16(s + 0x44, int(args[1]))     # how far it goes
+			w16(s + 0x46, int(args[2]))     # how fast
+			w16(s + 0x48, int(args[3]))     # the strike's scale
+			w16(s + 0xE, (int(args[4]) & 0xFFFF) << 6)   # and its sound (0x23), not here
+		BORTECTH:                           # 0x80054a84
+			setup(s, 0x1F, 0xAF0, 5)
+			w16(s + 0x10, 0x3C)
+			w16(s + 0x32, 0x1400)
+			for o in [0x4A, 0x48, 0x46, 0x44]:
+				w16(s + o, 0)
+			w16(s + 0xE, 0x80)              # and its sound (0x95), not here
+		HOLD:                               # 0x80054ac8
+			setup(s, 0x20, 0x1B58, 5)
+			w16(s + 0x10, 0x3C)
+			for o in [0x4A, 0x48, 0x44]:
+				w16(s + o, 0)
+			w16(s + 0x32, 0)
+			w16(s + 0xE, 0x40)
+			w16(s + 0x46, int(args[1]))     # the creature held, or -1
 		FIRE_BALL:                          # 0x80053e98
 			particle(s, 9, 0x1000, 5)
 			w16(s + 0xE, 0x40)
@@ -515,6 +546,12 @@ func tick(s: int) -> void:
 			_tick_ring(s)
 		WAVE:
 			_tick_wave(s)
+		EARTH_WAVE, 0x16:
+			_tick_earth_wave(s)
+		BORTECTH:
+			_tick_bortecth(s)
+		HOLD:
+			_tick_hold(s)
 		0x1A:
 			_mark(s, "b56a", 0x40)
 		0x1B:
@@ -719,7 +756,92 @@ func _attack(s: int, hit: int) -> void:
 	var back := []
 	for i in 3:
 		back.append(s32(s + 0x18 + 4 * i) - (s16(s + 0x38 + 2 * i) << 3))
-	world.attack_hit(hit, u8(s), u8(s + 1), 0x1388, magic_strength(s), u8(s + 6), back)
+	_hand(s, hit, 0x1388, back)
+
+
+# sub_800536f8: actor_attack_player(code, +0, the record, strength, the
+# caster's strength, +6, the point -- null for none).
+# @orig game:0x800536f8 sub_800536f8  status:verified -- through every spell's hit and bortecth's, spell_hit_check
+func _hand(s: int, code: int, strength: int, point) -> void:
+	world.attack_hit(code, u8(s), u8(s + 1), strength, magic_strength(s), u8(s + 6), point)
+
+
+# Earth wave (0x80057c34, kinds 7 and 0x16): a ring growing +0x46 a frame;
+# from 0x300 it strikes between four times its last size and four times its
+# size less one, 0x3e8 under its point, mode 0x7d0, at +0x48 throughout;
+# gone past +0x44. Cast with +0 0x43, it strikes the player too -- who stands
+# at its middle, nearer than it reaches.
+# @orig game:0x80057c34 effect_tick+0x1378  status:verified -- tools/effects.py spell_hit_check against the game's own end to end; the self-test this to it
+func _tick_earth_wave(s: int) -> void:
+	var v := u16(s + 0x30) + u16(s + 0x46)
+	w16(s + 0x30, v)
+	w16(s + 0x34, v)
+	var sc := s16(s + 0x30)
+	if sc >= 0x300:
+		strike([s32(s + 0x18), s32v(s32(s + 0x1C) + 0x3E8), s32(s + 0x20), 0],
+			(sc - s16(s + 0x46)) << 2, (sc << 2) - 1, 0x7D0, 0x1000, s16(s + 0x48))
+	if s16(s + 0x44) < s16(s + 0x30):
+		w8(s, 0xFF)
+
+
+# Bortecth (0x80057cd0): its first frame asks collide_query for the creatures
+# and objects within 0x400 of its point, its height its scale; a creature
+# alone (the mask 0x10 exactly) is handed actor_attack_player with code
+# 0x10010 -- the hit, and its +0x28 bit 0x800, the hold -- 0x1388 and no
+# point. Then its child 0x65 with the creature's slot, or -1. It turns 0x1a4
+# a frame.
+# @orig game:0x80057cd0 effect_tick+0x1414  status:verified -- tools/effects.py spell_hit_check against the game's own end to end, the hold and its end among it; the self-test this to it
+func _tick_bortecth(s: int) -> void:
+	if s16(s + 0x44) == 0:
+		var mask: int = world.collide_query(s32(s + 0x18), s32(s + 0x1C), s32(s + 0x20), 0x400,
+			s16(s + 0x30), 0x30)
+		if mask == 0x10:
+			_hand(s, 0x10010, 0x1388, null)
+		w16(s + 0x44, u16(s + 0x44) + 1)
+		spawn(0xA, 0, HOLD, m.slice(s + 0x18, s + 0x28), [null, int(world.collide_actor)])
+		w16(s + 0x48, 0)
+		w16(s + 0x4A, 0)
+	w16(s + 0x2A, u16(s + 0x2A) + 0x1A4)
+
+
+# Bortecth's hold (0x80057d74, kind 0x65): rising 0x1b8 a frame for 12
+# frames; from count 48 sinking again and letting the creature go (its +0x28
+# bit 0x800); from 12 to 47 a puff (0x6f) a frame, its velocity three rands
+# over 0x7fff. It turns -0x190 a frame.
+# @orig game:0x80057d74 effect_tick+0x14b8  status:verified -- tools/effects.py spell_hit_check against the game's own end to end; the self-test this to it
+func _tick_hold(s: int) -> void:
+	var n := s16(s + 0x44)
+	if n < 0xC:
+		w16(s + 0x32, u16(s + 0x32) + 0x1B8)
+	if n >= 0x30:
+		w16(s + 0x32, u16(s + 0x32) - 0x1B8)
+		var c := s16(s + 0x46)
+		if c != -1:
+			world.release(c)
+	if ((u16(s + 0x44) - 0xC) & 0xFFFFFFFF) < 0x24:
+		var v := PackedByteArray()
+		v.resize(8)
+		v.encode_s16(0, _div7fff(int(world.rand()) << 9) - 0x100)
+		v.encode_s16(2, _div7fff(-(int(world.rand()) << 8)))
+		v.encode_s16(4, _div7fff(int(world.rand()) << 9) - 0x100)
+		spawn(0xA, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [v, 0x1000, -0x80, 5, 0xC, 0, 1, 0])
+	w16(s + 0x44, u16(s + 0x44) + 1)
+	w16(s + 0x2A, u16(s + 0x2A) - 0x190)
+
+
+# x / 0x7fff as the compiler builds it, toward 0.
+# @port helper -- the division by 0x7fff (0x80010003 and a shift of 14) as plain integer division
+static func _div7fff(x: int) -> int:
+	var q := absi(x) / 0x7FFF
+	return -q if x < 0 else q
+
+
+# The creature a hold lets go: its +0x28 bit 0x800 cleared (0x80057dd0).
+# @port helper -- 0x80057dd0's write, handed to actors.gd
+func release(c: int) -> void:
+	var an := get_node_or_null("../Actors")
+	if an and an.has_method("release"):
+		an.call("release", c)
 
 
 # sub_80056268: one splash on the surface the last query found, when the
@@ -803,7 +925,7 @@ func magic_strength(s: int) -> int:
 # take_spell), whose practice and experience go to the player. A code with
 # other bits does nothing.
 # @orig game:0x800533e8 actor_attack_player  status:verified -- tools/effects.py fire_hit_check, 84 of 84 runs of the game's own end to end; the player's half through player_take_hit
-func attack_hit(code: int, flags: int, kind: int, strength: int, stat: int, pct: int, back: Array) -> void:
+func attack_hit(code: int, flags: int, kind: int, strength: int, stat: int, pct: int, back) -> void:
 	var rec: PackedByteArray = records.get(kind, PackedByteArray())
 	if rec.size() < 0x16:
 		return
@@ -811,7 +933,7 @@ func attack_hit(code: int, flags: int, kind: int, strength: int, stat: int, pct:
 	for o in [6, 8, 0xA, 0xC, 0xE, 0x10, 0x12, 0x14]:
 		att.append(rec.decode_u16(o))
 	var lo := code & 0xFFF0FFFF
-	var point := Vector3i(int(back[0]), int(back[1]), int(back[2]))
+	var point = null if back == null else Vector3i(int(back[0]), int(back[1]), int(back[2]))
 	if lo == 0x80:
 		if player and player.has_method("take_effect"):
 			player.call("take_effect", att, int(rec[4]), strength & 0xFFFF, pct, point)

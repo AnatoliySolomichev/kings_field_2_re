@@ -18,6 +18,8 @@ extends RefCounted
 #
 # @exe game
 
+const HOLD := 0x800                # +0x28: bortecth's hold, set by actor_attack_player's code bit 0x10000
+
 var coll: KFCollision
 var rand: Callable                 # the BIOS rand, 0..0x7fff
 
@@ -502,7 +504,10 @@ func move_vertical(a: Dictionary, kind: Dictionary) -> void:
 # -- one frame --------------------------------------------------------------------
 
 # Returns a blow opcode 4 struck this frame -- {reach, lift, arc, rec} -- or {}.
-# @orig game:0x800500a8 actor_tick  status:partial -- the arms of opcodes 0 to 6 and 0x19: 8 of the 30 its switch has besides the one 209 opcodes share
+# A flinch (op 2) held (+0x28 bit 0x800) past its first half runs no clock,
+# so waits; a death (op 3) held with its clock at 0x400 or past does nothing
+# but the tail -- no clock, no drop, no brake -- until the hold is let go.
+# @orig game:0x800500a8 actor_tick  status:partial -- the arms of opcodes 0 to 6 and 0x19: 8 of the 30 its switch has besides the one 209 opcodes share; the hold in 2 and 3 against the game's own, tools/ai.py hold_check, 1680 of 1680
 func tick(a: Dictionary, kind: Dictionary, player: Vector3i, others: Array) -> Dictionary:
 	var blow := {}
 	if a["rec"] == null:
@@ -600,7 +605,8 @@ func tick(a: Dictionary, kind: Dictionary, player: Vector3i, others: Array) -> D
 				a["sub"] = 0
 				start_anim(a, int(raw[1]))
 			var s2: int = int(a["sub"])
-			clock(a, s16f(raw, 8))
+			if s16(s2) < 2 or (int(a.get("eflags", 0)) & HOLD) == 0:   # 0x80050424: held,
+				clock(a, s16f(raw, 8))                                  # the second half waits
 			if s2 == 0:
 				a["sub"] = 1
 			elif s2 == 1 and int(a["clock"]) >= 0x7FF:
@@ -616,6 +622,9 @@ func tick(a: Dictionary, kind: Dictionary, player: Vector3i, others: Array) -> D
 				a["sub"] = 0
 				start_anim(a, int(raw[1]))
 			var s3: int = int(a["sub"])
+			if s3 == 0 and int(a["clock"]) >= 0x400 and (int(a.get("eflags", 0)) & HOLD) != 0:
+				move_vertical(a, kind)      # 0x8005063c: held, nothing but the tail (0x80052c14)
+				return blow
 			if s3 == 0:
 				clock(a, s16f(raw, 8))
 				if clock_passed(a, 0x800):  # 0x800506c0: what it leaves

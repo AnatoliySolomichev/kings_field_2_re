@@ -664,7 +664,8 @@ def tick(a, kind, lvl, player, others, rand):
             a["phase"], a["sub"] = 0xF0, 0
             start_anim(a, raw[1])
         s = a["sub"]
-        clock(a, s16f(raw, 8))
+        if s16(s) < 2 or not a["flags"] & HOLD:         # 0x80050424: held, the
+            clock(a, s16f(raw, 8))                      # second half waits
         if s == 0:
             a["sub"] = 1                                # the tint set (not kept)
         elif s == 1 and a["clock"] >= 0x7FF:
@@ -679,6 +680,9 @@ def tick(a, kind, lvl, player, others, rand):
             a["phase"], a["sub"] = 0xF0, 0
             start_anim(a, raw[1])
         s = a["sub"]
+        if s == 0 and a["clock"] >= 0x400 and a["flags"] & HOLD:
+            move_vertical(a, lvl, kind)                 # 0x8005063c: held, nothing
+            return blow                                 # but the tail (0x80052c14)
         if s == 0:
             clock(a, s16f(raw, 8))
             if clock_passed(a, 0x800):                  # 0x800506c0: what it leaves
@@ -1227,10 +1231,172 @@ def export(out_dir, lv):
         doc["run"] = run(lv)
         # and a kind-3 creature, whose volley (opcode 0x19) the first never uses
         doc["runs"] = [doc["run"], run(lv, 40)]
+        doc["holds"] = holds(lv)
     path = os.path.join(out_dir, f"ai{lv:02d}.json")
     with open(path, "w") as f:
         json.dump(doc, f, separators=(",", ":"))
     return path
+
+
+HOLD = 0x800            # +0x28: bortecth's hold (actor_attack_player's code bit 0x10000)
+CURRENT, CURRENT_DEF = 0x8018FAB4, 0x8018FAB0
+ACTOR_TICK = 0x800500A8
+
+
+HOLD_CASES = ((2, 2, 0x900), (2, 2, 0xFF0), (2, 1, 0x300), (3, 0, 0x500), (3, 0, 0x300),
+              (3, 0, 0xFF0))
+"""A flinch or a death put in at (op, sub, clock): held past the first half
+and not, held under 0x400 and past it."""
+
+
+def holds(lv, seed=0x800):
+    """hold_check's cases on the level's snapshots, in ai.gd's form, with what
+    the model leaves -- the clock, sub, opcode, phase and step, and held and
+    dying past 0x400 the velocity and place -- for godot/selftest.gd."""
+    import hit
+    import memcard
+    import movement
+    lvl = movement.level(lv)
+    blob = entity_blob(lv)
+    kinds_at = {kd["kind"]: kind_of(lv, kd["kind"], blob) for kd in kinds(lv, blob)}
+    out = []
+    for path in memcard._snapshots():
+        base = open(path, "rb").read()
+        if base[0x18FAD9] != lv or \
+                struct.unpack_from("<I", base, (ENTITY_TABLE & 0x1FFFFF) + LISTS)[0] == 0:
+            continue
+        r = hit.Ram(bytearray(base))
+        player = struct.unpack_from("<3i", base, 0x1B25F0)
+        for k in range(ACTORS):
+            a = ACTOR_TABLE + ACTOR_STRIDE * k
+            if r.u8(a + 9) != 1 or r.u8(a) == 3 or r.u32(a + 0x28) & 0x10:
+                continue
+            kind = kinds_at.get(r.u8(a + 2))
+            if kind is None:
+                continue
+            for op, sub, clk in HOLD_CASES:
+                rec = r.with_op(hit.ENTITY + 120 * r.u8(a + 2), op)
+                ri = [i for i, b in enumerate(kind["behaviours"]) if b["addr"] == rec]
+                if not rec or not ri:
+                    continue
+                for hold in (0, HOLD):
+                    m = _from_ram(r, a, kind["behaviours"][ri[0]], op, sub, clk, hold)
+                    before = dict(m)
+                    tick(m, kind, lvl, player, [m], bios_rand(seed))
+                    want = _hold_result(m, op, clk, hold)
+                    g = {"px": before["x"], "py": before["y"], "pz": before["z"],
+                         "ry": before["yaw"], "turn": before["turn"], "vx": before["vx"],
+                         "vy": before["vy"], "vz": before["vz"], "vst": before["vst"],
+                         "rec": ri[0], "op": op, "phase": 0xF0, "prev": before["prev"],
+                         "anim": before["anim"], "clock": clk, "step": before["step"],
+                         "aim": before["aim"], "sub": sub, "n72": before["n72"], "flee": 0,
+                         "cut": 0, "radius": before["radius"], "height": before["height"],
+                         "eflags": before["flags"], "st": 1}
+                    out.append({"a": g, "kind": r.u8(a + 2), "player": list(player),
+                                "seed": seed, "want": want})
+    return out
+
+
+def _from_ram(q, a, brec, op, sub, clk, hold):
+    """A creature in RAM as this model's dictionary, put into op/sub/clock."""
+    return {"x": q.s32(a + 0x2C), "y": q.s32(a + 0x30), "z": q.s32(a + 0x34),
+            "yaw": q.s16(a + 0x42), "turn": q.s16(a + 0x58), "vx": q.s16(a + 0x50),
+            "vy": q.s16(a + 0x52), "vz": q.s16(a + 0x54), "vst": q.u8(a + 0xD),
+            "rec": brec, "op": op, "phase": 0xF0, "prev": q.u8(a + 0x10),
+            "anim": q.u8(a + 0xC), "clock": clk, "step": q.u16(a + 0x66),
+            "aim": q.s16(a + 0x64), "sub": sub, "n72": q.s16(a + 0x72),
+            "flee": 0, "cut": 0, "radius": q.u16(a + 0x1C),
+            "height": q.u16(a + 0x1E), "flags": (q.u32(a + 0x28) & ~HOLD) | hold, "st": 1}
+
+
+def _hold_result(m, op, clk, hold):
+    out = [m["clock"], s16(m["sub"]), m["op"] & 0xFF, m["phase"] & 0xFF, m["step"]]
+    if hold and op == 3 and clk >= 0x400:
+        out += [m["vx"], m["vz"], m["x"], m["z"]]
+    return out
+
+
+def hold_check(out=sys.stdout, seed=0x800):
+    """The hold (+0x28 bit 0x800) against the game's own actor_tick, run by
+    tools/mipsrun.py on every snapshot's awake creatures put into a flinch
+    (op 2) or dying (op 3) at a sub and clock, held and not: one frame each,
+    the same rand on both sides. Compared: the clock, sub, opcode, phase and
+    the clock's step (+0x66); held and dying past 0x400, the velocity and the
+    place too, which the brake it skips would have moved."""
+    import effects
+    import hit
+    import levelstate
+    import memcard
+    import movement
+    cases = ok = held = 0
+    first = None
+    lvls, kinds_at = {}, {}
+    for path in memcard._snapshots():
+        base = bytearray(open(path, "rb").read())
+        lv = base[0x18FAD9]
+        if struct.unpack_from("<I", base, (ENTITY_TABLE & 0x1FFFFF) + LISTS)[0] == 0:
+            continue
+        if lv not in lvls:
+            try:
+                lvls[lv] = movement.level(lv)
+            except Exception:
+                continue
+            blob = entity_blob(lv)
+            kinds_at[lv] = {kd["kind"]: kind_of(lv, kd["kind"], blob) for kd in kinds(lv, blob)}
+        r = hit.Ram(base)
+        player = struct.unpack_from("<3i", base, 0x1B25F0)
+        for k in range(ACTORS):
+            a = ACTOR_TABLE + ACTOR_STRIDE * k
+            if r.u8(a + 9) != 1 or r.u8(a) == 3 or r.u32(a + 0x28) & 0x10:
+                continue
+            kind = kinds_at[lv].get(r.u8(a + 2))
+            if kind is None:
+                continue
+            kaddr = hit.ENTITY + 120 * r.u8(a + 2)
+            for op, sub, clk in HOLD_CASES:
+                rec = r.with_op(kaddr, op)
+                brec = [b for b in kind["behaviours"] if b["addr"] == rec]
+                if not rec or not brec:
+                    continue
+                for hold in (0, HOLD):
+                    ram = bytearray(base)
+                    q = hit.Ram(ram)
+                    q.w32(a + 0x60, rec)
+                    q.w8(a + 0xE, op)
+                    q.w8(a + 0xF, 0xF0)
+                    q.w16(a + 0x70, sub)
+                    q.w16(a + 0x18, clk)
+                    q.w32(a + 0x28, (q.u32(a + 0x28) & ~HOLD) | hold)
+                    q.w32(CURRENT, a)
+                    q.w32(CURRENT_DEF, kaddr)
+                    cpu = effects._game(bytes(ram))
+                    lcg = levelstate.Lcg(seed)
+                    cpu.hooks[effects.RAND] = lambda c, lcg=lcg: lcg()
+                    cpu.hooks[effects.SOUND_AT] = lambda c: 0
+                    effects._call(cpu, ACTOR_TICK, [])
+                    g = hit.Ram(cpu.ram)
+                    m = _from_ram(q, a, brec[0], op, sub, clk, hold)
+                    tick(m, kind, lvls[lv], player, [m], levelstate.Lcg(seed))
+                    got = [g.u16(a + 0x18), g.s16(a + 0x70), g.u8(a + 0xE), g.u8(a + 0xF),
+                           g.u16(a + 0x66)]
+                    want = _hold_result(m, op, clk, hold)
+                    if hold and op == 3 and clk >= 0x400:
+                        held += 1
+                        got += [g.s16(a + 0x50), g.s16(a + 0x54), g.s32(a + 0x2C), g.s32(a + 0x34)]
+                    elif hold and op == 2 and sub >= 2:
+                        held += 1
+                    cases += 1
+                    if got == want:
+                        ok += 1
+                    elif first is None:
+                        first = (f"  {os.path.basename(path)} slot {k} op {op} sub {sub} clock "
+                                 f"{clk:#x}{' held' if hold else ''}: game {got}, model {want}")
+    if first:
+        print(first, file=out)
+    print(f"  the hold (+0x28 bit 0x800), the game's own actor_tick on every snapshot's awake "
+          f"creatures: {ok} of {cases} frames of a flinch or a death as the model steps them, "
+          f"{held} of them held", file=out)
+    return ok == cases and cases > 0
 
 
 def main():
@@ -1239,6 +1405,7 @@ def main():
         sys.exit(0 if check_locked(verbose=True) else 1)
     if a == "--check":
         ok = check()
+        ok = hold_check() and ok
         # every level the log walked on, each with its own creatures in the slots
         import replay
         rows, _ = replay.load()

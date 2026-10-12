@@ -508,7 +508,8 @@ flinch, the death, the push -- and `actor_attack_player`, which an effect's
 hit goes to. Held to the game's own over every snapshot's creatures, **1260
 of 1260**; `export` writes `hitcheck.json` in actors.gd's form.
 `tools/effects.py spell_hit_check` runs the fire ball, stone, wind cutter,
-haze, shudom and walwind through both, against the game's own end to end
+haze, shudom, walwind, earth wave and bortecth through both, against the
+game's own end to end
 -- shudom's rings and walwind's waves through `strike_creatures`
 (`0x8004ceac`, the strike on the creatures in an area) and
 `effect_hurt_player`'s other modes; `export_strikes` writes
@@ -862,7 +863,11 @@ python3 tools/ai.py --locked      every creature frame stepped from bp16's
 
 `ai.py` also carries the machine itself -- `pick`, `tick`, the moves -- and
 `export` writes `aiNN.json` for `godot/ai.gd`, with a run of one creature
-(`run`) that the self-test repeats frame for frame.
+(`run`) that the self-test repeats frame for frame. `hold_check` (in
+`--check`) holds the flinch and the death, held by bortecth's bit 0x800 and
+not, to the game's own `actor_tick` run by `tools/mipsrun.py` on every
+snapshot's awake creatures: **1680 of 1680**; `aiNN.json` for level 0
+carries 1500 such cases (`holds`) for the self-test.
 
 **`compass.py`** — the ball in the top-right corner: its records, the model
 (`modelbank.load(0)`, entry 97 block 9), the library's `RotMatrix` with its own
