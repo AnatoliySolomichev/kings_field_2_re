@@ -1653,6 +1653,7 @@ def project(lv, out="out/godot", start=(57, 4)):
     try:
         import effects
         effects.export(out)
+        effects.export_strikes(out)
     except Exception as e:
         print(f"effect cases skipped: {e}")
     try:
@@ -1831,7 +1832,7 @@ def verify(out="out/godot"):
                             "fences:",
                             "creature run:",
                             "levels:", "skills:", "angles:",
-                            "scripts:", "damage:", "equipment:", "player_recalc_stats:", "knock-back:", "weapon:", "animation:", "effects:", "lift doors:", "chests:", "inscriptions:", "conversations:", "menus:", "routines:", "saves:", "level states:", "the run:", "player_take_hit:", "the status:", "casting:", "the attacking arms:", "creature hits:", "FAIL", "  first",
+                            "scripts:", "damage:", "equipment:", "player_recalc_stats:", "knock-back:", "weapon:", "animation:", "effects:", "lift doors:", "chests:", "inscriptions:", "conversations:", "menus:", "routines:", "saves:", "level states:", "the run:", "player_take_hit:", "the status:", "casting:", "the attacking arms:", "creature hits:", "creature strikes:", "FAIL", "  first",
                             "  level case", "  angle (", "  script level",
                             "  hit ")):
             print("   " + line.strip())

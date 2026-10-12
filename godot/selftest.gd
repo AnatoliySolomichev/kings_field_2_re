@@ -326,6 +326,9 @@ func _init() -> void:
 	if not _creature_hits():
 		quit(1)
 		return
+	if not _strike_areas():
+		quit(1)
+		return
 	if not _level_states():
 		quit(1)
 		return
@@ -634,8 +637,15 @@ func _effects() -> bool:
 		for k in run["fields"]:
 			rp.fields[k] = int(run["fields"][k])
 		for sp in run["spawns"]:
-			fx.spawn(int(sp[0]), int(sp[1]), int(sp[2]), (sp[3] as String).hex_decode(),
-				[(sp[4][0]["b"] as String).hex_decode()])
+			var args := []
+			for v in sp[4]:
+				if v == null:
+					args.append(null)
+				elif typeof(v) == TYPE_DICTIONARY:
+					args.append((v["b"] as String).hex_decode())
+				else:
+					args.append(int(v))
+			fx.spawn(int(sp[0]), int(sp[1]), int(sp[2]), (sp[3] as String).hex_decode(), args)
 		var ok := true
 		for f in run["frames"]:
 			frames += 1
@@ -643,10 +653,14 @@ func _effects() -> bool:
 			rp.i = 0
 			rp.bad = ""
 			rp.hits = []
+			rp.hurts = []
+			rp.strikes = []
 			rp.rands = (f.get("rand", []) as Array).map(func(x): return int(x))
 			fx.driver()
 			var same: bool = rp.bad == "" and rp.i == (f["q"] as Array).size() \
 				and rp.rands.is_empty() and str(rp.hits) == str(_ints(f["hits"])) \
+				and str(rp.hurts) == str(_ints(f.get("hurts", []))) \
+				and str(rp.strikes) == str(_ints(f.get("strikes", []))) \
 				and fx.m.hex_encode().md5_text() == str(f["md5"])
 			if same:
 				fgood += 1
@@ -654,7 +668,9 @@ func _effects() -> bool:
 				ok = false
 				if first == "":
 					first = "%s, frame %d: %s" % [run["label"], frames, rp.bad if rp.bad != "" else
-						"hits %s, python %s" % [str(rp.hits), str(f["hits"])]]
+						"hits %s, python %s; strikes %s, python %s; hurts %s, python %s" % [
+							str(rp.hits), str(f["hits"]), str(rp.strikes), str(f.get("strikes")),
+							str(rp.hurts), str(f.get("hurts"))]]
 		if ok:
 			good += 1
 	fx.free()
@@ -699,6 +715,13 @@ class FxReplay:
 	func attack_hit(code: int, flags: int, _kind: int, strength: int, stat: int, pct: int,
 			back: Array) -> void:
 		hits.append([code, flags, strength, stat, pct, back])
+
+	var strikes: Array = []
+
+	func strike_creatures(p: Array, near: int, radius: int, mode: int, edge: int, stat: int,
+			_att: Array, scale: int, flags: int, _kind: int) -> void:
+		strikes.append([int(p[0]), int(p[1]), int(p[2]), int(p[3]), near, radius, mode, edge,
+			stat, scale, flags])
 
 	func collide_query(x: int, y: int, z: int, r: int, h: int, flags: int) -> int:
 		if i >= calls.size():
@@ -1168,6 +1191,85 @@ func _creature_hits() -> bool:
 	KFTalk.flags = keep_flags
 	an.free()
 	print("creature hits: %d of %d as tools/hit.py takes them (whose model the game's own holds)" % [ok, n])
+	if first != "":
+		print("  first difference: " + first.substr(0, 1000))
+	return ok == n
+
+
+# The creatures' strike (0x8004ceac): actors.gd strike_area against
+# tools/effects.py strike_creatures -- a snapshot's awake creatures about one
+# of them, a strike of each mode there -- every creature, the practice and
+# experience and the kill counts after.
+# @port check -- strike_area against strikecheck.json
+func _strike_areas() -> bool:
+	if not FileAccess.file_exists("res://strikecheck.json"):
+		print("creature strikes: no cases to check against")
+		return true
+	var d = JSON.parse_string(FileAccess.get_file_as_string("res://strikecheck.json"))
+	var an = load("res://actors.gd").new()
+	an.coll = coll
+	an.level = -1
+	var ok := 0
+	var n := 0
+	var struck := 0
+	var first := ""
+	var keep_flags: Array = KFTalk.flags.duplicate()
+	KFTalk.flags.resize(KFTalk.FLAG_COUNT)
+	for c in d["cases"]:
+		var kinds := {}
+		for k in c["kinds"]:
+			kinds[int(k)] = _ints(c["kinds"][k])
+		var actors := []
+		actors.resize(200)
+		for k in c["actors"]:
+			var a: Dictionary = _ints(c["actors"][k])
+			var ri := int(a["rec"])
+			a["rec"] = kinds[int(a["kind"])]["behaviours"][ri] if ri >= 0 else null
+			a["st"] = 1
+			actors[int(k)] = a
+		an.kinds = kinds
+		an.actors = actors
+		an.rand_next = int(c["seed"])
+		KFTalk.flags[0x79] = int(c["kills"][0])
+		KFTalk.flags[0x7A] = int(c["kills"][1])
+		var outs: Array = an.strike_area(_ints(c["p"]), int(c["near"]), int(c["radius"]),
+			int(c["mode"]), int(c["edge"]), int(c["stat"]), _ints(c["att"]), int(c["scale"]),
+			int(c["flags"]))
+		var calls := []
+		for out in outs:
+			if bool(out.get("practice", false)):
+				calls.append(["practice"])
+			if bool(out.get("strong", false)):
+				calls.append(["strong"])
+			if int(out.get("exp", 0)) != 0:
+				calls.append(["exp", int(out["exp"])])
+		var same: bool = str(calls) == str(_ints(c["calls"])) \
+			and [int(KFTalk.flags[0x79]), int(KFTalk.flags[0x7A])] == _ints(c["kills_after"])
+		var bad := ""
+		for k in c["actors"]:
+			var want: Dictionary = _ints(c["after"].get(k, c["actors"][k]))
+			var a: Dictionary = actors[int(k)]
+			var got := {}
+			for key in want:
+				if key == "kind" or key == "radius":
+					continue
+				got[key] = a.get(key, 0)
+			var kl: Array = kinds[int(a["kind"])]["behaviours"]
+			got["rec"] = kl.find(a["rec"]) if a["rec"] != null else -1
+			want.erase("kind")
+			want.erase("radius")
+			if str(got) != str(want) and bad == "":
+				bad = "slot %s: godot %s, python %s" % [k, str(got), str(want)]
+		n += 1
+		struck += outs.size()
+		if same and bad == "":
+			ok += 1
+		elif first == "":
+			first = "case %d mode 0x%x: %s" % [n, int(c["mode"]), bad if bad != "" else
+				"calls %s, python %s" % [str(calls), str(c["calls"])]]
+	KFTalk.flags = keep_flags
+	an.free()
+	print("creature strikes: %d of %d as tools/effects.py strike_creatures has them (whose model the game's own holds), %d creatures struck" % [ok, n, struck])
 	if first != "":
 		print("  first difference: " + first.substr(0, 1000))
 	return ok == n

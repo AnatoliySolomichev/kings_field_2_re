@@ -507,8 +507,12 @@ player's blow and spell, a creature's, the immune, the behaviour 0x16, the
 flinch, the death, the push -- and `actor_attack_player`, which an effect's
 hit goes to. Held to the game's own over every snapshot's creatures, **1260
 of 1260**; `export` writes `hitcheck.json` in actors.gd's form.
-`tools/effects.py spell_hit_check` runs the fire ball, stone and wind
-cutter through both, against the game's own end to end.
+`tools/effects.py spell_hit_check` runs the fire ball, stone, wind cutter,
+haze, shudom and walwind through both, against the game's own end to end
+-- shudom's rings and walwind's waves through `strike_creatures`
+(`0x8004ceac`, the strike on the creatures in an area) and
+`effect_hurt_player`'s other modes; `export_strikes` writes
+`strikecheck.json`, 400 of `strike_creatures`' cases in actors.gd's form.
 
 **`knock.py`** — what a blow does to the player after the HP, and the recording.
 

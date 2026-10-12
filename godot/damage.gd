@@ -44,6 +44,25 @@ const ARG9 := 0x1000                 # 0x8004d358
 const ARG10 := 0xA                   # 0x8004d35c
 
 
+# What effect_hurt_player and 0x8004ceac do with a strike's distance: under
+# `near` it misses (-1); else the scale's low 15 bits, falling to edge / 0x1000
+# at the rim of the radius -- 0x1000 - ((d << 12) / radius) * (0x1000 - edge)
+# >> 12, the quotient's low half, the product's word.
+# @orig game:0x8002b234 effect_hurt_player+0x120  status:verified -- through effect_hurt_player, 118 strikes of bp26; 0x8004d10c's the same, tools/effects.py spell_hit_check against the game's own
+static func falloff(d: int, near: int, radius: int, edge: int, scale: int) -> int:
+	if d < near:
+		return -1
+	scale &= 0x7FFF
+	edge &= 0xFFFF
+	if edge == 0x1000:
+		return scale
+	var q := absi(d << 12) / absi(radius) if radius != 0 else 0
+	if (d << 12 < 0) != (radius < 0):
+		q = -q
+	var f := (0x1000 - ((((q & 0xFFFF) * (0x1000 - edge)) & 0xFFFFFFFF) >> 12)) & 0xFFFF
+	return ((scale * f) & 0xFFFFFFFF) >> 12
+
+
 # @orig game:0x8002a5f8 damage_of_type  status:verified -- through hit(), 6 of 6
 static func of_type(attack: int, defence: int, stat: int, k := K) -> int:
 	var a := attack * 16

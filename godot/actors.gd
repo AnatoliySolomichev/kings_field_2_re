@@ -558,6 +558,51 @@ func take_spell(k: int, stat: int, attacks: Array, strength: int, flags: int, po
 	return out
 
 
+# 0x8004ceac, effect_strike's creature half: every awake creature, by its
+# distance from the point -- mode 0x8000 in_range_3d with its radius and
+# height; 0x8001 the same, a point above its top missing; 0x8002 the same,
+# and missing when the bearing to it lies within 0x40 of both the point's
+# fourth word turned a quarter each way, which never is; any other in_range
+# with its height and the mode as the asker's -- not nearer than `near`; then
+# actor_take_hit with the scale's falloff (KFDamage.falloff) and the point,
+# none when the scale has bit 0x8000. The creature acting is skipped in the
+# game; while the effects run none is. What each hit left, as take_hit_flags.
+# @orig game:0x8004ceac sub_8004ceac  status:verified -- tools/effects.py spell_hit_check: shudom's rings (0x8002) and walwind's waves (0x800) against the game's own, every creature every frame; the self-test this to it
+func strike_area(p: Array, near: int, radius: int, mode: int, edge: int, stat: int,
+		attacks: Array, scale: int, flags: int) -> Array:
+	var outs := []
+	var at := Vector3i(int(p[0]), int(p[1]), int(p[2]))
+	var pt = null if scale & 0x8000 else at
+	for k in actors.size():
+		var a = actors[k]
+		if a == null or a["st"] != ACTIVE or not kinds.has(int(a["kind"])):
+			continue
+		var pos := Vector3i(int(a["px"]), int(a["py"]), int(a["pz"]))
+		var own := int(a["radius"])
+		var height := int(a["height"])
+		var d: int
+		if mode == 0x8001 and at.y < pos.y - height:
+			d = KFCollision.FAR
+		elif mode == 0x8000 or mode == 0x8001 or mode == 0x8002:
+			d = coll.in_range_3d(at, radius, pos, own, height)
+			if mode == 0x8002:
+				var b := KFCreatureAI.s16(coll.ratan2(pos.z - at.z, pos.x - at.x))
+				var w := int(p[3]) & 0xFFFF
+				if KFCreatureAI.facing_test(b, KFCreatureAI.s16(w + 0x400), 0x40) \
+						and KFCreatureAI.facing_test(b, KFCreatureAI.s16(w - 0x400), 0x40):
+					d = KFCollision.FAR
+		else:
+			d = _in_range(pos.x, pos.y, pos.z, at.x, at.y, at.z, radius, height, mode)
+			if d == -1:
+				d = KFCollision.FAR
+		var s := KFDamage.falloff(d, near, radius, edge, scale)
+		if s < 0:
+			continue
+		var dmg := KFWeapon.creature_damage(stat, attacks, kinds[int(a["kind"])]["defence"], s & 0xFFFF)
+		outs.append(take_hit_flags(k, dmg, s & 0xFFFF, flags, pt))
+	return outs
+
+
 # kind_behaviour_with_op for the creature in a slot, as a spell's aim asks
 # it (0x8002c274): its kind's first behaviour with the opcode, or null.
 # @port helper -- _with_op by a creature's slot

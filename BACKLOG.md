@@ -823,10 +823,12 @@ each one is also in its function's marker, as `partial` and what differs:
   buttons, `cast_spell`, the pending action, `skill_practice`, the USE
   stretch, the timers and the attacking arms (the aim, the creature in
   sight, the spawns), all held to the game's own code, and the effects of
-  the fire ball, stone and wind cutter. Not yet: the other attacking kinds'
-  effects (lightning's 0x71 next -- long, it follows the ground with
-  collide_surface), each of which spends its MP and spawns nothing that
-  stays;
+  the fire ball, stone, wind cutter, haze, shudom (and its rings, 0x5e) and
+  walwind (and its waves, 0x59), with `effect_strike`'s creature half
+  (`0x8004ceac`). Not yet: the other attacking kinds' effects (earth wave
+  7, bortecth 0xc, meteor 0x5f, lightning's 0x71 -- long, it follows the
+  ground with collide_surface), each of which spends its MP and spawns
+  nothing that stays;
   meteor's collision test (the port answers no); creatures a model's vertex
   places (flag 0x400000) in `actor_spot_taken`; in the port's
   `actor_take_hit`, a part passing its hit to its actor and a follower's

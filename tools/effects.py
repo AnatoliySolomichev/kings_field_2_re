@@ -101,17 +101,76 @@ def in_range_3d(p, radius, target, own=OWN, height=BODY):
     return ln - own
 
 
-def strike_scale(p, radius, player, edge=EDGE, scale=0x1000):
-    """effect_hurt_player (0x8002b114) with mode 0x8000 and near 0: None
-    when it misses, else the scale it hands player_take_hit."""
-    d = in_range_3d(p, radius, player)
-    if d < 0:
+def strike_scale(p, radius, player, edge=EDGE, scale=0x1000, near=0, mode=0x8000):
+    """effect_hurt_player (0x8002b114): None when it misses, else the scale it
+    hands player_take_hit. How far: mode 0x8000 in_range_3d to the player's
+    middle; 0x8001 the same, a point above the player's top (y less 0x6a4)
+    missing; any other in_range (0x8002b8d8) with the player's height 0x6a4
+    and the mode as the asker's. Nearer than `near` misses too."""
+    if mode == 0x8001 and p[1] < player[1] - 0x6A4:
+        d = FAR
+    elif mode in (0x8000, 0x8001):
+        d = in_range_3d(p, radius, player)
+    else:
+        d = movement.in_range(player, p[0], p[1], p[2], radius, 0x6A4, mode)
+        if d == -1:
+            d = FAR
+    return _falloff(d, near, radius, edge, scale)
+
+
+def _falloff(d, near, radius, edge, scale):
+    """What effect_hurt_player and 0x8004ceac share past the distance: None
+    under `near`, else the scale (its low 15 bits) falling to edge / 0x1000
+    at the rim."""
+    if d < near:
         return None
-    if edge == 0x1000:
+    scale &= 0x7FFF
+    if edge & 0xFFFF == 0x1000:
         return scale
-    lo = movement.trunc(d << 12, radius) & 0xFFFF
-    f = (0x1000 - ((lo * (0x1000 - edge)) >> 12)) & 0xFFFF
-    return (scale * f) >> 12
+    lo = movement.trunc(_s32(d << 12), radius) & 0xFFFF
+    f = (0x1000 - ((((lo * (0x1000 - (edge & 0xFFFF))) & 0xFFFFFFFF) >> 12))) & 0xFFFF
+    return ((scale * f) & 0xFFFFFFFF) >> 12
+
+
+def strike_creatures(r, point, near, radius, mode, edge, stat, att, scale, flags, record,
+                     rand, calls, hook):
+    """0x8004ceac, effect_strike's creature half, on RAM `r` (a hit.Ram):
+    every awake creature (+9 1) but the one acting, by its distance from the
+    point -- mode 0x8000 in_range_3d with its radius (+0x1c) and height
+    (+0x1e); 0x8001 the same, a point above its top missing; 0x8002 the same,
+    and missing when the bearing to it is within 0x40 of both the point's
+    +0xc turned a quarter each way, which never is; any other in_range with
+    its height and the mode as the asker's -- not nearer than `near`, then
+    actor_take_hit with the scale _falloff gives and the point (none when the
+    scale has bit 0x8000)."""
+    import hit
+    import weapon
+    pt = 0 if scale & 0x8000 else point
+    p = (r.s32(point), r.s32(point + 4), r.s32(point + 8))
+    cur = r.u32(CURRENT_ACTOR)
+    for k in range(ACTOR_N):
+        a = ACTORS + ACTOR_STRIDE * k
+        if r.u8(a + 9) != 1 or a == cur:
+            continue
+        pos = (r.s32(a + 0x2C), r.s32(a + 0x30), r.s32(a + 0x34))
+        own, height = r.u16(a + 0x1C), r.u16(a + 0x1E)
+        if mode == 0x8001 and p[1] < _s32(pos[1] - height):
+            d = FAR
+        elif mode in (0x8000, 0x8001, 0x8002):
+            d = in_range_3d(p, radius, pos, own, height)
+            if mode == 0x8002:
+                b = _s16_(movement.ratan2(_s32(pos[2] - p[2]), _s32(pos[0] - p[0])))
+                w = r.u16(point + 0xC)
+                if weapon._facing(b, _s16_(w + 0x400), 0x40) and \
+                        weapon._facing(b, _s16_(w - 0x400), 0x40):
+                    d = FAR
+        else:
+            d = movement.in_range(pos, p[0], p[1], p[2], radius, height, mode)
+            if d == -1:
+                d = FAR
+        s = _falloff(d, near, radius, edge, scale)
+        if s is not None:
+            hit.actor_take_hit(r, k, stat, att, s & 0xFFFF, flags, record, pt, rand, calls, hook)
 
 
 def tick_spore(e, lvl, player):
@@ -422,7 +481,7 @@ def export(out_dir):
     # as fire_check stands them in: the answers, and the hits handed over
     fires = []
     frng = random.Random(0xF1E)
-    for kind_, speed_ in ((FIRE_BALL, 0x384), (STONE, 0x1F4), (WIND_CUTTER, 0x2BC)):
+    for kind_, speed_, _name, more_, nframes_ in SPELLS_SENT:
       for path in memcard._snapshots()[:6]:
           base = bytearray(open(path, "rb").read())
           o = SLOTS & MASK
@@ -445,7 +504,9 @@ def export(out_dir):
               if frng.randrange(2) == 0:                       # water just under the path
                   struct.pack_into("<i", m, SURFACE & MASK, py - 0x640 - frng.randrange(0, 0x1F4))
               s18 = struct.unpack_from("<i", m, SURFACE & MASK)[0]
-              w = StandIn(7)
+              view = bytes(m[VIEW_ANGLES & MASK:(VIEW_ANGLES & MASK) + 8])
+              args_ = [vel] + [view if v == "view" else v for v in more_]
+              w = StandIn(7, m)
               log = []
               ask = w.collide_query
 
@@ -463,14 +524,16 @@ def export(out_dir):
                   return v
               mach = Machine(m, w, rnd)
               try:
-                  mach.spawn(0xA, 0x42, kind_, point, [vel])
+                  mach.spawn(0xA, 0x42, kind_, point, args_)
                   frames = []
-                  for _f in range(60):
-                      del log[:], w.hits[:], drawn[:]
+                  for _f in range(nframes_):
+                      del log[:], w.hits[:], drawn[:], w.hurts[:], w.strikes[:]
                       mach.driver()
                       frames.append({"q": [list(x) for x in log], "rand": list(drawn),
                                      "hits": [[h[0], h[1], h[2], h[3], h[4], [_s32(v) for v in h[5]]]
                                               for h in w.hits],
+                                     "hurts": [list(h) for h in w.hurts],
+                                     "strikes": [list(x) for x in w.strikes],
                                      "md5": hashlib.md5(_slots(m).hex().encode()).hexdigest()})
                       if all(m[o + STRIDE * k] == 0xFF for k in range(COUNT)):
                           break
@@ -478,7 +541,8 @@ def export(out_dir):
                   continue
               fires.append({"label": f"{os.path.basename(path)[:-4]} kind {kind_:#x}", "layer0": 7,
                             "fields": dict({"px": px, "s18": s18, "vy": vy}, **{f"w{k}": working[k] for k in range(5)}),
-                            "spawns": [[0xA, 0x42, kind_, point.hex(), [{"b": vel.hex()}]]],
+                            "spawns": [[0xA, 0x42, kind_, point.hex(),
+                                        [{"b": v.hex()} if isinstance(v, bytes) else v for v in args_]]],
                             "frames": frames})
     # and effect_aim: a creature's angles, the target, the speed, the point and
     # the spread, and the velocity and yaw aim() gives -- the game's own, 600
@@ -501,6 +565,99 @@ def export(out_dir):
                   fh, separators=(",", ":"))
     return path
 
+def export_strikes(out_dir, n=400):
+    """strikecheck.json: 0x8004ceac's cases in godot/actors.gd's form -- the
+    awake creatures of a snapshot about one of them, their kinds, a strike
+    there of each mode -- and what strike_creatures leaves them, for the
+    self-test. Parts and followers, which the port does not pass a hit on
+    from, are put to sleep first, and no creature is the one acting."""
+    import json
+    import random
+    import levelstate
+    import memcard
+    import hit
+    rng = random.Random(0x8004CEAC)
+    cases = []
+    paths = memcard._snapshots()
+    tries = 0
+    while len(cases) < n and tries < 20 * n:
+        tries += 1
+        ram = bytearray(open(paths[tries % len(paths)], "rb").read())
+        r = hit.Ram(ram)
+        r.w32(CURRENT_ACTOR, 0)
+        awake = []
+        for k in range(ACTOR_N):
+            a = ACTORS + ACTOR_STRIDE * k
+            if r.u8(a + 9) != 1:
+                continue
+            if r.u8(a) == 3 or r.u32(a + 0x28) & 0x10:
+                r.w8(a + 9, 0)
+                continue
+            awake.append(k)
+        if not awake:
+            continue
+        a = ACTORS + ACTOR_STRIDE * rng.choice(awake)
+        x, y, z = r.s32(a + 0x2C), r.s32(a + 0x30), r.s32(a + 0x34)
+        mode = rng.choice((0x8002, 0x800, 0x8000, 0x8001, 0x400))
+        radius = rng.choice((0x300, 0x900, 0x1800, 0x3000, rng.randrange(0x100, 0x4000)))
+        near = rng.choice((0, (15 * radius) >> 4, (29 * radius) >> 5, rng.randrange(0, radius)))
+        p = [x + rng.randrange(-radius, radius + 1), y - rng.randrange(-0x400, 0x800),
+             z + rng.randrange(-radius, radius + 1), rng.randrange(-0x800, 0x800)]
+        pt = STRIKE_POINT
+        struct.pack_into("<4i", ram, pt & MASK, *p)
+        stat = rng.randrange(0, 120)
+        att = [rng.choice((0, 0, rng.randrange(1, 60))) for _ in range(8)]
+        scale = rng.choice((0x1000, 0x1000, rng.randrange(0x100, 0x1000), 0x9000))
+        edge = rng.choice((0x400, 0x400, 0x1000, rng.randrange(0, 0x1000)))
+        flags = rng.choice((0x60, 0x60, 0xE0, 0x20))
+        seed = rng.randrange(1 << 30)
+        kinds, klists, before = {}, {}, {}
+        for k in awake:
+            ak = ACTORS + ACTOR_STRIDE * k
+            kn = r.u8(ak + 2)
+            if kn not in kinds:
+                kind = hit.ENTITY + 120 * kn
+                kl = []
+                for i in range(16):
+                    q = r.u32(kind + 0x38 + 4 * i)
+                    if q == 0:
+                        break
+                    kl.append(q)
+                klists[kn] = kl
+                kinds[kn] = {"defence": [r.u16(kind + 0x20 + 2 * i) for i in range(8)],
+                             "exp": r.s16(kind + 0x1E), "weight": r.u8(kind + 2),
+                             "arc_back": r.s16(kind + 0x18),
+                             "behaviours": [list(ram[q & MASK:(q & MASK) + 0x20]) for q in kl]}
+            d = hit._actor_dict(r, ak, klists[kn])
+            d["kind"] = kn
+            d["radius"] = r.u16(ak + 0x1C)
+            before[k] = d
+        kills = [r.u8(hit.KILL_FLAG), r.u8(hit.KILL_COUNT)]
+        calls = []
+        strike_creatures(r, pt, near, radius, mode, edge, stat, att, scale, flags, 0,
+                         levelstate.Lcg(seed), calls, lambda actor, dd: dd)
+        after = {}
+        for k in awake:
+            ak = ACTORS + ACTOR_STRIDE * k
+            d = hit._actor_dict(r, ak, klists[r.u8(ak + 2)])
+            if d != {key: before[k][key] for key in d}:
+                after[str(k)] = d
+        cases.append({"actors": {str(k): v for k, v in before.items()},
+                      "kinds": {str(k): v for k, v in kinds.items()},
+                      "p": p, "near": near, "radius": radius, "mode": mode, "edge": edge,
+                      "stat": stat, "att": att, "scale": scale, "flags": flags, "seed": seed,
+                      "kills": kills, "after": after,
+                      "kills_after": [r.u8(hit.KILL_FLAG), r.u8(hit.KILL_COUNT)],
+                      "calls": [[c[0], c[1]] if c[0] == "exp" else [c[0]] for c in calls
+                                if c != ("exp", 0)]})
+    path = os.path.join(out_dir, "strikecheck.json")
+    with open(path, "w") as fh:
+        json.dump({"_note": "0x8004ceac, the creatures' strike, as tools/effects.py "
+                            "strike_creatures has it (whose model the game's own holds)",
+                   "cases": cases}, fh, separators=(",", ":"))
+    return path
+
+
 # --- the machine, byte for byte ---------------------------------------------
 #
 # What follows is effect_spawn, effect_driver and the arms of effect_tick it
@@ -522,6 +679,8 @@ B56A, B56C, B56E = 0x801B256A, 0x801B256C, 0x801B256E
 TILE_LOOK = 0x801AEEFC
 FIRE_BALL = 0x00
 STONE, WIND_CUTTER = 0x06, 0x0D
+HAZE, SHUDOM, WALWIND, RING, WAVE = 0x0B, 0x09, 0x11, 0x5E, 0x59
+STRIKE_POINT = 0x801FF0D0           # the machine's stand-in for an arm's point on its stack
 VIEW_ANGLES = 0x801B2608
 SCRATCH_POINT = 0x801FF0C0          # where the check lays a hit's point back
 SPLASH = 0x70
@@ -643,7 +802,9 @@ class Machine:
                0x17: self._spawn_17, 0x19: self._spawn_19, 0x1A: self._spawn_1a,
                0x1B: self._spawn_1b, 0x1C: self._spawn_1c, 0x1E: self._spawn_1e,
                FIRE_BALL: self._spawn_00, SPLASH: self._spawn_70,
-               STONE: self._spawn_06, WIND_CUTTER: self._spawn_0d}.get(kind)
+               STONE: self._spawn_06, WIND_CUTTER: self._spawn_0d,
+               HAZE: self._spawn_0b, SHUDOM: self._spawn_09, WALWIND: self._spawn_11,
+               RING: self._spawn_5e, WAVE: self._spawn_59}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_spawn's arm {kind:#x}")
         arm(s, args)
@@ -717,6 +878,153 @@ class Machine:
             self.w8(s + 0x44, 0)
         self.splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
         self.w16(s + 0x2A, self.u16(s + 0x2A) + 0x2BC)
+
+    def _spawn_0b(self, s, args):           # 0x80054b08, haze
+        self.particle(s, 0x16, 0x1000, 5)
+        self.w16(s + 0x10, 0x46)
+        self.w16(s + 0xE, 0xC0)             # its sound (0x94) with the third of a cast's
+
+    def _tick_0b(self, s):                  # 0x80058164, haze
+        """Each thing it meets it strikes once (+0x44 the latch, cleared on
+        a clear frame), and the tiles end it -- the wind cutter's way, with
+        nothing turned and no splash."""
+        hit = self.move(0xB4, 0, 0)
+        if hit:
+            if hit & 0xF:
+                self.w8(s, 0xFF)
+            if self.u8(s + 0x44) == 0:
+                self.attack(s, hit)
+                self.w8(s + 0x44, 1)
+        else:
+            self.w8(s + 0x44, 0)
+
+    def _flat(self, s, model, scale, args):
+        """What shudom's and walwind's arms share (0x80054e54, 0x80054804):
+        model `model`, mode 5, the yaw of the angles args[1] points at (the
+        view's), level, a life of 0x96."""
+        self.w8(s + 8, 1)
+        self.w8(s + 9, 5)
+        self.w8(s + 2, model)
+        self.w8(s + 3, model)
+        self.w8(s + 0xC, 0x34)
+        self.w16(s + 0x12, 0x1000)
+        self.w8(s + 4, 0)
+        for o in (0x34, 0x32, 0x30):
+            self.w16(s + o, scale)
+        self.put(s + 0x28, args[1][:8])
+        self.w16(s + 0x28, 0)
+        self.w16(s + 0x2C, 0)
+        self.w16(s + 0x3A, 0)
+        self.w16(s + 0x10, 0x96)
+        self.w16(s + 0x44, 0)
+
+    def _spawn_09(self, s, args):           # 0x80054e54, shudom
+        self._flat(s, 0x33, 0x4B0, args)
+        self.w16(s + 0xE, 0)
+        self.w16(s + 0x46, self.u16(VIEW_ANGLES + 2))   # and its sound, 0x92
+
+    def _spawn_11(self, s, args):           # 0x80054804, walwind
+        self._flat(s, 0x32, 0xBB8, args)    # and its sound, 0x98
+
+    def _tick_09(self, s):                  # 0x800581b8, shudom
+        """Level through anything, the tiles ending it; at counts 12, 18,
+        24 ... (11 or more, a multiple of 6) a ring (0x5e) where it is,
+        turned as the view was when it was cast."""
+        hit = self.move(0xFA, 0x80000000, 0)
+        if hit & 0xF:
+            self.w8(s, 0xFF)
+        n = self.s16(s + 0x44)
+        if n >= 0xB and n % 6 == 0:
+            self.spawn(0xA, 0x42, RING, self.get(s + 0x18, 16), [None, self.s16(s + 0x46)])
+        self._spin(s)
+
+    def _tick_11(self, s):                  # 0x80058248, walwind
+        """Level, striking whatever it meets every frame, the tiles ending
+        it; at counts 20, 30, 40 ... (16 or more, a multiple of 10) a wave
+        (0x59) falling from where it is."""
+        hit = self.move(0xFA, 0x80000000, 0)
+        if hit:
+            if hit & 0xF:
+                self.w8(s, 0xFF)
+            self.attack(s, hit)
+        n = self.s16(s + 0x44)
+        if n >= 0x10 and n % 10 == 0:
+            self.spawn(0xA, 0x42, WAVE, self.get(s + 0x18, 16), [struct.pack("<4h", 0, 0x54, 0, 0)])
+        self._spin(s)
+
+    def _spin(self, s):                     # 0x800582f4
+        self.w16(s + 0x44, self.u16(s + 0x44) + 1)
+        self.w16(s + 0x14, (self.u16(s + 0x14) + 0x80) & 0xFFF)
+
+    def _spawn_5e(self, s, args):           # 0x80054b7c, shudom's ring
+        self.w8(s + 8, 1)
+        self.w8(s + 4, 0x80)
+        self.w8(s + 2, 0x1E)
+        self.w8(s + 3, 0x1E)
+        self.w16(s + 0x10, 0x1E)
+        self.w16(s + 0x32, 0x1000)
+        self.w8(s + 9, 0)
+        self.w16(s + 0x30, 0xA)
+        self.w16(s + 0x34, 0xA)
+        self.w16(s + 0x28, 0x400)
+        self.w16(s + 0x2C, 0)
+        self.w16(s + 0xE, 0)
+        self.w16(s + 0x2A, args[1])         # and its sound, 0x26
+
+    def _tick_5e(self, s):                  # 0x80059adc, shudom's ring
+        """Growing 0xc0 a frame; from 0x300 it strikes the creatures between
+        15/16 and 9/8 of it from its middle, 0x3e8 under it; past 0xc80 gone."""
+        self.w16(s + 0x34, self.u16(s + 0x34) + 0xC0)
+        self.w16(s + 0x30, self.u16(s + 0x30) + 0xC0)
+        sc = self.s16(s + 0x30)
+        if sc >= 0x300:
+            self.put(STRIKE_POINT, struct.pack("<4i", self.s32(s + 0x18), _s32(self.s32(s + 0x1C) + 0x3E8),
+                                               self.s32(s + 0x20), self.s16(s + 0x2A)))
+            self.strike(STRIKE_POINT, (15 * sc) >> 4, (9 * sc) >> 3, 0x8002, 0x400, 0x1000)
+        if self.s16(s + 0x30) >= 0xC81:
+            self.w8(s, 0xFF)
+
+    def _spawn_59(self, s, args):           # 0x80054894, walwind's wave
+        self.w8(s + 8, 1)
+        self.w8(s + 2, 0x1F)
+        self.w8(s + 3, 0x1F)
+        self.w8(s + 0xC, 0x34)
+        self.w16(s + 0x12, 0x1000)
+        self.w16(s + 0x32, 0x7D0)
+        self.w8(s + 4, 0)
+        self.w8(s + 9, 5)
+        self.w16(s + 0x30, 0x28)
+        self.w16(s + 0x34, 0x28)
+        self.w16(s + 0x10, 0x50)
+        self.w16(s + 0x44, 0)
+        self.w8(s + 0xB, 5)
+
+    def _tick_59(self, s):                  # 0x80058314, walwind's wave
+        """Turning 0x140 a frame. Falling until the tiles stop it (+0x44 0,
+        its sound 0x27 then); up 0xa0 once (1); then growing 0x280 a frame
+        (2), from 0x300 striking the creatures between 29/32 and 35/32 of it
+        -- and gone past 0x36b0, striking once more as +0 0xff: the player
+        too, and the creatures as a spell of nobody's."""
+        self.w16(s + 0x2A, self.u16(s + 0x2A) + 0x140)
+        n = self.s16(s + 0x44)
+        if n == 0:
+            hit = self.move(0xB4, 0x80000000, 0)
+            if hit & 0xF:
+                self.w16(s + 0x44, self.u16(s + 0x44) + 1)
+        elif n == 1:
+            self.w16(s + 0x44, self.u16(s + 0x44) + 1)
+            self.w32(s + 0x1C, self.s32(s + 0x1C) - 0xA0)
+        elif n == 2:
+            self.w16(s + 0x30, self.u16(s + 0x30) + 0x280)
+            self.w16(s + 0x34, self.u16(s + 0x34) + 0x280)
+            sc = self.s16(s + 0x30)
+            if sc >= 0x36B1:
+                self.w8(s, 0xFF)
+            if sc >= 0x300:
+                self.put(STRIKE_POINT, struct.pack("<4i", self.s32(s + 0x18),   # the fourth word
+                                                   _s32(self.s32(s + 0x1C) + 0x3E8),   # the stack's,
+                                                   self.s32(s + 0x20), 0))             # read by none
+                self.strike(STRIKE_POINT, (29 * sc) >> 5, (35 * sc) >> 5, 0x800, 0x400, 0x1000)
 
     def attack(self, s, hit):               # 0x800537e8
         """What was hit, handed to actor_attack_player from 8 velocities
@@ -917,7 +1225,9 @@ class Machine:
                0x17: self._tick_17, 0x19: self._tick_19, 0x1A: self._tick_1a,
                0x1B: self._tick_1b, 0x1C: self._tick_1c, 0x1E: self._tick_1e,
                FIRE_BALL: self._tick_00, SPLASH: self._tick_70,
-               STONE: self._tick_06, WIND_CUTTER: self._tick_0d}.get(kind)
+               STONE: self._tick_06, WIND_CUTTER: self._tick_0d,
+               HAZE: self._tick_0b, SHUDOM: self._tick_09, WALWIND: self._tick_11,
+               RING: self._tick_5e, WAVE: self._tick_59}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_tick's arm {kind:#x}")
         arm(s)
@@ -1116,7 +1426,9 @@ class Machine:
 
     def strike(self, point, a1, radius, mode, edge, scale):
         """effect_strike (0x80053850): bit 1 of +0 strikes the player through
-        effect_hurt_player with the kind's record; bit 2 the creatures."""
+        effect_hurt_player with the kind's record; bit 2 the creatures through
+        0x8004ceac (strike_creatures), with the caster's strength and the
+        flags +0 & 0xc0 and 0x20."""
         s = self.u32(CURRENT)
         rec = self.u32(CURRENT_REC)
         if self.u8(s) & 1:
@@ -1126,7 +1438,10 @@ class Machine:
                                [self.u16(rec + o) for o in (0xC, 0xE, 0x10, 0x12, 0x14)],
                                scale & 0xFFFF, self.u8(s + 6))
         if self.u8(s) & 2:
-            raise NotImplementedError("effect_strike on the creatures (0x8004ceac)")
+            self.w.strike_creatures(point, a1, radius, mode, edge & 0xFFFF,
+                                    self.magic_strength(s) & 0xFFFF,
+                                    [self.u16(rec + o) for o in (6, 8, 0xA, 0xC, 0xE, 0x10, 0x12, 0x14)],
+                                    scale & 0xFFFF, (self.u8(s) & 0xC0) | 0x20, rec)
 
     def u32(self, a):
         return struct.unpack_from("<I", self.m, a & MASK)[0]
@@ -1249,6 +1564,7 @@ class RamWorld:
         self.player = struct.unpack_from("<3i", m, PLAYER_POS & MASK)
         self.objs = self._solids()
         self.hurts = []
+        self.strikes = []
 
     def _solids(self):
         import objcoll
@@ -1333,6 +1649,16 @@ class RamWorld:
     def hurt_player(self, point, a1, radius, mode, edge, attacks, effect, more, scale, pct):
         self.hurts.append([point[0], point[1], point[2], a1, radius, mode, edge,
                            list(attacks), effect, list(more), scale, pct])
+
+    def strike_creatures(self, point, near, radius, mode, edge, stat, att, scale, flags, rec):
+        self.strikes.append(_strike_row(self.m, point, near, radius, mode, edge, stat, scale, flags))
+
+
+def _strike_row(m, point, near, radius, mode, edge, stat, scale, flags):
+    """A strike on the creatures as the checks keep it: the point (its fourth
+    word, the bearing 0x8002 turns from), and what effect_strike hands on but
+    the record."""
+    return [*struct.unpack_from("<4i", m, point & MASK), near, radius, mode, edge, stat, scale, flags]
 
 
 # --- the machine against the game's own code -----------------------------------
@@ -1591,10 +1917,13 @@ class StandIn:
     them in on both sides: a hit now and then, by where it asks, and what is
     handed over, kept."""
 
-    def __init__(self, layer):
+    def __init__(self, layer, m=None):
         self.layer_offset = layer
         self.asked = []
         self.hits = []
+        self.hurts = []
+        self.strikes = []
+        self.m = m
 
     @staticmethod
     def answer(x, y, z):
@@ -1607,18 +1936,33 @@ class StandIn:
     def attack_hit(self, code, flags, kind, strength, stat, pct, back):
         self.hits.append([code, flags, strength, stat, pct, [v & 0xFFFFFFFF for v in back]])
 
+    def hurt_player(self, point, a1, radius, mode, edge, attacks, effect, more, scale, pct):
+        self.hurts.append([point[0], point[1], point[2], a1, radius, mode, edge,
+                           list(attacks), effect, list(more), scale, pct])
 
-def spell_hit_check(out=sys.stdout, per=6, frames=80):
-    """The fire ball, stone and wind cutter end to end -- fire_hit_check for
-    each, sent at the speed its arm of player_action gives it."""
+    def strike_creatures(self, point, near, radius, mode, edge, stat, att, scale, flags, rec):
+        self.strikes.append(_strike_row(self.m, point, near, radius, mode, edge, stat, scale, flags))
+
+
+SPELLS_SENT = ((FIRE_BALL, 0x384, "the fire ball", (), 80), (STONE, 0x1F4, "stone", (), 80),
+               (WIND_CUTTER, 0x2BC, "wind cutter", (), 80), (HAZE, 0x104, "haze", (3,), 80),
+               (SHUDOM, 0xFA, "shudom", ("view",), 160), (WALWIND, 0xFA, "walwind", ("view",), 240))
+"""The attacking spells the checks send: the kind, the speed its arm of
+player_action gives it, its name, what follows the velocity ("view" a
+pointer to view_angles) and the frames to run."""
+
+
+def spell_hit_check(out=sys.stdout, per=6, frames=None):
+    """The attacking spells end to end -- fire_hit_check for each, sent at
+    the speed its arm of player_action gives it."""
     good = True
-    for kind, speed, name in ((FIRE_BALL, 0x384, "the fire ball"), (STONE, 0x1F4, "stone"),
-                              (WIND_CUTTER, 0x2BC, "wind cutter")):
-        good = fire_hit_check(out, per, frames, kind, speed, name) and good
+    for kind, speed, name, more, n in SPELLS_SENT:
+        good = fire_hit_check(out, per, frames or n, kind, speed, name, more) and good
     return good
 
 
-def fire_hit_check(out=sys.stdout, per=10, frames=60, kind=None, speed=0x384, name="the fire ball"):
+def fire_hit_check(out=sys.stdout, per=10, frames=60, kind=None, speed=0x384, name="the fire ball",
+                   more=()):
     """The fire ball end to end in the game's own world: collide_query,
     actor_attack_player and actor_take_hit the game's, over every snapshot,
     the balls sent at its creatures; only rand's seed shared and the leaves
@@ -1631,7 +1975,7 @@ def fire_hit_check(out=sys.stdout, per=10, frames=60, kind=None, speed=0x384, na
     import hit
     rng = random.Random(0xF1E2)
     runs = good = nframes = fgood = skipped = 0
-    hurt = killed = 0
+    hurt = killed = player = 0
     first = []
     oa = ACTORS & MASK
     for path in memcard._snapshots():
@@ -1657,8 +2001,10 @@ def fire_hit_check(out=sys.stdout, per=10, frames=60, kind=None, speed=0x384, na
             d = movement.direction_from_angles(ang[0], ang[1])
             vel = struct.pack("<4h", *[_s16_((c * speed) >> 12) for c in d], 0)
             point = struct.pack("<4i", *start, 0)
-            sp = (0xA, 0x42, FIRE_BALL if kind is None else kind, point, [vel])
             struct.pack_into("<3H", ram, VIEW_ANGLES & MASK, ang[0] & 0xFFFF, ang[1] & 0xFFFF, 0)
+            view = bytes(ram[VIEW_ANGLES & MASK:(VIEW_ANGLES & MASK) + 8])
+            sp = (0xA, 0x42, FIRE_BALL if kind is None else kind, point,
+                  [vel] + [view if v == "view" else v for v in more])
             if rng.randrange(4) == 0:                       # water just under the path
                 struct.pack_into("<i", ram, SURFACE & MASK, py - 0x640 - rng.randrange(0, 0x1F4))
             seed = rng.randrange(1 << 30)
@@ -1687,6 +2033,18 @@ def fire_hit_check(out=sys.stdout, per=10, frames=60, kind=None, speed=0x384, na
                                         stat, pct, pt, mlcg, m_calls, lambda actor, dd: dd)
                 m_calls[:] = [c if c[0] != "player" else ("player",) for c in m_calls]
             w.attack_hit = attack_hit
+
+            def strike(point, near, radius, mode, edge, stat, att, scale, flags, rec, r=r,
+                       m_calls=m_calls, mlcg=mlcg):
+                strike_creatures(r, point, near, radius, mode, edge, stat, att, scale, flags, rec,
+                                 mlcg, m_calls, lambda actor, dd: dd)
+            w.strike_creatures = strike
+
+            def hurt_player(point, a1, radius, mode, edge, attacks, effect, more_, scale, pct,
+                            w=w, m_calls=m_calls):
+                if strike_scale(point, radius, w.player, edge, scale, a1, mode) is not None:
+                    m_calls.append(("player",))
+            w.hurt_player = hurt_player
             mach = Machine(m, w, mlcg)
             try:
                 game_spawn(cpu, *sp)
@@ -1703,6 +2061,7 @@ def fire_hit_check(out=sys.stdout, per=10, frames=60, kind=None, speed=0x384, na
                     if before != bytes(cpu.ram[oa:oa + ACTOR_STRIDE * ACTOR_N]):
                         hurt += 1
                     killed += sum(1 for c in g_calls if c[0] == "exp")
+                    player += sum(1 for c in g_calls if c[0] == "player")
                     same = not bad and acts and g_calls == m_calls
                     nframes += 1
                     fgood += same
@@ -1724,7 +2083,8 @@ def fire_hit_check(out=sys.stdout, per=10, frames=60, kind=None, speed=0x384, na
     print(f"  {name} end to end, the game's own collide_query, actor_attack_player "
           f"and actor_take_hit: {good} of {runs} runs, {fgood} of {nframes} frames with all "
           f"128 slots, all 200 creatures and every call alike; {hurt} frames a creature "
-          f"was struck, {killed} killed", file=out)
+          f"was struck, {killed} killed" + (f", the player struck {player} times" if player else ""),
+          file=out)
     return good == runs
 
 

@@ -6326,6 +6326,86 @@ wind cutter (0xd) effect_setup(0xd, 0x1400, 5), its sound 0x2b, life 0x2d,
 In the port both fly, hit and splash as the game's (`effects.gd`), 150 of
 150 runs of the machine in the self-test.
 
+### Haze, shudom, walwind, and the strike on the creatures
+
+Three more, two of which leave children behind, and the children strike an
+area rather than what they meet -- `effect_strike`'s creature half,
+`0x8004ceac`, which no effect before had used:
+
+```
+haze (0xb)       particle(0x16, 0x1000, 5), +0xe 0xc0, life 0x46; its sound
+                 0x94 only when its second argument is 3. effect_move at
+                 0xb4 with no height and no turn; each thing it meets it
+                 strikes once (sub_800537e8, +0x44 the latch a clear frame
+                 lifts), and the tiles end it. No splash.
+shudom (9)       model 0x33, +9 5, scale 0x4b0, the view's yaw (the eight
+                 bytes args[1] points at, pitch and roll then zeroed),
+                 level (+0x3a 0), life 0x96, its sound 0x92, +0x46 the
+                 view's yaw again. effect_move at 0xfa and the height's top
+                 bit; it strikes nothing itself, the tiles end it; when its
+                 count (+0x44, 0 its first frame) is 12, 18, 24 ... -- the
+                 game asks 11 or more and a multiple of 6 -- a ring (0x5e)
+                 at its point with +0x46 as the ring's yaw.
+  ring (0x5e)    model 0x1e, +9 0, life 0x1e, its sound 0x26, scale 0xa
+                 growing 0xc0 a frame in x and z; from 0x300 it strikes the
+                 creatures from its point 0x3e8 lower, between 15/16 and 9/8
+                 of its scale, mode 0x8002; past 0xc80 gone -- 17 frames.
+walwind (0x11)   shudom's but model 0x32, scale 0xbb8, sound 0x98; it
+                 strikes what it meets every frame (no latch); at counts
+                 20, 30, 40 ... (16 or more, a multiple of 10) a wave
+                 (0x59) at its point, falling
+                 at 0x54 a frame (the velocity's fourth halfword the
+                 stack's).
+  wave (0x59)    model 0x1f, +9 5, a grace of 5, life 0x50, scale 0x28 x
+                 0x7d0 x 0x28, turning 0x140 a frame. Falling (+0x44 0)
+                 through effect_move at 0xb4 until the tiles stop it (its
+                 sound 0x27), up 0xa0 once (1), then growing 0x280 a frame
+                 (2): from 0x300 it strikes the creatures between 29/32 and
+                 35/32 of it, mode 0x800; past 0x36b0 gone.
+```
+
+**The wave's last strike is nobody's.** The arm frees the slot (`+0 0xff`)
+*before* it strikes in that frame, and `effect_strike` reads its bits from
+`+0`: bit 1 strikes **the player** (`effect_hurt_player` mode 0x800, the
+player between 29/32 and 35/32 of 0x3728 -- 12796 to 15443 -- from the
+wave's middle, heights overlapping), bit 2 the creatures with flags `0xff &
+0xc0 | 0x20` = 0xe0, which practises the caster's skills but, not being
+exactly 0x40, gives **no experience for a kill**.
+
+**The strike on the creatures** (`0x8004ceac`, from `effect_strike` when `+0`
+has bit 2): (point, near, radius, mode, edge, the caster's strength, the
+record's eight attacks, scale, flags `+0 & 0xc0 | 0x20`, the record). Every
+creature awake (`+9` 1) but the one acting, by its distance from the point:
+
+```
+0x8000   in_range_3d(point, radius, its place, its radius +0x1c, height +0x1e)
+0x8001   the same, a point above its top (y less its height) missing
+0x8002   the same, and missing when ratan2(dz, dx) lies within 0x40 of both
+         the point's fourth word + 0x400 and - 0x400 -- 0x800 apart, so never
+other    in_range(its place, the point, radius, its height, the mode as the
+         asker's height): a flat ring with the heights overlapping
+```
+
+not nearer than `near` (FAR, -0x98967f, always is), then `actor_take_hit`
+with the scale falling to `edge`/0x1000 at the rim exactly as
+`effect_hurt_player`'s (`scale & 0x7fff`, the quotient's low half) and the
+point -- none when the scale has bit 0x8000. `effect_hurt_player` takes the
+same modes for the player: 0x8001 a point above the player's top (y less
+0x6a4) missing, any other mode `sub_8002b8d8` -- `in_range` from the
+player, height 0x6a4.
+
+**Against the game's own**, sent at the snapshots' creatures at their arms'
+speeds with the game's `collide_query`, `actor_attack_player`, `actor_take_hit`
+and `effect_hurt_player`, all 128 slots and all 200 creatures every frame
+(`tools/effects.py spell_hit_check`): haze **126 of 126** runs, 4098
+frames, 8 with a creature struck; shudom **126 of 126**, 6582 frames, 111
+struck, 39 killed; walwind **126 of 126**, 7939 frames, 425 struck, 76
+killed and **the player struck 40 times** -- each a wave's last frame, the
+only strike of these with bit 1 in `+0`. The port has all five
+(`effects.gd`), and the strike as `actors.gd strike_area`: 400 of 400
+cases of `strike_creatures` in the self-test, every mode, every creature
+after; the machine's runs 222 of 222.
+
 ### The player's death
 
 `apply_damage` that leaves no HP calls `player_throw` (`0x80030a6c`) with the

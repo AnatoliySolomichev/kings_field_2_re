@@ -46,6 +46,11 @@ const FIRE_BALL := 0x00
 const SPLASH := 0x70
 const STONE := 0x06
 const WIND_CUTTER := 0x0D
+const HAZE := 0x0B
+const SHUDOM := 0x09
+const WALWIND := 0x11
+const RING := 0x5E                 # shudom's
+const WAVE := 0x59                 # walwind's
 const TRAIL_ARGS := [0xE10, -0x80, 5, 0x16, 0, 1, 3]   # 0x80058f50's, after the velocity
 const QUERY := {1: 0xA1, 2: 0x31, 3: 0xB1, 4: 0x01}    # effect_collide: +0 & 7 -> flags
 const GROW := 0x96
@@ -286,6 +291,44 @@ func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array) -> 
 			w16(s + 0x28, 0)
 			w16(s + 0x2C, 0)
 			w16(s + 0x34, 0x2000)
+		HAZE:                               # 0x80054b08
+			particle(s, 0x16, 0x1000, 5)
+			w16(s + 0x10, 0x46)
+			w16(s + 0xE, 0xC0)              # its sound (0x94) with a cast's third, not here
+		SHUDOM:                             # 0x80054e54
+			_flat(s, 0x33, 0x4B0)
+			w16(s + 0xE, 0)
+			w16(s + 0x46, int(world.field("vy")))   # and its sound (0x92), not here
+		WALWIND:                            # 0x80054804
+			_flat(s, 0x32, 0xBB8)           # and its sound (0x98), not here
+		RING:                               # 0x80054b7c
+			w8(s + 8, 1)
+			w8(s + 4, 0x80)
+			w8(s + 2, 0x1E)
+			w8(s + 3, 0x1E)
+			w16(s + 0x10, 0x1E)
+			w16(s + 0x32, 0x1000)
+			w8(s + 9, 0)
+			w16(s + 0x30, 0xA)
+			w16(s + 0x34, 0xA)
+			w16(s + 0x28, 0x400)
+			w16(s + 0x2C, 0)
+			w16(s + 0xE, 0)
+			w16(s + 0x2A, int(args[1]))     # and its sound (0x26), not here
+		WAVE:                               # 0x80054894
+			w8(s + 8, 1)
+			w8(s + 2, 0x1F)
+			w8(s + 3, 0x1F)
+			w8(s + 0xC, 0x34)
+			w16(s + 0x12, 0x1000)
+			w16(s + 0x32, 0x7D0)
+			w8(s + 4, 0)
+			w8(s + 9, 5)
+			w16(s + 0x30, 0x28)
+			w16(s + 0x34, 0x28)
+			w16(s + 0x10, 0x50)
+			w16(s + 0x44, 0)
+			w8(s + 0xB, 5)
 		FIRE_BALL:                          # 0x80053e98
 			particle(s, 9, 0x1000, 5)
 			w16(s + 0xE, 0x40)
@@ -323,6 +366,29 @@ func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array) -> 
 			w8(s, 0xFF)                     # an arm not here: no effect at all
 			KFInfo.note("effect: kind 0x%x is not in the port" % kind)
 	return s
+
+
+# What shudom's and walwind's arms share (0x80054e54, 0x80054804): model
+# `model`, mode 5 (+9), the yaw of the angles args[1] points at -- the view's,
+# its fourth halfword 0 -- level (+0x3a 0), a life of 0x96.
+# @orig game:0x80054e54 effect_spawn+0x11d0  status:verified -- shudom's arm, walwind's (0x80054804) the same but the model and scale; through spell_hit_check
+func _flat(s: int, model: int, scale: int) -> void:
+	w8(s + 8, 1)
+	w8(s + 9, 5)
+	w8(s + 2, model)
+	w8(s + 3, model)
+	w8(s + 0xC, 0x34)
+	w16(s + 0x12, 0x1000)
+	w8(s + 4, 0)
+	for o in [0x34, 0x32, 0x30]:
+		w16(s + o, scale)
+	w16(s + 0x2A, int(world.field("vy")))
+	w16(s + 0x2E, 0)
+	w16(s + 0x28, 0)
+	w16(s + 0x2C, 0)
+	w16(s + 0x3A, 0)
+	w16(s + 0x10, 0x96)
+	w16(s + 0x44, 0)
 
 
 # What 0x1f's and 0x22's arms share (0x80054cf4, 0x80054d68): +8 1, +4 0x80,
@@ -439,6 +505,16 @@ func tick(s: int) -> void:
 			_tick_stone(s)
 		WIND_CUTTER:
 			_tick_wind(s)
+		HAZE:
+			_tick_haze(s)
+		SHUDOM:
+			_tick_shudom(s)
+		WALWIND:
+			_tick_walwind(s)
+		RING:
+			_tick_ring(s)
+		WAVE:
+			_tick_wave(s)
 		0x1A:
 			_mark(s, "b56a", 0x40)
 		0x1B:
@@ -537,6 +613,103 @@ func _tick_wind(s: int) -> void:
 		w8(s + 0x44, 0)
 	_splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
 	w16(s + 0x2A, u16(s + 0x2A) + 0x2BC)
+
+
+# Haze (0x80058164): each thing it meets it strikes once (+0x44 the latch,
+# cleared on a clear frame), and the tiles end it -- the wind cutter's way,
+# with nothing turned and no splash.
+# @orig game:0x80058164 effect_tick+0x18a8  status:verified -- tools/effects.py spell_hit_check against the game's own end to end; the self-test this to it
+func _tick_haze(s: int) -> void:
+	var hit := move(0xB4, 0, 0)
+	if hit != 0:
+		if hit & 0xF:
+			w8(s, 0xFF)
+		if u8(s + 0x44) == 0:
+			_attack(s, hit)
+			w8(s + 0x44, 1)
+	else:
+		w8(s + 0x44, 0)
+
+
+# Shudom (0x800581b8): level through anything, the tiles ending it; at counts
+# 12, 18, 24 ... (11 or more, a multiple of 6) a ring (0x5e) where it is,
+# turned as the view was when it was cast (+0x46).
+# @orig game:0x800581b8 effect_tick+0x18fc  status:verified -- tools/effects.py spell_hit_check against the game's own end to end; the self-test this to it
+func _tick_shudom(s: int) -> void:
+	if move(0xFA, 0x80000000, 0) & 0xF:
+		w8(s, 0xFF)
+	var n := s16(s + 0x44)
+	if n >= 0xB and n % 6 == 0:
+		spawn(0xA, 0x42, RING, m.slice(s + 0x18, s + 0x28), [null, s16(s + 0x46)])
+	_spin(s)
+
+
+# Walwind (0x80058248): level, striking whatever it meets every frame, the
+# tiles ending it; at counts 20, 30, 40 ... (16 or more, a multiple of 10) a
+# wave (0x59) falling from where it is.
+# @orig game:0x80058248 effect_tick+0x198c  status:verified -- tools/effects.py spell_hit_check against the game's own end to end; the self-test this to it
+func _tick_walwind(s: int) -> void:
+	var hit := move(0xFA, 0x80000000, 0)
+	if hit != 0:
+		if hit & 0xF:
+			w8(s, 0xFF)
+		_attack(s, hit)
+	var n := s16(s + 0x44)
+	if n >= 0x10 and n % 10 == 0:
+		var v := PackedByteArray()
+		v.resize(8)
+		v.encode_s16(2, 0x54)
+		spawn(0xA, 0x42, WAVE, m.slice(s + 0x18, s + 0x28), [v])
+	_spin(s)
+
+
+# What shudom's and walwind's arms end with (0x800582f4): +0x44 counted,
+# +0x14 turned 0x80.
+# @orig game:0x800582f4 effect_tick+0x1a38  status:verified -- through shudom and walwind
+func _spin(s: int) -> void:
+	w16(s + 0x44, u16(s + 0x44) + 1)
+	w16(s + 0x14, (u16(s + 0x14) + 0x80) & 0xFFF)
+
+
+# Shudom's ring (0x80059adc): growing 0xc0 a frame; from 0x300 it strikes the
+# creatures between 15/16 and 9/8 of it from its middle, 0x3e8 under it,
+# mode 0x8002 from the yaw it was given; past 0xc80 gone.
+# @orig game:0x80059adc effect_tick+0x3220  status:verified -- tools/effects.py spell_hit_check against the game's own end to end, the creatures it strikes among them; the self-test this to it
+func _tick_ring(s: int) -> void:
+	w16(s + 0x34, u16(s + 0x34) + 0xC0)
+	w16(s + 0x30, u16(s + 0x30) + 0xC0)
+	var sc := s16(s + 0x30)
+	if sc >= 0x300:
+		strike([s32(s + 0x18), s32v(s32(s + 0x1C) + 0x3E8), s32(s + 0x20), s16(s + 0x2A)],
+			(15 * sc) >> 4, (9 * sc) >> 3, 0x8002, 0x400, 0x1000)
+	if s16(s + 0x30) >= 0xC81:
+		w8(s, 0xFF)
+
+
+# Walwind's wave (0x80058314): turning 0x140 a frame. Falling until the tiles
+# stop it (+0x44 0; its sound, 0x27, then); up 0xa0 once (1); then growing
+# 0x280 a frame (2), from 0x300 striking the creatures between 29/32 and
+# 35/32 of it, mode 0x800 -- and gone past 0x36b0, striking once more as +0
+# 0xff: the player too, and the creatures as nobody's spell, no experience.
+# @orig game:0x80058314 effect_tick+0x1a58  status:verified -- tools/effects.py spell_hit_check against the game's own end to end, the creatures it strikes among them; the self-test this to it
+func _tick_wave(s: int) -> void:
+	w16(s + 0x2A, u16(s + 0x2A) + 0x140)
+	var n := s16(s + 0x44)
+	if n == 0:
+		if move(0xB4, 0x80000000, 0) & 0xF:
+			w16(s + 0x44, u16(s + 0x44) + 1)
+	elif n == 1:
+		w16(s + 0x44, u16(s + 0x44) + 1)
+		w32(s + 0x1C, s32(s + 0x1C) - 0xA0)
+	elif n == 2:
+		w16(s + 0x30, u16(s + 0x30) + 0x280)
+		w16(s + 0x34, u16(s + 0x34) + 0x280)
+		var sc := s16(s + 0x30)
+		if sc >= 0x36B1:
+			w8(s, 0xFF)
+		if sc >= 0x300:
+			strike([s32(s + 0x18), s32v(s32(s + 0x1C) + 0x3E8), s32(s + 0x20), 0],
+				(29 * sc) >> 5, (35 * sc) >> 5, 0x800, 0x400, 0x1000)
 
 
 # sub_800537e8: what was hit, handed to actor_attack_player from 8
@@ -806,7 +979,7 @@ func lighting(rgb: Array, near: int, far: int, k: int) -> void:
 # @orig game:0x80058f3c effect_tick+0x2680  status:verified -- kinds 0x23 and 0x24; through tools/effects.py, 189 of 189 runs of the game's own
 func _tick_bolt(s: int) -> void:
 	w8(s, 0x81)
-	strike(s + 0x18, 0, s16(s + 0x30) >> 3, 0x8000, 0x400, 0x1000)
+	strike(point_at(s + 0x18), 0, s16(s + 0x30) >> 3, 0x8000, 0x400, 0x1000)
 	w8(s, 0x81)
 	if move(0x64, 0xC8, 0) != 0:
 		undo(s)
@@ -827,7 +1000,7 @@ func _tick_bob(s: int) -> void:
 		w16(s + 0x44, 1)
 	if s16(s + 0x46) >= 0x46 and s16(s + 0x44) == 1:
 		w16(s + 0x44, 0)
-	strike(s + 0x18, 0, s16(s + 0x30) >> 4, 0x8000, 0x400, 0x1000)
+	strike(point_at(s + 0x18), 0, s16(s + 0x30) >> 4, 0x8000, 0x400, 0x1000)
 	w8(s, 0x84)
 	if move(0x64, 0xC8, 0) != 0:
 		w8(s, 0xFF)
@@ -840,7 +1013,7 @@ func _tick_bob(s: int) -> void:
 # @orig game:0x80058bb4 effect_tick+0x22f8  status:verified -- kind 0x22; through tools/effects.py, 189 of 189 runs of the game's own
 func _tick_dart(s: int) -> void:
 	w8(s, 0x81)
-	strike(s + 0x18, 0, s16(s + 0x30) >> 4, 0x8000, 0x400, 0x1000)
+	strike(point_at(s + 0x18), 0, s16(s + 0x30) >> 4, 0x8000, 0x400, 0x1000)
 	w8(s, 0x84)
 	if move(0x64, 0xC8, 0) != 0:
 		undo(s)
@@ -873,7 +1046,7 @@ func _tick_spore(s: int) -> void:
 		w16(s + 0x32, s16(s + 0x32) + GROW)
 	w32(s + 0x1C, s32(s + 0x1C) + (-RISE if s16(s + 0x10) >= TURN else SINK))
 	w8(s, 0x81)
-	strike(s + 0x18, 0, s16(s + 0x30), 0x8000, 0x400, 0x1000)
+	strike(point_at(s + 0x18), 0, s16(s + 0x30), 0x8000, 0x400, 0x1000)
 	w8(s, 0x84)
 	if move(0x64, 0xC8, 0) != 0:
 		w8(s, 0xFF)
@@ -901,19 +1074,46 @@ func undo(s: int) -> void:
 
 # effect_strike: bit 1 of +0 strikes the player through effect_hurt_player
 # with the kind's spell_table record -- three attacks, the effect byte, five
-# more; bit 2 the creatures, which no arm here sets.
-# @orig game:0x80053850 effect_strike  status:partial -- the player's half; 3964 of 3964 calls handed what the game hands them (tools/effects.py); the creatures' (0x8004ceac) not here
-func strike(point: int, a1: int, radius: int, mode: int, edge: int, scale: int) -> void:
+# more; bit 2 the creatures (0x8004ceac, strike_creatures) with all eight, the
+# caster's strength and the flags +0 & 0xc0 and 0x20. `p` the point's four
+# words, the fourth the bearing mode 0x8002 turns from.
+# @orig game:0x80053850 effect_strike  status:verified -- the player's half 3964 of 3964 calls handed what the game hands them; the creatures' through tools/effects.py spell_hit_check, shudom's and walwind's against the game's own
+func strike(p: Array, a1: int, radius: int, mode: int, edge: int, scale: int) -> void:
 	var s := current
-	if (u8(s) & 1) == 0:
-		return
 	var rec: PackedByteArray = records.get(u8(s + 1), PackedByteArray())
 	var r := func(o: int) -> int: return rec.decode_u16(o) if rec.size() >= o + 2 else 0
-	world.hurt_player(Vector3i(s32(point), s32(point + 4), s32(point + 8)), a1, radius,
-		mode, edge & 0xFFFF, [r.call(6), r.call(8), r.call(0xA)],
-		int(rec[4]) if rec.size() > 4 else 0,
-		[r.call(0xC), r.call(0xE), r.call(0x10), r.call(0x12), r.call(0x14)],
-		scale & 0xFFFF, u8(s + 6))
+	if u8(s) & 1:
+		world.hurt_player(Vector3i(int(p[0]), int(p[1]), int(p[2])), a1, radius,
+			mode, edge & 0xFFFF, [r.call(6), r.call(8), r.call(0xA)],
+			int(rec[4]) if rec.size() > 4 else 0,
+			[r.call(0xC), r.call(0xE), r.call(0x10), r.call(0x12), r.call(0x14)],
+			scale & 0xFFFF, u8(s + 6))
+	if u8(s) & 2:
+		var att := []
+		for o in [6, 8, 0xA, 0xC, 0xE, 0x10, 0x12, 0x14]:
+			att.append(r.call(o))
+		world.strike_creatures(p, a1, radius, mode, edge & 0xFFFF, magic_strength(s) & 0xFFFF,
+			att, scale & 0xFFFF, (u8(s) & 0xC0) | 0x20, u8(s + 1))
+
+
+# @port helper -- a slot's point, its four words, as effect_strike is handed it
+func point_at(o: int) -> Array:
+	return [s32(o), s32(o + 4), s32(o + 8), s32(o + 12)]
+
+
+# effect_strike's creature half handed to the creatures (actors.gd
+# strike_area, 0x8004ceac); each hit's practice -- with the effect's own
+# record, `kind` -- and experience to the player.
+# @port helper -- the creatures' strike, from the effect to actors.gd and its leavings to the player
+func strike_creatures(p: Array, near: int, radius: int, mode: int, edge: int, stat: int,
+		att: Array, scale: int, flags: int, kind: int) -> void:
+	var an := get_node_or_null("../Actors")
+	if an == null or not an.has_method("strike_area"):
+		return
+	var outs: Array = an.call("strike_area", p, near, radius, mode, edge, stat, att, scale, flags)
+	if player and player.has_method("spell_struck"):
+		for out in outs:
+			player.call("spell_struck", out, kind)
 
 
 # effect_collide: a grace count first; then collide_query at the point, its y
@@ -1016,41 +1216,40 @@ func collide_query(x: int, y: int, z: int, r: int, h: int, flags: int) -> int:
 	return mask
 
 
-# effect_hurt_player with mode 0x8000, the effects' own: in_range_3d -- a box
-# of the radius + 0x320, then the length to the player's middle (0x6a4 / 2 up)
-# through the game's root, less 0x320 -- must be 0 or more, and the scale
-# falls from `scale` to `edge` at the rim; then player_take_hit.
-# @orig game:0x8002b114 effect_hurt_player  status:verified -- 118 of 118 strikes of bp26, scale and all; the bolts' through the same arithmetic
-func hurt_player(p: Vector3i, _a1: int, radius: int, _mode: int, edge: int, attacks: Array,
+# effect_hurt_player: the player within the radius of the point, not nearer
+# than a1, and the scale falling from `scale` to `edge` at the rim; then
+# player_take_hit.
+# @orig game:0x8002b114 effect_hurt_player  status:verified -- 118 of 118 strikes of bp26, scale and all; the bolts' through the same arithmetic; walwind's wave's mode 0x800 through tools/effects.py spell_hit_check
+func hurt_player(p: Vector3i, a1: int, radius: int, mode: int, edge: int, attacks: Array,
 		effect: int, more: Array, scale: int, pct: int) -> void:
 	if player == null or not player.has_method("take_effect"):
 		return
 	var t := Vector3i(int(player.get("gx")), int(player.get("gy")), int(player.get("gz")))
-	var hit := strike_scale(p, radius, t, edge, scale)
+	var hit := strike_scale(p, radius, t, edge, scale, a1, mode)
 	if hit < 0:
 		return
 	player.call("take_effect", attacks + more, effect, hit, pct, p)
 
 
-# @orig game:0x80016fb4 in_range_3d  status:verified -- through effect_hurt_player, 118 strikes of bp26
-func strike_scale(p: Vector3i, radius: int, t: Vector3i, edge := EDGE, scale := 0x1000) -> int:
-	var r := radius + OWN
-	var dx := t.x - p.x
-	var dz := t.z - p.z
-	var dy := t.y - p.y - (BODY >> 1)
-	if dx < -r or r < dx or dz < -r or r < dz or dy < -r or r < dy:
-		return -1
-	var ln := coll.isqrt((dx >> 3) * (dx >> 3) + (dz >> 3) * (dz >> 3) + (dy >> 3) * (dy >> 3)) << 3
-	if r < ln:
-		return -1
-	var d := ln - OWN
-	if d < 0:
-		return -1
-	if edge == 0x1000:
-		return scale
-	var q := absi(d << 12) / radius
-	var f := (0x1000 - (((q & 0xFFFF) * (0x1000 - edge)) >> 12)) & 0xFFFF
-	return (scale * f) >> 12
+# How far the player is for effect_hurt_player, by the mode: 0x8000
+# in_range_3d to the player's middle (0x6a4 / 2 up, radius 0x320); 0x8001 the
+# same, a point above the player's top missing; any other in_range
+# (0x8002b8d8) with the player's height and the mode as the asker's. Then the
+# falloff: -1 a miss, else the scale handed on.
+# @orig game:0x8002b1a4 effect_hurt_player+0x90  status:verified -- the distance by the mode; 118 strikes of bp26 (0x8000), walwind's wave (0x800) through tools/effects.py spell_hit_check
+# @orig game:0x8002b8d8 sub_8002b8d8  status:verified -- in_range from the player, its height 0x6a4; through spell_hit_check
+func strike_scale(p: Vector3i, radius: int, t: Vector3i, edge := EDGE, scale := 0x1000,
+		near := 0, mode := 0x8000) -> int:
+	var d: int
+	if mode == 0x8001 and p.y < t.y - BODY:
+		d = KFCollision.FAR
+	elif mode == 0x8000 or mode == 0x8001:
+		d = coll.in_range_3d(p, radius, t, OWN, BODY)
+	else:
+		d = coll.in_range(t.x, t.y, t.z, p.x, p.y, p.z, radius, BODY, mode)
+		if d == -1:
+			d = KFCollision.FAR
+	return KFDamage.falloff(d, near, radius, edge, scale)
 
 
 # --- what a volley throws -------------------------------------------------

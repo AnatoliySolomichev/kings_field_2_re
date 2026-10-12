@@ -173,7 +173,8 @@ def main(quick=False, only_check=False):
         "the effects, against what was played and the game's own code",
         keep=["frames of a spore", "strikes a frame after", "effect_aim, the game's",
               "effect_spawn and effect_driver, the game's",
-              "the healing and protecting spells' effects", "the fire ball"])
+              "the healing and protecting spells' effects", "the fire ball",
+              "end to end, the game's own collide_query"])
     run(["tools/status.py", "--check"],
         "what a hit leaves behind, against the game's own player_take_hit and sub_80030e14",
         keep=["player_take_hit:", "sub_80030e14:", "first difference"])
