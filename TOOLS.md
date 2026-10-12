@@ -478,6 +478,20 @@ of 13 057 frames** (fields, screen records, lighting records) -- and
 `export`/`export_tick` write `takehit.json` and `statuscheck.json` for the
 self-test. FORMATS.md, "What a hit leaves behind".
 
+**`magic.py`** — casting.
+
+```
+python3 tools/magic.py --check      against the game's own code
+```
+
+`cast_spell`, `skill_practice`, `player_action`'s healing and protecting
+arms, `player_turn`'s pending action and its USE stretch, and the timers at
+`player_controller`'s end, each held to the game's own code run by
+`mipsrun.py` over every snapshot with the deciding fields at random -- the
+two stretches by running from their first address to their last (`_stretch`),
+the routines they call hooked and recorded. 1260 of 1260 of each; `export`
+writes `magiccheck.json` for the self-test. FORMATS.md, "Casting".
+
 **`knock.py`** — what a blow does to the player after the HP, and the recording.
 
 ```

@@ -255,6 +255,9 @@ what a hit leaves, against the game's own              player_take_hit 840 of 84
 player_take_hit and sub_80030e14 over the snapshots    hits; sub_80030e14 84 of 84
                                                        runs, 13 057 of 13 057
                                                        frames
+casting, against the game's own cast_spell,            1260 of 1260 of each:
+player_action, player_turn and the controller's end    casts, actions, pending,
+                                                       timers, the USE stretch
 the knock-back, against the bp16 recording             171 of 171 frames, 7 of 7
                                                        lengths, 6 of 6 landings
 the creatures' HP, against 13 snapshots                69 of 69
@@ -292,6 +295,7 @@ saves 45 of 45 · level states 46 of 46 streams, 958 of 958 things made,
 effects 54 of 54 runs, 1868 of 1868 frames · aims 300 of 300
 the run 150129 of 150129 frames
 player_take_hit 300 of 300 · the status 40 of 40 runs, 6312 of 6312 frames
+casting 1000 of 1000
 ```
 
 **Tell the two kinds apart.** Against a recording or a RAM snapshot — the

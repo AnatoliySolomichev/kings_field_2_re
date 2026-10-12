@@ -821,6 +821,18 @@ each one is also in its function's marker, as `partial` and what differs:
   `kind_behaviour_with_op` twice. Each copy is marked, and the self-test would
   show one drifting; folding them into one is a refactor nobody has needed yet.
 
+* **Casting is in; most of what it casts is not.** `player.gd` has the
+  buttons, `cast_spell`, the pending action, `skill_practice`, the USE
+  stretch and the timers, all held to the game's own code. Not yet: the
+  attacking spells' arms of `player_action` (0 to `0x16`: `sub_8002c164`'s
+  aim and `effect_spawn` of the spell's own kind), the effects' arms of every
+  spell's kind -- so earth heal, antidote and blessings spend their MP and
+  heal nothing yet -- the weapons' magic (`0x36`..`0x4c`, `spell_begin`,
+  `held_item_tick`'s `0x801b25b2`), and the button's thing (`use_item` from
+  `0x8002ff28`). The MAGIC and BUTTON lines of the equipment screen
+  (`0x8001d0c4`, `0x8001d3a0`) are unread, so magic A and the button come
+  only from a save.
+
 **Found later, and fixed: shape 255 is the void, not nothing.** Every
 empty cell carries it, and the tools and the port answered nothing there;
 `tile_collision` reads the level's last shape for it, a floor 32000 above the

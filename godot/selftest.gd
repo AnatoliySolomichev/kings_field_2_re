@@ -317,6 +317,9 @@ func _init() -> void:
 	if not _status_tick():
 		quit(1)
 		return
+	if not _casting():
+		quit(1)
+		return
 	if not _level_states():
 		quit(1)
 		return
@@ -909,6 +912,67 @@ func _status_tick() -> bool:
 	if first != "":
 		print("  first difference: " + first)
 	return ok == n
+
+
+# Casting, player.gd against tools/magic.py (whose model the game's own holds):
+# cast_spell, player_action's healing and protecting arms, the pending action
+# and the timers at the controller's end -- the fields after and the calls.
+func _casting() -> bool:
+	if not FileAccess.file_exists("res://magiccheck.json"):
+		print("casting: no cases to check against")
+		return true
+	var d = JSON.parse_string(FileAccess.get_file_as_string("res://magiccheck.json"))
+	var fx = load("res://effects.gd").new()
+	fx.load_records()
+	var recs: Dictionary = fx.records
+	fx.free()
+	var script = load("res://player.gd")
+	var ok := 0
+	var n := 0
+	var first := ""
+	for r in d["rows"]:
+		var st: Dictionary = _ints(r["before"])
+		var calls := []
+		match str(r["what"]):
+			"cast":
+				script.cast_spell(st, int(r["spell"]), recs, calls)
+			"action":
+				script.player_action(st, int(r["spell"]), calls)
+			"pending":
+				script.pending_tick(st, calls)
+			"use":
+				calls.append(["rest", 1 if script.use_tick(st, recs) else 0])
+			_:
+				script.timers_tick(st, calls)
+		var want: Dictionary = _ints(r["after"])
+		var same: bool = str(_ints(calls)) == str(_ints(r["calls"]))
+		for k in want:
+			if str(st[k]) != str(want[k]):
+				same = false
+		n += 1
+		if same:
+			ok += 1
+		elif first == "":
+			first = "%s 0x%x: godot %s %s, python %s %s" % [r["what"], int(r["spell"]) if r["spell"] != null else -1,
+				str(st), str(calls), str(want), str(r["calls"])]
+	print("casting: %d of %d casts, actions and frames as tools/magic.py has them (whose model the game's own holds)" % [ok, n])
+	if first != "":
+		print("  first difference: " + first)
+	return ok == n
+
+
+# @port check -- JSON's floats back to ints, all the way down
+func _ints(v):
+	if v is Dictionary:
+		var o := {}
+		for k in v:
+			o[k] = _ints(v[k])
+		return o
+	if v is Array:
+		return (v as Array).map(func(x): return _ints(x))
+	if v is float:
+		return int(v)
+	return v
 
 
 # The memory card, card.gd against tools/memcard.py: save_restore's table

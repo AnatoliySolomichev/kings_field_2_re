@@ -3606,6 +3606,85 @@ icons (below, "The menus, as they are drawn") name the five skills -- 0 fire,
 Six of the 31 have no name, at 3, 10, 14, 18, 22 and 24 — the end of each group,
 so the elements have room for more spells than the game ships with.
 
+### Casting: the buttons, cast_spell, and what keeps running
+
+(`tools/magic.py`.) **The buttons** are `player_turn`'s (`0x8002fe1c`): the
+action button's edge casts magic A (`0x801b25ab`) unless the weapon's own
+magic is firing (`0x801b25b2`) or `0x801b25aa` is set; `bind_map`'s edge
+casts the button's spell (`0x801b25ac`), or uses its thing (`0x801b25ad`), or
+announces `0xa` when there is none left.
+
+**`cast_spell`** (`0x8002deec`) does nothing while an action is pending
+(`0x801b25e9` not `0xff`). The cost is `+0x16`, doubled by the groundal crown
+(head `0x26`), halved by orladin's mail (body `0x2e`); short of it, announce
+9. Weapon `0x1f` in hand casts nothing. Then the healing and protecting
+spells' conditions (`0x80011920`, spell - `0x17`):
+
+```
+0x17 earth heal       HP below its most
+0x19 antidote         poisoned
+0x1a fire resist      0x801b256a not running
+0x1b refusal          0x801b256c not running
+0x1c missile shield   0x801b256e not running
+0x1d light            0x801b2572 not running -- set to 0x384, the MP spent,
+                      skill_practice, done: light needs no full meter
+0x1e blessings        HP below its most, or cursed, dark, slowed, paralysed
+```
+
+Every other spell needs the **magic meter full** (5000). The healing five
+practise here; the attacking ones when they strike (`actor_take_hit` calls
+`skill_practice` too). Then the meter and the swing's pause go to 0, MP down
+by the cost, the spell pending a frame on (`0x801b25ec` = 1), `casting_spell`
+(`0x801b2590`) its record, and the cast's offset from the eye (`0x801b2630`,
+`2632`, `2634`) -200, 200, 400, which the spell's own arm of `0x80011940`
+changes along with **how many shots** (`0x801b25ea`) and **how many frames
+apart** (`0x801b25eb`): fire wall 5 three apart from (-2000, 1600, 1000),
+fire storm and tornado 3, haze 12, earth wave 2, meteor 4 two apart, flash 5
+two apart, flame from (0, -512, 2000), shudom and walwind their own offsets,
+the rest one.
+
+**The pending action** (`0x8002ff88`): the delay counts down and at 0
+`player_action(spell)` fires -- a 77-arm switch (`0x800117e8`) whose arms 0
+to `0x1e` are the 31 spells in table order and `0x36` to `0x4c` the weapons'
+magic. While shots remain the delay starts again at the interval.
+
+**`skill_practice`** (`0x8002a10c`): for each skill k whose bit the record's
+group has, `+3` is added to the count at `0x801b250a + 2k`; at 400 the count
+is 0 again and the skill one higher -- 999 at most, announce `0x12 + k` below
+it -- then `skill_unlock(k)` and the stats.
+
+**The healing and protecting arms** of `player_action`: fire resist and
+missile shield spawn two effects of their own kind at the player and set
+`0x801b256a` (fire defence +50) / `0x801b256e` (slash, blow and stab +30) to
+`0x708` frames, two minutes; refusal spawns one and sets `0x801b256c` to
+`0xc8`, the timer that lets no hit through at all; each then the stats. Earth
+heal, antidote and blessings only spawn their effect: the healing is the
+effect's own (its arm of `effect_tick`, not read yet).
+
+**At `player_controller`'s end** (`0x80031f0c`), after the poison:
+`0x801b256a`, `256c` and `256e` count down and recalculate the stats at 0;
+`0x801b2576` counts down **holding MP at its most** every frame, announce
+`0x1b` at its end; `0x801b2578` (`use_item`'s, five on every skill) counts
+down, and at 0 the stats and announce `0x1b`.
+
+**And the USE stretch** (`0x80030010`) is whole now: held this frame and the
+last, with the feet not the groundal boots, the run's flag counts down, 500
+goes from each meter -- an empty one pauses 60 frames, 1 (the weapon's) and 0
+(the magic's) with the fu-jin or ichrius' boots (`0x4d`, `0x4f`) -- and
+`damage_scale` falls by `0x80` to `0x400`, **and `player_turn` returns
+there**: while USE is held no swing starts. Otherwise the magic meter refills
+by `meter_gain(the five working skills' mean, rate)` where the rate is the
+last cast record's `+1` (a quarter less with helm `0x25`, twice with armour
+`0x30`; 0 before any cast), to 5000.
+
+**Against the game's own code**, run over every snapshot with the deciding
+fields at random: **1260 of 1260 casts, 1260 of 1260 healing and protecting
+actions, 1260 of 1260 frames** each of the pending action, the timers and the
+USE stretch -- every field, and every call out (`announce`, `skill_unlock`,
+`player_recalc_stats`, `effect_spawn`, `player_action`). `godot/player.gd`
+(`cast_spell`, `skill_practice`, `player_action`, `pending_tick`,
+`timers_tick`, `use_tick`): 1000 of 1000 as the model.
+
 ### The five "rolled stats" are skills, and they unlock spells
 
 `award_exp` rolls for five halfwords at `0x801b2518`..`0x801b2520` on every

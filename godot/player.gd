@@ -251,6 +251,20 @@ var light := [0, 0]
 var guard := 0
 var shielded := 0
 var bonus := [0, 0, 0]
+# Casting (tools/magic.py): the action pending (0x801b25e9, 0xff none), the
+# shots it has left (0x801b25ea), the frames between them (0x801b25eb) and
+# to the next (0x801b25ec); the cast's offset from the eye (0x801b2630,
+# 0x801b2632, 0x801b2634); the spell being cast (casting_spell, 0x801b2590,
+# -1 none); the five practice counts (0x801b250a..0x801b2512); and
+# 0x801b2576, which holds MP at its most while it runs.
+var pending := 0xFF
+var shots := 0
+var shot_gap := 0
+var shot_delay := 0
+var cast_off := [0, 0, 0]
+var casting := -1
+var practice := [0, 0, 0, 0, 0]
+var mp_hold := 0
 var magic_pause := 0
 var use_prev := false
 # What player_controller makes of the frame's caps (0x800311b4..0x800313ec),
@@ -401,6 +415,8 @@ func take_save(f: Dictionary) -> void:
 	light = [int(tm[9]), int(tm[10])]
 	shielded = int(tm[7])
 	bonus = [int(tm[6]), int(tm[8]), int(tm[13])]
+	mp_hold = int(tm[12])
+	practice = KFCard.halves(f, "b250a")
 	guard = 0
 	equip_weapon(KFCard.num(f, "weapon"))       # the meter 0, the pause, the stats
 	rotation.y = float(facing) * TAU / 4096.0
@@ -602,6 +618,7 @@ func _ramp(speed: int, pos: bool, neg: bool, cap: int, decay := 3) -> int:
 func _tick(dir: Vector3) -> void:
 	_frame(dir)
 	_poison()
+	_timers()
 
 
 # The end of player_controller (0x80031e78), whatever the state: the poison
@@ -620,6 +637,282 @@ func _poison() -> void:
 		if hp == 0:
 			_throw(null)
 	poison -= 1
+
+
+# --- casting -------------------------------------------------------------------
+
+const CAST_ARMS := {
+	0x04: [[0, -0x200, 0x7D0], 1, 1], 0x4C: [[0, 0, 0x258], 1, 1],
+	0x01: [[-0x7D0, 0x640, 0x3E8], 5, 3], 0x38: ["y", 3, 1], 0x0D: ["y", 1, 1],
+	0x40: [null, 3, 1], 0x42: [null, 1, 1], 0x09: [[0, -0x190, 0x190], 1, 1],
+	0x11: [[0, -0x258, 0x258], 1, 1], 0x14: ["x", 5, 2], 0x47: ["x", 5, 2],
+	0x02: [null, 3, 1], 0x0B: [null, 0xC, 1], 0x07: [[0, 0, 0], 2, 1],
+	0x08: [null, 4, 2],
+}
+const ONE_SHOT := [0x00, 0x05, 0x06, 0x0C, 0x0F, 0x10, 0x13, 0x15, 0x1D, 0x36, 0x37,
+	0x3A, 0x3C, 0x3E, 0x44, 0x45, 0x46, 0x48, 0x49, 0x4B]
+const TIMED := {0x1A: ["b56a", 0x708, 2], 0x1C: ["b56e", 0x708, 2], 0x1B: ["b56c", 0xC8, 1]}
+
+
+# cast_spell, tools/magic.py's: nothing while an action is pending; the cost
+# the record's +0x16, doubled by the groundal crown (head 0x26), halved by
+# orladin's mail (body 0x2e), announce 9 when MP is short; nothing with weapon
+# 0x1f; the eight healing and protecting spells' conditions (0x80011920) --
+# light (0x1d) set there and done, 0x801b2572 = 0x384 -- each with one shot;
+# then the magic meter must be full; the healing five practise; the meter
+# and the swing's pause 0, MP spent, the spell pending a frame on, the eye
+# offset -200, 200, 400 and what the spell's own arm of 0x80011940 makes of
+# it and of the shots and their interval. `st` holds tools/magic.py's
+# fields; `records` the spell_table records by index; `calls` collects
+# ["announce", n], ["unlock", k], ["recalc"].
+# @orig game:0x8002deec cast_spell  status:verified -- tools/magic.py: 1260 of 1260 casts as the game's own over 21 snapshots, fields and calls; the self-test this to it
+static func cast_spell(st: Dictionary, spell: int, records: Dictionary, calls: Array) -> void:
+	if int(st["pending"]) != 0xFF or spell == 0xFF:
+		return
+	var rec: PackedByteArray = records.get(spell, PackedByteArray())
+	if rec.size() < 24:
+		return
+	var cost := int(rec[0x16]) | (int(rec[0x17]) << 8)
+	if int(st["worn"][0]) == 0x26:
+		cost <<= 1
+	if int(st["worn"][1]) == 0x2E:
+		cost >>= 1
+	if int(st["mp"]) < cost:
+		calls.append(["announce", 9])
+		return
+	if int(st["weapon"]) == 0x1F:
+		return
+	var one := false
+	var k := spell - 0x17
+	if k >= 0 and k < 8:
+		match k:
+			0:
+				if int(st["hp"]) == int(st["hp_max"]):
+					return
+				one = true
+			2:
+				if int(st["poison"]) == 0:
+					return
+				one = true
+			3, 4, 5:
+				if int(st[["b56a", "b56c", "b56e"][k - 3]]) != 0:
+					return
+				one = true
+			6:
+				if int(st["light_t"]) != 0:
+					return
+				st["light_t"] = 0x384
+				st["mp"] = (int(st["mp"]) - cost) & 0xFFFF
+				skill_practice(st, rec, calls)
+				return
+			7:
+				if not (int(st["hp"]) != int(st["hp_max"]) or int(st["curse_lv"]) != 0
+						or int(st["dark_lv"]) != 0 or int(st["slow"]) != 0
+						or int(st["paralysis"]) != 0):
+					return
+				one = true
+	if one:
+		st["count"] = 1
+		st["interval"] = 1
+	if int(st["meter"]) < 0x1388:
+		return
+	if spell == 0x17 or (spell >= 0x19 and spell <= 0x1C) or spell == 0x1E:
+		skill_practice(st, rec, calls)
+	st["off_x"] = -0xC8
+	st["off_y"] = 0xC8
+	st["off_z"] = 0x190
+	st["meter"] = 0
+	st["swing_pause"] = 0
+	st["pending"] = spell
+	st["delay"] = 1
+	st["mp"] = (int(st["mp"]) - cost) & 0xFFFF
+	if spell in ONE_SHOT:
+		st["count"] = 1
+		st["interval"] = 1
+	elif CAST_ARMS.has(spell):
+		var arm: Array = CAST_ARMS[spell]
+		var offs = arm[0]
+		if offs is String:
+			if offs == "y":
+				st["off_y"] = 0x1F4
+			else:
+				st["off_x"] = -0xC8
+		elif offs != null:
+			st["off_x"] = int(offs[0])
+			st["off_y"] = int(offs[1])
+			st["off_z"] = int(offs[2])
+		st["count"] = int(arm[1])
+		st["interval"] = int(arm[2])
+	st["casting"] = spell
+
+
+# skill_practice: for each skill k whose bit 1 << k the record's group (+5)
+# has, its +3 into the count at 0x801b250a + 2k; at 400 the count is 0 again
+# and the skill one higher -- 999 at most, announce 0x12 + k below that --
+# then skill_unlock(k) and the stats.
+# @orig game:0x8002a10c skill_practice  status:verified -- through cast_spell, the same 1260 casts
+static func skill_practice(st: Dictionary, rec: PackedByteArray, calls: Array) -> void:
+	var group := int(rec[5])
+	for k in range(4, -1, -1):
+		if group & (1 << k) == 0:
+			continue
+		st["practice"][k] = (int(st["practice"][k]) + int(rec[3])) & 0xFFFF
+		if int(st["practice"][k]) < 0x190:
+			continue
+		st["practice"][k] = 0
+		st["skills"][k] = (int(st["skills"][k]) + 1) & 0xFFFF
+		if int(st["skills"][k]) >= 0x3E8:
+			st["skills"][k] = 0x3E7
+		else:
+			calls.append(["announce", 0x12 + k])
+		calls.append(["unlock", k])
+		calls.append(["recalc"])
+
+
+# player_action's arms for the healing and protecting spells: fire resist and
+# missile shield two effects of their kind at the player and 0x801b256a /
+# 0x801b256e to 0x708, refusal one and 0x801b256c to 0xc8, each then the
+# stats; earth heal, antidote and blessings their effect alone.
+# ["spawn", a0, a1, kind, point, the second stack word or null].
+# @orig game:0x8002cd2c player_action+0xa20  status:verified -- the arms of 0x17, 0x19, 0x1a, 0x1b, 0x1c and 0x1e: tools/magic.py, 1260 of 1260 as the game's own; the attacking arms are not here
+static func player_action(st: Dictionary, spell: int, calls: Array) -> void:
+	if TIMED.has(spell):
+		var t: Array = TIMED[spell]
+		var n := int(t[2])
+		for i in n:
+			calls.append(["spawn", 0xA, 0x40, spell, 0x801B25F0, i if n == 2 else null])
+		st[t[0]] = int(t[1])
+		calls.append(["recalc"])
+	elif spell in [0x17, 0x19, 0x1E]:
+		calls.append(["spawn", 0xA, 0x40, spell, 0x801B25F0, null])
+
+
+# player_turn's pending action, a frame (0x8002ff88): the delay down, and at 0
+# player_action and a shot less -- nothing pending after the last, else the
+# delay the interval again.
+# @orig game:0x8002ff88 player_turn+0x16c  status:verified -- tools/magic.py, 1260 of 1260 frames as the game's own
+static func pending_tick(st: Dictionary, calls: Array) -> void:
+	if int(st["pending"]) == 0xFF:
+		return
+	st["delay"] = (int(st["delay"]) - 1) & 0xFF
+	if int(st["delay"]) != 0:
+		return
+	calls.append(["action", int(st["pending"])])
+	st["count"] = (int(st["count"]) - 1) & 0xFF
+	if int(st["count"]) == 0:
+		st["pending"] = 0xFF
+	else:
+		st["delay"] = int(st["interval"])
+
+
+# The timers at player_controller's end (0x80031f0c): 0x801b256a, 256c and
+# 256e down, the stats when one reaches 0; 0x801b2576 down holding MP at its
+# most, announce 0x1b at its end; 0x801b2578 down, the stats and announce 0x1b
+# at its end.
+# @orig game:0x80031f0c player_controller+0xf40  status:verified -- tools/magic.py, 1260 of 1260 frames as the game's own
+static func timers_tick(st: Dictionary, calls: Array) -> void:
+	for name in ["b56a", "b56c", "b56e"]:
+		if int(st[name]) != 0:
+			st[name] = KFWeapon.s16(int(st[name]) - 1)
+			if int(st[name]) == 0:
+				calls.append(["recalc"])
+	if int(st["b576"]) != 0:
+		st["b576"] = KFWeapon.s16(int(st["b576"]) - 1)
+		st["mp"] = int(st["mp_max"])
+		if int(st["b576"]) == 0:
+			calls.append(["announce", 0x1B])
+	if int(st["b578"]) != 0:
+		st["b578"] = KFWeapon.s16(int(st["b578"]) - 1)
+		if int(st["b578"]) == 0:
+			calls.append(["recalc"])
+			calls.append(["announce", 0x1B])
+
+
+# @port helper -- the player's casting fields as tools/magic.py's state
+func _magic_state() -> Dictionary:
+	return {"pending": pending, "count": shots, "interval": shot_gap,
+		"delay": shot_delay, "mp": mp, "mp_max": int(character.get("mp_max", 30)),
+		"hp": hp, "hp_max": hp_max, "weapon": weapon_id, "poison": poison,
+		"curse_lv": curse[0], "dark_lv": dark[0], "slow": caps["slow"],
+		"paralysis": caps["paralysis"], "b56a": bonus[0], "b56c": shielded,
+		"b56e": bonus[1], "b576": mp_hold, "b578": bonus[2], "light_t": light[1],
+		"meter": magic_meter, "swing_pause": int(wstate["pause"]),
+		"off_x": cast_off[0], "off_y": cast_off[1], "off_z": cast_off[2],
+		"casting": casting, "worn": worn, "practice": practice,
+		"skills": character.get("grow", [0, 0, 0, 0, 10])}
+
+
+# @port helper -- the state back into the player, and what it asked for done
+func _magic_put(st: Dictionary, calls: Array) -> void:
+	pending = int(st["pending"])
+	shots = int(st["count"])
+	shot_gap = int(st["interval"])
+	shot_delay = int(st["delay"])
+	mp = int(st["mp"])
+	bonus = [int(st["b56a"]), int(st["b56e"]), int(st["b578"])]
+	shielded = int(st["b56c"])
+	mp_hold = int(st["b576"])
+	light[1] = int(st["light_t"])
+	magic_meter = int(st["meter"])
+	wstate["pause"] = int(st["swing_pause"])
+	cast_off = [int(st["off_x"]), int(st["off_y"]), int(st["off_z"])]
+	casting = int(st["casting"])
+	for c in calls:
+		match str(c[0]):
+			"announce":
+				KFMessages.announce(int(c[1]))
+			"unlock":
+				for b in KFLevels.skill_unlock(character, int(c[1]), KFTalk.flags):
+					KFMessages.announce(int(b))
+			"recalc":
+				recalc_stats()
+			"spawn":
+				var fx := get_node_or_null("../Effects")
+				if fx and fx.has_method("spawn"):
+					var pt := PackedByteArray()
+					pt.resize(16)
+					pt.encode_s32(0, gx)
+					pt.encode_s32(4, gy)
+					pt.encode_s32(8, gz)
+					fx.call("spawn", int(c[1]), int(c[2]), int(c[3]), pt,
+						[null, c[5]])
+			"action":
+				var more := []
+				player_action(st, int(c[1]), more)
+				_magic_put(st, more)
+
+
+# @port helper -- spell_table's records, as the effects hold them (fxrecords.json)
+func _spell_records() -> Dictionary:
+	var fx := get_node_or_null("../Effects")
+	if fx and fx.get("records") != null:
+		return fx.get("records")
+	return {}
+
+
+# player_turn's buttons (0x8002fe1c): the action button's edge casts magic A
+# unless the weapon's own magic is firing (0x801b25b2) or 0x801b25aa is set,
+# neither of which the port has yet; the square button's (bind_map) the
+# button's spell, or uses its thing (0x8002ff28). Then the pending action.
+# @orig game:0x8002fe1c player_turn  status:partial -- the casting buttons and the pending action; the button's thing is use_item's, not here
+func _cast_buttons() -> void:
+	var st := _magic_state()
+	var calls := []
+	var recs := _spell_records()
+	if KFPad.hit(KFPad.ACTION):
+		cast_spell(st, spell_a, recs, calls)
+	if KFPad.hit(KFPad.MAP) and spell_b != 0xFF:
+		cast_spell(st, spell_b, recs, calls)
+	pending_tick(st, calls)
+	_magic_put(st, calls)
+
+
+# @port helper -- timers_tick on the player, at the controller's end
+func _timers() -> void:
+	var st := _magic_state()
+	var calls := []
+	timers_tick(st, calls)
+	_magic_put(st, calls)
 
 
 # An effect's strike (effect_strike 0x80053850 -> effect_hurt_player
@@ -830,12 +1123,14 @@ func _frame(dir: Vector3) -> void:
 		if (int(caps["paralysis"]) & 3) == 3:
 			_tint(tints_now, 1, [0x3C, 0x1E, 0], 0xC00, true)
 			_tints(tints_now)
-	_use()
+	_cast_buttons()
+	var rest := _use()
 	# player_turn (0x80030424): a swing begins on the attack button's edge
-	# when the pause after the last blow is over (0x8002c040).
+	# when the pause after the last blow is over (0x8002c040) -- never while
+	# USE is held, when player_turn has returned already.
 	# sub_8002c040 starts nothing with no weapon in hand; following the
 	# emulator, the swing is the game's (ghost.gd)
-	if attack_latch and int(wstate["pause"]) == 0 and weapon_id < KFWeapon.records.size() \
+	if rest and attack_latch and int(wstate["pause"]) == 0 and weapon_id < KFWeapon.records.size() \
 			and not KFGame.follow:
 		KFWeapon.start(wstate, KFWeapon.records[weapon_id])
 	attack_latch = false
@@ -939,45 +1234,84 @@ static func run_flag(c: Dictionary, held: bool) -> void:
 		c["run"] = 1
 
 
-# player_turn's middle (0x80030010): the USE button held this frame and the
-# last takes 500 from each meter and sets each pause to 1 -- 60 when a meter
-# empties -- and lowers damage_scale by 0x80 to 0x400; otherwise the magic
-# meter's pause counts down, or it refills by meter_gain(the five working
-# skills' average, 0) a frame, and damage_scale climbs back by 0x80 to 0x1000.
-# The groundal boots (0x4c) on the feet (0x801b25d8) take the held branch
-# away. The run's flag is run_flag's.
-# tools/weapon.py use_held: with the swing, 817 of 817 frames of bp25.
-# @orig game:0x80030010 player_turn+0x1f4  status:transcribed -- a label inside player_turn; the boots 0x4d (fu-jin) and 0x4f (ichrius') that shorten the meters' pause, and a spell's rate, are not here
-func _use() -> void:
-	var now := KFPad.held(KFPad.USE)
-	var held := now and use_prev and int(worn[4]) != 0x4C
-	run_flag(caps, held)
-	if held:
-		wstate["pause"] = 1
-		var m := coll._s16(int(wstate["meter"]) - 0x1F4)
-		if m <= 0:
-			wstate["meter"] = 0
-			wstate["pause"] = 0x3C
-		else:
-			wstate["meter"] = m
-		magic_pause = 1
-		var mm := coll._s16(magic_meter - 0x1F4)
-		if mm <= 0:
-			magic_meter = 0
-			magic_pause = 0x3C
-		else:
-			magic_meter = mm
-		damage_k = maxi(damage_k - 0x80, 0x400)
-		weapon_meter = int(wstate["meter"])
+# player_turn's USE stretch (0x80030010), tools/magic.py's: held this frame
+# and the last, and the feet not the groundal boots (0x4c), the run's flag
+# counts down (run_flag), 500 goes from each meter -- an empty one pauses 60
+# frames, 1 and 0 with the fu-jin or ichrius' boots (0x4d, 0x4f) -- and 0x80
+# from damage_scale down to 0x400, and player_turn returns there: no swing
+# starts. Otherwise the magic meter's pause runs down or it refills by
+# meter_gain(the five working skills' mean, the cast record's +1 -- a quarter
+# less with helm 0x25, twice with armour 0x30), to 5000; damage_scale climbs
+# by 0x80 to 0x1000; the run's flag is 1; 0x801b25aa counts down, or
+# 0x801b258c is 0x8009c3cc. `st` holds tools/magic.py's fields; true when the
+# rest of player_turn runs.
+# @orig game:0x80030010 player_turn+0x1f4  status:verified -- tools/magic.py, 1260 of 1260 frames as the game's own over 21 snapshots; tools/weapon.py use_held, 817 of 817 of bp25; the self-test this to it
+static func use_tick(st: Dictionary, records: Dictionary) -> bool:
+	var feet := int(st["worn"][4])
+	var held: bool = (int(st["buttons"]) & int(st["use"])) != 0 \
+		and (int(st["buttons_prev"]) & int(st["use"])) != 0
+	if held and feet != 0x4C:
+		run_flag(st, true)
+		st["swing_pause"] = 1
+		st["weapon_meter"] = (int(st["weapon_meter"]) - 500) & 0xFFFF
+		if KFWeapon.s16(int(st["weapon_meter"])) <= 0:
+			st["weapon_meter"] = 0
+			st["swing_pause"] = 1 if feet == 0x4D or feet == 0x4F else 0x3C
+		st["magic_pause"] = 1
+		st["meter"] = (int(st["meter"]) - 500) & 0xFFFF
+		if KFWeapon.s16(int(st["meter"])) <= 0:
+			st["meter"] = 0
+			st["magic_pause"] = 0 if feet == 0x4D or feet == 0x4F else 0x3C
+		st["damage_scale"] = (int(st["damage_scale"]) - 0x80) & 0xFFFF
+		if KFWeapon.s16(int(st["damage_scale"])) < 0x400:
+			st["damage_scale"] = 0x400
+		return false
+	var total := 0
+	for v in st["working"]:
+		total += int(v)
+	var avg := total / 5
+	if int(st["magic_pause"]) != 0:
+		st["magic_pause"] = int(st["magic_pause"]) - 1
 	else:
-		if magic_pause > 0:
-			magic_pause -= 1
-		else:
-			var g: Array = working
-			var avg := (int(g[0]) + int(g[1]) + int(g[2]) + int(g[3]) + int(g[4])) / 5
-			magic_meter = mini(magic_meter + KFWeapon.gain(avg, 0), 5000)
-		damage_k = mini(damage_k + 0x80, 0x1000)
+		var rate := 0
+		if int(st["casting"]) >= 0 and records.has(int(st["casting"])):
+			rate = int((records[int(st["casting"])] as PackedByteArray)[1])
+			if int(st["worn"][0]) == 0x25:
+				rate -= rate >> 2
+			if int(st["worn"][1]) == 0x30:
+				rate <<= 1
+		st["meter"] = (int(st["meter"]) + KFWeapon.gain(avg, rate)) & 0xFFFF
+	if int(st["meter"]) >= 0x1389:
+		st["meter"] = 0x1388
+	st["damage_scale"] = (int(st["damage_scale"]) + 0x80) & 0xFFFF
+	if KFWeapon.s16(int(st["damage_scale"])) > 0x1000:
+		st["damage_scale"] = 0x1000
+	run_flag(st, false)
+	if int(st["b25aa"]) != 0:
+		st["b25aa"] = int(st["b25aa"]) - 1
+	else:
+		st["b258c"] = 0x8009C3CC
+	return true
+
+
+# @port helper -- use_tick on the player's fields; true when player_turn goes on
+func _use() -> bool:
+	var now := KFPad.held(KFPad.USE)
+	var st := {"buttons": 1 if now else 0, "buttons_prev": 1 if use_prev else 0,
+		"use": 1, "worn": worn, "run": caps["run"], "swing_pause": int(wstate["pause"]),
+		"weapon_meter": int(wstate["meter"]), "magic_pause": magic_pause,
+		"meter": magic_meter, "damage_scale": damage_k, "working": working,
+		"casting": casting, "b25aa": 0, "b258c": 0}
+	var rest := use_tick(st, _spell_records())
+	caps["run"] = int(st["run"])
+	wstate["pause"] = int(st["swing_pause"])
+	wstate["meter"] = int(st["weapon_meter"])
+	weapon_meter = int(st["weapon_meter"])
+	magic_pause = int(st["magic_pause"])
+	magic_meter = int(st["meter"])
+	damage_k = int(st["damage_scale"])
 	use_prev = now
+	return rest
 
 
 # held_item_tick (0x8002d2a0), last in the controller (0x80032150): the swing,
