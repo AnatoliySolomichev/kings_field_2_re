@@ -52,7 +52,7 @@ def run(args, why, out=sys.stdout, keep=None):
     head = f"  {why}"
     if shown:
         print(f"{head}: {shown[0].strip()}", file=out)
-        for line in shown[1:7]:
+        for line in shown[1:12]:
             print(f"      {line.strip()}", file=out)
     else:
         print(f"{head}: done in {time.time() - t:.1f}s", file=out)

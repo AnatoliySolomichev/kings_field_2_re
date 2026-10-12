@@ -44,6 +44,8 @@ const FAST := 0xC5C10              # a speed squared past it gets the half-step 
 const TRAIL := 0x6F
 const FIRE_BALL := 0x00
 const SPLASH := 0x70
+const STONE := 0x06
+const WIND_CUTTER := 0x0D
 const TRAIL_ARGS := [0xE10, -0x80, 5, 0x16, 0, 1, 3]   # 0x80058f50's, after the velocity
 const QUERY := {1: 0xA1, 2: 0x31, 3: 0xB1, 4: 0x01}    # effect_collide: +0 & 7 -> flags
 const GROW := 0x96
@@ -188,7 +190,7 @@ func alloc() -> int:
 # effect_spawn(a0, a1, kind, point, ...): `point` the 16 bytes a3 points at
 # (or empty), `args` the stack arguments from the fifth on -- a pointer as the
 # bytes it points at. The slot's offset, or -1 when none is free.
-# @orig game:0x80053c84 effect_spawn  status:partial -- the common setting up and the arms of kinds 0x1f, 0x22, 0x23, 0x24, 0x26 and 0x6f; 189 of 189 runs of the game's own as tools/effects.py, which the self-test holds this to; the other 124 arms are not here
+# @orig game:0x80053c84 effect_spawn  status:partial -- the common setting up and the arms of kinds 0 (fire ball), 6 (stone), 0xd (wind cutter), 0x17, 0x19, 0x1a, 0x1b, 0x1c, 0x1e, 0x1f, 0x22, 0x23, 0x24, 0x26, 0x6f and 0x70 (splash); tools/effects.py's, which the game's own holds (machine_check, magic_check, spell_hit_check) and the self-test holds this to; the other 114 arms are not here
 func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array) -> int:
 	var s := alloc()
 	if s < 0:
@@ -264,6 +266,26 @@ func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array) -> 
 			w16(s + 0x34, int(args[1]))
 			w16(s + 0x30, int(args[1]))
 			w16(s + 0x44, int(args[2]))      # and its sound, every 30 blanks at most: not here
+		STONE:                              # 0x800541f4
+			w16(s + 0xE, 0x40)
+			w8(s + 8, 1)
+			w8(s + 4, 0x80)
+			w8(s + 2, 0xF)
+			w8(s + 3, 0xF)
+			w8(s + 0x44, 0)
+			w16(s + 0x10, 0x46)             # and its sound (0x32), not here
+		WIND_CUTTER:                        # 0x800544b8
+			setup(s, 0xD, 0x1400, 5)        # after its sound (0x2b)
+			w16(s + 0x10, 0x2D)
+			w8(s + 0x44, 0)
+			w8(s + 0xD, 1)
+			w16(s + 0x2A, int(world.field("vy")))   # the view's angles; pitch and roll 0
+			w16(s + 0x2E, 0)
+			w16(s + 0x30, 0x1800)
+			w16(s + 0x32, 0x1000)
+			w16(s + 0x28, 0)
+			w16(s + 0x2C, 0)
+			w16(s + 0x34, 0x2000)
 		FIRE_BALL:                          # 0x80053e98
 			particle(s, 9, 0x1000, 5)
 			w16(s + 0xE, 0x40)
@@ -396,7 +418,7 @@ func driver() -> void:
 
 
 # effect_tick's switch on the kind (0x80056908), with the arms the port has.
-# @orig game:0x800568bc effect_tick  status:partial -- the switch, and the arms of kinds 0x1f, 0x22, 0x23, 0x24, 0x26 and 0x6f; the other 124 do nothing here
+# @orig game:0x800568bc effect_tick  status:partial -- the switch, and the arms of the same sixteen kinds as effect_spawn's; the other 114 do nothing here
 func tick(s: int) -> void:
 	match u8(s + 1):
 		0x1F:
@@ -413,6 +435,10 @@ func tick(s: int) -> void:
 			_tick_fire(s)
 		SPLASH:
 			_tick_splash(s)
+		STONE:
+			_tick_stone(s)
+		WIND_CUTTER:
+			_tick_wind(s)
 		0x1A:
 			_mark(s, "b56a", 0x40)
 		0x1B:
@@ -449,10 +475,7 @@ func _tick_fire(s: int) -> void:
 				w32(s + 0x18 + 4 * i, s32(s + 0x18 + 4 * i) - (-((-h) >> 1) if h < 0 else h >> 1))
 		else:
 			undo(s)
-		var back := []
-		for i in 3:
-			back.append(s32(s + 0x18 + 4 * i) - (s16(s + 0x38 + 2 * i) << 3))
-		world.attack_hit(hit, u8(s), u8(s + 1), 0x1388, magic_strength(s), u8(s + 6), back)
+		_attack(s, hit)
 		w8(s + 7, 1)
 	elif ph >= 3:
 		w8(s, 0xFF)
@@ -462,6 +485,86 @@ func _tick_fire(s: int) -> void:
 	for o in [0x30, 0x32, 0x34]:
 		w16(s + o, sc)
 	w8(s + 7, u8(s + 7) + 1)
+
+
+# Stone (0x800569e4): flying (+0x44 0) it spins its pitch 0xc8 a frame; its
+# first hit strikes, steps it back and drops it from -0x64, falling by 0xd a
+# frame (+0x44 1); the next hit strikes again and it lies (+0x44 2), +9 5,
+# +0xc 0x32, fading +0x12 by 0x100 a frame from 0x400 to 0x1000. A splash a
+# frame while it is in the water.
+# @orig game:0x800569e4 effect_tick+0x128  status:verified -- tools/effects.py spell_hit_check, 63 of 63 runs of the game's own end to end, all 200 creatures; the self-test this to it
+func _tick_stone(s: int) -> void:
+	var b44 := u8(s + 0x44)
+	if b44 == 2:
+		var v := (u16(s + 0x12) + 0x100) & 0xFFFF
+		w16(s + 0x12, v)
+		if s16v(v) >= 0x1000:
+			w8(s, 0xFF)
+		return
+	if b44 == 1:
+		w16(s + 0x3A, u16(s + 0x3A) + 0xD)
+	w16(s + 0x28, u16(s + 0x28) + 0xC8)
+	var hit := move(0x1F4, 0x1F4, 0xFA)
+	if hit != 0:
+		_attack(s, hit)
+		if u8(s + 0x44) == 1:
+			w8(s + 0x44, 2)
+			w8(s + 9, 5)
+			w8(s + 0xC, 0x32)
+			w16(s + 0x12, 0x400)
+			return
+		undo(s)
+		w8(s + 0x44, 1)
+		w16(s + 0x3C, 0)
+		w16(s + 0x38, 0)
+		w16(s + 0x3A, -0x64)
+	_splash_one(s + 0x18, 0x4000, 0x4000, 0x1F4)
+
+
+# Wind cutter (0x800574b4): flat, its yaw the view's turning 0x2bc a frame;
+# each thing it passes it strikes once (+0x44 the latch, cleared on a clear
+# frame), and the tiles (any of the low four bits) end it.
+# @orig game:0x800574b4 effect_tick+0xbf8  status:verified -- tools/effects.py spell_hit_check, 63 of 63 runs of the game's own end to end; the self-test this to it
+func _tick_wind(s: int) -> void:
+	var hit := move(0xB4, 0x80000000, 0)
+	if hit != 0:
+		if hit & 0xF:
+			w8(s, 0xFF)
+		if u8(s + 0x44) == 0:
+			w8(s + 0x44, 1)
+			_attack(s, hit)
+	else:
+		w8(s + 0x44, 0)
+	_splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
+	w16(s + 0x2A, u16(s + 0x2A) + 0x2BC)
+
+
+# sub_800537e8: what was hit, handed to actor_attack_player from 8
+# velocities back, with 0x1388 and the caster's strength.
+# @orig game:0x800537e8 sub_800537e8  status:verified -- through the fire ball, stone and wind cutter, spell_hit_check
+func _attack(s: int, hit: int) -> void:
+	var back := []
+	for i in 3:
+		back.append(s32(s + 0x18 + 4 * i) - (s16(s + 0x38 + 2 * i) << 3))
+	world.attack_hit(hit, u8(s), u8(s + 1), 0x1388, magic_strength(s), u8(s + 6), back)
+
+
+# sub_80056268: one splash on the surface the last query found, when the
+# point is within `depth` under it.
+# @orig game:0x80056268 sub_80056268  status:verified -- through stone and wind cutter
+func _splash_one(point: int, size: int, bob: int, depth: int) -> void:
+	var y := s32(point + 4)
+	var surf := int(world.field("s18"))
+	if y < surf or surf + depth < y:
+		return
+	var pt := PackedByteArray()
+	pt.resize(16)
+	pt.encode_s32(0, s32(point))
+	pt.encode_s32(4, surf)
+	pt.encode_s32(8, s32(point + 8))
+	var vel := PackedByteArray()
+	vel.resize(8)
+	spawn(0xA, 0, SPLASH, pt, [vel, size, bob])
 
 
 # sub_80056580: splashes on the water, when the point is within 0x1f4 under
@@ -663,6 +766,7 @@ func field(name: String) -> int:
 		"b56e": return int(player.get("bonus")[1])
 		"px": return int(player.get("gx"))
 		"s18": return surface18
+		"vy": return (int(player.get("facing")) + int(player.get("tilt")[1])) & 0xFFFF
 		"w0", "w1", "w2", "w3", "w4":
 			return int(player.get("working")[int(name.substr(1))])
 	return 0

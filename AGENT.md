@@ -263,7 +263,9 @@ effect_spawn and effect_driver                         2698 frames, slots, field
 a creature's hit, against the game's own              1260 of 1260 hits, every
 actor_take_hit                                         flag path, 200 actors
 the fire ball end to end, the game's own collide,      84 of 84 runs, 988
-actor_attack_player and actor_take_hit                 frames, 15 struck, 11 dead
+actor_attack_player and actor_take_hit                 frames, 15 struck, 11 dead;
+                                                       stone 63 of 63, wind
+                                                       cutter 63 of 63
 the fire ball, against the game's own effect_spawn    168 of 168 runs, 914 of
 and effect_driver (its world stood in for)             914 frames, queries, hits;
                                                        with its own collide_query
@@ -308,7 +310,7 @@ directions 400 of 400
 routines 13858 of 13858
 saves 45 of 45 · level states 46 of 46 streams, 958 of 958 things made,
 42 of 42 states written, 46 of 46 tables read and written again
-effects 102 of 102 runs, 2482 of 2482 frames · aims 300 of 300
+effects 150 of 150 runs, 3298 of 3298 frames · aims 300 of 300
 the run 150129 of 150129 frames
 player_take_hit 300 of 300 · the status 40 of 40 runs, 6312 of 6312 frames
 casting 1000 of 1000 · the attacking arms 240 of 240 · creature hits 400 of 400

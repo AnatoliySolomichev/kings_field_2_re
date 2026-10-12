@@ -422,61 +422,64 @@ def export(out_dir):
     # as fire_check stands them in: the answers, and the hits handed over
     fires = []
     frng = random.Random(0xF1E)
-    for path in memcard._snapshots()[:6]:
-        base = bytearray(open(path, "rb").read())
-        o = SLOTS & MASK
-        base[o:o + STRIDE * COUNT] = bytes(STRIDE * COUNT)
-        for k in range(COUNT):
-            base[o + STRIDE * k] = 0xFF
-        px, py, pz = struct.unpack_from("<3i", base, PLAYER_POS & MASK)
-        for _ in range(4):
-            m = bytearray(base)
-            working = [frng.randrange(0, 200) for _k in range(5)]
-            for k in range(5):
-                struct.pack_into("<H", m, (WORKING & MASK) + 2 * k, working[k])
-            yaw = frng.randrange(0x1000)
-            point = struct.pack("<4i", px + frng.randrange(-0x400, 0x400), py - 0x640,
-                                pz + frng.randrange(-0x400, 0x400), 0)
-            d = movement.direction_from_angles(frng.randrange(-0x100, 0x100) & 0xFFF, yaw)
-            vel = struct.pack("<4h", *[_s16_((c * 0x384) >> 12) for c in d], 0)
-            if frng.randrange(2) == 0:                       # water just under the path
-                struct.pack_into("<i", m, SURFACE & MASK, py - 0x640 - frng.randrange(0, 0x1F4))
-            s18 = struct.unpack_from("<i", m, SURFACE & MASK)[0]
-            w = StandIn(7)
-            log = []
-            ask = w.collide_query
+    for kind_, speed_ in ((FIRE_BALL, 0x384), (STONE, 0x1F4), (WIND_CUTTER, 0x2BC)):
+      for path in memcard._snapshots()[:6]:
+          base = bytearray(open(path, "rb").read())
+          o = SLOTS & MASK
+          base[o:o + STRIDE * COUNT] = bytes(STRIDE * COUNT)
+          for k in range(COUNT):
+              base[o + STRIDE * k] = 0xFF
+          px, py, pz = struct.unpack_from("<3i", base, PLAYER_POS & MASK)
+          for _ in range(4):
+              m = bytearray(base)
+              working = [frng.randrange(0, 200) for _k in range(5)]
+              for k in range(5):
+                  struct.pack_into("<H", m, (WORKING & MASK) + 2 * k, working[k])
+              yaw = frng.randrange(0x1000)
+              point = struct.pack("<4i", px + frng.randrange(-0x400, 0x400), py - 0x640,
+                                  pz + frng.randrange(-0x400, 0x400), 0)
+              d = movement.direction_from_angles(frng.randrange(-0x100, 0x100) & 0xFFF, yaw)
+              vel = struct.pack("<4h", *[_s16_((c * speed_) >> 12) for c in d], 0)
+              vy = frng.randrange(0x1000)
+              struct.pack_into("<4H", m, VIEW_ANGLES & MASK, 0, vy, 0, 0)
+              if frng.randrange(2) == 0:                       # water just under the path
+                  struct.pack_into("<i", m, SURFACE & MASK, py - 0x640 - frng.randrange(0, 0x1F4))
+              s18 = struct.unpack_from("<i", m, SURFACE & MASK)[0]
+              w = StandIn(7)
+              log = []
+              ask = w.collide_query
 
-            def cq(x, y, z, r, h, flags, ask=ask, log=log, w=w):
-                v = ask(x, y, z, r, h, flags)
-                log.append([_s32(x), _s32(y), _s32(z), r, h & 0xFFFFFFFF, flags, v, w.layer_offset])
-                return v
-            w.collide_query = cq
-            drawn = []
-            lcg = levelstate.Lcg()
+              def cq(x, y, z, r, h, flags, ask=ask, log=log, w=w):
+                  v = ask(x, y, z, r, h, flags)
+                  log.append([_s32(x), _s32(y), _s32(z), r, h & 0xFFFFFFFF, flags, v, w.layer_offset])
+                  return v
+              w.collide_query = cq
+              drawn = []
+              lcg = levelstate.Lcg()
 
-            def rnd(lcg=lcg, drawn=drawn):
-                v = lcg()
-                drawn.append(v)
-                return v
-            mach = Machine(m, w, rnd)
-            try:
-                mach.spawn(0xA, 0x42, FIRE_BALL, point, [vel])
-                frames = []
-                for _f in range(60):
-                    del log[:], w.hits[:], drawn[:]
-                    mach.driver()
-                    frames.append({"q": [list(x) for x in log], "rand": list(drawn),
-                                   "hits": [[h[0], h[1], h[2], h[3], h[4], [_s32(v) for v in h[5]]]
-                                            for h in w.hits],
-                                   "md5": hashlib.md5(_slots(m).hex().encode()).hexdigest()})
-                    if all(m[o + STRIDE * k] == 0xFF for k in range(COUNT)):
-                        break
-            except NotImplementedError:
-                continue
-            fires.append({"label": f"{os.path.basename(path)[:-4]} fire ball", "layer0": 7,
-                          "fields": dict({"px": px, "s18": s18}, **{f"w{k}": working[k] for k in range(5)}),
-                          "spawns": [[0xA, 0x42, FIRE_BALL, point.hex(), [{"b": vel.hex()}]]],
-                          "frames": frames})
+              def rnd(lcg=lcg, drawn=drawn):
+                  v = lcg()
+                  drawn.append(v)
+                  return v
+              mach = Machine(m, w, rnd)
+              try:
+                  mach.spawn(0xA, 0x42, kind_, point, [vel])
+                  frames = []
+                  for _f in range(60):
+                      del log[:], w.hits[:], drawn[:]
+                      mach.driver()
+                      frames.append({"q": [list(x) for x in log], "rand": list(drawn),
+                                     "hits": [[h[0], h[1], h[2], h[3], h[4], [_s32(v) for v in h[5]]]
+                                              for h in w.hits],
+                                     "md5": hashlib.md5(_slots(m).hex().encode()).hexdigest()})
+                      if all(m[o + STRIDE * k] == 0xFF for k in range(COUNT)):
+                          break
+              except NotImplementedError:
+                  continue
+              fires.append({"label": f"{os.path.basename(path)[:-4]} kind {kind_:#x}", "layer0": 7,
+                            "fields": dict({"px": px, "s18": s18, "vy": vy}, **{f"w{k}": working[k] for k in range(5)}),
+                            "spawns": [[0xA, 0x42, kind_, point.hex(), [{"b": vel.hex()}]]],
+                            "frames": frames})
     # and effect_aim: a creature's angles, the target, the speed, the point and
     # the spread, and the velocity and yaw aim() gives -- the game's own, 600
     # of 600 (aim_check)
@@ -518,6 +521,8 @@ SLOW, PARALYSIS = 0x801B2566, 0x801B2568
 B56A, B56C, B56E = 0x801B256A, 0x801B256C, 0x801B256E
 TILE_LOOK = 0x801AEEFC
 FIRE_BALL = 0x00
+STONE, WIND_CUTTER = 0x06, 0x0D
+VIEW_ANGLES = 0x801B2608
 SCRATCH_POINT = 0x801FF0C0          # where the check lays a hit's point back
 SPLASH = 0x70
 VBLANK, SPLASH_SOUND = 0x801C12E8, 0x8009C214 + 0x1DC   # vblank_count, gp + 0x1dc
@@ -637,11 +642,99 @@ class Machine:
                0x24: self._spawn_24, 0x26: self._spawn_26, TRAIL: self._spawn_6f,
                0x17: self._spawn_17, 0x19: self._spawn_19, 0x1A: self._spawn_1a,
                0x1B: self._spawn_1b, 0x1C: self._spawn_1c, 0x1E: self._spawn_1e,
-               FIRE_BALL: self._spawn_00, SPLASH: self._spawn_70}.get(kind)
+               FIRE_BALL: self._spawn_00, SPLASH: self._spawn_70,
+               STONE: self._spawn_06, WIND_CUTTER: self._spawn_0d}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_spawn's arm {kind:#x}")
         arm(s, args)
         return s
+
+    def _spawn_06(self, s, args):           # 0x800541f4, stone
+        self.w16(s + 0xE, 0x40)
+        self.w8(s + 8, 1)
+        self.w8(s + 4, 0x80)
+        self.w8(s + 2, 0xF)
+        self.w8(s + 3, 0xF)
+        self.w8(s + 0x44, 0)
+        self.w16(s + 0x10, 0x46)            # and its sound (sub_800532d4, 0x32)
+
+    def _tick_06(self, s):                  # 0x800569e4, stone
+        """Flying (+0x44 0) it spins its pitch 0xc8 a frame; its first hit
+        strikes, steps it back and drops it from -0x64, falling by 0xd a
+        frame (+0x44 1); the next hit strikes again and it lies (+0x44 2),
+        +9 5, +0xc 0x32, fading +0x12 by 0x100 a frame from 0x400 to 0x1000.
+        A splash a frame while it is in the water."""
+        b44 = self.u8(s + 0x44)
+        if b44 == 2:
+            v = (self.u16(s + 0x12) + 0x100) & 0xFFFF
+            self.w16(s + 0x12, v)
+            if _s16_(v) >= 0x1000:
+                self.w8(s, 0xFF)
+            return
+        if b44 == 1:
+            self.w16(s + 0x3A, self.u16(s + 0x3A) + 0xD)
+        self.w16(s + 0x28, self.u16(s + 0x28) + 0xC8)
+        hit = self.move(0x1F4, 0x1F4, 0xFA)
+        if hit:
+            self.attack(s, hit)
+            if self.u8(s + 0x44) == 1:
+                self.w8(s + 0x44, 2)
+                self.w8(s + 9, 5)
+                self.w8(s + 0xC, 0x32)
+                self.w16(s + 0x12, 0x400)
+                return
+            self.undo(s)
+            self.w8(s + 0x44, 1)
+            self.w16(s + 0x3C, 0)
+            self.w16(s + 0x38, 0)
+            self.w16(s + 0x3A, -0x64)
+        self.splash_one(s + 0x18, 0x4000, 0x4000, 0x1F4)
+
+    def _spawn_0d(self, s, args):           # 0x800544b8, wind cutter
+        self.setup(s, 0xD, 0x1400, 5)       # after its sound (0x2b)
+        self.w16(s + 0x10, 0x2D)
+        self.w8(s + 0x44, 0)
+        self.w8(s + 0xD, 1)
+        self.put(s + 0x28, self.get(VIEW_ANGLES, 8))
+        self.w16(s + 0x30, 0x1800)
+        self.w16(s + 0x32, 0x1000)
+        self.w16(s + 0x28, 0)
+        self.w16(s + 0x2C, 0)
+        self.w16(s + 0x34, 0x2000)
+
+    def _tick_0d(self, s):                  # 0x800574b4, wind cutter
+        """Flat, its yaw the view's turning 0x2bc a frame: each thing it
+        passes it strikes once (+0x44 the latch, cleared on a clear frame),
+        and the tiles (any of the low four bits) end it."""
+        hit = self.move(0xB4, 0x80000000, 0)
+        if hit:
+            if hit & 0xF:
+                self.w8(s, 0xFF)
+            if self.u8(s + 0x44) == 0:
+                self.w8(s + 0x44, 1)
+                self.attack(s, hit)
+        else:
+            self.w8(s + 0x44, 0)
+        self.splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
+        self.w16(s + 0x2A, self.u16(s + 0x2A) + 0x2BC)
+
+    def attack(self, s, hit):               # 0x800537e8
+        """What was hit, handed to actor_attack_player from 8 velocities
+        back, with 0x1388 and the caster's strength."""
+        back = [self.s32(s + o) - (self.s16(s + v) << 3)
+                for o, v in ((0x18, 0x38), (0x1C, 0x3A), (0x20, 0x3C))]
+        self.w.attack_hit(hit, self.u8(s), self.u8(s + 1), 0x1388,
+                          self.magic_strength(s), self.u8(s + 6), back)
+
+    def splash_one(self, point, size, bob, depth):  # 0x80056268
+        """One splash (kind 0x70) on the surface the last query found, when
+        the point is within `depth` under it."""
+        y, surf = self.s32(point + 4), self.s32(SURFACE)
+        if y < surf or surf + depth < y:
+            return 0
+        pt = struct.pack("<3i", self.s32(point), surf, self.s32(point + 8)) + bytes(4)
+        self.spawn(0xA, 0, SPLASH, pt, [bytes(8), size, bob])
+        return 1
 
     def _spawn_70(self, s, args):           # 0x800557dc, a splash
         self.w8(s + 8, 1)
@@ -823,7 +916,8 @@ class Machine:
                0x24: self._tick_23, 0x26: self._tick_26, TRAIL: self._tick_6f,
                0x17: self._tick_17, 0x19: self._tick_19, 0x1A: self._tick_1a,
                0x1B: self._tick_1b, 0x1C: self._tick_1c, 0x1E: self._tick_1e,
-               FIRE_BALL: self._tick_00, SPLASH: self._tick_70}.get(kind)
+               FIRE_BALL: self._tick_00, SPLASH: self._tick_70,
+               STONE: self._tick_06, WIND_CUTTER: self._tick_0d}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_tick's arm {kind:#x}")
         arm(s)
@@ -914,10 +1008,7 @@ class Machine:
                     self.w32(s + o, self.s32(s + o) - (int(h / 2) if h < 0 else h >> 1))
             else:
                 self.undo(s)
-            back = [self.s32(s + o) - (self.s16(s + v) << 3)
-                    for o, v in ((0x18, 0x38), (0x1C, 0x3A), (0x20, 0x3C))]
-            self.w.attack_hit(hit, self.u8(s), self.u8(s + 1), 0x1388,
-                              self.magic_strength(s), self.u8(s + 6), back)
+            self.attack(s, hit)
             self.w8(s + 7, 1)
         elif ph >= 3:
             self.w8(s, 0xFF)
@@ -1517,7 +1608,17 @@ class StandIn:
         self.hits.append([code, flags, strength, stat, pct, [v & 0xFFFFFFFF for v in back]])
 
 
-def fire_hit_check(out=sys.stdout, per=10, frames=60):
+def spell_hit_check(out=sys.stdout, per=6, frames=80):
+    """The fire ball, stone and wind cutter end to end -- fire_hit_check for
+    each, sent at the speed its arm of player_action gives it."""
+    good = True
+    for kind, speed, name in ((FIRE_BALL, 0x384, "the fire ball"), (STONE, 0x1F4, "stone"),
+                              (WIND_CUTTER, 0x2BC, "wind cutter")):
+        good = fire_hit_check(out, per, frames, kind, speed, name) and good
+    return good
+
+
+def fire_hit_check(out=sys.stdout, per=10, frames=60, kind=None, speed=0x384, name="the fire ball"):
     """The fire ball end to end in the game's own world: collide_query,
     actor_attack_player and actor_take_hit the game's, over every snapshot,
     the balls sent at its creatures; only rand's seed shared and the leaves
@@ -1554,9 +1655,12 @@ def fire_hit_check(out=sys.stdout, per=10, frames=60):
             t = struct.unpack_from("<3i", ram, (a + 0x2C) & MASK)
             ang = vec_to_angles(t[0] - start[0], t[1] - 0x300 - start[1], t[2] - start[2])
             d = movement.direction_from_angles(ang[0], ang[1])
-            vel = struct.pack("<4h", *[_s16_((c * 0x384) >> 12) for c in d], 0)
+            vel = struct.pack("<4h", *[_s16_((c * speed) >> 12) for c in d], 0)
             point = struct.pack("<4i", *start, 0)
-            sp = (0xA, 0x42, FIRE_BALL, point, [vel])
+            sp = (0xA, 0x42, FIRE_BALL if kind is None else kind, point, [vel])
+            struct.pack_into("<3H", ram, VIEW_ANGLES & MASK, ang[0] & 0xFFFF, ang[1] & 0xFFFF, 0)
+            if rng.randrange(4) == 0:                       # water just under the path
+                struct.pack_into("<i", ram, SURFACE & MASK, py - 0x640 - rng.randrange(0, 0x1F4))
             seed = rng.randrange(1 << 30)
             cpu = _game(bytes(ram))
             lcg = levelstate.Lcg(seed)
@@ -1617,7 +1721,7 @@ def fire_hit_check(out=sys.stdout, per=10, frames=60):
                 runs -= 1
     for line in first:
         print(line, file=out)
-    print(f"  the fire ball end to end, the game's own collide_query, actor_attack_player "
+    print(f"  {name} end to end, the game's own collide_query, actor_attack_player "
           f"and actor_take_hit: {good} of {runs} runs, {fgood} of {nframes} frames with all "
           f"128 slots, all 200 creatures and every call alike; {hurt} frames a creature "
           f"was struck, {killed} killed", file=out)
@@ -1850,5 +1954,5 @@ if __name__ == "__main__":
     good = magic_check() and good
     good = fire_check() and good
     good = fire_world_check() and good
-    good = fire_hit_check() and good
+    good = spell_hit_check() and good
     sys.exit(0 if good else 1)

@@ -6297,6 +6297,35 @@ all 200 creatures alike, 15 frames a creature struck, 11 killed
 (`tools/effects.py fire_hit_check`). In the port a fire ball now hurts,
 flinches and kills, practises the caster's fire and gives the experience.
 
+### Stone and wind cutter
+
+Two more of the attacking spells' effects, each held to the game's own code
+end to end the way the fire ball is -- `collide_query`, `actor_attack_player`
+and `actor_take_hit` the game's, the stones and cutters sent at the
+snapshots' creatures at their arms' speeds (`tools/effects.py
+spell_hit_check`):
+
+```
+stone (6)        model 0xf (model_table 0x37), +0xe 0x40, life 0x46, its
+                 sound 0x32. Flying (+0x44 0) it spins its pitch 0xc8 a
+                 frame, effect_move at 0x1f4 / 0x1f4 turning 0xfa; the first
+                 hit strikes (sub_800537e8), steps it back and drops it from
+                 vy -0x64, falling 0xd a frame (+0x44 1); the next hit
+                 strikes again and it lies (+0x44 2): +9 5, +0xc 0x32, its
+                 +0x12 from 0x400 up 0x100 a frame, gone at 0x1000. A splash
+                 a frame in the water (sub_80056268: one kind 0x70 within
+                 0x1f4 under the surface).                 63 of 63 runs
+wind cutter (0xd) effect_setup(0xd, 0x1400, 5), its sound 0x2b, life 0x2d,
+                 the view's yaw, scale 0x1800 / 0x1000 / 0x2000; flat
+                 through effect_move at 0xb4 and the height's top bit, its
+                 yaw turning 0x2bc a frame; each thing it passes it strikes
+                 once -- +0x44 latches, a clear frame unlatches -- and the
+                 tiles (any of the hit's low four bits) end it.  63 of 63
+```
+
+In the port both fly, hit and splash as the game's (`effects.gd`), 150 of
+150 runs of the machine in the self-test.
+
 ### The player's death
 
 `apply_damage` that leaves no HP calls `player_throw` (`0x80030a6c`) with the

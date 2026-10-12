@@ -822,9 +822,11 @@ each one is also in its function's marker, as `partial` and what differs:
 * **Casting is in; most of what it casts is not.** `player.gd` has the
   buttons, `cast_spell`, the pending action, `skill_practice`, the USE
   stretch, the timers and the attacking arms (the aim, the creature in
-  sight, the spawns), all held to the game's own code, and the fire ball's
-  effect. Not yet: the other attacking kinds' effects (an attacking spell
-  but the fire ball spends its MP and spawns nothing that stays);
+  sight, the spawns), all held to the game's own code, and the effects of
+  the fire ball, stone and wind cutter. Not yet: the other attacking kinds'
+  effects (lightning's 0x71 next -- long, it follows the ground with
+  collide_surface), each of which spends its MP and spawns nothing that
+  stays;
   meteor's collision test (the port answers no); creatures a model's vertex
   places (flag 0x400000) in `actor_spot_taken`; in the port's
   `actor_take_hit`, a part passing its hit to its actor and a follower's
