@@ -1410,6 +1410,26 @@ func _menus() -> bool:
 				KFMenu.ratings_page(o, lk, case["offense"], case["defense"])
 			"page":
 				KFMenu.menu_page(o, lk, int(case["page"]), int(case["n"]), int(case["sel"]))
+			"magic_list", "button_list":
+				var table := (case["table"] as String).hex_decode()
+				var sl := {}
+				var mode := 4
+				if str(case["screen"]) == "magic_list":
+					sl = KFMenu.magic_list(table, case["equip"])
+				else:
+					var inv := PackedByteArray()
+					inv.resize(150)
+					for key in case["inventory"]:
+						inv[int(key)] = int(case["inventory"][key])
+					sl = KFMenu.button_list(inv, table, case["equip"])
+					mode = 0x10
+				if int(sl["sel"]) != int(case["sel"]):
+					print("  %s: the selection %d, python's %d" % [case["screen"], int(sl["sel"]), int(case["sel"])])
+				if case["prompt"] == null:
+					KFMenu.panel(o, lk, sl, mode)
+				else:
+					KFMenu.panel(o, lk, sl, mode | 0x8000)
+					KFMenu.options(o, lk, int(case["prompt"]))
 			"equip_list":
 				var inv := PackedByteArray()
 				inv.resize(150)

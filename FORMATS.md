@@ -3186,7 +3186,7 @@ from `0x80080430` (31 rows of 24), a thing's from `0x8007f620`, `0xff` is
 nothing. The two-button legend; `ui_menu_chrome` moves the choice.
 
 A line chosen opens **`ui_equip_page`** (`0x8001cbb8`) -- or, for MAGIC and
-BUTTON, `0x8001d0c4` and `0x8001d3a0`, not read yet. It lists, with
+BUTTON, `0x8001d0c4` and `0x8001d3a0` (below). It lists, with
 `item_list`, what `inventory_a` holds of the line's range:
 
 | line | range | then |
@@ -3222,6 +3222,27 @@ weapon's record and installs FDAT.T entry `0x62 + id` as `model_table[0x20]`
 `held_item_tick` does nothing. **`equip_armour`** (`0x8002bb84`) writes its
 slot -- 0..6 are `0x801b25d4`, `d5`, `d7`, `d8`, `d6`, `d9`, `da` -- and
 both end in `player_recalc_stats`.
+
+**MAGIC** (`0x8001d0c4`) lists, with `sub_8001c6c0`, the spells **0 to
+`0x16`** whose record's `+0` is 1 -- the attacking ones only -- each name off
+`spell_names` and its MP (`+0x16`) beside it, then "TAKE OFF"; the list four
+rows from y `0x83` (`ui_menu_label`'s kind 2 with `+0x1d` 0x83, `+0x1f` 4),
+drawn by `ui_panel` mode 4, the selection on magic A, `ui_prompt(s, 5, 4)`,
+and `set_spell_a` with the choice. **BUTTON** (`0x8001d3a0`) lists the
+things `0x65..0x92` carried (`0x85` left out by zeroing its count while the
+list is made) with their counts, then **every** spell unlocked (`0..0x1e`)
+with its MP, then "TAKE OFF", in mode `0x10`; the choice goes to
+`set_spell_b` and `set_button_item`, each of which clears the other. So the
+healing and protecting spells, light among them, are cast from the button
+(`bind_map`) and never from magic A.
+
+`ui_panel`'s columns for the two modes: mode 4 a three-digit number from the
+`u32` array at `+0x30` behind the MP sign (`number_digits` mode 3) at x +
+0xdb, unless it is -1; mode `0x10` the count (`+0x2c`, "x N", two digits) at
+x + 0xe9 unless 0xff, then the cost 0xce further on unless -1 -- the place
+carried from one to the next. **Against the game's own `ui_panel`**, run by
+`tools/mipsrun.py` over menu1's RAM with random lists laid in: **80 of 80
+frames** primitive for primitive (`tools/ui.py panel_check`).
 
 `ui_menu_chrome`'s up and down (`0x800223a4`), which every list uses: the
 selection moves one and the bar with it, the rows shown moving only when the

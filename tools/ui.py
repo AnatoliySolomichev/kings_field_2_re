@@ -300,6 +300,22 @@ def panel(f, look, e, s, mode):
         draw_label(f, look, style, x, y, s["names"][k][:s["length"]])
         if m == 3:
             draw_label(f, look, style, x + 0x54, y, list(s["names2"][k][:0x18]) + [0xFF])
+        if m == 4 and s["costs"][k] != -1:
+            # .L8: the u32 column (+0x30), three digits behind the MP sign
+            x += 0xCE
+            draw_number(f, look, record(e, NUMBER_STYLE), x, y,
+                        number_digits(s["costs"][k], 3, 0, 3))
+        if m == 0x10:
+            # .L14: the thing's count, then a spell's cost, each moving the
+            # place on from where the last left it
+            if s["counts"][k] != 0xFF:
+                x += 0xDC
+                draw_number(f, look, record(e, NUMBER_STYLE), x, y,
+                            number_digits(s["counts"][k], 2, 0, 1))
+            if s["costs"][k] != -1:
+                x += 0xCE
+                draw_number(f, look, record(e, NUMBER_STYLE), x, y,
+                            number_digits(s["costs"][k], 3, 0, 3))
         if m not in NO_COUNTS and s["counts"][k] != 0xFF:
             draw_number(f, look, record(e, NUMBER_STYLE), s["x"] + 0xE9, y,
                         number_digits(s["counts"][k], 2, 0, 1))
@@ -595,6 +611,177 @@ def equip_list(e, inventory, line, st):
     return s
 
 
+SPELL_TABLE = 0x801B77EC
+NO_SPELL = 0xFF
+
+
+def spell_rows(e, table, first, last):
+    """sub_8001c6c0: (names, costs, ids) of the spells first..last whose +0
+    is 1 -- `table` the 96 records' bytes, a name off SPELL_NAMES and the
+    cost off +0x16."""
+    names, costs, ids = [], [], []
+    for k in range(first, last + 1):
+        rec = table[24 * k:24 * k + 24]
+        if rec[0] == 1:
+            names.append(list(e.bytes(SPELL_NAMES + 24 * k, 24)))
+            costs.append(struct.unpack_from("<H", rec, 0x16)[0])
+            ids.append(k)
+    return names, costs, ids
+
+
+def magic_list(e, table, st):
+    """sub_8001d0c4's list: the attacking spells 0..0x16 unlocked, their MP
+    beside them, and "TAKE OFF"; four rows from y 0x83, the selection on
+    magic A."""
+    names, costs, ids = spell_rows(e, table, 0, 0x16)
+    names.append(list(e.bytes(TAKE_OFF, 10)) + [0] * 14)
+    costs.append(-1)
+    ids.append(NO_SPELL)
+    lab = e.bytes(0x8007E67C + 2 * 28 + 4, 16)
+    out = {"tx": 0x1F, "ty": 0x20, "title": list(lab), "x": 0x1B, "y": 0x83,
+           "rows": 4, "length": 0x18, "count": len(ids), "names": names,
+           "costs": costs, "counts": [0xFF] * len(ids), "ids": ids}
+    sel = 0
+    for i in range(len(ids) - 1):
+        if ids[i] == st["spell_a"]:
+            sel = i
+            break
+    place(out, sel)
+    return out
+
+
+BUTTON_THINGS = (0x65, 0x92)
+
+
+def button_list(e, inventory, table, st):
+    """sub_8001d3a0's list: the things 0x65..0x92 carried (not 0x85), with
+    their counts, then every spell unlocked with its MP, then "TAKE OFF"; the
+    selection on the button's spell or, with none, its thing."""
+    inv = list(inventory)
+    inv[0x85] = 0
+    names, counts, items = item_list(e, inv, *BUTTON_THINGS)
+    spells = [NO_SPELL] * len(items)
+    costs = [-1] * len(items)
+    sn, sc, si = spell_rows(e, table, 0, 0x1E)
+    names += sn
+    counts += [0xFF] * len(si)
+    costs += sc
+    spells += si
+    items += [0xFF] * len(si)
+    names.append(list(e.bytes(TAKE_OFF, 10)) + [0] * 14)
+    counts.append(0xFF)
+    costs.append(-1)
+    spells.append(NO_SPELL)
+    items.append(0xFF)
+    lab = e.bytes(0x8007E67C + 2 * 28 + 4, 16)
+    out = {"tx": 0x1F, "ty": 0x20, "title": list(lab), "x": 0x1B, "y": 0x93,
+           "rows": 3, "length": 0x18, "count": len(items), "names": names,
+           "costs": costs, "counts": counts, "items": items, "spells": spells}
+    sel = 0
+    if not (st["spell_b"] == 0xFF and st["item_b"] == 0xFF):
+        for i in range(len(items)):
+            if (items[i] == st["item_b"]) if st["spell_b"] == 0xFF else (spells[i] == st["spell_b"]):
+                sel = i
+                break
+    place(out, sel)
+    return out
+
+
+def list_screen(e, look, s, mode, prompt=None):
+    """A chooser's frame: ui_panel(s, mode), or while ui_prompt(s, 5, mode)
+    asks, the list in mode | 0x8000 under "USE" and "CANCEL"."""
+    f = Frame()
+    if prompt is None:
+        panel(f, look, e, s, mode)
+    else:
+        panel(f, look, e, s, mode | 0x8000)
+        options(f, look, e, (45, 58, PROMPT_WORDS[0] + [0xFF]), (45, 84, CANCEL + [0xFF]),
+                prompt)
+    return f.order()
+
+
+def _lay_list(ram, s, at=0x801F0000):
+    """A list record as ui_menu_label leaves it and the page fills it, in
+    free RAM: the title, x, y, count, rows, first, selection, its row, the
+    length, and the names, counts and costs it points at."""
+    o = at & 0x1FFFFF
+    rec = bytearray(0x34)
+    struct.pack_into("<hh", rec, 0, s["tx"], s["ty"])
+    rec[4:4 + len(s["title"])] = bytes(s["title"])
+    rec[0x1C:0x24] = bytes([s["x"], s["y"], s["count"], s["rows"], s["first"],
+                            s["sel"], s["sel_row"], s["length"]])
+    names = o + 0x100
+    counts = names + 24 * len(s["names"]) + 8
+    costs = counts + len(s["counts"]) + 8
+    costs += (-costs) & 3
+    struct.pack_into("<IIII", rec, 0x24, 0x80000000 | names, 0, 0x80000000 | counts,
+                     0x80000000 | costs)
+    ram[o:o + len(rec)] = rec
+    for i, n in enumerate(s["names"]):
+        ram[names + 24 * i:names + 24 * i + 24] = bytes(n[:24]) + bytes(24 - len(n[:24]))
+    ram[counts:counts + len(s["counts"])] = bytes(s["counts"])
+    for i, c in enumerate(s["costs"]):
+        struct.pack_into("<i", ram, costs + 4 * i, c)
+    return at
+
+
+def panel_check(out=sys.stdout, n=40):
+    """The MAGIC and BUTTON lists, ui_panel modes 4 and 0x10 and their
+    prompts' 0x8000, against the game's own ui_panel run by tools/mipsrun.py
+    over menu1's RAM with each list laid in: the 2D primitives alike."""
+    import random
+    import mipsrun
+    path = os.path.join(ROOT, "out", "snap", "menu1.ram")
+    if not os.path.exists(path):
+        print("  no menu1 snapshot to run ui_panel over", file=out)
+        return True
+    e = exe()
+    base = bytearray(open(path, "rb").read())
+    rng = random.Random(0x7A4E1)
+    ok = runs = 0
+    first = None
+    t = SPELL_TABLE & 0x1FFFFF
+    for i in range(n):
+        table = bytearray(base[t:t + 24 * 96])
+        for k in range(31):
+            table[24 * k] = 1 if rng.randrange(3) else 0
+        inv = [0] * 150
+        for k in rng.sample(range(0x65, 0x93), rng.randrange(0, 12)):
+            inv[k] = rng.randrange(1, 99)
+        st = {"spell_a": rng.choice((0xFF, rng.randrange(0, 0x17))),
+              "spell_b": rng.choice((0xFF, 0xFF, rng.randrange(0, 0x1F))),
+              "item_b": rng.choice((0xFF, rng.randrange(0x65, 0x93)))}
+        for which in ("magic", "button"):
+            s = magic_list(e, table, st) if which == "magic" else button_list(e, inv, table, st)
+            if s["count"] > s["rows"] and rng.randrange(2):
+                place(s, rng.randrange(s["count"]))
+            mode = 4 if which == "magic" else 0x10
+            if rng.randrange(3) == 0:
+                mode |= 0x8000
+            ram = bytearray(base)
+            at = _lay_list(ram, s)
+            pulse = rng.randrange(0x60)
+            prims, _cpu = mipsrun.frame(ram, [(0x80025468, at, mode)], pulse)
+            look = Look(ram)
+            look.pulse = pulse
+            f = Frame()
+            panel(f, look, e, s, mode)
+            got = mipsrun.two_d(prims)
+            want = [(d, p) for d, p in f.order()]
+            runs += 1
+            same = got == want
+            ok += same
+            if not same and first is None:
+                k = next((j for j, (a, b) in enumerate(zip(got, want)) if a != b), min(len(got), len(want)))
+                first = (f"{which} mode {mode:#x}: {len(got)} primitives, the model {len(want)}; "
+                         f"at {k}: game {got[k] if k < len(got) else None} model {want[k] if k < len(want) else None}")
+    print(f"  the MAGIC and BUTTON lists, ui_panel's modes 4 and 0x10 as the game's own "
+          f"draws them over menu1: {ok} of {runs} frames primitive for primitive", file=out)
+    if first:
+        print("  first difference: " + first, file=out)
+    return ok == runs
+
+
 def place(s, sel):
     """sub_80027728: the index held to the list, the first row shown and the
     bar's row."""
@@ -768,6 +955,29 @@ def export_cases(e):
                       "inventory": EQUIP_INVENTORY, "prompt": prompt, "pulse": 0x31,
                       "sel": s["sel"],
                       "prims": [[d, p] for d, p in equip_list_screen(e, look, s, prompt)]})
+    # the MAGIC and BUTTON lines' lists (whose drawing the game's own ui_panel
+    # holds, panel_check), from the disc's spell table with some unlocked
+    import spells as _spells
+    table = bytearray(b"".join(_spells.rows()))
+    for k in (0, 6, 0xD, 0x13, 0x17, 0x1A, 0x1D, 0x1E):
+        table[24 * k] = 1
+    binv = [0] * 150
+    for k, v in ((0x68, 3), (0x6B, 1), (0x85, 1), (0x92, 2)):
+        binv[k] = v
+    for st in ({"spell_a": 0xD, "spell_b": 0x1D, "item_b": 0xFF},
+               {"spell_a": 0xFF, "spell_b": 0xFF, "item_b": 0x6B},
+               {"spell_a": 0x13, "spell_b": 0xFF, "item_b": 0xFF}):
+        for prompt in (None, 0):
+            look.pulse = 0x2C
+            ms = magic_list(e, table, st)
+            cases.append({"screen": "magic_list", "table": table.hex(), "equip": st,
+                          "prompt": prompt, "sel": ms["sel"], "pulse": 0x2C,
+                          "prims": [[d, p] for d, p in list_screen(e, look, ms, 4, prompt)]})
+            bs = button_list(e, binv, table, st)
+            cases.append({"screen": "button_list", "table": table.hex(), "equip": st,
+                          "inventory": {str(k): v for k, v in enumerate(binv) if v},
+                          "prompt": prompt, "sel": bs["sel"], "pulse": 0x2C,
+                          "prims": [[d, p] for d, p in list_screen(e, look, bs, 0x10, prompt)]})
     # ui_ratings_page as the game's own code draws it, run over menu1's RAM by
     # tools/mipsrun.py -- when that snapshot is here
     menu1 = os.path.join(ROOT, "out", "snap", "menu1.ram")
@@ -946,6 +1156,7 @@ def check_menus(out=sys.stdout, verbose=False, names=("menu1", "equip1", "equip2
 
 def check(out=sys.stdout, verbose=False):
     menus = check_menus(out, verbose)
+    menus = panel_check(out) and menus
     e = exe()
     ok = bad = 0
     for name in ("inv1", "inv2"):

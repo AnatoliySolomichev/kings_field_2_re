@@ -360,7 +360,7 @@ static func legend(o: Dictionary, lk: Dictionary, two: bool) -> void:
 # and the legend. Mode 3 puts a second name 0x54 to the right of each row's
 # (the equipment screen's), modes 1 and 5 the count "x N" at x + 0xe9; the
 # legend is two buttons for modes 3, 8, 9 and 12 and with flag 0x8000.
-# @orig game:0x80025468 ui_panel  status:partial -- modes 1, 3 and 5 and the 0x8000 flag; tools/ui.py, 116 of 116 primitives of inv1 and inv2; the number columns of modes 2, 4, 8, 9, 0xa..0x10 not here
+# @orig game:0x80025468 ui_panel  status:partial -- modes 1, 3, 4, 5 and 0x10 and the 0x8000 flag; tools/ui.py, 116 of 116 primitives of inv1 and inv2, and modes 4 and 0x10 80 of 80 frames of the game's own (panel_check); the number columns of modes 2, 8, 9, 0xa..0xf not here
 static func panel(o: Dictionary, lk: Dictionary, s: Dictionary, mode: int) -> void:
 	var style: Array = rec(LABEL_STYLE)
 	var m := mode & 0xFFF
@@ -377,6 +377,22 @@ static func panel(o: Dictionary, lk: Dictionary, s: Dictionary, mode: int) -> vo
 		if m == 3:
 			draw_label(o, lk, style, x + 0x54, y,
 				(s["names2"][k] as Array).slice(0, 0x18) + [0xFF])
+		if m == 4 and int(s["costs"][k]) != -1:
+			# .L8: the u32 column (+0x30), three digits behind the MP sign
+			x += 0xCE
+			draw_number(o, lk, rec(NUMBER_STYLE), x, y,
+				number_digits(int(s["costs"][k]), 3, 0, 3))
+		if m == 0x10:
+			# .L14: the thing's count, then a spell's cost, each moving the
+			# place on from where the last left it
+			if int(s["counts"][k]) != 0xFF:
+				x += 0xDC
+				draw_number(o, lk, rec(NUMBER_STYLE), x, y,
+					number_digits(int(s["counts"][k]), 2, 0, 1))
+			if int(s["costs"][k]) != -1:
+				x += 0xCE
+				draw_number(o, lk, rec(NUMBER_STYLE), x, y,
+					number_digits(int(s["costs"][k]), 3, 0, 3))
 		if not (m in NO_COUNTS) and int(s["counts"][k]) != 0xFF:
 			draw_number(o, lk, rec(NUMBER_STYLE), int(s["x"]) + 0xE9, y,
 				number_digits(int(s["counts"][k]), 2, 0, 1))
@@ -547,6 +563,91 @@ static func equip_list(inv: PackedByteArray, line: int, st: Dictionary) -> Dicti
 		"counts": counts, "ids": ids, "sel": 0, "first": 0, "sel_row": 0, "line": line}
 	place(s, sel)
 	return s
+
+
+# sub_8001c6c0: the names, MP costs and ids of the spells first..last whose
+# record's +0 is 1 -- `table` the 96 records' bytes.
+# @orig game:0x8001c6c0 sub_8001c6c0  status:verified -- through panel_check's lists, 80 of 80 frames of the game's own ui_panel
+static func spell_rows(table: PackedByteArray, first: int, last: int) -> Dictionary:
+	var names := []
+	var costs := []
+	var ids := []
+	for k in range(first, last + 1):
+		if int(table[24 * k]) == 1:
+			names.append(data["equip"]["spells"][k])
+			costs.append(int(table[24 * k + 0x16]) | (int(table[24 * k + 0x17]) << 8))
+			ids.append(k)
+	return {"names": names, "costs": costs, "ids": ids}
+
+
+# The MAGIC line's list (0x8001d0c4): the attacking spells 0..0x16 unlocked,
+# their MP beside them in mode 4, and "TAKE OFF"; four rows from y 0x83, the
+# selection on magic A.
+# @orig game:0x8001d0c4 sub_8001d0c4  status:partial -- the list, its selection, the prompt and set_spell_a; not the guide (0x80024f88) or set_spell_a's sound bank
+static func magic_list(table: PackedByteArray, st: Dictionary) -> Dictionary:
+	var r := spell_rows(table, 0, 0x16)
+	var names: Array = r["names"]
+	var costs: Array = r["costs"]
+	var ids: Array = r["ids"]
+	names.append((data["equip"]["take_off"] as Array) + [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+	costs.append(-1)
+	ids.append(0xFF)
+	var out := {"tx": 0x1F, "ty": 0x20, "title": data["labels"][0][2][2], "x": 0x1B,
+		"y": 0x83, "rows": 4, "length": 0x18, "count": ids.size(), "names": names,
+		"costs": costs, "counts": [], "ids": ids, "sel": 0, "first": 0, "sel_row": 0}
+	var sel := 0
+	for i in ids.size() - 1:
+		if int(ids[i]) == int(st["spell_a"]):
+			sel = i
+			break
+	place(out, sel)
+	return out
+
+
+# The BUTTON line's list (0x8001d3a0): the things 0x65..0x92 carried, not
+# 0x85, with their counts, then every spell unlocked with its MP, mode 0x10,
+# then "TAKE OFF"; the selection on the button's spell or, with none, its
+# thing.
+# @orig game:0x8001d3a0 sub_8001d3a0  status:partial -- the list, its selection, the prompt, set_spell_b and set_button_item; not the thing's model (0x80025be8), the guide, or the sound banks
+static func button_list(inv: PackedByteArray, table: PackedByteArray, st: Dictionary) -> Dictionary:
+	var counted := inv.duplicate()
+	counted[0x85] = 0
+	var l := item_list(counted, 0x65, 0x92)
+	var names: Array = l["names"]
+	var counts: Array = l["counts"]
+	counts.pop_back()
+	var items: Array = l["ids"]
+	var spells := []
+	var costs := []
+	for i in items.size():
+		spells.append(0xFF)
+		costs.append(-1)
+	var r := spell_rows(table, 0, 0x1E)
+	for i in (r["ids"] as Array).size():
+		names.append(r["names"][i])
+		counts.append(0xFF)
+		costs.append(int(r["costs"][i]))
+		spells.append(int(r["ids"][i]))
+		items.append(0xFF)
+	names.append((data["equip"]["take_off"] as Array) + [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+	counts.append(0xFF)
+	costs.append(-1)
+	spells.append(0xFF)
+	items.append(0xFF)
+	var out := {"tx": 0x1F, "ty": 0x20, "title": data["labels"][0][2][2], "x": 0x1B,
+		"y": 0x93, "rows": 3, "length": 0x18, "count": items.size(), "names": names,
+		"counts": counts, "costs": costs, "items": items, "spells": spells,
+		"sel": 0, "first": 0, "sel_row": 0}
+	var sel := 0
+	if not (int(st["spell_b"]) == 0xFF and int(st["item_b"]) == 0xFF):
+		for i in items.size():
+			var hit: bool = (int(items[i]) == int(st["item_b"])) if int(st["spell_b"]) == 0xFF \
+				else (int(spells[i]) == int(st["spell_b"]))
+			if hit:
+				sel = i
+				break
+	place(out, sel)
+	return out
 
 
 # The "use item" screen's 2D part, as tools/ui.py draws it.
@@ -891,6 +992,12 @@ func _step(press: int) -> void:
 				if EQUIP_RANGES.has(equip_sel):
 					chooser = equip_list(player.inventory.a, equip_sel, _equip_state())
 					state = "equip_list"
+				elif equip_sel == 1:
+					chooser = magic_list(_spell_table(), _equip_state())
+					state = "magic_list"
+				elif equip_sel == 9:
+					chooser = button_list(player.inventory.a, _spell_table(), _equip_state())
+					state = "button_list"
 				else:
 					KFInfo.note("menu: the equipment's line %d is not ported yet" % equip_sel)
 			elif press & cancel:
@@ -903,6 +1010,30 @@ func _step(press: int) -> void:
 				state = "equip_prompt"
 			elif press & cancel:
 				state = "equip"
+		"magic_list", "button_list":
+			if press & (UP | DOWN):
+				chrome_move(chooser, press)
+			elif press & confirm:
+				prompt_sel = 0
+				state = "magic_prompt" if state == "magic_list" else "button_prompt"
+			elif press & cancel:
+				state = "equip"
+		"magic_prompt", "button_prompt":
+			# ui_prompt(s, 5, 4 or 0x10, ...): "USE" puts the choice in its slot and
+			# closes the page; "CANCEL" goes back to the list
+			var back := "magic_list" if state == "magic_prompt" else "button_list"
+			if press & (UP | DOWN):
+				prompt_sel = 1 - prompt_sel
+				moved = true
+			elif press & confirm and prompt_sel == 0:
+				var k := int(chooser["sel"])
+				if state == "magic_prompt":
+					player.spell_a = int(chooser["ids"][k])            # set_spell_a
+				else:
+					_set_button(int(chooser["spells"][k]), int(chooser["items"][k]))
+				state = "equip"
+			elif press & (confirm | cancel):
+				state = back
 		"equip_prompt":
 			# ui_prompt(s, 5, 5, id): "USE" or "CANCEL"; either way back to the list
 			# unless it was used
@@ -979,6 +1110,35 @@ func _use(id: int) -> void:
 		KFMessages.announce(NOTHING_HAPPENS)
 
 
+# The BUTTON page's end (0x8001d734): set_spell_b with the row's spell, then
+# set_button_item with its thing -- either clears the other when it puts
+# one, so a spell's row leaves no thing and a thing's no spell.
+# @orig game:0x8002ba38 set_spell_b  status:partial -- the slot and the thing cleared; not the spell's sound bank
+# @orig game:0x8002bb5c set_button_item  status:transcribed -- the slot, and the spell cleared with one
+func _set_button(spell: int, item: int) -> void:
+	player.spell_b = spell
+	if spell != 0xFF:
+		player.item_b = 0xFF
+	player.item_b = item
+	if item != 0xFF:
+		player.spell_b = 0xFF
+
+
+# @port helper -- spell_table's 96 records as the lists read them: +0 the unlocked flag off the character
+func _spell_table() -> PackedByteArray:
+	var t := PackedByteArray()
+	t.resize(96 * 24)
+	var fx := get_node_or_null("../../Effects")
+	var recs: Dictionary = fx.get("records") if fx and fx.get("records") != null else {}
+	var unlocked: Array = player.character.get("spells", [])
+	for k in 96:
+		var r: PackedByteArray = recs.get(k, PackedByteArray())
+		for i in mini(r.size(), 24):
+			t[24 * k + i] = r[i]
+		t[24 * k] = int(unlocked[k]) if k < unlocked.size() else 0
+	return t
+
+
 # @port helper -- the slots equip_names reads, out of the player
 func _equip_state() -> Dictionary:
 	return {"weapon": player.weapon_id, "spell_a": player.spell_a,
@@ -1027,6 +1187,16 @@ func _build() -> void:
 			panel(ot, look, chooser, 5)
 		"equip_prompt":
 			panel(ot, look, chooser, 5 | 0x8000)
+			options(ot, look, prompt_sel)
+		"magic_list":
+			panel(ot, look, chooser, 4)
+		"magic_prompt":
+			panel(ot, look, chooser, 4 | 0x8000)
+			options(ot, look, prompt_sel)
+		"button_list":
+			panel(ot, look, chooser, 0x10)
+		"button_prompt":
+			panel(ot, look, chooser, 0x10 | 0x8000)
 			options(ot, look, prompt_sel)
 
 

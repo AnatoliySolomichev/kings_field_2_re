@@ -831,9 +831,9 @@ each one is also in its function's marker, as `partial` and what differs:
   sparkles, in front of the eye -- the lighting pulses' background colour,
   the weapons' magic (`0x36`..`0x4c`, `spell_begin`,
   `held_item_tick`'s `0x801b25b2`), and the button's thing (`use_item` from
-  `0x8002ff28`). The MAGIC and BUTTON lines of the equipment screen
-  (`0x8001d0c4`, `0x8001d3a0`) are unread, so magic A and the button come
-  only from a save.
+  `0x8002ff28`). The equipment screen's MAGIC and BUTTON lines are in
+  (light goes on the button: magic A lists the attacking spells alone); not
+  their guide page or the spells' sound banks.
 
 **Found later, and fixed: shape 255 is the void, not nothing.** Every
 empty cell carries it, and the tools and the port answered nothing there;

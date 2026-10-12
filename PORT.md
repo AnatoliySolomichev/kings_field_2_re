@@ -43,16 +43,16 @@ and `@port` says which kind of the port's own code a function is:
 
 ## How much is covered
 
-576 functions in 39 files: **315 reproduce
-code of the game** and 261 are the port's own
-(79 check, 23 data, 55 engine, 104 helper). 364 markers, 740 addresses cited in
+581 functions in 39 files: **319 reproduce
+code of the game** and 262 are the port's own
+(79 check, 23 data, 55 engine, 105 helper). 369 markers, 745 addresses cited in
 comments, every one of them with its executable.
 
 | executable | routines | with a marker | stretches marked inside them | instructions | covered |
 | --- | --- | --- | --- | --- | --- |
 | boot | 10 | 1 | 1 | 115 | 50 (43%) |
 | open | 293 | 9 | 3 | 20002 | 1607 (8%) |
-| game | 820 | 196 | 117 | 93512 | 43724 (46%) |
+| game | 820 | 201 | 117 | 93512 | 44297 (47%) |
 | end | 167 | 0 | 0 | 9966 | 0 (0%) |
 
 Those percentages are of *all* the code in the image, which includes
@@ -592,39 +592,45 @@ The whole file is the port's own: **check** — labels for comparing the two win
 | [`small_text`](godot/menu.gd#L330) | `game:0x80026570` ui_small_text | verified |
 | [`legend`](godot/menu.gd#L343) | `game:0x80025a2c` ui_panel+0x5c4 | verified |
 | [`panel`](godot/menu.gd#L364) | `game:0x80025468` ui_panel | partial |
-| [`item_list`](godot/menu.gd#L398) | `game:0x8001aea4` item_list | transcribed |
-| [`use_item_list`](godot/menu.gd#L415) | `game:0x80027688` ui_menu_label | verified |
+| [`item_list`](godot/menu.gd#L414) | `game:0x8001aea4` item_list | transcribed |
+| [`use_item_list`](godot/menu.gd#L431) | `game:0x80027688` ui_menu_label | verified |
 |  | `game:0x80027728` list_place | transcribed |
-| [`place`](godot/menu.gd#L426) | — port's own, *helper*: sub_80027728's arithmetic: the selection, the first row shown, the bar's row | |
-| [`chrome_move`](godot/menu.gd#L447) | `game:0x800223a4` ui_menu_chrome+0xa8 | transcribed |
-| [`equip_names`](godot/menu.gd#L488) | `game:0x8001c9c0` equip_names | transcribed |
-| [`equip_ids`](godot/menu.gd#L503) | — port's own, *helper*: equip_names' ten bytes, out of the player's slots | |
-| [`equipment_list`](godot/menu.gd#L513) | `game:0x8001c7a8` menu_equipment | partial |
-| [`equip_list`](godot/menu.gd#L524) | `game:0x8001cbb8` ui_equip_page | partial |
-| [`use_item_screen`](godot/menu.gd#L554) | `game:0x8001aa84` menu_use_item | partial |
-| [`options`](godot/menu.gd#L562) | `game:0x80025b24` sub_80025b24 | transcribed |
-| [`menu_page`](godot/menu.gd#L582) | `game:0x800252f4` sub_800252f4 | transcribed |
-| [`status_page`](godot/menu.gd#L609) | `game:0x800227ec` ui_status_page | verified |
-| [`ratings_page`](godot/menu.gd#L695) | `game:0x80023300` ui_ratings_page | verified |
-| [`_put`](godot/menu.gd#L726) | — port's own, *helper*: bytes copied over the front of a record on the stack, as lwl/lwr and sb do | |
-| [`order`](godot/menu.gd#L732) | — port's own, *helper*: the ordering table in the order the GPU draws it, each sprite with its page | |
-| [`_process`](godot/menu.gd#L755) | — port's own, *engine*: the menu button opens it; its own frames at 15 a second while it is up | |
-| [`pulse_step`](godot/menu.gd#L778) | `game:0x80027090` frame_begin+0xac | transcribed |
-| [`_may_open`](godot/menu.gd#L788) | `game:0x80030640` sub_800305d8+0x68 | transcribed |
-| [`_open`](godot/menu.gd#L795) | `game:0x8001a774` pause_menu | partial |
-| [`_close`](godot/menu.gd#L804) | — port's own, *helper*: the menu closed, the world going again | |
-| [`_step`](godot/menu.gd#L818) | `game:0x800221e8` sub_800221e8 | transcribed |
+| [`place`](godot/menu.gd#L442) | — port's own, *helper*: sub_80027728's arithmetic: the selection, the first row shown, the bar's row | |
+| [`chrome_move`](godot/menu.gd#L463) | `game:0x800223a4` ui_menu_chrome+0xa8 | transcribed |
+| [`equip_names`](godot/menu.gd#L504) | `game:0x8001c9c0` equip_names | transcribed |
+| [`equip_ids`](godot/menu.gd#L519) | — port's own, *helper*: equip_names' ten bytes, out of the player's slots | |
+| [`equipment_list`](godot/menu.gd#L529) | `game:0x8001c7a8` menu_equipment | partial |
+| [`equip_list`](godot/menu.gd#L540) | `game:0x8001cbb8` ui_equip_page | partial |
+| [`spell_rows`](godot/menu.gd#L571) | `game:0x8001c6c0` sub_8001c6c0 | verified |
+| [`magic_list`](godot/menu.gd#L587) | `game:0x8001d0c4` sub_8001d0c4 | partial |
+| [`button_list`](godot/menu.gd#L612) | `game:0x8001d3a0` sub_8001d3a0 | partial |
+| [`use_item_screen`](godot/menu.gd#L655) | `game:0x8001aa84` menu_use_item | partial |
+| [`options`](godot/menu.gd#L663) | `game:0x80025b24` sub_80025b24 | transcribed |
+| [`menu_page`](godot/menu.gd#L683) | `game:0x800252f4` sub_800252f4 | transcribed |
+| [`status_page`](godot/menu.gd#L710) | `game:0x800227ec` ui_status_page | verified |
+| [`ratings_page`](godot/menu.gd#L796) | `game:0x80023300` ui_ratings_page | verified |
+| [`_put`](godot/menu.gd#L827) | — port's own, *helper*: bytes copied over the front of a record on the stack, as lwl/lwr and sb do | |
+| [`order`](godot/menu.gd#L833) | — port's own, *helper*: the ordering table in the order the GPU draws it, each sprite with its page | |
+| [`_process`](godot/menu.gd#L856) | — port's own, *engine*: the menu button opens it; its own frames at 15 a second while it is up | |
+| [`pulse_step`](godot/menu.gd#L879) | `game:0x80027090` frame_begin+0xac | transcribed |
+| [`_may_open`](godot/menu.gd#L889) | `game:0x80030640` sub_800305d8+0x68 | transcribed |
+| [`_open`](godot/menu.gd#L896) | `game:0x8001a774` pause_menu | partial |
+| [`_close`](godot/menu.gd#L905) | — port's own, *helper*: the menu closed, the world going again | |
+| [`_step`](godot/menu.gd#L919) | `game:0x800221e8` sub_800221e8 | transcribed |
 |  | `game:0x800222fc` ui_menu_chrome | partial |
 |  | `game:0x80024c70` ui_prompt | partial |
 |  | `game:0x8001d784` menu_records | partial |
 |  | `game:0x8001d8a4` menu_ratings | transcribed |
-| [`_use`](godot/menu.gd#L924) | `game:0x8001b254` item_consume | transcribed |
+| [`_use`](godot/menu.gd#L1055) | `game:0x8001b254` item_consume | transcribed |
 |  | `game:0x8005d748` use_item+0xb68 | partial |
-| [`_equip_state`](godot/menu.gd#L983) | — port's own, *helper*: the slots equip_names reads, out of the player | |
-| [`_equip`](godot/menu.gd#L991) | `game:0x8001cfa0` ui_equip_page+0x3e8 | transcribed |
-| [`_status`](godot/menu.gd#L999) | — port's own, *helper*: what ui_status_page reads, out of the player: the paralysis, the curse, the slowing and the dark are not in the port | |
-| [`_build`](godot/menu.gd#L1009) | — port's own, *engine*: the screen up now, as primitives | |
-| [`_draw`](godot/menu.gd#L1037) | — port's own, *engine*: the GPU's drawing of SPRT and POLY_FT4, on a 320 x 240 screen centred in the window | |
+| [`_set_button`](godot/menu.gd#L1118) | `game:0x8002ba38` set_spell_b | partial |
+|  | `game:0x8002bb5c` set_button_item | transcribed |
+| [`_spell_table`](godot/menu.gd#L1128) | — port's own, *helper*: spell_table's 96 records as the lists read them: +0 the unlocked flag off the character | |
+| [`_equip_state`](godot/menu.gd#L1143) | — port's own, *helper*: the slots equip_names reads, out of the player | |
+| [`_equip`](godot/menu.gd#L1151) | `game:0x8001cfa0` ui_equip_page+0x3e8 | transcribed |
+| [`_status`](godot/menu.gd#L1159) | — port's own, *helper*: what ui_status_page reads, out of the player: the paralysis, the curse, the slowing and the dark are not in the port | |
+| [`_build`](godot/menu.gd#L1169) | — port's own, *engine*: the screen up now, as primitives | |
+| [`_draw`](godot/menu.gd#L1207) | — port's own, *engine*: the GPU's drawing of SPRT and POLY_FT4, on a 320 x 240 screen centred in the window | |
 
 ### [`godot/messages.gd`](godot/messages.gd)
 
@@ -821,15 +827,15 @@ The whole file is the port's own: **check** — the self-test; it runs the port'
 | [`_chests`](godot/selftest.gd#L1194) | — port's own, *check* | |
 | [`_conversations`](godot/selftest.gd#L1330) | — port's own, *check* | |
 | [`_menus`](godot/selftest.gd#L1379) | — port's own, *check* | |
-| [`_norm`](godot/selftest.gd#L1442) | — port's own, *check*: a primitive list with every number an int and every pair an array, for comparing | |
-| [`_inscriptions`](godot/selftest.gd#L1462) | — port's own, *check* | |
-| [`_damage`](godot/selftest.gd#L1507) | — port's own, *check* | |
-| [`_scripts`](godot/selftest.gd#L1550) | — port's own, *check* | |
-| [`_equip`](godot/selftest.gd#L1619) | — port's own, *check* | |
-| [`_objects`](godot/selftest.gd#L1652) | — port's own, *check* | |
-| [`_directions`](godot/selftest.gd#L1687) | — port's own, *check* | |
-| [`_angles`](godot/selftest.gd#L1718) | — port's own, *check* | |
-| [`_levels`](godot/selftest.gd#L1745) | — port's own, *check* | |
+| [`_norm`](godot/selftest.gd#L1462) | — port's own, *check*: a primitive list with every number an int and every pair an array, for comparing | |
+| [`_inscriptions`](godot/selftest.gd#L1482) | — port's own, *check* | |
+| [`_damage`](godot/selftest.gd#L1527) | — port's own, *check* | |
+| [`_scripts`](godot/selftest.gd#L1570) | — port's own, *check* | |
+| [`_equip`](godot/selftest.gd#L1639) | — port's own, *check* | |
+| [`_objects`](godot/selftest.gd#L1672) | — port's own, *check* | |
+| [`_directions`](godot/selftest.gd#L1707) | — port's own, *check* | |
+| [`_angles`](godot/selftest.gd#L1738) | — port's own, *check* | |
+| [`_levels`](godot/selftest.gd#L1765) | — port's own, *check* | |
 
 ### [`godot/sky.gd`](godot/sky.gd)
 
@@ -925,29 +931,32 @@ The whole file is the port's own: **check** — a model browser for naming thing
 | `game:0x80017aa4` world_shift | [`godot/crossing.gd:93`](godot/crossing.gd#L93) | `func shifted` | transcribed |
 | `game:0x80017c78` object_trigger | [`godot/crossing.gd:76`](godot/crossing.gd#L76) | `func fire` | partial |
 | `game:0x80019614` frame_limit | [`godot/player.gd:552`](godot/player.gd#L552) | `func _process` | transcribed |
-| `game:0x8001a774` pause_menu | [`godot/menu.gd:794`](godot/menu.gd#L794) | `func _open` | partial |
-| `game:0x8001aa84` menu_use_item | [`godot/menu.gd:553`](godot/menu.gd#L553) | `func use_item_screen` | partial |
-| `game:0x8001aea4` item_list | [`godot/menu.gd:397`](godot/menu.gd#L397) | `func item_list` | transcribed |
-| `game:0x8001b254` item_consume | [`godot/menu.gd:922`](godot/menu.gd#L922) | `func _use` | transcribed |
-| `game:0x8001c7a8` menu_equipment | [`godot/menu.gd:512`](godot/menu.gd#L512) | `func equipment_list` | partial |
-| `game:0x8001c9c0` equip_names | [`godot/menu.gd:487`](godot/menu.gd#L487) | `func equip_names` | transcribed |
-| `game:0x8001cbb8` ui_equip_page | [`godot/menu.gd:523`](godot/menu.gd#L523) | `func equip_list` | partial |
-| `game:0x8001cfa0` ui_equip_page+0x3e8 | [`godot/menu.gd:990`](godot/menu.gd#L990) | `func _equip` | transcribed |
-| `game:0x8001d784` menu_records | [`godot/menu.gd:816`](godot/menu.gd#L816) | `func _step` | partial |
-| `game:0x8001d8a4` menu_ratings | [`godot/menu.gd:817`](godot/menu.gd#L817) | `func _step` | transcribed |
+| `game:0x8001a774` pause_menu | [`godot/menu.gd:895`](godot/menu.gd#L895) | `func _open` | partial |
+| `game:0x8001aa84` menu_use_item | [`godot/menu.gd:654`](godot/menu.gd#L654) | `func use_item_screen` | partial |
+| `game:0x8001aea4` item_list | [`godot/menu.gd:413`](godot/menu.gd#L413) | `func item_list` | transcribed |
+| `game:0x8001b254` item_consume | [`godot/menu.gd:1053`](godot/menu.gd#L1053) | `func _use` | transcribed |
+| `game:0x8001c6c0` sub_8001c6c0 | [`godot/menu.gd:570`](godot/menu.gd#L570) | `func spell_rows` | verified |
+| `game:0x8001c7a8` menu_equipment | [`godot/menu.gd:528`](godot/menu.gd#L528) | `func equipment_list` | partial |
+| `game:0x8001c9c0` equip_names | [`godot/menu.gd:503`](godot/menu.gd#L503) | `func equip_names` | transcribed |
+| `game:0x8001cbb8` ui_equip_page | [`godot/menu.gd:539`](godot/menu.gd#L539) | `func equip_list` | partial |
+| `game:0x8001cfa0` ui_equip_page+0x3e8 | [`godot/menu.gd:1150`](godot/menu.gd#L1150) | `func _equip` | transcribed |
+| `game:0x8001d0c4` sub_8001d0c4 | [`godot/menu.gd:586`](godot/menu.gd#L586) | `func magic_list` | partial |
+| `game:0x8001d3a0` sub_8001d3a0 | [`godot/menu.gd:611`](godot/menu.gd#L611) | `func button_list` | partial |
+| `game:0x8001d784` menu_records | [`godot/menu.gd:917`](godot/menu.gd#L917) | `func _step` | partial |
+| `game:0x8001d8a4` menu_ratings | [`godot/menu.gd:918`](godot/menu.gd#L918) | `func _step` | transcribed |
 | `game:0x8001f4c0` apply_control_scheme | [`godot/pad.gd:129`](godot/pad.gd#L129) | `func apply` | transcribed |
 | `game:0x8001fa60` read_overlay_arg2 | [`godot/loadscreen.gd:30`](godot/loadscreen.gd#L30) | `func _ready` | partial |
 | `game:0x8001fc5c` sub_8001fc5c | [`godot/loadscreen.gd:53`](godot/loadscreen.gd#L53) | `func _step` | partial |
-| `game:0x800221e8` sub_800221e8 | [`godot/menu.gd:813`](godot/menu.gd#L813) | `func _step` | transcribed |
-| `game:0x800222fc` ui_menu_chrome | [`godot/menu.gd:814`](godot/menu.gd#L814) | `func _step` | partial |
-| `game:0x800223a4` ui_menu_chrome+0xa8 | [`godot/menu.gd:446`](godot/menu.gd#L446) | `func chrome_move` | transcribed |
-| `game:0x800227ec` ui_status_page | [`godot/menu.gd:608`](godot/menu.gd#L608) | `func status_page` | verified |
-| `game:0x80023300` ui_ratings_page | [`godot/menu.gd:694`](godot/menu.gd#L694) | `func ratings_page` | verified |
-| `game:0x80024c70` ui_prompt | [`godot/menu.gd:815`](godot/menu.gd#L815) | `func _step` | partial |
-| `game:0x800252f4` sub_800252f4 | [`godot/menu.gd:581`](godot/menu.gd#L581) | `func menu_page` | transcribed |
+| `game:0x800221e8` sub_800221e8 | [`godot/menu.gd:914`](godot/menu.gd#L914) | `func _step` | transcribed |
+| `game:0x800222fc` ui_menu_chrome | [`godot/menu.gd:915`](godot/menu.gd#L915) | `func _step` | partial |
+| `game:0x800223a4` ui_menu_chrome+0xa8 | [`godot/menu.gd:462`](godot/menu.gd#L462) | `func chrome_move` | transcribed |
+| `game:0x800227ec` ui_status_page | [`godot/menu.gd:709`](godot/menu.gd#L709) | `func status_page` | verified |
+| `game:0x80023300` ui_ratings_page | [`godot/menu.gd:795`](godot/menu.gd#L795) | `func ratings_page` | verified |
+| `game:0x80024c70` ui_prompt | [`godot/menu.gd:916`](godot/menu.gd#L916) | `func _step` | partial |
+| `game:0x800252f4` sub_800252f4 | [`godot/menu.gd:682`](godot/menu.gd#L682) | `func menu_page` | transcribed |
 | `game:0x80025468` ui_panel | [`godot/menu.gd:363`](godot/menu.gd#L363) | `func panel` | partial |
 | `game:0x80025a2c` ui_panel+0x5c4 | [`godot/menu.gd:342`](godot/menu.gd#L342) | `func legend` | verified |
-| `game:0x80025b24` sub_80025b24 | [`godot/menu.gd:561`](godot/menu.gd#L561) | `func options` | transcribed |
+| `game:0x80025b24` sub_80025b24 | [`godot/menu.gd:662`](godot/menu.gd#L662) | `func options` | transcribed |
 | `game:0x80025f38` ui_label_plate | [`godot/menu.gd:229`](godot/menu.gd#L229) | `func label_plate` | verified |
 | `game:0x80026020` sub_80026020 | [`godot/menu.gd:244`](godot/menu.gd#L244) | `func lit_plate` | transcribed |
 | `game:0x80026158` sub_80026158 | [`godot/menu.gd:251`](godot/menu.gd#L251) | `func dim_label` | transcribed |
@@ -956,11 +965,11 @@ The whole file is the port's own: **check** — a model browser for naming thing
 | `game:0x80026570` ui_small_text | [`godot/menu.gd:329`](godot/menu.gd#L329) | `func small_text` | verified |
 | `game:0x800269c0` ui_button | [`godot/menu.gd:321`](godot/menu.gd#L321) | `func button` | verified |
 | `game:0x80026acc` ui_frame | [`godot/menu.gd:259`](godot/menu.gd#L259) | `func frame` | verified |
-| `game:0x80027090` frame_begin+0xac | [`godot/menu.gd:777`](godot/menu.gd#L777) | `func pulse_step` | transcribed |
+| `game:0x80027090` frame_begin+0xac | [`godot/menu.gd:878`](godot/menu.gd#L878) | `func pulse_step` | transcribed |
 | `game:0x80027494` ui_prim_quad | [`godot/menu.gd:156`](godot/menu.gd#L156) | `func quad` | verified |
 | `game:0x80027610` ui_set_tpage | [`godot/menu.gd:143`](godot/menu.gd#L143) | `func set_tpage` | transcribed |
-| `game:0x80027688` ui_menu_label | [`godot/menu.gd:413`](godot/menu.gd#L413) | `func use_item_list` | verified |
-| `game:0x80027728` list_place | [`godot/menu.gd:414`](godot/menu.gd#L414) | `func use_item_list` | transcribed |
+| `game:0x80027688` ui_menu_label | [`godot/menu.gd:429`](godot/menu.gd#L429) | `func use_item_list` | verified |
+| `game:0x80027728` list_place | [`godot/menu.gd:430`](godot/menu.gd#L430) | `func use_item_list` | transcribed |
 | `game:0x800277c0` number_digits | [`godot/menu.gd:195`](godot/menu.gd#L195) | `func number_digits` | transcribed |
 | `game:0x800277c0` number_digits | [`godot/messages.gd:75`](godot/messages.gd#L75) | `func digits` | partial |
 | `game:0x8002860c` save_load_slot | [`godot/card.gd:149`](godot/card.gd#L149) | `func valid` | transcribed |
@@ -987,6 +996,8 @@ The whole file is the port's own: **check** — a model browser for naming thing
 | `game:0x8002b330` camera_pose | [`godot/player.gd:1797`](godot/player.gd#L1797) | `func _view` | partial |
 | `game:0x8002b468` new_character | [`godot/levelup.gd:217`](godot/levelup.gd#L217) | `func fresh` | partial |
 | `game:0x8002b6f0` clear_movement_state | [`godot/player.gd:2094`](godot/player.gd#L2094) | `func clear_movement` | partial |
+| `game:0x8002ba38` set_spell_b | [`godot/menu.gd:1116`](godot/menu.gd#L1116) | `func _set_button` | partial |
+| `game:0x8002bb5c` set_button_item | [`godot/menu.gd:1117`](godot/menu.gd#L1117) | `func _set_button` | transcribed |
 | `game:0x8002bb84` equip_armour | [`godot/player.gd:472`](godot/player.gd#L472) | `func equip_armour` | partial |
 | `game:0x8002bdc0` equip_weapon | [`godot/player.gd:458`](godot/player.gd#L458) | `func equip_weapon` | partial |
 | `game:0x8002c040` swing_start | [`godot/weapon.gd:86`](godot/weapon.gd#L86) | `func start` | transcribed |
@@ -1012,7 +1023,7 @@ The whole file is the port's own: **check** — a model browser for naming thing
 | `game:0x8003005c` player_turn+0x240 | [`godot/player.gd:1228`](godot/player.gd#L1228) | `func run_flag` | verified |
 | `game:0x80030424` player_turn+0x608 | [`godot/player.gd:1094`](godot/player.gd#L1094) | `func _frame` | transcribed |
 | `game:0x8003047c` player_tilt_spring | [`godot/player.gd:1513`](godot/player.gd#L1513) | `func _tilt` | transcribed |
-| `game:0x80030640` sub_800305d8+0x68 | [`godot/menu.gd:787`](godot/menu.gd#L787) | `func _may_open` | transcribed |
+| `game:0x80030640` sub_800305d8+0x68 | [`godot/menu.gd:888`](godot/menu.gd#L888) | `func _may_open` | transcribed |
 | `game:0x8003078c` player_state_reset | [`godot/player.gd:1784`](godot/player.gd#L1784) | `func _knock_end` | transcribed |
 | `game:0x80030a6c` player_throw | [`godot/player.gd:1545`](godot/player.gd#L1545) | `func _throw` | transcribed |
 | `game:0x80030b24` sub_80030b24 | [`godot/player.gd:1633`](godot/player.gd#L1633) | `func status_tick` | verified |
@@ -1205,7 +1216,7 @@ The whole file is the port's own: **check** — a model browser for naming thing
 | `game:0x8005ce10` use_item+0x230 | [`godot/levelup.gd:163`](godot/levelup.gd#L163) | `func use_arm` | transcribed |
 | `game:0x8005d188` use_item+0x5a8 | [`godot/loot.gd:714`](godot/loot.gd#L714) | `func try_key` | transcribed |
 | `game:0x8005d244` use_item+0x664 | [`godot/loot.gd:798`](godot/loot.gd#L798) | `func put_key` | transcribed |
-| `game:0x8005d748` use_item+0xb68 | [`godot/menu.gd:923`](godot/menu.gd#L923) | `func _use` | partial |
+| `game:0x8005d748` use_item+0xb68 | [`godot/menu.gd:1054`](godot/menu.gd#L1054) | `func _use` | partial |
 | `game:0x8005d7bc` has_item | [`godot/items.gd:59`](godot/items.gd#L59) | `func has_item` | transcribed |
 | `game:0x8005d7f8` take_item | [`godot/items.gd:66`](godot/items.gd#L66) | `func take_item` | partial |
 | `game:0x8005d898` give_item | [`godot/items.gd:79`](godot/items.gd#L79) | `func give_item` | partial |

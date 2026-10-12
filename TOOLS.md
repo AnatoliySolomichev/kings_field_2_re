@@ -739,7 +739,10 @@ numbers in the 7-wide font, the plates and the frames out of the pieces at
 `0x8007e588`, `ui_panel`'s lists, the button legend. It draws the "use item"
 screen's 116 2D primitives exactly as the game filed them in `inv1` and `inv2`
 (positions, UVs, CLUTs, pages, colours, depths and order), which is what the
-port's menu is held to.
+port's menu is held to. `panel_check` lays the equipment screen's MAGIC and
+BUTTON lists (`magic_list`, `button_list`) into menu1's RAM and runs the
+game's own `ui_panel` over them in modes 4 and `0x10`, with and without the
+prompt's `0x8000`: 80 of 80 frames alike.
 
 ```
 python3 tools/ui.py            the use-item screen against both snapshots, both buffers

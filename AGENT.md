@@ -226,6 +226,8 @@ the menus, against their snapshots' frames             16 of 16 frames primitive
                                                        too), the main page with the
                                                        status page, the equipment
                                                        screen, its list and prompt
+the MAGIC and BUTTON lists, against the game's own     80 of 80 frames
+ui_panel (modes 4 and 0x10) over menu1
 the spells unlocked, against every snapshot            21 of 21
 Silviera's key on a pedestal, silv1 and silv2          7 of 7
 the drops, against the snapshots                       5 of 5 lying as the fall leaves
@@ -290,7 +292,7 @@ levels 40 of 40 · angles 400 of 400
 conversations 43 of 43, and 25 of 25 steps the emulator recorded
 damage 6 of 6 · knock-back 2484 of 2484 · weapon 2336 of 2336
 fences 600 of 600 · animation 288 of 288
-equipment 16 of 16
+equipment 16 of 16 · menus 43 of 43
 directions 400 of 400
 routines 13858 of 13858
 saves 45 of 45 · level states 46 of 46 streams, 958 of 958 things made,
