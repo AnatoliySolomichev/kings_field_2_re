@@ -521,7 +521,7 @@ func _refresh() -> void:
 		magic_meter, poison]
 
 
-# @port engine -- the mouse turns the facing and the pitch; F1, G, Esc and Tab are the port's keys
+# @port engine -- the mouse turns the facing and the pitch; F1, F11, G, Esc and Tab are the port's keys
 func _unhandled_input(e: InputEvent) -> void:
 	if e is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		# The mouse moves the game's own facing rather than the node, so that
@@ -539,6 +539,8 @@ func _unhandled_input(e: InputEvent) -> void:
 				vstate = 0
 				vvel = 0
 				_refresh()
+			KEY_F11:
+				_learn_all()
 			KEY_G:
 				var v := get_node_or_null("../CollisionView")
 				if v:
@@ -547,6 +549,22 @@ func _unhandled_input(e: InputEvent) -> void:
 				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 			KEY_TAB:
 				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+# F11, the port's own: every spell learned and the MP raised to the cap
+# (0x3e7) and filled -- to try what the game gives late, on level 0. The
+# spells then stand in the equipment screen's MAGIC and BUTTON lists.
+# @port check -- F11: every spell, and MP to spare
+func _learn_all() -> void:
+	var sp: Array = character.get("spells", KFLevels.new_spells())
+	while sp.size() < KFLevels.SPELLS:
+		sp.append(0)
+	for k in 0x1F:                    # the 31 the menus list: 0..0x16 and 0x17..0x1e
+		sp[k] = 1
+	character["spells"] = sp
+	character["mp_max"] = KFLevels.STAT_CAP
+	mp = KFLevels.STAT_CAP
+	KFInfo.note("player: F11 -- every spell, MP %d of %d" % [mp, KFLevels.STAT_CAP])
 
 
 # @orig game:0x80019614 frame_limit  status:transcribed -- the 15 frames a second _tick and _look run at; the pad's poll, flying and the attack latch are the port's
