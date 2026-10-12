@@ -520,6 +520,19 @@ def export(out_dir):
                               w.collide_actor])
                   return v
               w.collide_query = cq
+              cws, sfs = [], []
+              ask_w, ask_s = w.collide_wrapper, w.surface
+
+              def cw(x, y, z, r, h, ask_w=ask_w, cws=cws):
+                  v = ask_w(x, y, z, r, h)
+                  cws.append([_s32(x), _s32(y), _s32(z), r, h, v])
+                  return v
+
+              def sf(x, y, z, r, h, ask_s=ask_s, sfs=sfs):
+                  v = ask_s(x, y, z, r, h)
+                  sfs.append([_s32(x), _s32(y), _s32(z), r, h, v])
+                  return v
+              w.collide_wrapper, w.surface = cw, sf
               drawn = []
               lcg = levelstate.Lcg()
 
@@ -529,12 +542,17 @@ def export(out_dir):
                   return v
               mach = Machine(m, w, rnd)
               try:
+                  spawn_rand = []
                   mach.spawn(0xA, a1_, kind_, point, args_)
+                  spawn_rand = list(drawn)
+                  spawn_ask = {"cw": [list(x) for x in cws], "sf": [list(x) for x in sfs]}
                   frames = []
                   for _f in range(nframes_):
                       del log[:], w.hits[:], drawn[:], w.hurts[:], w.strikes[:], w.released[:]
+                      del cws[:], sfs[:]
                       mach.driver()
                       frames.append({"q": [list(x) for x in log], "rand": list(drawn),
+                                     "cw": [list(x) for x in cws], "sf": [list(x) for x in sfs],
                                      "hits": [[h[0], h[1], h[2], h[3], h[4],
                                                None if h[5] is None else [_s32(v) for v in h[5]]]
                                               for h in w.hits],
@@ -547,6 +565,7 @@ def export(out_dir):
               except NotImplementedError:
                   continue
               fires.append({"label": f"{os.path.basename(path)[:-4]} kind {kind_:#x}", "layer0": 7,
+                            "spawn_rand": spawn_rand, "spawn_ask": spawn_ask,
                             "fields": dict({"px": px, "s18": s18, "vy": vy}, **{f"w{k}": working[k] for k in range(5)}),
                             "spawns": [[0xA, a1_, kind_, point.hex(),
                                         [{"b": v.hex()} if isinstance(v, bytes) else v for v in args_]]],
@@ -688,6 +707,7 @@ FIRE_BALL = 0x00
 STONE, WIND_CUTTER = 0x06, 0x0D
 HAZE, SHUDOM, WALWIND, RING, WAVE = 0x0B, 0x09, 0x11, 0x5E, 0x59
 EARTH_WAVE, BORTECTH, HOLD = 0x07, 0x0C, 0x65
+METEOR, BLAST = 0x5F, 0x5A
 STRIKE_POINT = 0x801FF0D0           # the machine's stand-in for an arm's point on its stack
 VIEW_ANGLES = 0x801B2608
 SCRATCH_POINT = 0x801FF0C0          # where the check lays a hit's point back
@@ -820,7 +840,8 @@ class Machine:
                STONE: self._spawn_06, WIND_CUTTER: self._spawn_0d,
                HAZE: self._spawn_0b, SHUDOM: self._spawn_09, WALWIND: self._spawn_11,
                RING: self._spawn_5e, WAVE: self._spawn_59, EARTH_WAVE: self._spawn_07,
-               0x16: self._spawn_07, BORTECTH: self._spawn_0c, HOLD: self._spawn_65}.get(kind)
+               0x16: self._spawn_07, BORTECTH: self._spawn_0c, HOLD: self._spawn_65,
+               METEOR: self._spawn_5f, BLAST: self._spawn_5a}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_spawn's arm {kind:#x}")
         arm(s, args)
@@ -1054,6 +1075,100 @@ class Machine:
         strength, +6, the point -- None for none)."""
         self.w.attack_hit(code, self.u8(s), self.u8(s + 1), strength,
                           self.magic_strength(s), self.u8(s + 6), point)
+
+    def _spawn_5f(self, s, args):           # 0x8005593c, meteor
+        """Put down where it is to land -- +0x48 that y -- then moved to a
+        point within 0x514 of it each way by two rands, unless
+        collide_wrapper_actor finds that point blocked; and from there
+        0x9d8 back in x and z and 0x4000 up, falling (0x64, 0x28a, 0x64)."""
+        y = self.s32(s + 0x1C)
+        self.w8(s + 8, 1)
+        self.w8(s + 4, 0x80)
+        self.w8(s + 2, 0xF)
+        self.w8(s + 3, 0xF)
+        self.w16(s + 0x10, 0x2D)
+        self.w32(s + 0x48, y)
+        x = _s32(self.s32(s + 0x18) - 0x514 + ((self.rand() * 2600) >> 15))
+        z = _s32(self.s32(s + 0x20) - 0x514 + ((self.rand() * 2600) >> 15))
+        if self.w.collide_wrapper(x, y, z, 0xA, 0xA):
+            x, z = self.s32(s + 0x18), self.s32(s + 0x20)
+        self.w32(s + 0x18, x - 0x9D8)
+        self.w16(s + 0x38, 0x64)
+        self.w16(s + 0x3C, 0x64)
+        self.w32(s + 0x1C, y - 0x4000)
+        self.w16(s + 0x3A, 0x28A)
+        for o in (0x34, 0x32, 0x30):
+            self.w16(s + o, 0x1000)
+        self.w16(s + 0xE, 0x80)
+        self.w32(s + 0x20, z - 0x9D8)       # and its sound, 0x2d
+
+    def _tick_5f(self, s):                  # 0x8005b8f8, meteor
+        """Falling, turning 0x100 a frame, asking collide_query for the
+        creatures, objects and player within 0xa; meeting none, the floor
+        under it at +0x48 (collide_surface): above it, six puffs a frame
+        behind it; at or past it, set on it. Then the impact: what it met
+        struck (sub_800537e8), a blast (0x5a) with its own +0 -- 0x640 at
+        0x64 a frame, scale 0x800 -- four puffs about it, and gone."""
+        for o, v in ((0x18, 0x38), (0x1C, 0x3A), (0x20, 0x3C)):
+            self.w32(s + o, self.s32(s + o) + self.s16(s + v))
+        self.w16(s + 0x2A, self.u16(s + 0x2A) + 0x100)
+        x, z = self.s32(s + 0x18), self.s32(s + 0x20)
+        mask = self.w.collide_query(x, self.s32(s + 0x1C), z, 0xA, 0xA, 0xB0)
+        if mask == 0:
+            surf = self.w.surface(x, self.s32(s + 0x48), z, 0, 0)
+            if self.s32(s + 0x1C) < surf:
+                vel = self.get(s + 0x38, 8)
+                scale = 0xB86
+                for k in range(5, -1, -1):
+                    v = [(_s16_(struct.unpack_from("<H", vel, 2 * i)[0]) >> 3) * (k + 1)
+                         for i in range(3)]
+                    self.spawn(0xA, 0, TRAIL, self.get(s + 0x18, 16),
+                               [struct.pack("<3h", *[_s16_(c) for c in v]) + vel[6:8],
+                                scale, -0x80, 5, 0x1C, 0, 1, 2])
+                    scale -= 0x15E
+                return
+            self.w32(s + 0x1C, surf)
+        point = self.get(s + 0x18, 16)
+        self.attack(s, mask)
+        self.spawn(0xA, self.u8(s), BLAST, point, [struct.pack("<4h", 0, -0x20, 0, 0),
+                                                  0x640, 0x64, 0x800])
+        for _k in range(4):
+            px, py, pz, pw = struct.unpack("<4i", self.get(s + 0x18, 16))
+            px = _s32(px - 0x1F4 + ((self.rand() * 1000) >> 15))
+            pz = _s32(pz - 0x1F4 + ((self.rand() * 1000) >> 15))
+            self.spawn(0xA, 0, TRAIL, struct.pack("<4i", px, py, pz, pw),
+                       [struct.pack("<4h", 0, -0x168, 0, 0), 0x4000, -0x80, 5, 0x1D, 0, 1, 2])
+        self.w8(s, 0xFF)
+
+    def _spawn_5a(self, s, args):           # 0x800553a8, meteor's blast
+        self.w8(s + 8, 1)
+        self.w8(s + 4, 0x80)
+        self.w8(s + 2, 0x1E)
+        self.w8(s + 3, 0x1E)
+        self.w8(s + 0xC, 0x34)
+        self.w16(s + 0x12, 0x1000)
+        self.w16(s + 0x30, 0xA)
+        self.w16(s + 0x34, 0xA)
+        self.w16(s + 0x44, args[1])         # how far it goes
+        self.w16(s + 0x46, args[2])         # how fast
+        self.w16(s + 0xE, 0)
+        self.w16(s + 0x48, args[3])         # the strike's scale; and its sound, 0x23
+
+    def _tick_5a(self, s):                  # 0x80059a28, meteor's blast
+        """Earth wave's ring (0x80057c34) but its two sizes kept apart, and
+        turning 0x200 a frame."""
+        self.w16(s + 0x30, self.u16(s + 0x30) + self.u16(s + 0x46))
+        self.w16(s + 0x34, self.u16(s + 0x34) + self.u16(s + 0x46))
+        sc = self.s16(s + 0x30)
+        if sc >= 0x300:
+            self.put(STRIKE_POINT, struct.pack("<4i", self.s32(s + 0x18),
+                                               _s32(self.s32(s + 0x1C) + 0x3E8),
+                                               self.s32(s + 0x20), 0))
+            self.strike(STRIKE_POINT, (sc - self.s16(s + 0x46)) << 2, (sc << 2) - 1, 0x7D0,
+                        0x1000, self.s16(s + 0x48))
+        if self.s16(s + 0x44) < self.s16(s + 0x30):
+            self.w8(s, 0xFF)
+        self.w16(s + 0x2A, self.u16(s + 0x2A) + 0x200)
 
     def _spawn_07(self, s, args):           # 0x80054ef4, earth wave (and 0x16)
         self.w8(s + 8, 1)
@@ -1338,7 +1453,8 @@ class Machine:
                STONE: self._tick_06, WIND_CUTTER: self._tick_0d,
                HAZE: self._tick_0b, SHUDOM: self._tick_09, WALWIND: self._tick_11,
                RING: self._tick_5e, WAVE: self._tick_59, EARTH_WAVE: self._tick_07,
-               0x16: self._tick_07, BORTECTH: self._tick_0c, HOLD: self._tick_65}.get(kind)
+               0x16: self._tick_07, BORTECTH: self._tick_0c, HOLD: self._tick_65,
+               METEOR: self._tick_5f, BLAST: self._tick_5a}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_tick's arm {kind:#x}")
         arm(s)
@@ -1768,6 +1884,19 @@ class RamWorld:
         """0x80057dd0: the creature in slot c let go -- its +0x28 bit 0x800."""
         _release(self.m, c)
 
+    def collide_wrapper(self, x, y, z, r, h):
+        """collide_wrapper_actor (0x80033d08): the tiles alone, the mask; the
+        planes it finds left in RAM."""
+        extra = {}
+        mask, _cur = movement.query(self.lvl, x, y, z, radius=r, body=h, extra=extra)
+        for a in (0x801E647C, 0x801E6480, 0x801E6484):
+            struct.pack_into("<i", self.m, a & MASK, extra.get(a, 100000))
+        return mask
+
+    def surface(self, x, y, z, r, h):
+        """collide_surface (0x80033b10): the nearest surface, 0x801e6474."""
+        return movement.surface(self.lvl, x, y, z, radius=r, body=h)
+
 
 def _release(m, c):
     a = (ACTORS + ACTOR_STRIDE * c + 0x28) & MASK
@@ -1852,12 +1981,27 @@ def _leftover(x, i):
     """Whether byte i of the game's slot x is the stack's leftover the
     machine cannot know: a puff's velocity's fourth halfword and a sparkle's
     point's fourth word while it lives; a splash's velocity, the half-step
-    flag made of it and its point's fourth word, freed or not."""
+    flag made of it and its point's fourth word, freed or not; meteor's
+    blast's velocity's fourth halfword (0x8005b9c4 writes three), freed or
+    not."""
     if x[1] == TRAIL and x[0] != 0xFF:
         return i in (0x3E, 0x3F, 0x24, 0x25, 0x26, 0x27)
     if x[1] == SPLASH:
         return i in (0x24, 0x25, 0x26, 0x27, 0xD) or 0x38 <= i < 0x40
+    if x[1] == BLAST:
+        return i in (0x3E, 0x3F)
     return False
+
+
+def _take_leftovers(game, m):
+    """The game's leftovers (_leftover) into the machine's slots, so that a
+    slot spawned over one later starts from the same bytes as the game's."""
+    o = SLOTS & MASK
+    for k in range(COUNT):
+        x = game[o + STRIDE * k:o + STRIDE * (k + 1)]
+        for i in range(STRIDE):
+            if _leftover(x, i):
+                m[o + STRIDE * k + i] = x[i]
 
 
 def _differ(a, b):
@@ -2060,6 +2204,12 @@ class StandIn:
     def release(self, c):
         self.released.append(c)
 
+    def collide_wrapper(self, x, y, z, r, h):
+        return 1 if ((_s32(x) ^ _s32(z)) >> 7) % 5 == 0 else 0
+
+    def surface(self, x, y, z, r, h):
+        return _s32(y) + (0x80 if (_s32(x) >> 9) & 1 else 0)
+
     def attack_hit(self, code, flags, kind, strength, stat, pct, back):
         self.hits.append([code, flags, strength, stat, pct,
                           None if back is None else [v & 0xFFFFFFFF for v in back]])
@@ -2076,7 +2226,8 @@ SPELLS_SENT = ((FIRE_BALL, 0x384, "the fire ball", (), 80), (STONE, 0x1F4, "ston
                (WIND_CUTTER, 0x2BC, "wind cutter", (), 80), (HAZE, 0x104, "haze", (3,), 80),
                (SHUDOM, 0xFA, "shudom", ("view",), 160), (WALWIND, 0xFA, "walwind", ("view",), 240),
                (EARTH_WAVE, None, "earth wave", ("player", 0x43, None, 0x1000, 0x100, 0x1000, 1), 40),
-               (BORTECTH, None, "bortecth", ("creature", 0x42, None), 80))
+               (BORTECTH, None, "bortecth", ("creature", 0x42, None), 80),
+               (METEOR, None, "meteor", ("creature", 0x43, None), 60))
 """The attacking spells the checks send: the kind, the speed its arm of
 player_action gives it, its name, what follows the velocity ("view" a
 pointer to view_angles) and the frames to run. With no speed it is put
@@ -2210,6 +2361,7 @@ def fire_hit_check(out=sys.stdout, per=10, frames=60, kind=None, speed=0x384, na
                     killed += sum(1 for c in g_calls if c[0] == "exp")
                     player += sum(1 for c in g_calls if c[0] == "player")
                     same = not bad and acts and g_calls == m_calls
+                    _take_leftovers(cpu.ram, m)
                     nframes += 1
                     fgood += same
                     if not same and ok:

@@ -508,8 +508,8 @@ flinch, the death, the push -- and `actor_attack_player`, which an effect's
 hit goes to. Held to the game's own over every snapshot's creatures, **1260
 of 1260**; `export` writes `hitcheck.json` in actors.gd's form.
 `tools/effects.py spell_hit_check` runs the fire ball, stone, wind cutter,
-haze, shudom, walwind, earth wave and bortecth through both, against the
-game's own end to end
+haze, shudom, walwind, earth wave, bortecth and meteor through both,
+against the game's own end to end
 -- shudom's rings and walwind's waves through `strike_creatures`
 (`0x8004ceac`, the strike on the creatures in an area) and
 `effect_hurt_player`'s other modes; `export_strikes` writes

@@ -54,6 +54,8 @@ const WAVE := 0x59                 # walwind's
 const EARTH_WAVE := 0x07           # and 0x16, the same arms
 const BORTECTH := 0x0C
 const HOLD := 0x65                 # bortecth's
+const METEOR := 0x5F
+const BLAST := 0x5A                # meteor's
 const TRAIL_ARGS := [0xE10, -0x80, 5, 0x16, 0, 1, 3]   # 0x80058f50's, after the velocity
 const QUERY := {1: 0xA1, 2: 0x31, 3: 0xB1, 4: 0x01}    # effect_collide: +0 & 7 -> flags
 const GROW := 0x96
@@ -360,6 +362,21 @@ func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array) -> 
 			w16(s + 0x32, 0)
 			w16(s + 0xE, 0x40)
 			w16(s + 0x46, int(args[1]))     # the creature held, or -1
+		METEOR:                             # 0x8005593c
+			_spawn_meteor(s)
+		BLAST:                              # 0x800553a8
+			w8(s + 8, 1)
+			w8(s + 4, 0x80)
+			w8(s + 2, 0x1E)
+			w8(s + 3, 0x1E)
+			w8(s + 0xC, 0x34)
+			w16(s + 0x12, 0x1000)
+			w16(s + 0x30, 0xA)
+			w16(s + 0x34, 0xA)
+			w16(s + 0x44, int(args[1]))     # how far it goes
+			w16(s + 0x46, int(args[2]))     # how fast
+			w16(s + 0xE, 0)
+			w16(s + 0x48, int(args[3]))     # the strike's scale; and its sound (0x23), not here
 		FIRE_BALL:                          # 0x80053e98
 			particle(s, 9, 0x1000, 5)
 			w16(s + 0xE, 0x40)
@@ -552,6 +569,10 @@ func tick(s: int) -> void:
 			_tick_bortecth(s)
 		HOLD:
 			_tick_hold(s)
+		METEOR:
+			_tick_meteor(s)
+		BLAST:
+			_tick_blast(s)
 		0x1A:
 			_mark(s, "b56a", 0x40)
 		0x1B:
@@ -827,6 +848,130 @@ func _tick_hold(s: int) -> void:
 		spawn(0xA, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [v, 0x1000, -0x80, 5, 0xC, 0, 1, 0])
 	w16(s + 0x44, u16(s + 0x44) + 1)
 	w16(s + 0x2A, u16(s + 0x2A) - 0x190)
+
+
+# Meteor's arm of effect_spawn (0x8005593c): put down where it is to land --
+# +0x48 that y -- then moved to a point within 0x514 of it each way by two
+# rands, unless collide_wrapper_actor finds that point blocked; from there
+# 0x9d8 back in x and z and 0x4000 up, falling (0x64, 0x28a, 0x64).
+# @orig game:0x8005593c effect_spawn+0x1cb8  status:verified -- tools/effects.py spell_hit_check against the game's own end to end, the blocked point among them; the self-test this to it
+func _spawn_meteor(s: int) -> void:
+	var y := s32(s + 0x1C)
+	w8(s + 8, 1)
+	w8(s + 4, 0x80)
+	w8(s + 2, 0xF)
+	w8(s + 3, 0xF)
+	w16(s + 0x10, 0x2D)
+	w32(s + 0x48, y)
+	var x := s32v(s32(s + 0x18) - 0x514 + ((int(world.rand()) * 2600) >> 15))
+	var z := s32v(s32(s + 0x20) - 0x514 + ((int(world.rand()) * 2600) >> 15))
+	if int(world.collide_wrapper(x, y, z, 0xA, 0xA)) != 0:
+		x = s32(s + 0x18)
+		z = s32(s + 0x20)
+	w32(s + 0x18, x - 0x9D8)
+	w16(s + 0x38, 0x64)
+	w16(s + 0x3C, 0x64)
+	w32(s + 0x1C, y - 0x4000)
+	w16(s + 0x3A, 0x28A)
+	for o in [0x34, 0x32, 0x30]:
+		w16(s + o, 0x1000)
+	w16(s + 0xE, 0x80)
+	w32(s + 0x20, z - 0x9D8)                # and its sound (0x2d), not here
+
+
+# Meteor (0x8005b8f8): falling, turning 0x100 a frame, asking collide_query
+# for the creatures, objects and player within 0xa; meeting none, the floor
+# under it at +0x48 (collide_surface): above it, six puffs a frame behind it
+# (its velocity / 8 times 6 down to 1, scales 0xb86 down by 0x15e); at or
+# past it, set on it. Then the impact: what it met struck (sub_800537e8), a
+# blast (0x5a) with its own +0 -- 0x640 at 0x64 a frame, scale 0x800 -- four
+# puffs about it, and gone.
+# @orig game:0x8005b8f8 effect_tick+0x503c  status:verified -- tools/effects.py spell_hit_check against the game's own end to end, on the floor and on a creature; the self-test this to it
+func _tick_meteor(s: int) -> void:
+	for i in 3:
+		w32(s + 0x18 + 4 * i, s32(s + 0x18 + 4 * i) + s16(s + 0x38 + 2 * i))
+	w16(s + 0x2A, u16(s + 0x2A) + 0x100)
+	var x := s32(s + 0x18)
+	var z := s32(s + 0x20)
+	var mask: int = world.collide_query(x, s32(s + 0x1C), z, 0xA, 0xA, 0xB0)
+	if mask == 0:
+		var surf: int = world.surface(x, s32(s + 0x48), z, 0, 0)
+		if s32(s + 0x1C) < surf:
+			var scale := 0xB86
+			for k in range(5, -1, -1):
+				var v := m.slice(s + 0x38, s + 0x40)
+				for i in 3:
+					v.encode_s16(2 * i, s16v((s16(s + 0x38 + 2 * i) >> 3) * (k + 1)))
+				spawn(0xA, 0, TRAIL, m.slice(s + 0x18, s + 0x28),
+					[v, scale, -0x80, 5, 0x1C, 0, 1, 2])
+				scale -= 0x15E
+			return
+		w32(s + 0x1C, surf)
+	var point := m.slice(s + 0x18, s + 0x28)
+	_attack(s, mask)
+	var v0 := PackedByteArray()
+	v0.resize(8)
+	v0.encode_s16(2, -0x20)
+	spawn(0xA, u8(s), BLAST, point, [v0, 0x640, 0x64, 0x800])
+	for _k in 4:
+		var pt := m.slice(s + 0x18, s + 0x28)
+		pt.encode_s32(0, s32v(pt.decode_s32(0) - 0x1F4 + ((int(world.rand()) * 1000) >> 15)))
+		pt.encode_s32(8, s32v(pt.decode_s32(8) - 0x1F4 + ((int(world.rand()) * 1000) >> 15)))
+		var v := PackedByteArray()
+		v.resize(8)
+		v.encode_s16(2, -0x168)
+		spawn(0xA, 0, TRAIL, pt, [v, 0x4000, -0x80, 5, 0x1D, 0, 1, 2])
+	w8(s, 0xFF)
+
+
+# Meteor's blast (0x80059a28): earth wave's ring, its two sizes kept apart,
+# turning 0x200 a frame. With meteor's +0 (0x43) it strikes the player too.
+# @orig game:0x80059a28 effect_tick+0x316c  status:verified -- tools/effects.py spell_hit_check against the game's own end to end; the self-test this to it
+func _tick_blast(s: int) -> void:
+	w16(s + 0x30, u16(s + 0x30) + u16(s + 0x46))
+	w16(s + 0x34, u16(s + 0x34) + u16(s + 0x46))
+	var sc := s16(s + 0x30)
+	if sc >= 0x300:
+		strike([s32(s + 0x18), s32v(s32(s + 0x1C) + 0x3E8), s32(s + 0x20), 0],
+			(sc - s16(s + 0x46)) << 2, (sc << 2) - 1, 0x7D0, 0x1000, s16(s + 0x48))
+	if s16(s + 0x44) < s16(s + 0x30):
+		w8(s, 0xFF)
+	w16(s + 0x2A, u16(s + 0x2A) + 0x200)
+
+
+# collide_wrapper_actor for an effect: the tiles alone at the radius and
+# height asked, the mask.
+# @orig game:0x80033d08 collide_wrapper_actor  status:verified -- through meteor's landing point, tools/effects.py spell_hit_check against the game's own (movement.query its model)
+func collide_wrapper(x: int, y: int, z: int, r: int, h: int) -> int:
+	if coll == null:
+		return 0
+	var keep_r := coll.radius
+	var keep_b := coll.body
+	coll.radius = r
+	coll.body = h & 0x0FFFFFFF
+	coll.flags = h & 0xF0000000
+	var q := coll.query(x, y, z)
+	coll.flags = 0
+	coll.radius = keep_r
+	coll.body = keep_b
+	surface18 = int(coll.surfaces.get(0x18, 100000))
+	return int(q["mask"])
+
+
+# collide_surface for an effect: the nearest surface under the point, its
+# layer from a flat y - 0x500 (collision.gd surface).
+# @port helper -- collision.gd surface at the radius and height an effect asks with
+func surface(x: int, y: int, z: int, r: int, h: int) -> int:
+	if coll == null:
+		return 100000
+	var keep_r := coll.radius
+	var keep_b := coll.body
+	coll.radius = r
+	coll.body = h
+	var f := coll.surface(x, y, z)
+	coll.radius = keep_r
+	coll.body = keep_b
+	return f
 
 
 # x / 0x7fff as the compiler builds it, toward 0.

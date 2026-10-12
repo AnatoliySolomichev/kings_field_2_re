@@ -1072,9 +1072,12 @@ func actor_switch(slot: int, rec) -> void:
 		KFCreatureAI.switch_to(an.get("actors")[slot], rec)
 
 
-# @port helper -- collide_wrapper_actor for meteor's lead: not in the port yet, so never
-func collide(_x: int, _y: int, _z: int) -> bool:
-	return false
+# collide_wrapper_actor for meteor's lead (radius and height 0xa): the
+# tiles there, through effects.gd's.
+# @port helper -- meteor's lead test, handed to effects.gd collide_wrapper
+func collide(x: int, y: int, z: int) -> bool:
+	var fx := get_node_or_null("../Effects")
+	return fx != null and int(fx.call("collide_wrapper", x, y, z, 0xA, 0xA)) != 0
 
 
 # @port helper -- an arm's effect into effects.gd; its slot's number + 1, or 0

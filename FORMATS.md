@@ -6455,6 +6455,48 @@ killed; bortecth **126 of 126**, 7686 frames, 208 with a creature changed
 (`effects.gd`, 270 of 270 machine runs in the self-test) and the hold
 (`ai.gd`).
 
+### Meteor
+
+```
+meteor (0x5f)    cast with +0 0x43 where the creature will be (or ahead),
+                 and (0): model 0xf, life 0x2d, +0xe 0x80, scale 0x1000,
+                 its sound 0x2d. Its spawn keeps that y at +0x48, moves the
+                 point to x - 0x514 + (rand * 2600 >> 15), z the same --
+                 back to the target if collide_wrapper_actor(that, 0xa,
+                 0xa) finds tiles there -- then 0x9d8 back in x and z and
+                 0x4000 up: falling (0x64, 0x28a, 0x64), 26 frames to the
+                 ground.
+                 Each frame it moves, turns 0x100, and asks collide_query
+                 (0xa, 0xa, 0xb0: the creatures, objects and the player).
+                 Meeting none, collide_surface(x, +0x48, z, 0, 0): above the
+                 floor six puffs (0x6f) behind it, its velocity >> 3 times
+                 6 down to 1 at scales 0xb86 down by 0x15e; at the floor or
+                 past it, set on it. Then the impact: what it met handed to
+                 actor_attack_player (sub_800537e8; the floor's 0 does
+                 nothing), a blast (0x5a) with its own +0 and (0, -0x20, 0),
+                 0x640, 0x64, 0x800, four puffs within 0x1f4, and gone.
+  blast (0x5a)   model 0x1e, scale 0xa, +0x44 0x640, +0x46 0x64, +0x48
+                 0x800, its sound 0x23: earth wave's ring, its two sizes
+                 kept apart, turning 0x200 a frame -- from 0x300 a strike
+                 between 4 * (size - 0x64) and 4 * size - 1, mode 0x7d0,
+                 for nine frames. With +0 0x43 it strikes the player too:
+                 a meteor that falls by the player hurts them.
+```
+
+Against the game's own end to end, sent at the snapshots' creatures
+(`spell_hit_check`): **126 of 126** runs, 4924 frames, all 128 slots and all
+200 creatures alike -- the landing point blocked 20 times, 63 meteors on the
+floor, 57 on a creature, 6 on an object, 63 killed, the player struck once.
+The blast's velocity's fourth halfword is the stack's (the arm writes
+three), which the check takes from the game's as it does the puffs'. The
+port has both (`effects.gd`, with
+`collide_wrapper_actor` and `collide_surface` for the effects), and the
+lead's tile test in `player.gd` now asks the tiles instead of answering no.
+`tools/level3d.py` now exports the models all these effects draw
+(`model_table[+3 + 0x28]`: 0x34..0x37, 0x3e, 0x44..0x48, 0x5a, 0x5b), so the
+port shows them -- at their place, angles and scale, as `effects.gd`'s draw
+does for every effect, without `+0xe` and the light.
+
 ### The player's death
 
 `apply_damage` that leaves no HP calls `player_throw` (`0x80030a6c`) with the

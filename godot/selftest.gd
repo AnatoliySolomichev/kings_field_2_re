@@ -687,6 +687,10 @@ func _effects() -> bool:
 		rp.fields = {}
 		for k in run["fields"]:
 			rp.fields[k] = int(run["fields"][k])
+		rp.bad = ""
+		rp.rands = (run.get("spawn_rand", []) as Array).map(func(x): return int(x))
+		rp.cws = _ints(run.get("spawn_ask", {}).get("cw", []))
+		rp.sfs = _ints(run.get("spawn_ask", {}).get("sf", []))
 		for sp in run["spawns"]:
 			var args := []
 			for v in sp[4]:
@@ -697,7 +701,9 @@ func _effects() -> bool:
 				else:
 					args.append(int(v))
 			fx.spawn(int(sp[0]), int(sp[1]), int(sp[2]), (sp[3] as String).hex_decode(), args)
-		var ok := true
+		var ok := rp.bad == "" and rp.rands.is_empty() and rp.cws.is_empty() and rp.sfs.is_empty()
+		if not ok and first == "":
+			first = "%s, its spawn: %s" % [run["label"], rp.bad if rp.bad != "" else "draws or asks left"]
 		for f in run["frames"]:
 			frames += 1
 			rp.calls = f["q"]
@@ -707,9 +713,12 @@ func _effects() -> bool:
 			rp.hurts = []
 			rp.strikes = []
 			rp.released = []
+			rp.cws = _ints(f.get("cw", []))
+			rp.sfs = _ints(f.get("sf", []))
 			rp.rands = (f.get("rand", []) as Array).map(func(x): return int(x))
 			fx.driver()
 			var same: bool = rp.bad == "" and rp.i == (f["q"] as Array).size() \
+				and rp.cws.is_empty() and rp.sfs.is_empty() \
 				and rp.rands.is_empty() and str(rp.hits) == str(_ints(f["hits"])) \
 				and str(rp.hurts) == str(_ints(f.get("hurts", []))) \
 				and str(rp.strikes) == str(_ints(f.get("strikes", []))) \
@@ -793,9 +802,28 @@ class FxReplay:
 
 	var collide_actor := -1
 	var released: Array = []
+	var cws: Array = []
+	var sfs: Array = []
 
 	func release(c: int) -> void:
 		released.append(c)
+
+	func _asked(list: Array, what: String, asked: Array) -> int:
+		if list.is_empty():
+			if bad == "":
+				bad = "an extra %s %s" % [what, str(asked)]
+			return 0
+		var c: Array = list.pop_front()
+		for k in 5:
+			if int(c[k]) != int(asked[k]) and bad == "":
+				bad = "%s %s, python %s" % [what, str(asked), str(c.slice(0, 5))]
+		return int(c[5])
+
+	func collide_wrapper(x: int, y: int, z: int, r: int, h: int) -> int:
+		return _asked(cws, "collide_wrapper", [x, y, z, r, h])
+
+	func surface(x: int, y: int, z: int, r: int, h: int) -> int:
+		return _asked(sfs, "surface", [x, y, z, r, h])
 
 	func hurt_player(p: Vector3i, a1: int, radius: int, mode: int, edge: int, attacks: Array,
 			effect: int, more: Array, scale: int, pct: int) -> void:

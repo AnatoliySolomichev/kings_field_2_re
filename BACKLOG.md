@@ -830,12 +830,12 @@ each one is also in its function's marker, as `partial` and what differs:
   sight, the spawns), all held to the game's own code, and the effects of
   the fire ball, stone, wind cutter, haze, shudom (and its rings, 0x5e) and
   walwind (and its waves, 0x59), earth wave and bortecth (and its hold,
-  0x65, with `actor_tick`'s held flinch and death), with `effect_strike`'s
-  creature half (`0x8004ceac`). Not yet: the other attacking kinds'
-  effects (meteor 0x5f, lightning's 0x71 -- long, it follows the ground
-  with collide_surface -- tornado, fire storm, fire wall, flash, freeze and
-  the rest), each of which spends its MP and spawns nothing that stays;
-  meteor's collision test (the port answers no); creatures a model's vertex
+  0x65, with `actor_tick`'s held flinch and death), meteor (and its blast,
+  0x5a, and its lead's tile test), with `effect_strike`'s creature half
+  (`0x8004ceac`). Not yet: the other attacking kinds' effects (lightning's
+  0x71 -- long, it follows the ground with collide_surface -- tornado,
+  fire storm, fire wall, flash, freeze and the rest), each of which spends
+  its MP and spawns nothing that stays; creatures a model's vertex
   places (flag 0x400000) in `actor_spot_taken`; in the port's
   `actor_take_hit`, a part passing its hit to its actor and a follower's
   push handed to its leader (the healing and protecting six are in), the
