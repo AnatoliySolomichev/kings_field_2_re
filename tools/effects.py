@@ -357,6 +357,67 @@ def export(out_dir):
                                       else v for v in args]]
                                     for a0, a1, kind, point, args in spawns],
                          "frames": frames})
+    # and the healing and protecting spells' effects, with the player's fields
+    # they read and write, the rand values drawn and the lighting asked for
+    import levelstate
+    names = {"hp": HP, "hp_max": HP_MAX, "poison": POISON, "curse_lv": CURSE_LV,
+             "curse_t": CURSE_T, "dark_lv": DARK_LV, "dark_t": DARK_T, "slow": SLOW,
+             "paralysis": PARALYSIS, "b56a": B56A, "b56c": B56C, "b56e": B56E}
+    heals = []
+    for path in memcard._snapshots()[:4]:
+        base = bytearray(open(path, "rb").read())
+        lv = base[0x8018FAD9 & MASK]
+        o = SLOTS & MASK
+        base[o:o + STRIDE * COUNT] = bytes(STRIDE * COUNT)
+        for k in range(COUNT):
+            base[o + STRIDE * k] = 0xFF
+        for kind in HEALING:
+            ram = bytearray(base)
+            hpm = rng.choice((50, rng.randrange(200, 1000)))
+            struct.pack_into("<H", ram, HP_MAX & MASK, hpm)
+            struct.pack_into("<H", ram, HP & MASK, rng.randrange(1, min(hpm, 120)))
+            for a in (POISON, CURSE_LV, CURSE_T, DARK_LV, DARK_T, SLOW, PARALYSIS):
+                struct.pack_into("<H", ram, a & MASK, rng.choice((0, 0, rng.randrange(1, 300))))
+            for a in (B56A, B56C, B56E):
+                struct.pack_into("<H", ram, a & MASK, rng.choice((0, rng.randrange(1, 30))))
+            point = bytes(ram[PLAYER_POS & MASK:(PLAYER_POS & MASK) + 16])
+            vel = bytes(8)
+            spawns = ([(0xA, 0x40, kind, point, [vel, 0]), (0xA, 0x40, kind, point, [vel, 1])]
+                      if kind in (0x1A, 0x1C) else [(0xA, 0x40, kind, point, [vel])])
+            m = bytearray(ram)
+            lcg = levelstate.Lcg()
+            drawn, lit = [], []
+
+            def rnd(lcg=lcg, drawn=drawn):
+                v = lcg()
+                drawn.append(v)
+                return v
+            mach = Machine(m, RamWorld(m, lv), rnd)
+            blend = mach.lighting
+
+            def lighting(rgb, near, far, k, blend=blend, lit=lit):
+                lit.append([near, far, k])
+                blend(rgb, near, far, k)
+            mach.lighting = lighting
+            start = {n: struct.unpack_from("<H", m, a & MASK)[0] for n, a in names.items()}
+            for sp in spawns:
+                mach.spawn(*sp)
+            frames = []
+            for _f in range(40):
+                del drawn[:], lit[:]
+                mach.driver()
+                frames.append({"md5": hashlib.md5(_slots(m).hex().encode()).hexdigest(),
+                               "fields": {n: struct.unpack_from("<H", m, a & MASK)[0]
+                                          for n, a in names.items()},
+                               "rand": list(drawn), "lit": [list(x) for x in lit]})
+                if all(m[o + STRIDE * k] == 0xFF for k in range(COUNT)):
+                    break
+            heals.append({"label": f"{os.path.basename(path)[:-4]} kind {kind:#x}",
+                          "fields": start,
+                          "spawns": [[a0, a1, kd, pt.hex(),
+                                      [{"b": v.hex()} if isinstance(v, (bytes, bytearray)) else v
+                                       for v in args]] for a0, a1, kd, pt, args in spawns],
+                          "frames": frames})
     # and effect_aim: a creature's angles, the target, the speed, the point and
     # the spread, and the velocity and yaw aim() gives -- the game's own, 600
     # of 600 (aim_check)
@@ -374,7 +435,7 @@ def export(out_dir):
     with open(path, "w") as fh:
         json.dump({"_note": "the effect machine of tools/effects.py over snapshots, the "
                             "world's answers in order; and effect_aim's cases",
-                   "runs": runs, "aims": aims}, fh, separators=(",", ":"))
+                   "runs": runs, "aims": aims, "heals": heals}, fh, separators=(",", ":"))
     return path
 
 # --- the machine, byte for byte ---------------------------------------------
@@ -391,6 +452,12 @@ SLOTS, STRIDE, COUNT = 0x801B80EC, 0x4C, 128
 CURRENT, CURRENT_REC, INDEX = 0x801BA6F0, 0x801BA6EC, 0x801BA6F4
 SPELL_TABLE, RECORD = 0x801B77EC, 24
 PLAYER_POS, PLAYER_STATE = 0x801B25F0, 0x801B25E5
+HP, HP_MAX, POISON = 0x801B24FC, 0x801B24FA, 0x801B255C
+CURSE_LV, CURSE_T, DARK_LV, DARK_T = 0x801B255E, 0x801B2560, 0x801B2562, 0x801B2564
+SLOW, PARALYSIS = 0x801B2566, 0x801B2568
+B56A, B56C, B56E = 0x801B256A, 0x801B256C, 0x801B256E
+TILE_LOOK = 0x801AEEFC
+PLAYER_FIELDS = (HP, POISON, CURSE_LV, CURSE_T, DARK_LV, DARK_T, SLOW, PARALYSIS)
 LAYER_OFFSET = 0x801E646E        # collision_layer_offset, select_cell_layer's answer
 GRID, CELL_BYTES = 0x801D4464, 10
 OBJECT_TABLE, OBJECT_STRIDE, OBJECT_TYPES = 0x80191A5C, 0x44, 0x8018FB3C
@@ -418,8 +485,10 @@ class Machine:
     """effect_spawn (0x80053c84), effect_driver (0x8005bc50) and effect_tick's
     arms 0x23/0x24, 0x26 and 0x6f, over RAM `m`."""
 
-    def __init__(self, m, world):
+    def __init__(self, m, world, rand=None):
+        import levelstate
         self.m, self.w = m, world
+        self.rand = rand or levelstate.Lcg()
 
     def u8(self, a):
         return self.m[a & MASK]
@@ -496,11 +565,61 @@ class Machine:
             self.w8(s, 0xFF)
             return s
         arm = {0x1F: self._spawn_1f, 0x22: self._spawn_22, 0x23: self._spawn_23,
-               0x24: self._spawn_24, 0x26: self._spawn_26, TRAIL: self._spawn_6f}.get(kind)
+               0x24: self._spawn_24, 0x26: self._spawn_26, TRAIL: self._spawn_6f,
+               0x17: self._spawn_17, 0x19: self._spawn_19, 0x1A: self._spawn_1a,
+               0x1B: self._spawn_1b, 0x1C: self._spawn_1c, 0x1E: self._spawn_1e}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_spawn's arm {kind:#x}")
         arm(s, args)
         return s
+
+    def orbit(self, s, model, angle, y):    # 0x80053c20
+        """What the three protecting spells' marks share: drawn by mode 0xe,
+        in front of the eye, at (0xa0, y + 0x78, 0), scale 0x100, turned by
+        `angle`."""
+        self.w8(s + 8, 0xE)
+        self.w8(s + 4, 0x80)
+        self.w8(s + 9, 5)
+        self.w8(s + 0xC, 0x34)
+        self.w16(s + 0x12, 0x1000)
+        for o in (0x32, 0x34, 0x30):
+            self.w16(s + o, 0x100)
+        self.w8(s + 2, model)
+        self.w8(s + 3, model)
+        self.w32(s + 0x18, 0xA0)
+        self.w32(s + 0x1C, y + 0x78)
+        self.w32(s + 0x20, 0)
+        self.w16(s + 0x28, angle)
+        self.w16(s + 0x2C, 0)
+        self.w16(s + 0x2A, 0)
+
+    def _spawn_1a(self, s, args):           # 0x8005585c, fire resist's mark
+        i = args[1]
+        self.orbit(s, 0x18, i << 11, 14 * i - 7)
+        self.w16(s + 0xE, 0xC0)
+
+    def _spawn_1b(self, s, args):           # 0x8005588c, refusal's
+        self.orbit(s, 0x2F, 0, 0)
+        self.w16(s + 0xE, 0x80)
+
+    def _spawn_1c(self, s, args):           # 0x800558a8, missile shield's
+        i = args[1]
+        self.orbit(s, 0x18, i << 11, 14 * i - 7)
+        self.w16(s + 0xE, 0x80)
+
+    def _spawn_17(self, s, args):           # 0x800558d4, earth heal
+        self.w8(s + 8, 0)
+        self.w16(s + 0x10, 8)
+
+    def _spawn_19(self, s, args):           # 0x800558f4, antidote
+        self.w8(s + 8, 0)
+        self.w16(s + 0x10, 0x10)
+        self.w16(s + 0xE, 0x80)
+
+    def _spawn_1e(self, s, args):           # 0x80055918, blessings
+        self.w8(s + 8, 0)
+        self.w16(s + 0x10, 0x10)
+        self.w16(s + 0xE, 0x40)
 
     def _aimed(self, s, model):
         """0x80054cf4 and 0x80054d68: +8 1, +4 0x80, +2 and +3 the model,
@@ -603,7 +722,9 @@ class Machine:
         if kind >= 0x82:
             return
         arm = {0x1F: self._tick_1f, 0x22: self._tick_22, 0x23: self._tick_23,
-               0x24: self._tick_23, 0x26: self._tick_26, TRAIL: self._tick_6f}.get(kind)
+               0x24: self._tick_23, 0x26: self._tick_26, TRAIL: self._tick_6f,
+               0x17: self._tick_17, 0x19: self._tick_19, 0x1A: self._tick_1a,
+               0x1B: self._tick_1b, 0x1C: self._tick_1c, 0x1E: self._tick_1e}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_tick's arm {kind:#x}")
         arm(s)
@@ -673,6 +794,65 @@ class Machine:
             self.w16(s + o, sc)
         self.w32(s + 0x1C, self.s32(s + 0x1C) + self.s16(s + 0x3A))
 
+    def _mark(self, s, timer, turn):
+        if self.s16(timer) == 0:
+            self.w8(s, 0xFF)
+        self.w16(s + 0x2A, self.u16(s + 0x2A) + turn)
+
+    def _tick_1a(self, s):                  # 0x8005b5e4: gone with 0x801b256a
+        self._mark(s, B56A, 0x40)
+
+    def _tick_1b(self, s):                  # 0x8005b610: with 0x801b256c
+        self._mark(s, B56C, -0x100)
+
+    def _tick_1c(self, s):                  # 0x8005b63c: with 0x801b256e
+        self._mark(s, B56E, -0x40)
+
+    def _heal(self, n):
+        hp = (self.u16(HP) + n) & 0xFFFF
+        self.w16(HP, hp)
+        if self.u16(HP_MAX) < hp:
+            self.w16(HP, self.u16(HP_MAX))
+
+    def lighting(self, rgb, near, far, k):  # sub_8003456c on the 48 records
+        import status
+        o = TILE_LOOK & MASK
+        look = bytearray(self.m[o:o + 48 * 0x6C])
+        status.light_blend(look, rgb, near, far, k)
+        self.m[o:o + len(look)] = look
+
+    def _sparkle(self, vel, b, e):
+        """A sparkle in front of the eye: a puff at (rand >> 5 - 0x200,
+        rand >> 8 + 0xc8, 0x400) drawn by mode 0xe, its +0xa 1."""
+        x = (self.rand() >> 5) - 0x200
+        y = (self.rand() >> 8) + 0xC8
+        t = self.spawn(0xA, 0, TRAIL, struct.pack("<3i", x, y, 0x400) + bytes(4),
+                       [vel, 0x2BC, -0x1E, 0xA, 0x26, -0xA, b, e])
+        self.w8(t + 0xA, 1)
+        self.w8(t + 8, 0xE)
+
+    def _tick_17(self, s):                  # 0x8005b668, earth heal
+        if self.s16(s + 0x10) == 4:
+            self._heal(0x50)
+        k = movement.game_sin((self.s16(s + 0x10) << 8) & 0xFFFFFFFF)
+        self.lighting((0xE6, 0xC8, 0xA0), 0, 0x59D8, _s16_(k))
+
+    def _tick_19(self, s):                  # 0x8005b6d4, antidote
+        if self.s16(s + 0x10) == 0xC:
+            self.w16(POISON, 0)
+        self._sparkle(bytes(8), 1, 2)
+        k = movement.game_sin((self.s16(s + 0x10) << 7) & 0xFFFFFFFF)
+        self.lighting((0xA0, 0xB4, 0xDC), 0, 0x4650, _s16_(k))
+
+    def _tick_1e(self, s):                  # 0x8005b7a4, blessings
+        if self.s16(s + 0x10) == 0xC:
+            self._heal(0xC8)
+            cure(self, 7)
+        for _ in range(3):
+            self._sparkle(bytes(8), 1, 1)
+        k = movement.game_sin((self.s16(s + 0x10) << 7) & 0xFFFFFFFF)
+        self.lighting((0xF0, 0xF0, 0xA0), 0, 0x4650, _s16_(k))
+
     def undo(self, s):                      # 0x80056800: the move taken back
         for o, v in ((0x18, 0x38), (0x1C, 0x3A), (0x20, 0x3C)):
             self.w32(s + o, self.s32(s + o) - self.s16(s + v))
@@ -728,6 +908,23 @@ class Machine:
 # effect_aim (0x8004f1d0) and what it takes from: the bearing from a point to
 # the target's eye, pulled towards the creature's own facing the further off
 # it is, and a velocity along it.
+
+def cure(mach, mask):
+    """sub_8002aa54: bit 1 the curse, 2 the darkness -- the level cut to 0x40
+    and the timer 0, so it ramps out -- either of them the poison, 1 or 4 the
+    slowing cut to 0x40, 4 the paralysis."""
+    for bit, lv, t in ((1, CURSE_LV, CURSE_T), (2, DARK_LV, DARK_T)):
+        if mask & bit:
+            if mach.s16(lv) >= 0x41:
+                mach.w16(lv, 0x40)
+            mach.w16(t, 0)
+    if mask & 3:
+        mach.w16(POISON, 0)
+    if mask & 5 and mach.s16(SLOW) >= 0x41:
+        mach.w16(SLOW, 0x40)
+    if mask & 4:
+        mach.w16(PARALYSIS, 0)
+
 
 def vec_to_angles(dx, dy, dz):
     """0x80016c90: [pitch, yaw, 0] of a vector."""
@@ -909,14 +1106,16 @@ def _slots(m):
 
 def _differ(a, b):
     """The bytes of two slot arrays that differ, leaving out a puff's +0x3e
-    -- the stack's leftover the trail's velocity carries."""
+    and +0x24 -- the stack's leftovers its velocity and a sparkle's point
+    carry."""
     bad = []
     for k in range(COUNT):
         x, y = a[k * STRIDE:(k + 1) * STRIDE], b[k * STRIDE:(k + 1) * STRIDE]
         if x == y:
             continue
         for i in range(STRIDE):
-            if x[i] != y[i] and not (i in (0x3E, 0x3F) and x[1] == TRAIL and x[0] != 0xFF):
+            if x[i] != y[i] and not (i in (0x3E, 0x3F, 0x24, 0x25, 0x26, 0x27)
+                                     and x[1] == TRAIL and x[0] != 0xFF):
                 bad.append((k, i, x[i], y[i]))
     return bad
 
@@ -1005,6 +1204,80 @@ def machine_check(out=sys.stdout, frames=90):
     return good == runs
 
 
+HEALING = (0x17, 0x19, 0x1A, 0x1B, 0x1C, 0x1E)
+
+
+def magic_check(out=sys.stdout, per=6, frames=40):
+    """The healing and protecting spells' effects against effect_spawn and
+    effect_driver themselves over every snapshot: spawned as player_action
+    spawns them, with the player hurt, poisoned, cursed or not and the timers
+    running or not -- every frame all 128 slots, the player's fields and the
+    48 lighting records."""
+    import random
+    import memcard
+    import levelstate
+    rng = random.Random(0x4EA1)
+    runs = good = nframes = fgood = 0
+    first = []
+    lo = TILE_LOOK & MASK
+    for path in memcard._snapshots():
+        base = bytearray(open(path, "rb").read())
+        o = SLOTS & MASK
+        for k in range(COUNT):
+            base[o + STRIDE * k] = 0xFF
+        lv = base[0x8018FAD9 & MASK]
+        for _ in range(per):
+            ram = bytearray(base)
+            hpm = rng.choice((50, rng.randrange(200, 1000)))
+            struct.pack_into("<H", ram, HP_MAX & MASK, hpm)
+            struct.pack_into("<H", ram, HP & MASK, rng.randrange(1, min(hpm, 120)))
+            for a in (POISON, CURSE_LV, CURSE_T, DARK_LV, DARK_T, SLOW, PARALYSIS):
+                struct.pack_into("<H", ram, a & MASK, rng.choice((0, 0, rng.randrange(1, 300))))
+            for a in (B56A, B56C, B56E):
+                struct.pack_into("<H", ram, a & MASK, rng.choice((0, rng.randrange(1, 30))))
+            kind = rng.choice(HEALING)
+            point = bytes(ram[PLAYER_POS & MASK:(PLAYER_POS & MASK) + 16])
+            vel = bytes(rng.randrange(256) for _ in range(8))
+            spawns = ([(0xA, 0x40, kind, point, [vel, 0]), (0xA, 0x40, kind, point, [vel, 1])]
+                      if kind in (0x1A, 0x1C) else [(0xA, 0x40, kind, point, [vel])])
+            cpu = _game(bytes(ram))
+            cpu.hooks[0x8001576C] = lambda c: 0            # the sound
+            m = bytearray(ram)
+            mach = Machine(m, RamWorld(m, lv), levelstate.Lcg())
+            for sp in spawns:
+                game_spawn(cpu, *sp)
+                mach.spawn(*sp)
+            runs += 1
+            ok = True
+            for f in range(frames):
+                _call(cpu, DRIVER, [])
+                mach.driver()
+                bad = _differ(_slots(cpu.ram), _slots(m))
+                fields = [a for a in PLAYER_FIELDS
+                          if cpu.rd(a, 2) != struct.unpack_from("<H", m, a & MASK)[0]]
+                look = bytes(cpu.ram[lo:lo + 48 * 0x6C]) == bytes(m[lo:lo + 48 * 0x6C])
+                nframes += 1
+                same = not bad and not fields and look
+                fgood += same
+                if not same and ok:
+                    ok = False
+                    if len(first) < 4:
+                        first.append(f"  {os.path.basename(path)} kind {kind:#x}, frame {f}: "
+                                     + (f"slot {bad[0][0]} +{bad[0][1]:#x} game {bad[0][2]:#x} here {bad[0][3]:#x}"
+                                        if bad else f"fields {[hex(a) for a in fields]}" if fields
+                                        else "the lighting records"))
+                if all(cpu.rd(SLOTS + STRIDE * k, 1) == 0xFF for k in range(COUNT)):
+                    break
+            good += ok
+    for line in first:
+        print(line, file=out)
+    print(f"  the healing and protecting spells' effects, the game's own over the "
+          f"snapshots: {good} of {runs} runs, {fgood} of {nframes} frames with all 128 "
+          f"slots, the player's fields and the 48 lighting records as the machine "
+          f"leaves them", file=out)
+    return good == runs
+
+
 def aim_check(out=sys.stdout, n=600):
     """effect_aim, the game's, against aim() on random creatures, targets and
     points: the velocity and the yaw it answers."""
@@ -1046,4 +1319,5 @@ if __name__ == "__main__":
     good = check(verbose="--check" not in sys.argv)
     good = aim_check() and good
     good = machine_check() and good
+    good = magic_check() and good
     sys.exit(0 if good else 1)

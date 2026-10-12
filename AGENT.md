@@ -255,6 +255,9 @@ what a hit leaves, against the game's own              player_take_hit 840 of 84
 player_take_hit and sub_80030e14 over the snapshots    hits; sub_80030e14 84 of 84
                                                        runs, 13 057 of 13 057
                                                        frames
+the healing spells' effects, against the game's own     126 of 126 runs, 2698 of
+effect_spawn and effect_driver                         2698 frames, slots, fields
+                                                       and lighting
 casting, against the game's own cast_spell,            1260 of 1260 of each:
 player_action, player_turn and the controller's end    casts, actions, pending,
                                                        timers, the USE stretch
@@ -292,7 +295,7 @@ directions 400 of 400
 routines 13858 of 13858
 saves 45 of 45 · level states 46 of 46 streams, 958 of 958 things made,
 42 of 42 states written, 46 of 46 tables read and written again
-effects 54 of 54 runs, 1868 of 1868 frames · aims 300 of 300
+effects 78 of 78 runs, 2358 of 2358 frames · aims 300 of 300
 the run 150129 of 150129 frames
 player_take_hit 300 of 300 · the status 40 of 40 runs, 6312 of 6312 frames
 casting 1000 of 1000

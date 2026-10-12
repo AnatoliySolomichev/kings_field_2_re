@@ -68,6 +68,10 @@ uniform bool scrolls = false;
 uniform bool cued = true;
 uniform float dark_k = -1.0;
 uniform float light_k = -1.0;
+uniform bool pulse_on = false;
+uniform float pulse_near = 0.0;
+uniform float pulse_far = 0.0;
+uniform float pulse_k = 0.0;
 varying float cue;
 void vertex() {
 	float z = -(MODELVIEW_MATRIX * vec4(VERTEX, 1.0)).z * 1000.0;
@@ -81,6 +85,12 @@ void vertex() {
 	}
 	if (light_k >= 0.0) {
 		farz += floor((%.1f - farz) * light_k / 4096.0);
+		if (farz < nearz + 4096.0) { nearz = farz - 4096.0; }
+	}
+	if (pulse_on) {
+		nearz += floor((pulse_near - nearz) * pulse_k / 4096.0);
+		if (farz - 4096.0 < nearz) { farz = nearz + 4096.0; }
+		farz += floor((pulse_far - farz) * pulse_k / 4096.0);
 		if (farz < nearz + 4096.0) { nearz = farz - 4096.0; }
 	}
 	cue = (!cued || nearz >= %.1f || farz <= nearz) ? 0.0
@@ -104,6 +114,7 @@ var mats: Array[ShaderMaterial] = []
 var every: Array[ShaderMaterial] = []   # all of them, for the F2 switch
 var cued := true
 var lights := [-1, -1]
+var pulse := []
 var clock := 0.0
 
 
@@ -177,6 +188,22 @@ func set_lights(dark_k: int, light_k: int) -> void:
 	for s in every:
 		s.set_shader_parameter("dark_k", float(dark_k))
 		s.set_shader_parameter("light_k", float(light_k))
+
+
+# An effect's lighting this frame -- earth heal's, antidote's, blessings' --
+# [near, far, k], or [] for none: blended after the darkness and the light,
+# as effect_driver runs after player_controller.
+# @orig game:0x8003456c sub_8003456c  status:partial -- an effect's call, the near and the far per vertex; not the background colour
+func set_pulse(p: Array) -> void:
+	if p == pulse:
+		return
+	pulse = p
+	for s in every:
+		s.set_shader_parameter("pulse_on", not p.is_empty())
+		if not p.is_empty():
+			s.set_shader_parameter("pulse_near", float(p[0]))
+			s.set_shader_parameter("pulse_far", float(p[1]))
+			s.set_shader_parameter("pulse_k", float(p[2]))
 
 
 # @orig game:0x800351fc texture_scroll_step  status:transcribed -- delay 0, step 1, wrapped at 32; the shader samples the square the way its MoveImages leave it

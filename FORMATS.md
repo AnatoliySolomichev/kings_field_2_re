@@ -3659,7 +3659,39 @@ missile shield spawn two effects of their own kind at the player and set
 `0x708` frames, two minutes; refusal spawns one and sets `0x801b256c` to
 `0xc8`, the timer that lets no hit through at all; each then the stats. Earth
 heal, antidote and blessings only spawn their effect: the healing is the
-effect's own (its arm of `effect_tick`, not read yet).
+effect's own (below).
+
+**What those effects do** (`effect_spawn` and `effect_tick`'s arms of their
+kinds, `tools/effects.py`):
+
+```
+0x17 earth heal    life 8; 4 frames before its end HP + 0x50, to the most
+0x19 antidote      life 0x10; 12 before its end the poison gone
+0x1e blessings     life 0x10; 12 before its end HP + 0xc8 and sub_8002aa54(7)
+0x1a fire resist   two marks (model 0x18) turning +0x40 a frame, gone with
+                   0x801b256a
+0x1b refusal       one mark (model 0x2f), -0x100 a frame, gone with 256c
+0x1c missile shield  two marks (0x18), -0x40 a frame, gone with 256e
+```
+
+The three healing ones pulse the lighting every frame of their life through
+`sub_8003456c` -- earth heal toward (0xe6, 0xc8, 0xa0), near 0, far 0x59d8 by
+`sin(life << 8)`; antidote toward (0xa0, 0xb4, 0xdc) and blessings toward
+(0xf0, 0xf0, 0xa0), far 0x4650, by `sin(life << 7)` -- and antidote and
+blessings throw sparkles, one and three a frame: puffs (`0x6f`) at
+(`rand >> 5` - 0x200, `rand >> 8` + 0xc8, 0x400). The marks and the sparkles
+have draw mode `0xe`, whose `+8 & 0xc` picks another matrix than the view's in
+`render_walk` (`0x800416d8`) -- they are drawn in front of the eye; the marks
+sit at (0xa0, 0x78 +- 7), two half a turn apart (`sub_80053c20`).
+
+**`sub_8002aa54`** is the cure: bit 1 the curse and 2 the darkness (the level
+cut to 0x40, the timer 0, so it ramps out), either of them the poison, 1 or 4
+the slowing cut to 0x40, 4 the paralysis. Blessings cure all seven.
+
+**Against the game's own `effect_spawn` and `effect_driver`**, the six kinds
+spawned as `player_action` spawns them over every snapshot, the player hurt,
+poisoned, cursed or not: **126 of 126 runs, 2698 of 2698 frames**, all 128
+slots, the player's fields and the 48 lighting records alike.
 
 **At `player_controller`'s end** (`0x80031f0c`), after the poison:
 `0x801b256a`, `256c` and `256e` count down and recalculate the stats at 0;

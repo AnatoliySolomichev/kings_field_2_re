@@ -534,6 +534,13 @@ runs, **5144 of 5144** frames with all 128 slots byte for byte, **4284 of
 `fxrecords.json` (`spell_table` off the disc) and `fxcheck.json`, the runs
 with the world's answers in order, which `godot/selftest.gd` replays.
 
+It has the healing and protecting spells' kinds too (0x17, 0x19, 0x1a, 0x1b,
+0x1c, 0x1e: the marks, the heals, the cure, the sparkles, the lighting
+pulse), which reach the player's fields, `rand` and the lighting records;
+`magic_check` holds them to the game's own code with all three compared every
+frame, **126 of 126** runs and **2698 of 2698** frames, and `fxcheck.json`
+carries 24 such runs with the fields, the draws and the lighting calls.
+
 **`weapon.py`** — the player's weapon: the swing, what it reaches, what a hit
 does to a creature.
 

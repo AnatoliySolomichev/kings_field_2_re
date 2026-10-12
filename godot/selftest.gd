@@ -578,8 +578,48 @@ func _effects() -> bool:
 			aok += 1
 		elif first == "":
 			first = "aim %s: godot %s" % [str(v.slice(0, 10)), str(got)]
+	# the healing and protecting spells' effects: the player's fields, the rand
+	# values and the lighting through the replay
+	var heals := 0
+	var hgood := 0
+	for run in d.get("heals", []):
+		heals += 1
+		fx.clear()
+		rp.fields = {}
+		for k in run["fields"]:
+			rp.fields[k] = int(run["fields"][k])
+		for sp in run["spawns"]:
+			var args := []
+			for v in sp[4]:
+				args.append((v["b"] as String).hex_decode() if typeof(v) == TYPE_DICTIONARY else int(v))
+			fx.spawn(int(sp[0]), int(sp[1]), int(sp[2]), (sp[3] as String).hex_decode(), args)
+		var ok := true
+		for f in run["frames"]:
+			frames += 1
+			rp.rands = (f["rand"] as Array).map(func(x): return int(x))
+			rp.lit = []
+			rp.calls = []
+			rp.i = 0
+			rp.bad = ""
+			fx.driver()
+			var same: bool = rp.bad == "" and rp.rands.is_empty() \
+				and fx.m.hex_encode().md5_text() == str(f["md5"]) \
+				and str(rp.lit) == str((f["lit"] as Array).map(func(x): return (x as Array).map(func(y): return int(y))))
+			for k in f["fields"]:
+				if int(rp.fields[k]) != int(f["fields"][k]):
+					same = false
+			if same:
+				fgood += 1
+			elif ok:
+				ok = false
+				if first == "":
+					first = "%s, frame %d: %s" % [run["label"], frames, rp.bad if rp.bad != "" else "the slots, fields or lighting differ"]
+		if ok:
+			hgood += 1
+	runs += heals
+	good += hgood
 	fx.free()
-	print("effects: %d of %d runs, %d of %d frames of the effect machine as tools/effects.py's (whose machine the game's own effect_spawn and effect_driver hold: 189 of 189 runs); %d of %d aims as its effect_aim (600 of 600 the game's)" % [
+	print("effects: %d of %d runs, %d of %d frames of the effect machine as tools/effects.py's (whose machine the game's own effect_spawn and effect_driver hold: 189 of 189 runs, and the healing spells' 126 of 126); %d of %d aims as its effect_aim (600 of 600 the game's)" % [
 		good, runs, fgood, frames, aok, aims])
 	if first != "":
 		print("  first difference: " + first)
@@ -595,6 +635,25 @@ class FxReplay:
 	var layer_offset := 0
 	var hurts: Array = []
 	var bad := ""
+	var fields := {}
+	var rands: Array = []
+	var lit: Array = []
+
+	func field(name: String) -> int:
+		return int(fields.get(name, 0))
+
+	func set_field(name: String, v: int) -> void:
+		fields[name] = v & 0xFFFF
+
+	func rand() -> int:
+		if rands.is_empty():
+			if bad == "":
+				bad = "an extra rand"
+			return 0
+		return int(rands.pop_front())
+
+	func lighting(_rgb: Array, near: int, far: int, k: int) -> void:
+		lit.append([near, far, k])
 
 	func collide_query(x: int, y: int, z: int, r: int, h: int, flags: int) -> int:
 		if i >= calls.size():

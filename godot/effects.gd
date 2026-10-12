@@ -59,6 +59,7 @@ var current := -1                  # 0x801ba6f0: the slot being run, an offset i
 var records := {}                  # kind -> its spell_table record (24 bytes)
 var layer_offset := 0              # collision_layer_offset after the last tile query
 var world = null                   # what the effects ask of the game; this node, or a stand-in
+var pulse := []                     # this frame's lighting from an effect: [near, far, k]
 var acc := 0.0
 var player: Node3D
 var coll: KFCollision
@@ -250,6 +251,28 @@ func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array) -> 
 			w8(s + 0xD, 1)
 			w16(s + 0x44, 0x14)
 			w32(s + 0x1C, s32(s + 0x1C) - 0xC8)
+		0x1A:                               # 0x8005585c, fire resist's mark
+			var i := int(args[1]) if args.size() > 1 and args[1] != null else 0
+			orbit(s, 0x18, i << 11, 14 * i - 7)
+			w16(s + 0xE, 0xC0)
+		0x1B:                               # 0x8005588c, refusal's
+			orbit(s, 0x2F, 0, 0)
+			w16(s + 0xE, 0x80)
+		0x1C:                               # 0x800558a8, missile shield's
+			var i := int(args[1]) if args.size() > 1 and args[1] != null else 0
+			orbit(s, 0x18, i << 11, 14 * i - 7)
+			w16(s + 0xE, 0x80)
+		0x17:                               # 0x800558d4, earth heal
+			w8(s + 8, 0)
+			w16(s + 0x10, 8)
+		0x19:                               # 0x800558f4, antidote
+			w8(s + 8, 0)
+			w16(s + 0x10, 0x10)
+			w16(s + 0xE, 0x80)
+		0x1E:                               # 0x80055918, blessings
+			w8(s + 8, 0)
+			w16(s + 0x10, 0x10)
+			w16(s + 0xE, 0x40)
 		TRAIL:                              # 0x80055738
 			particle(s, int(args[4]), int(args[1]), int(args[6]) | 4)
 			w16(s + 0x44, int(args[2]))
@@ -281,6 +304,27 @@ func _aimed(s: int, model: int) -> void:
 	w16(s + 0x28, coll.ratan2(s16(s + 0x3A), ln))
 	w16(s + 0x2C, 0)
 	w16(s + 0x2A, coll.ratan2(s16(s + 0x3C), s16(s + 0x38)) - 0x400)
+
+
+# What the three protecting spells' marks share: drawn by mode 0xe, in front
+# of the eye, at (0xa0, y + 0x78, 0), scale 0x100, turned by `angle`.
+# @orig game:0x80053c20 sub_80053c20  status:verified -- through the arms of 0x1a, 0x1b and 0x1c, tools/effects.py magic_check, 126 of 126 runs of the game's own
+func orbit(s: int, model: int, angle: int, y: int) -> void:
+	w8(s + 8, 0xE)
+	w8(s + 4, 0x80)
+	w8(s + 9, 5)
+	w8(s + 0xC, 0x34)
+	w16(s + 0x12, 0x1000)
+	for o in [0x32, 0x34, 0x30]:
+		w16(s + o, 0x100)
+	w8(s + 2, model)
+	w8(s + 3, model)
+	w32(s + 0x18, 0xA0)
+	w32(s + 0x1C, y + 0x78)
+	w32(s + 0x20, 0)
+	w16(s + 0x28, angle)
+	w16(s + 0x2C, 0)
+	w16(s + 0x2A, 0)
 
 
 # @orig game:0x80053ba8 effect_setup  status:verified -- through the spore's arm, the same 189 runs
@@ -315,6 +359,7 @@ func particle(s: int, a: int, scale: int, b: int) -> void:
 # else its kind's arm.
 # @orig game:0x8005bc50 effect_driver  status:verified -- 4702 of 4702 frames, all 128 slots, of the game's own (tools/effects.py), which the self-test holds this to
 func driver() -> void:
+	pulse = []
 	for k in COUNT:
 		var s := k * STRIDE
 		if m[s] == 0xFF:
@@ -326,6 +371,10 @@ func driver() -> void:
 			m[s] = 0xFF
 		else:
 			tick(s)
+	if world == self:
+		var sc := get_node_or_null("../Scroll")
+		if sc and sc.has_method("set_pulse"):
+			sc.call("set_pulse", pulse)
 
 
 # effect_tick's switch on the kind (0x80056908), with the arms the port has.
@@ -342,6 +391,159 @@ func tick(s: int) -> void:
 			_tick_spore(s)
 		TRAIL:
 			_tick_puff(s)
+		0x1A:
+			_mark(s, "b56a", 0x40)
+		0x1B:
+			_mark(s, "b56c", -0x100)
+		0x1C:
+			_mark(s, "b56e", -0x40)
+		0x17:
+			_tick_earth_heal(s)
+		0x19:
+			_tick_antidote(s)
+		0x1E:
+			_tick_blessings(s)
+
+
+# The protecting spells' marks (0x8005b5e4, 0x8005b610, 0x8005b63c): gone
+# when their timer is, else turned by 0x40, -0x100 or -0x40 a frame.
+# @orig game:0x8005b5e4 effect_tick+0x4d28  status:verified -- kinds 0x1a, 0x1b, 0x1c; tools/effects.py magic_check, 126 of 126 runs of the game's own, which the self-test holds this to
+func _mark(s: int, timer: String, turn: int) -> void:
+	if KFWeapon.s16(int(world.field(timer))) == 0:
+		w8(s, 0xFF)
+	w16(s + 0x2A, u16(s + 0x2A) + turn)
+
+
+# earth heal (0x8005b668): 0x50 HP, to the most, four frames before its end;
+# every frame the lighting pulsed toward (0xe6, 0xc8, 0xa0), near 0, far
+# 0x59d8 by sin(life << 8).
+# @orig game:0x8005b668 effect_tick+0x4dac  status:verified -- the same runs
+func _tick_earth_heal(s: int) -> void:
+	if s16(s + 0x10) == 4:
+		_heal(0x50)
+	var k := coll.game_sin((s16(s + 0x10) << 8) & 0xFFFFFFFF)
+	world.lighting([0xE6, 0xC8, 0xA0], 0, 0x59D8, s16v(k))
+
+
+# antidote (0x8005b6d4): the poison gone twelve frames before its end; a
+# sparkle every frame; the lighting toward (0xa0, 0xb4, 0xdc), far 0x4650.
+# @orig game:0x8005b6d4 effect_tick+0x4e18  status:verified -- the same runs
+func _tick_antidote(s: int) -> void:
+	if s16(s + 0x10) == 0xC:
+		world.set_field("poison", 0)
+	_sparkle(1, 2)
+	var k := coll.game_sin((s16(s + 0x10) << 7) & 0xFFFFFFFF)
+	world.lighting([0xA0, 0xB4, 0xDC], 0, 0x4650, s16v(k))
+
+
+# blessings (0x8005b7a4): 0xc8 HP and the cure of the curse, the darkness,
+# the poison, the slowing and the paralysis (sub_8002aa54(7)) twelve frames
+# before its end; three sparkles a frame; the lighting toward (0xf0, 0xf0,
+# 0xa0), far 0x4650.
+# @orig game:0x8005b7a4 effect_tick+0x4ee8  status:verified -- the same runs
+func _tick_blessings(s: int) -> void:
+	if s16(s + 0x10) == 0xC:
+		_heal(0xC8)
+		cure(world, 7)
+	for i in 3:
+		_sparkle(1, 1)
+	var k := coll.game_sin((s16(s + 0x10) << 7) & 0xFFFFFFFF)
+	world.lighting([0xF0, 0xF0, 0xA0], 0, 0x4650, s16v(k))
+
+
+# @port helper -- HP up by n, to its most, as both healing arms do it
+func _heal(n: int) -> void:
+	var hp := (int(world.field("hp")) + n) & 0xFFFF
+	if int(world.field("hp_max")) < hp:
+		hp = int(world.field("hp_max"))
+	world.set_field("hp", hp)
+
+
+# A sparkle in front of the eye: a puff (0x6f) at (rand >> 5 - 0x200,
+# rand >> 8 + 0xc8, 0x400), drawn by mode 0xe, its +0xa 1.
+# @orig game:0x8005b6ec effect_tick+0x4e30  status:verified -- the same runs
+func _sparkle(b: int, e: int) -> void:
+	var x := (int(world.rand()) >> 5) - 0x200
+	var y := (int(world.rand()) >> 8) + 0xC8
+	var pt := PackedByteArray()
+	pt.resize(16)
+	pt.encode_s32(0, x)
+	pt.encode_s32(4, y)
+	pt.encode_s32(8, 0x400)
+	var vel := PackedByteArray()
+	vel.resize(8)
+	var t := spawn(0xA, 0, TRAIL, pt, [vel, 0x2BC, -0x1E, 0xA, 0x26, -0xA, b, e])
+	if t >= 0:
+		w8(t + 0xA, 1)
+		w8(t + 8, 0xE)
+
+
+# sub_8002aa54 on `w`'s fields: bit 1 the curse and 2 the darkness -- the
+# level cut to 0x40, the timer 0, so it ramps out -- either the poison, 1 or
+# 4 the slowing cut to 0x40, 4 the paralysis.
+# @orig game:0x8002aa54 sub_8002aa54  status:verified -- through blessings, the same runs
+static func cure(w, mask: int) -> void:
+	for p in [[1, "curse_lv", "curse_t"], [2, "dark_lv", "dark_t"]]:
+		if mask & int(p[0]):
+			if KFWeapon.s16(int(w.field(p[1]))) >= 0x41:
+				w.set_field(p[1], 0x40)
+			w.set_field(p[2], 0)
+	if mask & 3:
+		w.set_field("poison", 0)
+	if mask & 5 and KFWeapon.s16(int(w.field("slow"))) >= 0x41:
+		w.set_field("slow", 0x40)
+	if mask & 4:
+		w.set_field("paralysis", 0)
+
+
+# The player's fields the effects read and write, by tools/effects.py's
+# names, when this node is its own world.
+# @port helper -- a player field by name
+func field(name: String) -> int:
+	if player == null:
+		return 0
+	match name:
+		"hp": return int(player.get("hp"))
+		"hp_max": return int(player.get("hp_max"))
+		"poison": return int(player.get("poison"))
+		"curse_lv": return int(player.get("curse")[0])
+		"curse_t": return int(player.get("curse")[1])
+		"dark_lv": return int(player.get("dark")[0])
+		"dark_t": return int(player.get("dark")[1])
+		"slow": return int(player.get("caps")["slow"])
+		"paralysis": return int(player.get("caps")["paralysis"])
+		"b56a": return int(player.get("bonus")[0])
+		"b56c": return int(player.get("shielded"))
+		"b56e": return int(player.get("bonus")[1])
+	return 0
+
+
+# @port helper -- and written
+func set_field(name: String, v: int) -> void:
+	if player == null:
+		return
+	match name:
+		"hp": player.set("hp", v)
+		"poison": player.set("poison", v)
+		"curse_lv": player.get("curse")[0] = v
+		"curse_t": player.get("curse")[1] = v
+		"dark_lv": player.get("dark")[0] = v
+		"dark_t": player.get("dark")[1] = v
+		"slow": player.get("caps")["slow"] = v
+		"paralysis": player.get("caps")["paralysis"] = v
+
+
+# @port helper -- the BIOS's rand, for the sparkles
+func rand() -> int:
+	return randi() & 0x7FFF
+
+
+# sub_8003456c from an effect: kept for the world's shader, which blends the
+# near and far by it after the frame's darkness and light -- the last one of
+# the frame, the driver hands it on.
+# @port helper -- an effect's lighting, for scroll.gd
+func lighting(rgb: Array, near: int, far: int, k: int) -> void:
+	pulse = [near, far, k]
 
 
 # A bolt (0x80058f3c, kinds 0x23 and 0x24): its strike within a scale of
@@ -683,12 +885,12 @@ func spawn_spore(point: Vector3i, pct: int) -> void:
 # render_walk's third loop: a slot whose +8 & 3 is not 0 is drawn by
 # draw_model_plain, model_table[+3 + 0x28] at +0x18, turned by +0x28.. with
 # 0x800 on the yaw, through the scale +0x30..+0x34.
-# @orig game:0x8004165c render_walk+0xb78  status:partial -- the model, the place, the turn and the scale; not the view test (+8 & 3, view_bits_at), the matrices +8 & 0xc chooses, nor +0xe and the light
+# @orig game:0x8004165c render_walk+0xb78  status:partial -- the model, the place, the turn and the scale of +8 & 0xc 0, the world's; not the view test (+8 & 3, view_bits_at), the three other matrices +8 & 0xc chooses (the marks and sparkles in front of the eye are not drawn), nor +0xe and the light
 func _draw_all() -> void:
 	var live := {}
 	for k in COUNT:
 		var s := k * STRIDE
-		if m[s] == 0xFF or (m[s + 8] & 3) == 0:
+		if m[s] == 0xFF or (m[s + 8] & 3) == 0 or (m[s + 8] & 0xC) != 0:
 			continue
 		var model := u8(s + 3) + MODEL_BASE
 		var n = nodes.get(k)
