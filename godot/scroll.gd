@@ -53,6 +53,11 @@ const FRAME_HZ := 15.0               # see player.gd
 const FAR_COLOUR := 5.0 / 128.0      # FC, 5 << 4, over the texture's 128
 const CUE_CAP := 7951.0 / 4096.0     # t is capped at 0x1f0f
 const CUE_OFF := 32000.0             # a near this far means no cue at all
+# What sub_80030e14 moves the near and far toward (player.gd status_tick):
+# the darkness's 0x1388 and 0x1770, the light's far 0x4650.
+const DARK_NEAR := 5000.0
+const DARK_FAR := 6000.0
+const LIGHT_FAR := 18000.0
 
 const CODE := """
 shader_type spatial;
@@ -61,11 +66,23 @@ uniform sampler2D page : source_color, filter_nearest;
 uniform float offset = 0.0;
 uniform bool scrolls = false;
 uniform bool cued = true;
+uniform float dark_k = -1.0;
+uniform float light_k = -1.0;
 varying float cue;
 void vertex() {
 	float z = -(MODELVIEW_MATRIX * vec4(VERTEX, 1.0)).z * 1000.0;
 	float nearz = UV2.x;
 	float farz = UV2.y;
+	if (dark_k >= 0.0) {
+		nearz += floor((%.1f - nearz) * dark_k / 4096.0);
+		if (farz - 4096.0 < nearz) { farz = nearz + 4096.0; }
+		farz += floor((%.1f - farz) * dark_k / 4096.0);
+		if (farz < nearz + 4096.0) { nearz = farz - 4096.0; }
+	}
+	if (light_k >= 0.0) {
+		farz += floor((%.1f - farz) * light_k / 4096.0);
+		if (farz < nearz + 4096.0) { nearz = farz - 4096.0; }
+	}
 	cue = (!cued || nearz >= %.1f || farz <= nearz) ? 0.0
 		: clamp((z - nearz) / (farz - nearz), 0.0, %.6f);
 }
@@ -86,6 +103,7 @@ const MIXED := "if (c.a < 0.01) { discard; }\n\tALPHA = c.a;"
 var mats: Array[ShaderMaterial] = []
 var every: Array[ShaderMaterial] = []   # all of them, for the F2 switch
 var cued := true
+var lights := [-1, -1]
 var clock := 0.0
 
 
@@ -123,7 +141,8 @@ func _swap(n: Node, shaders: Dictionary) -> void:
 			var key := "%s %s %s" % [cull, blend, semi]
 			if not shaders.has(key):
 				var sh := Shader.new()
-				sh.code = CODE % [cull, blend, CUE_OFF, CUE_CAP, X0, Y0, Y0 + SIZE,
+				sh.code = CODE % [cull, blend, DARK_NEAR, DARK_FAR, LIGHT_FAR,
+					CUE_OFF, CUE_CAP, X0, Y0, Y0 + SIZE,
 					Y0, Y0, SIZE, FAR_COLOUR, MIXED if semi else CUT]
 				shaders[key] = sh
 			var s := ShaderMaterial.new()
@@ -144,6 +163,20 @@ func _unhandled_input(e: InputEvent) -> void:
 		cued = not cued
 		for s in every:
 			s.set_shader_parameter("cued", cued)
+
+
+# The darkness's and the light's intensities this frame (-1: none), which the
+# shader blends every vertex's near and far by, as sub_80034394 blends the
+# record's. Their background colours are not here: the vertex colours are
+# baked with the record's own.
+# @orig game:0x8003456c sub_8003456c  status:partial -- the near and the far, per vertex; not the background colour (+0x64), which the baked vertex colours carry
+func set_lights(dark_k: int, light_k: int) -> void:
+	if lights == [dark_k, light_k]:
+		return
+	lights = [dark_k, light_k]
+	for s in every:
+		s.set_shader_parameter("dark_k", float(dark_k))
+		s.set_shader_parameter("light_k", float(light_k))
 
 
 # @orig game:0x800351fc texture_scroll_step  status:transcribed -- delay 0, step 1, wrapped at 32; the shader samples the square the way its MoveImages leave it

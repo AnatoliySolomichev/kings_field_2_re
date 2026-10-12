@@ -181,6 +181,11 @@ var tilt_vel := [0, 0, 0]
 var crouch := 0
 var dip := 0
 var flash := 0
+# The hit's flash itself, 0x801b2658: 0xdac from apply_damage, 0x960 from the
+# poison; sub_80030e14 takes `flash` off it every frame and adds red over the
+# screen by it.
+var flash_colour := 0
+var tints_now := []                  # this frame's two rectangles (status_tick)
 # What player_recalc_stats leaves (KFEquip.recalc, recalc_stats below): the
 # eight offense ratings a blow carries (0x801b2538), the eight defence ones a
 # hit meets (0x801b254a), the effective stat (0x801b2524) both scale by, and
@@ -234,6 +239,18 @@ var damage_k := 0x1000
 # half -- 0 for a new character) goes the player's way.
 var poison := 0
 var resist := 0
+# The rest of what a hit can leave (player_take_hit, tools/status.py): the
+# curse, the darkness and the light, each a level and a timer the status ramp
+# runs (0x801b255e/0x801b2560, 0x801b2562/0x801b2564, 0x801b2570/0x801b2572);
+# 0x801b25b4 and 0x801b256c, either of which lets no hit through; and the
+# three bonus timers player_recalc_stats reads (0x801b256a, 0x801b256e,
+# 0x801b2578). The save holds all of them but 0x801b25b4.
+var curse := [0, 0]
+var dark := [0, 0]
+var light := [0, 0]
+var guard := 0
+var shielded := 0
+var bonus := [0, 0, 0]
 var magic_pause := 0
 var use_prev := false
 # What player_controller makes of the frame's caps (0x800311b4..0x800313ec),
@@ -377,8 +394,14 @@ func take_save(f: Dictionary) -> void:
 	fwd_speed = 0
 	stf_speed = 0
 	magic_meter = 0
-	caps = {"run": 0, "mod": 0, "slow": KFCard.halves(f, "timers")[4],
-		"paralysis": KFCard.halves(f, "timers")[5]}   # 0x801b2566, 0x801b2568 off the save
+	var tm: Array = KFCard.halves(f, "timers")     # 0x801b255e..0x801b2578
+	caps = {"run": 0, "mod": 0, "slow": int(tm[4]), "paralysis": int(tm[5])}
+	curse = [int(tm[0]), int(tm[1])]
+	dark = [int(tm[2]), int(tm[3])]
+	light = [int(tm[9]), int(tm[10])]
+	shielded = int(tm[7])
+	bonus = [int(tm[6]), int(tm[8]), int(tm[13])]
+	guard = 0
 	equip_weapon(KFCard.num(f, "weapon"))       # the meter 0, the pause, the stats
 	rotation.y = float(facing) * TAU / 4096.0
 	_to_godot()
@@ -387,16 +410,25 @@ func take_save(f: Dictionary) -> void:
 
 
 # player_recalc_stats is the game's after anything that changes what it reads:
-# a level, a strong blow, something put on or eaten. This gathers what it
-# reads -- the character's stat 36 and five skills, the weapon and the worn
-# things; the curse (0x801b255e), the three bonus timers and the story byte
-# 0x801ba9e9 are not in the port and read 0 -- and keeps what it writes.
+# a level, a strong blow, something put on or eaten, a curse. This gathers what
+# it reads -- the character's stat 36 and five skills, the curse's level, the
+# three bonus timers, the weapon and the worn things; the story byte
+# 0x801ba9e9 is not in the port and reads 0 -- and keeps what it writes.
 # @port helper -- what KFEquip.recalc reads, out of the player, and what it writes, back
 func recalc_stats() -> void:
-	var r := equip.recalc({"stat36": int(character.get("stat36", 20)),
-		"skills": character.get("grow", [0, 0, 0, 0, 10]), "curse": 0, "b56a": 0,
-		"b56e": 0, "b578": 0, "weapon": weapon_id, "worn": worn, "story": 0,
-		"level": _level()})
+	_take_recalc(equip.recalc(_recalc_state()))
+
+
+# @port helper -- what player_recalc_stats reads, out of the player
+func _recalc_state() -> Dictionary:
+	return {"stat36": int(character.get("stat36", 20)),
+		"skills": character.get("grow", [0, 0, 0, 0, 10]), "curse": int(curse[0]),
+		"b56a": int(bonus[0]), "b56e": int(bonus[1]), "b578": int(bonus[2]),
+		"weapon": weapon_id, "worn": worn, "story": 0, "level": _level()}
+
+
+# @port helper -- what player_recalc_stats writes, into the player
+func _take_recalc(r: Dictionary) -> void:
 	offense = r["offense"]
 	defence = r["defense"]
 	working = r["working"]
@@ -582,6 +614,7 @@ func _poison() -> void:
 	if poison == 0:
 		return
 	if poison % 30 == 0:
+		flash_colour = 0x960
 		flash = 0x3C
 		hp = maxi(hp - 1, 0)
 		if hp == 0:
@@ -592,20 +625,177 @@ func _poison() -> void:
 # An effect's strike (effect_strike 0x80053850 -> effect_hurt_player
 # 0x8002b114 -> player_take_hit 0x8002ab18): the eight attacks and the effect
 # of its spell_table record, the scale its distance gave and its percentage.
-# The effect's low nibble picks player_take_hit's arm -- 3, the poison, is the
-# only one here: (100 * rand()) >> 15 against the resistance. Then the damage,
-# which is 0 for a spore, and apply_damage from its point.
-# @orig game:0x8002ab18 player_take_hit  status:partial -- the poison of the effects' seven; tools/effects.py; not the two things that let nothing through, the weapon's guard (0x801b25b4, held_item_tick) and the bonus timer 0x801b256c
+# @port helper -- an effect's strike into take_hit, from its point
 func take_effect(attacks: Array, effect: int, scale: int, pct: int, point: Vector3i) -> void:
-	if (effect & 0xF) == 3:
-		var roll := (100 * (randi() & 0x7FFF)) >> 15
-		if resist < roll:
-			poison = 0x384
-	var dmg := int(KFDamage.hit(attacks, defence, stat, damage_k, scale, pct)["damage"])
-	_apply_damage(dmg, true, point, effect)
+	_hit(attacks, effect, scale, pct, point)
+
+
+# player_take_hit, tools/status.py's: nothing at all while 0x801b25b4 is set
+# or 0x801b256c runs; else the five durations as what is worn leaves them,
+# the attacks less what it turns away -- rnd drawn just where the game draws
+# rand -- the effect's arm, and the damage of the eight, which apply_damage
+# is handed. `st` holds what it reads and writes: "worn", "guard",
+# "shielded", "resist", "mp", "mp_max", "poison", "curse_lv", "curse_t",
+# "dark_t", "light_t", "paralysis", "slow", "defence", "stat", "k" and
+# "recalc", player_recalc_stats's state, which the curse runs with the curse
+# on before the damage; it leaves the recalculation in "recalced". The damage,
+# or -1 when nothing gets through.
+# @orig game:0x8002ab18 player_take_hit  status:verified -- tools/status.py: 840 of 840 hits as the game's own takes them over 21 snapshots, status, damage and rand draws; the self-test this to it
+static func take_hit(st: Dictionary, attacks: Array, effect: int, scale: int, pct: int,
+		rnd: Callable, eq: KFEquip) -> int:
+	if int(st["guard"]) != 0 or int(st["shielded"]) != 0:
+		return -1
+	var d := hit_durations(st["worn"])
+	var a := hit_shield(st["worn"], attacks, rnd)
+	match effect & 0xF:
+		1:
+			st["curse_t"] = int(d[3])
+			st["curse_lv"] = 1
+			var rs: Dictionary = (st["recalc"] as Dictionary).duplicate()
+			rs["curse"] = 1
+			var r := eq.recalc(rs)
+			st["defence"] = r["defense"]
+			st["stat"] = int(r["stat"])
+			st["recalced"] = r
+		2:
+			st["dark_t"] = int(d[2])
+			st["light_t"] = 0
+		3:
+			if int(st["resist"]) < (100 * int(rnd.call())) >> 15:
+				st["poison"] = int(d[1])
+		4:
+			st["paralysis"] = int(d[0])
+		5:
+			st["slow"] = int(d[4])
+		6:
+			var cut := int(st["mp_max"]) >> 4
+			st["mp"] = int(st["mp"]) - cut if cut < int(st["mp"]) else 0
+		7:
+			st["poison"] = 0
+	var base := 0
+	for i in 8:
+		base += KFDamage.of_type(int(a[i]), int(st["defence"][i]), int(st["stat"]), int(st["k"]))
+	var s1 := _s32(scale * base + 0x8000) >> 16
+	return _s32(pct * s1) / 10
+
+
+# The five durations -- paralysis, poison, darkness, curse, slowing -- from
+# 0xc8, 0x384, 0xa8c, 0x546 and 0x1c2 as what is worn cuts them: silver arms
+# (0x41), silver boots (0x4a), groundal boots (0x4c), the silver and gold
+# rings (0x53, 0x56), the globe amulet (0x58), the luster wing (0x5b),
+# ichrius' helm (0x29) and boots (0x4f). `worn` is 0x801b25d4..0x801b25da.
+# @orig game:0x8002abb4 player_take_hit+0x9c  status:verified -- through take_hit
+static func hit_durations(worn: Array) -> Array:
+	var para := 0xC8
+	var poi := 0x384
+	var dk := 0xA8C
+	var cu := 0x546
+	var sl := 0x1C2
+	var head := int(worn[0])
+	var arms := int(worn[3])
+	var feet := int(worn[4])
+	var items := [int(worn[5]), int(worn[6])]
+	if arms == 0x41:
+		para = 0x96
+	if feet == 0x4A:
+		poi = 0x2A3
+	if feet == 0x4C:
+		para >>= 1
+		dk = 0x546
+		cu = 0x2A3
+		sl = 0xE1
+	if 0x53 in items:
+		poi >>= 2
+	if 0x56 in items:
+		para >>= 2
+	if 0x58 in items:
+		dk >>= 1
+		cu >>= 1
+		sl >>= 1
+	if 0x5B in items:
+		dk >>= 2
+		cu >>= 2
+		sl >>= 2
+	if head == 0x29:
+		dk >>= 2
+		cu >>= 2
+		sl >>= 2
+	if feet == 0x4F:
+		para >>= 2
+		poi >>= 2
+	return [para, poi, dk, cu, sl]
+
+
+# The attacks less what is worn turns away: the fire mail (0x2d) the fire;
+# slash, blow and stab one time in four for the dragon head (0x27), groundal
+# mail (0x30) and ichrius' armor (0x31), always for the five promeus pieces;
+# the five magic one in four for the groundal and ichrius' shields (0x3a,
+# 0x3c), one in two for the ebony bracelet (0x55). rand is drawn only for a
+# piece worn.
+# @orig game:0x8002ad08 player_take_hit+0x1f0  status:verified -- through take_hit
+static func hit_shield(worn: Array, attacks: Array, rnd: Callable) -> Array:
+	var a: Array = []
+	for i in 8:
+		a.append(int(attacks[i]) if i < attacks.size() else 0)
+	var head := int(worn[0])
+	var body := int(worn[1])
+	var shld := int(worn[2])
+	var items := [int(worn[5]), int(worn[6])]
+	if body == 0x2D:
+		a[4] = 0
+	if head == 0x27 and int(rnd.call()) < 0x2000:
+		a[0] = 0; a[1] = 0; a[2] = 0
+	if head == 0x28 and body == 0x2F and shld == 0x3B and int(worn[3]) == 0x45 \
+			and int(worn[4]) == 0x4E:
+		a[0] = 0; a[1] = 0; a[2] = 0
+	if body == 0x30 and int(rnd.call()) < 0x2000:
+		a[0] = 0; a[1] = 0; a[2] = 0
+	if body == 0x31 and int(rnd.call()) < 0x2000:
+		a[0] = 0; a[1] = 0; a[2] = 0
+	if shld == 0x3A and int(rnd.call()) < 0x2000:
+		for i in range(3, 8): a[i] = 0
+	if shld == 0x3C and int(rnd.call()) < 0x2000:
+		for i in range(3, 8): a[i] = 0
+	if 0x55 in items and int(rnd.call()) < 0x4000:
+		for i in range(3, 8): a[i] = 0
+	return a
+
+
+# @port helper -- a hit: the player's fields into take_hit and back, then apply_damage
+func _hit(attacks: Array, effect: int, scale: int, pct: int, at: Vector3i) -> void:
+	var st := {"worn": worn, "guard": guard, "shielded": shielded, "resist": resist,
+		"mp": mp, "mp_max": int(character.get("mp_max", 30)), "poison": poison,
+		"curse_lv": curse[0], "curse_t": curse[1], "dark_t": dark[1],
+		"light_t": light[1], "paralysis": caps["paralysis"], "slow": caps["slow"],
+		"defence": defence, "stat": stat, "k": damage_k, "recalc": _recalc_state()}
+	var dmg := take_hit(st, attacks, effect, scale, pct, _rand, equip)
+	if dmg < 0:
+		return
+	mp = int(st["mp"])
+	poison = int(st["poison"])
+	curse = [int(st["curse_lv"]), int(st["curse_t"])]
+	dark[1] = int(st["dark_t"])
+	light[1] = int(st["light_t"])
+	caps["paralysis"] = int(st["paralysis"])
+	caps["slow"] = int(st["slow"])
+	if st.has("recalced"):
+		_take_recalc(st["recalced"])
+	_apply_damage(dmg, true, at, effect)
+
+
+# @port helper -- the BIOS's rand, 0..0x7fff
+static func _rand() -> int:
+	return randi() & 0x7FFF
+
+
+# @port helper -- two's complement of a 32-bit product, as mflo leaves it
+static func _s32(v: int) -> int:
+	v &= 0xFFFFFFFF
+	return v - 0x100000000 if v & 0x80000000 else v
 
 
 # @orig game:0x800313fc player_controller+0x430  status:partial -- the switch on the state, for 0, 0x10, 0x11 and 0x12
+# @orig game:0x80031364 player_controller+0x398  status:transcribed -- the paralysis's orange flash, every fourth frame, into status_tick's records
 # @orig game:0x80031b98 player_controller+0xbcc  status:transcribed -- state 0x10 after the walk: the push, the tilt spring, the end
 # @orig game:0x80031c14 player_controller+0xc48  status:transcribed -- state 0x12, the stun
 # @orig game:0x80030424 player_turn+0x608  status:transcribed -- a swing begins on the attack edge once the pause is over
@@ -613,8 +803,7 @@ func take_effect(attacks: Array, effect: int, scale: int, pct: int, point: Vecto
 func _frame(dir: Vector3) -> void:
 	var an := get_node_or_null("../Actors")
 	creatures = an.solid() if an and an.has_method("solid") else []
-	if flash > 0:
-		flash -= 1
+	_status()
 	if pstate == 0x11:
 		_dying()
 		_view()
@@ -636,6 +825,11 @@ func _frame(dir: Vector3) -> void:
 	if int(c[2]):                     # the paralysis halves the speeds
 		fwd_speed = coll._s16(fwd_speed) >> 1
 		stf_speed = coll._s16(stf_speed) >> 1
+		# and every fourth frame flashes orange (0x800313ac), into this
+		# frame's records after sub_80030e14's
+		if (int(caps["paralysis"]) & 3) == 3:
+			_tint(tints_now, 1, [0x3C, 0x1E, 0], 0xC00, true)
+			_tints(tints_now)
 	_use()
 	# player_turn (0x80030424): a swing begins on the attack button's edge
 	# when the pause after the last blow is over (0x8002c040).
@@ -698,7 +892,7 @@ func _frame(dir: Vector3) -> void:
 # grows the speed by mod / 0x1000 and the turn by mod / 0x2000 of themselves;
 # and the paralysis (0x801b2568) makes both 0, counts down and halves the two
 # speeds. [speed cap, turn cap, paralysed].
-# @orig game:0x800311b4 player_controller+0x1e8  status:verified -- the run: tools/replay.py, 150129 of 150129 frames of bp16's speed caps, and the self-test this to it; the slowing and the paralysis transcribed, their screen flash (0x8003d8ec) and the guard (0x801b25b4) not here
+# @orig game:0x800311b4 player_controller+0x1e8  status:verified -- the run: tools/replay.py, 150129 of 150129 frames of bp16's speed caps, and the self-test this to it; the slowing and the paralysis transcribed (the paralysis's flash is _frame's); not the halving while 0x801b25b4 is set
 static func frame_caps(c: Dictionary, walking: bool) -> Array:
 	var speed := 0xC8
 	var turn := TURN_MAX_MOVING if walking else TURN_MAX_STILL
@@ -734,8 +928,8 @@ static func frame_caps(c: Dictionary, walking: bool) -> Array:
 
 
 # player_turn on 0x801b24f5: USE held this frame and the last counts it down to
-# 0 -- and with ring 0x4c worn (0x801b25d8) USE held does nothing at all --
-# else it is 1 again (0x800302a8).
+# 0 -- and with the groundal boots (0x4c) on the feet (0x801b25d8) USE held
+# does nothing at all -- else it is 1 again (0x800302a8).
 # @orig game:0x8003005c player_turn+0x240  status:verified -- through frame_caps, the same 150129 frames
 static func run_flag(c: Dictionary, held: bool) -> void:
 	if held:
@@ -750,10 +944,10 @@ static func run_flag(c: Dictionary, held: bool) -> void:
 # empties -- and lowers damage_scale by 0x80 to 0x400; otherwise the magic
 # meter's pause counts down, or it refills by meter_gain(the five working
 # skills' average, 0) a frame, and damage_scale climbs back by 0x80 to 0x1000.
-# Ring 0x4c in the fifth slot (0x801b25d8) takes the held branch away. The run's
-# flag is run_flag's.
+# The groundal boots (0x4c) on the feet (0x801b25d8) take the held branch
+# away. The run's flag is run_flag's.
 # tools/weapon.py use_held: with the swing, 817 of 817 frames of bp25.
-# @orig game:0x80030010 player_turn+0x1f4  status:transcribed -- a label inside player_turn; the rings 0x4d and 0x4f and a spell's rate are not here
+# @orig game:0x80030010 player_turn+0x1f4  status:transcribed -- a label inside player_turn; the boots 0x4d (fu-jin) and 0x4f (ichrius') that shorten the meters' pause, and a spell's rate, are not here
 func _use() -> void:
 	var now := KFPad.held(KFPad.USE)
 	var held := now and use_prev and int(worn[4]) != 0x4C
@@ -855,16 +1049,14 @@ static func fall_damage(v: int) -> int:
 
 # A creature's blow, from actors.gd: actor_blow (0x8004d254) found the player in
 # reach and arc and hands player_take_hit (0x8002ab18) slash, blow and stab
-# from the record's +0x12, +0x14 and +0x16, the effect +0x11, and its own point
-# raised by +0xf << 5. The seven effects the low nibble picks (poison and its
-# kin) are not here.
-# @orig game:0x8002ab18 player_take_hit  status:partial -- the damage and apply_damage; not the effects, nor the armour and rings that cut the attack
+# from the record's +0x12, +0x14 and +0x16, the five magic attacks 0, the
+# effect +0x11, the scales 0x1000 and 10, and its own point raised by +0xf << 5.
+# @orig game:0x8004d348 actor_blow+0xf4  status:transcribed -- the call: the record's three attacks and its effect, the rest 0
 func take_blow(a: Dictionary, rec: Array) -> void:
-	var attacks := [_u16(rec, 0x12), _u16(rec, 0x14), _u16(rec, 0x16)]
-	var dmg := int(KFDamage.hit(attacks, defence, stat, damage_k)["damage"])
+	var attacks := [_u16(rec, 0x12), _u16(rec, 0x14), _u16(rec, 0x16), 0, 0, 0, 0, 0]
 	var at := Vector3i(int(a["px"]), int(a["py"]) - (int(rec[0xF]) << 5),
 		int(a["pz"]))
-	_apply_damage(dmg, true, at, int(rec[0x11]))
+	_hit(attacks, int(rec[0x11]), KFDamage.ARG9, KFDamage.ARG10, at)
 
 
 # @port helper -- a little-endian halfword out of a record's bytes
@@ -901,6 +1093,7 @@ func _apply_damage(dmg: int, has_at: bool, at: Vector3i, effect: int) -> void:
 			pv[i] = coll._s16((int(d[i]) * s1) >> 12)
 		pv[1] = clampi(pv[1], -0xC8, 0xC8)
 	flash = maxi((0x514 - (share >> 1)) >> 2, 0x46)
+	flash_colour = 0xDAC
 	if left == 0:
 		_throw(pv)                  # 0x8002a8b0: thrown by the blow that killed
 		return
@@ -1086,6 +1279,155 @@ static var arrive = null
 # [the inventory, the gold, the character, the weapon, what is worn, the
 # magic and the button's].
 static var carried = null
+
+
+# sub_80030e14, called by player_controller each frame before the pad
+# (0x80031118), tools/status.py's: four ramps of a level and a timer through
+# sub_80030b24 -- the level climbs a frame at a time while it is under the
+# timer, which is then zeroed, and falls back; the intensity is level * scale
+# / 0x40, scale from 0x40 up, -1 once both are 0. The darkness (0x801b2562)
+# blends the lighting toward a background of (10, 10, 10), near 0x1388 and far
+# 0x1770 and sets a grey (0x80) subtracted by a quarter of it; the light
+# (0x801b2570) the background toward (0xdc, 0xdc, 0xa0) and the far toward
+# 0x4650; the hit's flash falls by its step and adds red (0x3c) by itself,
+# 0x1000 at most; the curse (0x801b255e) adds (0x1e, 0x1e, 0xa), and its
+# level back at 0 runs player_recalc_stats. `st` holds the eight fields;
+# the answer is the two rectangles' records ([count, mode, r, g, b], mode 1
+# adding and 2 subtracting), the two lighting intensities (-1: none) and the
+# recalculations.
+# @orig game:0x80030e14 sub_80030e14  status:verified -- tools/status.py: 84 of 84 runs, the game's own over the snapshots frame for frame, fields, tints and the 48 lighting records; the self-test this to it
+# @orig game:0x80030b24 sub_80030b24  status:verified -- through status_tick
+static func status_tick(st: Dictionary) -> Dictionary:
+	var tints := [[0, 1, 0, 0, 0], [0, 1, 0, 0, 0]]
+	var out := {"tints": tints, "dark": -1, "light": -1, "recalc": 0}
+	var r := _ramp_status(st, "dark_lv", "dark_t", 0x40, 0xC00)
+	if r != -1:
+		out["dark"] = r
+		_tint(tints, 2, [0x80, 0x80, 0x80], r >> 2, false)
+	r = _ramp_status(st, "light_lv", "light_t", 0x40, 0xE10)
+	if r != -1:
+		out["light"] = r
+	if KFWeapon.s16(int(st["flash"])) != 0:
+		var f := (int(st["flash"]) - int(st["flash_step"])) & 0xFFFF
+		if KFWeapon.s16(f) < 0:
+			f = 0
+		st["flash"] = f
+		_tint(tints, 1, [0x3C, 0, 0], mini(KFWeapon.s16(f), 0x1000), true)
+	r = _ramp_status(st, "curse_lv", "curse_t", 0x40, 0xC00)
+	if r != -1:
+		if KFWeapon.s16(int(st["curse_lv"])) == 0:
+			out["recalc"] = 1
+		_tint(tints, 1, [0x1E, 0x1E, 0xA], r, true)
+	return out
+
+
+# @port helper -- sub_80030b24 on two of status_tick's fields, written back unless -1
+static func _ramp_status(st: Dictionary, lk: String, tk: String, most: int, scale: int) -> int:
+	var lv := int(st[lk]) & 0xFFFF
+	var t := int(st[tk]) & 0xFFFF
+	if KFWeapon.s16(lv) == 0 and t == 0:
+		return -1
+	if KFWeapon.s16(lv) < KFWeapon.s16(t):
+		lv = (lv + 1) & 0xFFFF
+	else:
+		t = 0
+		lv = (lv - 1) & 0xFFFF
+	st[lk] = lv
+	st[tk] = t
+	var v := KFWeapon.s16(lv)
+	if v < most:
+		v = _s32(v * scale) / most
+	else:
+		v = scale
+	return KFWeapon.s16(v)
+
+
+# sub_8003d8ec (adding) and sub_8003da10 (setting) on render_frame's two
+# records: the count up, the mode, and each colour times k >> 12.
+# @orig game:0x8003d8ec sub_8003d8ec  status:verified -- through status_tick
+# @orig game:0x8003da10 sub_8003da10  status:verified -- through status_tick
+static func _tint(tints: Array, mode: int, rgb: Array, k: int, add: bool) -> void:
+	var rec: Array = tints[mode - 1]
+	rec[0] = (int(rec[0]) + 1) & 0xFF
+	rec[1] = mode
+	for i in 3:
+		var d := _s32(int(rgb[i]) * k) >> 12
+		rec[2 + i] = KFWeapon.s16((int(rec[2 + i]) if add else 0) + d)
+
+
+# sub_80034394 on one lighting record [r, g, b, near, far] (the bytes at
+# +0x64 and the halves at +0x68, +0x6a): each moved by fixed_madd toward its
+# target by k / 0x1000 -- 0xff in the colour or 0xffff for a distance leaves
+# it -- and the two kept 0x1000 apart. scroll.gd's shader does the distances
+# the same way, vertex by vertex, from the record's near and far.
+# @orig game:0x80034394 sub_80034394  status:verified -- through status_tick, the 48 records sub_800344dc blends
+static func light_blend(rec: Array, rgb: Array, near: int, far: int, k: int) -> void:
+	var colour := int(rgb[0]) & 0xFF != 0xFF and int(rgb[1]) & 0xFF != 0xFF \
+		and int(rgb[2]) & 0xFF != 0xFF
+	if colour:
+		for i in 3:
+			rec[i] = (int(rec[i]) + (_s32((int(rgb[i]) - int(rec[i])) * k) >> 12)) & 0xFF
+	if near != 0xFFFF:
+		rec[3] = (int(rec[3]) + (_s32((near - int(rec[3])) * k) >> 12)) & 0xFFFF
+		if int(rec[4]) - 0x1000 < int(rec[3]):
+			rec[4] = (int(rec[3]) + 0x1000) & 0xFFFF
+	if far != 0xFFFF:
+		rec[4] = (int(rec[4]) + (_s32((far - int(rec[4])) * k) >> 12)) & 0xFFFF
+		if int(rec[4]) < int(rec[3]) + 0x1000:
+			rec[3] = (int(rec[4]) - 0x1000) & 0xFFFF
+
+
+# @port helper -- status_tick on the player's fields, its rectangles drawn and its lighting handed to the world's shader
+func _status() -> void:
+	var st := {"dark_lv": dark[0], "dark_t": dark[1], "light_lv": light[0],
+		"light_t": light[1], "curse_lv": curse[0], "curse_t": curse[1],
+		"flash": flash_colour, "flash_step": flash}
+	var out := status_tick(st)
+	dark = [int(st["dark_lv"]), int(st["dark_t"])]
+	light = [int(st["light_lv"]), int(st["light_t"])]
+	curse = [int(st["curse_lv"]), int(st["curse_t"])]
+	flash_colour = int(st["flash"])
+	if int(out["recalc"]) > 0:
+		recalc_stats()
+	tints_now = out["tints"]
+	_tints(tints_now)
+	var sc := get_node_or_null("../Scroll")
+	if sc and sc.has_method("set_lights"):
+		sc.call("set_lights", int(out["dark"]), int(out["light"]))
+
+
+# render_frame's two rectangles over the whole screen (sub_8003d64c, adding,
+# and sub_8003d79c, subtracting): each record asked for this frame draws its
+# colour over its count, a byte a channel, at the rate its mode gives -- under
+# the panel, which is drawn nearer.
+# @orig game:0x8003d64c sub_8003d64c  status:transcribed -- the colour and the rate; a ColorRect blended as the GPU's B+F
+# @orig game:0x8003d79c sub_8003d79c  status:transcribed -- the same, B-F
+func _tints(tints: Array) -> void:
+	var layer := get_node_or_null("Tints")
+	if layer == null:
+		layer = CanvasLayer.new()
+		layer.name = "Tints"
+		layer.layer = 0
+		for m in [1, 2]:
+			var r := ColorRect.new()
+			r.name = "Rate%d" % m
+			r.set_anchors_preset(Control.PRESET_FULL_RECT)
+			r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			var mat := CanvasItemMaterial.new()
+			mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD if m == 1 \
+				else CanvasItemMaterial.BLEND_MODE_SUB
+			r.material = mat
+			r.visible = false
+			layer.add_child(r)
+		add_child(layer)
+	for i in 2:
+		var rec: Array = tints[i]
+		var r := layer.get_node("Rate%d" % (i + 1)) as ColorRect
+		var n := int(rec[0])
+		r.visible = n > 0
+		if n > 0:
+			r.color = Color8((int(rec[2]) / n) & 0xFF, (int(rec[3]) / n) & 0xFF,
+				(int(rec[4]) / n) & 0xFF)
 
 
 # @port engine -- the black the dying fades to, as a layer; its value is _dying's

@@ -1436,8 +1436,9 @@ and the last** (`0x801b265c`, `0x801b265e`, `bind_use`) counts `0x801b24f5`
 down to 0 (`0x8003005c`), anything else puts it back to 1 (`0x800302a8`). So
 holding USE for two frames runs: from the third, the cap climbs 39 a frame to
 **336** (`200 + 0xaf0 * 200 >> 12`) and the turn to `0x20 + 0x15`; let go and
-it falls back as fast. With ring `0x4c` in the fifth slot (`0x801b25d8`) the
-held branch is skipped altogether, so that ring cannot run. The same branch is
+it falls back as fast. With the groundal boots (`0x4c`) on the feet
+(`0x801b25d8`) the held branch is skipped altogether, so they cannot run. The
+same branch is
 what drains both meters by 500 a frame and lowers `damage_scale` -- the
 running costs stamina and defence (see "The player's blow").
 
@@ -3780,6 +3781,103 @@ those three against 33 HP, so the five magic attacks that session's bp20 did
 not log were not all zero — it logs them now (`m=`), with the call site (`ra=`).
 `godot/damage.gd` is the same formula and `selftest.gd` holds the two together
 on the same six.
+
+### What a hit leaves behind: the seven effects, and what is worn against them
+
+The rest of `player_take_hit` (`tools/status.py`). Before anything, two things
+let a hit through not at all: **`0x801b25b4` set** and **`0x801b256c`
+running** (`0x8002ab9c`, `0x8002abb0`). Then five durations, which what is worn
+cuts -- the worn bytes are `0x801b25d4` head, `d5` body, `d6` shield, `d7`
+arms, `d8` feet, `d9` and `da` the two items:
+
+```
+                      paralysis  poison  darkness  curse   slowing
+start                 0xc8       0x384   0xa8c     0x546   0x1c2
+silver arms 0x41      0x96
+silver boots 0x4a                0x2a3
+groundal boots 0x4c   >> 1               0x546     0x2a3   0xe1
+silver ring 0x53                 >> 2                              either item
+gold ring 0x56        >> 2                                         either item
+globe amulet 0x58                        >> 1      >> 1    >> 1    either item
+luster wing 0x5b                         >> 2      >> 2    >> 2    either item
+ichrius' helm 0x29                       >> 2      >> 2    >> 2
+ichrius' boots 0x4f   >> 2       >> 2
+```
+
+in that order, and then what turns attacks away, `rand` drawn only for a
+piece that is worn: the **fire mail** (`0x2d`) the fire attack always; the
+**dragon head** (`0x27`), **groundal mail** (`0x30`) and **ichrius' armor**
+(`0x31`) slash, blow and stab one time in four (`rand() < 0x2000`); the
+**promeus five** -- helm `0x28`, armor `0x2f`, shield `0x3b`, hands `0x45`
+(the word at `0x801b25d4` is `0x453b2f28`) and boots `0x4e` -- the three
+always; the **groundal** and **ichrius' shields** (`0x3a`, `0x3c`) the five
+magic attacks one in four, the **ebony bracelet** (`0x55`) one in two.
+
+The effect's low nibble picks the arm (the table at `0x800117a8`):
+
+```
+1  the curse      0x801b255e = 1, 0x801b2560 = curse, player_recalc_stats --
+                  before the damage, so the cursing hit meets the halved
+                  defence already
+2  darkness       0x801b2564 = darkness; 0x801b2572 = 0 puts out the light
+3  poison         0x801b255c = poison when (100 * rand()) >> 15 is above the
+                  resistance 0x801b255a
+4  paralysis      0x801b2568
+5  slowing        turn_slow_timer, 0x801b2566
+6  MP             less a sixteenth of its most, to 0
+7  the poison cured
+```
+
+and the damage of the eight goes to `apply_damage` with the whole effect.
+**Against the game's own routine**, run by `tools/mipsrun.py` over every
+snapshot with each case laid in -- what is worn, the timers, the two ways out,
+the attacks, the LCG's seed: **840 of 840 hits**, the fields, the damage and
+the `rand` values drawn alike, 743 of them reaching `apply_damage`.
+
+**What keeps running: `sub_80030e14`**, which `player_controller` calls every
+frame before it reads the pad (`0x80031118`). Four things go through one ramp,
+`sub_80030b24(&level, &timer, most, scale)`: while the level is under the
+timer it climbs one a frame; there the timer is zeroed and the level falls
+back one a frame -- so an effect of timer T lasts about 2T frames, and the
+answer is `level * scale / most`, `scale` itself from `most` up, -1 (and
+nothing written) once both are 0.
+
+```
+darkness  0x801b2562/64   0x40, 0xc00   the 48 lighting records' background
+                                        toward (10,10,10), near toward 0x1388,
+                                        far toward 0x1770; a grey 0x80 taken
+                                        off the screen by a quarter of it
+light     0x801b2570/72   0x40, 0xe10   the background toward (0xdc,0xdc,0xa0),
+                                        the far toward 0x4650
+flash     0x801b2658 -= 0x801b265a, to 0; red 0x3c added by it (0x1000 most)
+curse     0x801b255e/60   0x40, 0xc00   (0x1e,0x1e,0xa) added; its level back
+                                        at 0 runs player_recalc_stats
+```
+
+The blending is `sub_8003456c` -> `sub_800344dc` -> `sub_80034394`: every one
+of the first 48 records' `+0x64` colour, `+0x68` near and `+0x6a` far moved
+by `fixed_madd` toward its target by the intensity / 0x1000 (a 0xff colour or
+a 0xffff distance left alone) and the two distances kept 0x1000 apart.
+`light_table_reset` refills the records at the top of every frame, so the
+blend is from the level's own each time, not cumulative. The screen's colours
+are two records at `0x801aeafe` -- a count, a mode, three s16 -- which
+`sub_8003d8ec` adds to and `sub_8003da10` sets, and `render_frame` draws each
+asked-for one as a rectangle over the whole screen (`sub_8003d64c`,
+`sub_8003d79c`), the sum over the count a byte a channel, at the rate its
+mode gives: 1 adds, 2 subtracts. The paralysis adds its own orange (0x3c,
+0x1e, 0) every fourth frame (`0x800313ac`). The hit's flash is set by
+`apply_damage` and the two knocks (0xdac, and the step it worked out) and by
+the poison (0x960, 0x3c).
+
+**Against the game's own `sub_80030e14`**, over every snapshot with each case
+laid in and the records reset each frame as the game resets them: **84 of 84
+runs, 13 057 of 13 057 frames**, every field, both screen records and all 48
+lighting records byte for byte. In the port (`player.gd` `take_hit`,
+`status_tick`): 300 of 300 hits and 40 of 40 runs (6312 frames) as the model
+has them. The darkness's and the light's near and far go to the world's
+shader (`scroll.gd`) and are blended vertex by vertex the same way; their
+background colour does not, since the port bakes each record's into the
+vertex colours.
 
 ### The 191 opcodes that share a target are not doing nothing
 

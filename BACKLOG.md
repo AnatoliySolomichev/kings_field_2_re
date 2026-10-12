@@ -787,10 +787,21 @@ and the game, one to one"; PORT.md the table). The pass that put the markers on
 read each function against the code it names, and this is what it left open --
 each one is also in its function's marker, as `partial` and what differs:
 
-* **`player_recalc_stats` reads four things the port does not keep**: the
-  curse (`0x801b255e`), the bonus timers `0x801b256a`, `0x801b256e` and
-  `0x801b2578`, and the story byte `0x801ba9e9`; `player.gd` passes 0 for
-  each. The routine itself is whole (`equip.gd recalc`, 299 of 299 values).
+* **`player_recalc_stats` reads one thing the port does not keep**: the
+  story byte `0x801ba9e9`; `player.gd` passes 0 for it. The curse's level is
+  kept now (a hit's effect 1, `status_tick`), and the three bonus timers come
+  off a save, though nothing in the port starts or counts them down yet --
+  the spells that do are not read. The routine itself is whole (`equip.gd
+  recalc`, 299 of 299 values).
+* **What a hit leaves is whole; two of its inputs are not.** `0x801b25b4`,
+  which lets no hit through and halves both of the walk's caps, is cleared by
+  `equip_weapon` and set by something not read yet (the summary had it as a
+  weapon's guard; unconfirmed). `0x801b256c`, the other way out, is one of the
+  bonus timers above. And the darkness's and the light's background colour
+  (`+0x64` of the lighting records) is not in the port: the vertex colours are
+  baked with the record's own, so the darkness there is its near and far
+  alone -- the world goes black past 0x1770 -- and the light only pushes the
+  far out.
 * **`give_item` and `take_item` call the level's own hook** after the count
   changes (`level_hooks+0x18`, `+0x2c`); `godot/items.gd` does not.
 * **`new_character` does much more than `KFLevels.fresh`**: the gold, the

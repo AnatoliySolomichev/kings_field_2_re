@@ -459,6 +459,25 @@ sixteen times over and handed to `apply_damage`.
 **6 of 6** hits in the recorded session reproduced exactly; the seventh, the
 one that killed the player, needed magic the log did not carry.
 
+**`status.py`** — what a hit leaves behind besides the damage, and what keeps
+running after it.
+
+```
+python3 tools/status.py --check      both, against the game's own routines
+```
+
+`take_hit` is the rest of `player_take_hit`: the two ways nothing gets through,
+the five durations as what is worn cuts them, the attacks the armour and the
+rings turn away (`rand` drawn just where the game draws it) and the seven
+effects. `tick` is `sub_80030e14`, a frame: the darkness, the light, the
+hit's flash and the curse through their ramp, the two rectangles drawn over
+the screen and the 48 lighting records blended. Both are held to the game's
+own code run by `mipsrun.py` over every snapshot with random cases laid in --
+**840 of 840 hits** (state, damage, every draw) and **84 of 84 runs, 13 057
+of 13 057 frames** (fields, screen records, lighting records) -- and
+`export`/`export_tick` write `takehit.json` and `statuscheck.json` for the
+self-test. FORMATS.md, "What a hit leaves behind".
+
 **`knock.py`** — what a blow does to the player after the HP, and the recording.
 
 ```

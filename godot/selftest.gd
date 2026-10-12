@@ -311,6 +311,12 @@ func _init() -> void:
 	if not _run():
 		quit(1)
 		return
+	if not _take_hit():
+		quit(1)
+		return
+	if not _status_tick():
+		quit(1)
+		return
 	if not _level_states():
 		quit(1)
 		return
@@ -791,6 +797,115 @@ func _run() -> bool:
 				first = "frame %d: godot %d, the game %d" % [n, int(got[0]), v[4]]
 		script.run_flag(c, v[2] == 1)
 	print("the run: %d of %d frames' speed caps as bp16 logged them (%d above 200, USE held)" % [ok, n, ran])
+	if first != "":
+		print("  first difference: " + first)
+	return ok == n
+
+
+# player_take_hit, player.gd's take_hit against tools/status.py's (whose model
+# the game's own holds, 840 of 840): a fresh character with each case's worn
+# things, timers and attacks laid in, the rand values drawn in the order the
+# model drew them -- the state left, the damage, and every draw taken.
+func _take_hit() -> bool:
+	if not FileAccess.file_exists("res://takehit.json"):
+		print("player_take_hit: no cases to check against")
+		return true
+	var d = JSON.parse_string(FileAccess.get_file_as_string("res://takehit.json"))
+	var eq := KFEquip.new()
+	if not eq.load_tables():
+		print("player_take_hit: no equipment tables")
+		return true
+	var script = load("res://player.gd")
+	var ok := 0
+	var n := 0
+	var first := ""
+	for c in d["hits"]:
+		var draws: Array = c["draws"]
+		var at := [0]
+		var rnd := func() -> int:
+			at[0] += 1
+			return int(draws[at[0] - 1]) if at[0] <= draws.size() else -1
+		var rs: Dictionary = (d["recalc"] as Dictionary).duplicate(true)
+		rs["worn"] = (c["worn"] as Array).map(func(x): return int(x))
+		var st := {"worn": rs["worn"], "guard": int(c["guard"]),
+			"shielded": int(c["shielded"]), "resist": int(c["resist"]),
+			"mp_max": int(c["mp_max"]),
+			"defence": (d["defence"] as Array).map(func(x): return int(x)),
+			"stat": int(d["stat"]), "k": int(d["k"]), "recalc": rs}
+		for k in c["before"]:
+			st[k] = int(c["before"][k])
+		var dmg: int = script.take_hit(st, c["attacks"], int(c["effect"]),
+			int(c["scale"]), int(c["pct"]), rnd, eq)
+		var same: bool = dmg == int(c["damage"]) and at[0] == draws.size()
+		for k in c["after"]:
+			if int(st[k]) != int(c["after"][k]):
+				same = false
+		n += 1
+		if same:
+			ok += 1
+		elif first == "":
+			first = "case %d, effect 0x%x, worn %s: godot %d, %d draws; python %d, %d" % [
+				n, int(c["effect"]), str(rs["worn"]), dmg, at[0], int(c["damage"]), draws.size()]
+	print("player_take_hit: %d of %d hits as tools/status.py takes them (whose model the game's own holds)" % [ok, n])
+	if first != "":
+		print("  first difference: " + first)
+	return ok == n
+
+
+# sub_80030e14, player.gd's status_tick against tools/status.py's tick (whose
+# model the game's own holds frame for frame): every frame's fields, the two
+# rectangles drawn, the recalculations, and the first lighting record after
+# the darkness and the light.
+func _status_tick() -> bool:
+	if not FileAccess.file_exists("res://statuscheck.json"):
+		print("the status: no frames to check against")
+		return true
+	var d = JSON.parse_string(FileAccess.get_file_as_string("res://statuscheck.json"))
+	var script = load("res://player.gd")
+	var names := ["dark_lv", "dark_t", "light_lv", "light_t", "curse_lv", "curse_t",
+		"flash", "flash_step"]
+	var runs := 0
+	var good := 0
+	var n := 0
+	var ok := 0
+	var first := ""
+	for run in d["runs"]:
+		var st := {}
+		for k in names:
+			st[k] = int(run["start"][k])
+		var all := true
+		runs += 1
+		for row in run["frames"]:
+			var out: Dictionary = script.status_tick(st)
+			var fields := []
+			for k in names:
+				fields.append(int(st[k]))
+			var rects := []
+			for rec in out["tints"]:
+				var c := int(rec[0])
+				if c > 0:
+					rects.append([int(rec[1]) & 3, (int(rec[2]) / c) & 0xFF,
+						(int(rec[3]) / c) & 0xFF, (int(rec[4]) / c) & 0xFF])
+			var look: Array = (d["look0"] as Array).map(func(x): return int(x))
+			if int(out["dark"]) != -1:
+				script.light_blend(look, [0xA, 0xA, 0xA], 0x1388, 0x1770, int(out["dark"]))
+			if int(out["light"]) != -1:
+				script.light_blend(look, [0xDC, 0xDC, 0xA0], 0xFFFF, 0x4650, int(out["light"]))
+			var want_rects: Array = (row[1] as Array).map(func(r): return (r as Array).map(func(x): return int(x)))
+			var same: bool = fields == (row[0] as Array).map(func(x): return int(x)) \
+				and rects == want_rects and int(out["recalc"]) == int(row[2]) \
+				and look == (row[3] as Array).map(func(x): return int(x))
+			n += 1
+			if same:
+				ok += 1
+			elif all:
+				all = false
+				if first == "":
+					first = "run %d frame %d: godot %s %s %s, python %s %s %s" % [runs,
+						n, str(fields), str(rects), str(look), str(row[0]), str(row[1]), str(row[3])]
+		if all:
+			good += 1
+	print("the status: %d of %d runs, %d of %d frames of sub_80030e14 as tools/status.py runs it (whose model the game's own holds)" % [good, runs, ok, n])
 	if first != "":
 		print("  first difference: " + first)
 	return ok == n
