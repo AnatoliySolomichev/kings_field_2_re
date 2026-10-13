@@ -59,6 +59,7 @@ const BLAST := 0x5A                # meteor's
 const ORLADIN := 0x15
 const BURST := 0x58                # orladin's
 const RAY := 0x5B                  # orladin's
+const TORNADO := 0x0F
 const TRAIL_ARGS := [0xE10, -0x80, 5, 0x16, 0, 1, 3]   # 0x80058f50's, after the velocity
 const QUERY := {1: 0xA1, 2: 0x31, 3: 0xB1, 4: 0x01}    # effect_collide: +0 & 7 -> flags
 const GROW := 0x96
@@ -78,6 +79,7 @@ var layer_offset := 0              # collision_layer_offset after the last tile 
 var world = null                   # what the effects ask of the game; this node, or a stand-in
 var pulse := []                     # this frame's lighting from an effect: [near, far, k, rgb]
 var collide_actor := -1             # 0x801e648c: the creature the last query met
+var tick_stack := PackedByteArray([0, 0, 0, 0, 0, 0, 0, 0])   # effect_tick's sp+0x50: tornado's
 var surface18 := 100000             # 0x801e647c: the water the last query found
 var acc := 0.0
 var player: Node3D
@@ -119,6 +121,7 @@ func clear() -> void:
 	m.fill(0)
 	for k in COUNT:
 		m[k * STRIDE] = 0xFF
+	tick_stack.fill(0)
 
 
 # @port engine -- runs effect_driver at the game's 15 frames a second
@@ -203,7 +206,7 @@ func alloc() -> int:
 # effect_spawn(a0, a1, kind, point, ...): `point` the 16 bytes a3 points at
 # (or empty), `args` the stack arguments from the fifth on -- a pointer as the
 # bytes it points at. The slot's offset, or -1 when none is free.
-# @orig game:0x80053c84 effect_spawn  status:partial -- the common setting up and the arms of 30 kinds: 0 (fire ball), 6 (stone), 7 and 0x16 (earth wave), 9 (shudom), 0xb (haze), 0xc (bortecth), 0xd (wind cutter), 0x11 (walwind), 0x15 (orladin), 0x17, 0x19, 0x1a, 0x1b, 0x1c, 0x1e (the healing and protecting), 0x1f, 0x22, 0x23, 0x24, 0x26 (the creatures'), 0x58, 0x59, 0x5a, 0x5b, 0x5e, 0x5f, 0x65 (the spells' children), 0x6f (puff) and 0x70 (splash); tools/effects.py's, which the game's own holds (machine_check, magic_check, spell_hit_check) and the self-test holds this to. 35 kinds have the empty arm, which frees the slot, as here; the other 65 arms are not here
+# @orig game:0x80053c84 effect_spawn  status:partial -- the common setting up and the arms of 31 kinds: 0 (fire ball), 6 (stone), 7 and 0x16 (earth wave), 9 (shudom), 0xb (haze), 0xc (bortecth), 0xd (wind cutter), 0xf (tornado), 0x11 (walwind), 0x15 (orladin), 0x17, 0x19, 0x1a, 0x1b, 0x1c, 0x1e (the healing and protecting), 0x1f, 0x22, 0x23, 0x24, 0x26 (the creatures'), 0x58, 0x59, 0x5a, 0x5b, 0x5e, 0x5f, 0x65 (the spells' children), 0x6f (puff) and 0x70 (splash); tools/effects.py's, which the game's own holds (machine_check, magic_check, spell_hit_check) and the self-test holds this to. 35 kinds have the empty arm, which frees the slot, as here; the other 64 arms are not here
 func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array) -> int:
 	var s := alloc()
 	if s < 0:
@@ -367,6 +370,21 @@ func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array) -> 
 			w16(s + 0x46, int(args[1]))     # the creature held, or -1
 		METEOR:                             # 0x8005593c
 			_spawn_meteor(s)
+		TORNADO:                            # 0x80054294
+			var i := int(args[2])           # the first of the two 0, the second 1
+			w8(s + 4, 0x80)
+			w8(s + 2, 8)
+			w8(s + 3, 8)
+			w8(s + 9, 5)
+			w16(s + 0x10, 0x32)
+			w16(s + 0x32, 0xC80)
+			w8(s + 8, 1)
+			w8(s + 0x44, 0)
+			w8(s + 0xD, 1)
+			w16(s + 0xE, 0x40)
+			w16(s + 0x30, 2000 * i + 0xC80)
+			w16(s + 0x34, 2000 * i + 0xC80)
+			w16(s + 0x2A, i << 11)          # and the first, its sound (0x96), not here
 		ORLADIN:                            # 0x800543e8
 			particle(s, 0x37, 0x1800, 5)
 			w16(s + 0x10, 0x78)
@@ -562,7 +580,7 @@ func driver() -> void:
 
 
 # effect_tick's switch on the kind (0x80056908), with the arms the port has.
-# @orig game:0x800568bc effect_tick  status:partial -- the switch, and the arms of the same 30 kinds as effect_spawn's; the other 65 do nothing here
+# @orig game:0x800568bc effect_tick  status:partial -- the switch, and the arms of the same 31 kinds as effect_spawn's; the other 64 do nothing here
 func tick(s: int) -> void:
 	match u8(s + 1):
 		0x1F:
@@ -601,6 +619,8 @@ func tick(s: int) -> void:
 			_tick_hold(s)
 		METEOR:
 			_tick_meteor(s)
+		TORNADO:
+			_tick_tornado(s)
 		ORLADIN:
 			_tick_orladin(s)
 		BURST:
@@ -973,6 +993,43 @@ func _tick_blast(s: int) -> void:
 	if s16(s + 0x44) < s16(s + 0x30):
 		w8(s, 0xFF)
 	w16(s + 0x2A, u16(s + 0x2A) + 0x200)
+
+
+# Tornado (0x80056ac4): effect_move at 0xb4 with no height and no turn; the
+# tiles (the hit's low two bits) take the move back and free it, and what it
+# meets it strikes once (sub_800537e8, +0x44 the latch a clear frame lifts).
+# Then a strike about its point -- radius its scale x / 8, mode its height /
+# 2, 0x640: in_range's asker's height -- with +0 as it stands, so a tornado
+# that has just met a wall, its +0 0xff, strikes the player too. The point is
+# offset by the three halfwords at effect_tick's sp+0x50, which the arm
+# writes only after, with its puff's velocity: within a frame the tornado
+# before it; the first of a frame reads what the rest of the game's frame
+# left there, which the port does not have -- it keeps the last tornado's.
+# A puff (0x6f) a frame, velocity three rands over 0x7fff; a splash in the
+# water; it turns 0x15e a frame.
+# @orig game:0x80056ac4 effect_tick+0x208  status:verified -- tools/effects.py spell_hit_check against the game's own end to end, 126 of 126 runs; the self-test this to it. The leftover a frame's first tornado reads is the last tornado's here, the game's other routines' there
+func _tick_tornado(s: int) -> void:
+	var hit := move(0xB4, 0, 0)
+	if hit != 0:
+		if hit & 3:
+			undo(s)
+			w8(s, 0xFF)
+		if u8(s + 0x44) == 0:
+			w8(s + 0x44, 1)
+			_attack(s, hit)
+	else:
+		w8(s + 0x44, 0)
+	strike([s32v(s32(s + 0x18) + tick_stack.decode_s16(0)),
+		s32v(s32(s + 0x1C) + tick_stack.decode_s16(2)),
+		s32v(s32(s + 0x20) + tick_stack.decode_s16(4)), 0],
+		0, s16(s + 0x30) >> 3, s16(s + 0x32) >> 1, 0x400, 0x1000)
+	tick_stack.encode_s16(0, s16v(_div7fff(int(world.rand()) << 9) - 0x100))
+	tick_stack.encode_s16(2, s16v(_div7fff(-(int(world.rand()) << 8))))
+	tick_stack.encode_s16(4, s16v(_div7fff(int(world.rand()) << 9) - 0x100))
+	spawn(0xA, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [tick_stack.duplicate(), 0x270F, -0x80, 5,
+		0x16, 0, 1, 1])
+	w16(s + 0x2A, u16(s + 0x2A) + 0x15E)
+	_splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
 
 
 # Orladin (0x80057fc0): a puff a frame where it was (its velocity three

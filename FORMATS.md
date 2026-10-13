@@ -6550,6 +6550,50 @@ radius, so nothing had shown it. Fixed in `tools/effects.py` and
 `godot/collision.gd`, and the routine is now in `tools/routines.py`: **600 of
 600** calls of the game's own, 158 of them inside; no number above moved.
 
+### Tornado
+
+```
+tornado (0xf)    two a cast, at 0x12c, 0x540 lower than the cast point and
+                 level (the arm zeroes the velocity's y); args[2] 0 and 1.
+                 +2 +3 8, +9 5, life 0x32, scale (0xc80 + 2000 i, 0xc80,
+                 0xc80 + 2000 i), the yaw i << 11 -- the second 2000 wider
+                 and turned half -- +0xd 1, +0xe 0x40; the first its sound
+                 0x96. The view's angles it is handed are not read.
+                 Each frame effect_move at 0xb4, no height, no turn: the
+                 tiles (the hit's low two bits) take the move back and free
+                 it; what it meets it strikes once (sub_800537e8, +0x44 the
+                 latch a clear frame lifts). Then effect_strike about its
+                 point, radius scale x / 8 (400, 650), mode its height / 2 --
+                 0x640, in_range's asker's height -- edge 0x400; a puff
+                 (0x6f) a frame, its velocity three rands over 0x7fff; a
+                 splash in the water (0x2000, 0x1f4); it turns 0x15e.
+```
+
+**Its strike point is a stack leftover.** The arm adds to its point the
+three halfwords at `effect_tick`'s `sp+0x50` and only afterwards writes
+them, with its puff's velocity. Nothing else in `effect_tick` writes there
+and `effect_driver` calls nothing else, so within a frame the second
+tornado's strike is offset by the first's puff velocity (up to 0x100 each
+way); the first of a frame reads what the rest of the game's frame left on
+the stack. `tools/effects.py` keeps the three halfwords in RAM where the
+check's run of the game keeps them (`0x801fbc70`); the port keeps the last
+tornado's, from 0 -- the frame's first strike may stand up to 0x100 off the
+game's, and nothing in the port knows by how much.
+
+**A tornado that meets a wall strikes the player.** Freed, its `+0` is
+0xff, and the strike in the same frame reads bit 1 from it:
+`effect_hurt_player`, the player within 400 or 650 in the plane, the
+heights overlapping. The cast point is some 400 ahead, so a tornado cast
+into a wall at close quarters hurts its caster.
+
+Against the game's own end to end, both of a cast sent along the ground at
+the snapshots' creatures (`spell_hit_check`): **126 of 126** runs, 4067
+frames, all 128 slots and all 200 creatures alike, 7 frames a creature
+struck, 6 killed, and **the player struck twice**, each by a tornado freed
+on a wall (`0x8002b2fc`, in `effect_hurt_player`). The port has it
+(`effects.gd`, 342 of 342 machine runs in the self-test) and draws its
+model (0x30).
+
 ### The player's death
 
 `apply_damage` that leaves no HP calls `player_throw` (`0x80030a6c`) with the

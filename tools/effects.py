@@ -718,6 +718,8 @@ HAZE, SHUDOM, WALWIND, RING, WAVE = 0x0B, 0x09, 0x11, 0x5E, 0x59
 EARTH_WAVE, BORTECTH, HOLD = 0x07, 0x0C, 0x65
 METEOR, BLAST = 0x5F, 0x5A
 ORLADIN, BURST, RAY = 0x15, 0x58, 0x5B
+TORNADO = 0x0F
+TICK_STACK = 0x801FBC70             # effect_tick's sp+0x50 as the check's driver runs it
 STRIKE_POINT = 0x801FF0D0           # the machine's stand-in for an arm's point on its stack
 VIEW_ANGLES = 0x801B2608
 SCRATCH_POINT = 0x801FF0C0          # where the check lays a hit's point back
@@ -852,7 +854,7 @@ class Machine:
                RING: self._spawn_5e, WAVE: self._spawn_59, EARTH_WAVE: self._spawn_07,
                0x16: self._spawn_07, BORTECTH: self._spawn_0c, HOLD: self._spawn_65,
                METEOR: self._spawn_5f, BLAST: self._spawn_5a, ORLADIN: self._spawn_15,
-               BURST: self._spawn_58, RAY: self._spawn_5b}.get(kind)
+               BURST: self._spawn_58, RAY: self._spawn_5b, TORNADO: self._spawn_0f}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_spawn's arm {kind:#x}")
         arm(s, args)
@@ -1308,6 +1310,60 @@ class Machine:
         self.w16(s + 0x10, 0x32)            # sub_800532d4's sound between
         self.w8(s + 0xD, 1)
 
+    def _spawn_0f(self, s, args):           # 0x80054294, tornado
+        """The first of a cast's two (args[2] 0) is 0xc80 across and turned
+        nothing, the second 2000 wider and turned half; the view's angles in
+        args[1] are not read."""
+        i = args[2]
+        self.w8(s + 4, 0x80)
+        self.w8(s + 2, 8)
+        self.w8(s + 3, 8)
+        self.w8(s + 9, 5)
+        self.w16(s + 0x10, 0x32)
+        self.w16(s + 0x32, 0xC80)
+        self.w8(s + 8, 1)
+        self.w8(s + 0x44, 0)
+        self.w8(s + 0xD, 1)
+        self.w16(s + 0xE, 0x40)
+        self.w16(s + 0x30, 2000 * i + 0xC80)
+        self.w16(s + 0x34, 2000 * i + 0xC80)
+        self.w16(s + 0x2A, i << 11)         # and the first, its sound 0x96
+
+    def _tick_0f(self, s):                  # 0x80056ac4, tornado
+        """effect_move at 0xb4 with no height and no turn: the tiles (the
+        hit's low two bits) take the move back and end it; what it meets it
+        strikes once (sub_800537e8, +0x44 the latch a clear frame lifts).
+        Then a strike about its point -- radius its scale x / 8, mode its
+        height / 2 (0x640, in_range's asker's height), edge 0x400 -- but the
+        point is offset by the three halfwords at effect_tick's sp+0x50,
+        which this arm writes only after: the last tornado's puff velocity,
+        or what the rest of the frame left there. A puff (0x6f) a frame,
+        velocity three rands over 0x7fff, and a splash in the water. It
+        turns 0x15e a frame."""
+        hit = self.move(0xB4, 0, 0)
+        if hit:
+            if hit & 3:
+                self.undo(s)
+                self.w8(s, 0xFF)
+            if self.u8(s + 0x44) == 0:
+                self.w8(s + 0x44, 1)
+                self.attack(s, hit)
+        else:
+            self.w8(s + 0x44, 0)
+        off = struct.unpack_from("<3h", self.m, TICK_STACK & MASK)
+        self.put(STRIKE_POINT, struct.pack("<3i", *[_s32(self.s32(s + 0x18 + 4 * i) + off[i])
+                                                    for i in range(3)]))
+        self.strike(STRIKE_POINT, 0, self.s16(s + 0x30) >> 3, self.s16(s + 0x32) >> 1, 0x400,
+                    0x1000)
+        v = [_div7fff(self.rand() << 9) - 0x100]
+        v.append(_div7fff(-(self.rand() << 8)))
+        v.append(_div7fff(self.rand() << 9) - 0x100)
+        struct.pack_into("<3h", self.m, TICK_STACK & MASK, *[_s16_(c) for c in v])
+        self.spawn(0xA, 0, TRAIL, self.get(s + 0x18, 16),
+                   [self.get(TICK_STACK, 8), 0x270F, -0x80, 5, 0x16, 0, 1, 1])
+        self.w16(s + 0x2A, self.u16(s + 0x2A) + 0x15E)
+        self.splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
+
     def _spawn_15(self, s, args):           # 0x800543e8, orladin
         self.particle(s, 0x37, 0x1800, 5)
         self.w16(s + 0x10, 0x78)
@@ -1560,7 +1616,7 @@ class Machine:
                RING: self._tick_5e, WAVE: self._tick_59, EARTH_WAVE: self._tick_07,
                0x16: self._tick_07, BORTECTH: self._tick_0c, HOLD: self._tick_65,
                METEOR: self._tick_5f, BLAST: self._tick_5a, ORLADIN: self._tick_15,
-               BURST: self._tick_58, RAY: self._tick_5b}.get(kind)
+               BURST: self._tick_58, RAY: self._tick_5b, TORNADO: self._tick_0f}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_tick's arm {kind:#x}")
         arm(s)
@@ -2336,7 +2392,8 @@ SPELLS_SENT = ((FIRE_BALL, 0x384, "the fire ball", (), 80), (STONE, 0x1F4, "ston
                (EARTH_WAVE, None, "earth wave", ("player", 0x43, None, 0x1000, 0x100, 0x1000, 1), 40),
                (BORTECTH, None, "bortecth", ("creature", 0x42, None), 80),
                (METEOR, None, "meteor", ("creature", 0x43, None), 60),
-               (ORLADIN, 0x104, "orladin", (), 120))
+               (ORLADIN, 0x104, "orladin", (), 120),
+               (TORNADO, 0x12C, "tornado", ("view", (0, 1)), 60))
 """The attacking spells the checks send: the kind, the speed its arm of
 player_action gives it, its name, what follows the velocity ("view" a
 pointer to view_angles; a tuple, one spawn for each of its values, as the
@@ -2344,7 +2401,7 @@ arm spawns them) and the frames to run. With no speed it is put down, not
 sent: at the player's feet or a creature's, its +0 and its arguments
 after."""
 
-FLAT = {}
+FLAT = {TORNADO: 0x540}
 """The spells whose arm lowers the cast point by this and zeroes the
 velocity's y: they go level, along the ground."""
 
