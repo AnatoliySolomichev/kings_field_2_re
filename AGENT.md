@@ -269,8 +269,8 @@ actor_attack_player and actor_take_hit                 frames, 15 struck, 11 dea
                                                        shudom, walwind, earth
                                                        wave, bortecth, meteor,
                                                        orladin, tornado, fire
-                                                       wall and fire storm 126
-                                                       of 126 each
+                                                       wall, fire storm and
+                                                       flame 126 of 126 each
 the fire ball, against the game's own effect_spawn    168 of 168 runs, 914 of
 and effect_driver (its world stood in for)             914 frames, queries, hits;
                                                        with its own collide_query
@@ -309,13 +309,13 @@ creature runs 480 of 480 twice
 levels 40 of 40 · angles 400 of 400
 conversations 43 of 43, and 25 of 25 steps the emulator recorded
 damage 6 of 6 · knock-back 2484 of 2484 · weapon 2336 of 2336
-fences 600 of 600 · animation 288 of 288
+fences 600 of 600 · animation 540 of 540
 equipment 16 of 16 · menus 43 of 43
 directions 400 of 400
 routines 14458 of 14458
 saves 45 of 45 · level states 46 of 46 streams, 958 of 958 things made,
 42 of 42 states written, 46 of 46 tables read and written again
-effects 390 of 390 runs, 8368 of 8368 frames · aims 300 of 300
+effects 414 of 414 runs, 10314 of 10314 frames · aims 300 of 300
 the run 150129 of 150129 frames
 player_take_hit 300 of 300 · the status 40 of 40 runs, 6312 of 6312 frames
 casting 1000 of 1000 · the attacking arms 240 of 240 · creature hits 400 of 400

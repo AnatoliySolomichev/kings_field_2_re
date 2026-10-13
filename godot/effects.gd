@@ -62,6 +62,12 @@ const RAY := 0x5B                  # orladin's
 const TORNADO := 0x0F
 const FIRE_WALL := 0x01
 const FIRE_STORM := 0x02
+const FLAME := 0x04
+const BREATH := 0x6E               # flame's: the empty arm
+const BANK_KEY := 0x20000          # KFAnim's key for model_table[index] of the resident bank
+const EMPTY := [0x08, 0x0A, 0x0E, 0x18, 0x1D, 0x2B, 0x39, 0x3B, 0x3D, 0x3F, 0x41, 0x43, 0x49,
+	0x4A, 0x4D, 0x4E, 0x4F, 0x54, 0x57, 0x60, 0x61, 0x62, 0x63, 0x68, 0x69, 0x6A, 0x6B, 0x6D,
+	0x6E, 0x73, 0x75, 0x76, 0x77, 0x79, 0x7F]   # effect_spawn's arm 0x80055b18: set up, freed
 const TRAIL_ARGS := [0xE10, -0x80, 5, 0x16, 0, 1, 3]   # 0x80058f50's, after the velocity
 const QUERY := {1: 0xA1, 2: 0x31, 3: 0xB1, 4: 0x01}    # effect_collide: +0 & 7 -> flags
 const GROW := 0x96
@@ -210,7 +216,7 @@ func alloc() -> int:
 # effect_spawn(a0, a1, kind, point, ...): `point` the 16 bytes a3 points at
 # (or empty), `args` the stack arguments from the fifth on -- a pointer as the
 # bytes it points at. The slot's offset, or -1 when none is free.
-# @orig game:0x80053c84 effect_spawn  status:partial -- the common setting up and the arms of 33 kinds: 0 (fire ball), 1 (fire wall), 2 (fire storm), 6 (stone), 7 and 0x16 (earth wave), 9 (shudom), 0xb (haze), 0xc (bortecth), 0xd (wind cutter), 0xf (tornado), 0x11 (walwind), 0x15 (orladin), 0x17, 0x19, 0x1a, 0x1b, 0x1c, 0x1e (the healing and protecting), 0x1f, 0x22, 0x23, 0x24, 0x26 (the creatures'), 0x58, 0x59, 0x5a, 0x5b, 0x5e, 0x5f, 0x65 (the spells' children), 0x6f (puff) and 0x70 (splash); tools/effects.py's, which the game's own holds (machine_check, magic_check, spell_hit_check) and the self-test holds this to. 35 kinds have the empty arm, which frees the slot, as here; the other 62 arms are not here
+# @orig game:0x80053c84 effect_spawn  status:partial -- the common setting up and the arms of 34 kinds: 0 (fire ball), 1 (fire wall), 2 (fire storm), 4 (flame), 6 (stone), 7 and 0x16 (earth wave), 9 (shudom), 0xb (haze), 0xc (bortecth), 0xd (wind cutter), 0xf (tornado), 0x11 (walwind), 0x15 (orladin), 0x17, 0x19, 0x1a, 0x1b, 0x1c, 0x1e (the healing and protecting), 0x1f, 0x22, 0x23, 0x24, 0x26 (the creatures'), 0x58, 0x59, 0x5a, 0x5b, 0x5e, 0x5f, 0x65 (the spells' children), 0x6f (puff) and 0x70 (splash); tools/effects.py's, which the game's own holds (machine_check, magic_check, spell_hit_check) and the self-test holds this to. 35 kinds have the empty arm, which frees the slot, as here; the other 61 arms are not here
 func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array) -> int:
 	var s := alloc()
 	if s < 0:
@@ -246,7 +252,7 @@ func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array) -> 
 	w16(s + 0x10, -1)
 	w8(s + 0xD, 1 if FAST < s32v(vx * vx + vy * vy + vz * vz) else 0)
 	w16(s + 0xE, 0)
-	if kind >= 0x82:
+	if kind >= 0x82 or kind in EMPTY:
 		w8(s, 0xFF)
 		return s
 	match kind:
@@ -374,6 +380,20 @@ func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array) -> 
 			w16(s + 0x46, int(args[1]))     # the creature held, or -1
 		METEOR:                             # 0x8005593c
 			_spawn_meteor(s)
+		FLAME:                              # 0x80054dd4
+			w8(s + 8, 1)
+			w8(s + 9, 5)
+			w8(s + 2, 0x29)
+			w8(s + 3, 0x29)
+			w8(s + 0xC, 0x34)
+			w16(s + 0x12, 0x1000)
+			w8(s + 4, 0)
+			for o in [0x34, 0x32, 0x30]:
+				w16(s + o, 0xBB8)
+			put(s + 0x28, (args[1] as PackedByteArray).slice(0, 8))   # the view's angles, pitch too
+			w16(s + 0x10, 0x96)
+			w8(s + 0x45, 0)
+			w16(s + 0xE, 0x80)              # and its sound (0x90), not here
 		FIRE_STORM:                         # 0x800540b8
 			particle(s, 9, 0x1B58, 5)
 			for o in [0x38, 0x3A, 0x3C]:
@@ -612,7 +632,7 @@ func driver() -> void:
 
 
 # effect_tick's switch on the kind (0x80056908), with the arms the port has.
-# @orig game:0x800568bc effect_tick  status:partial -- the switch, and the arms of the same 33 kinds as effect_spawn's; the other 62 do nothing here
+# @orig game:0x800568bc effect_tick  status:partial -- the switch, and the arms of the same 34 kinds as effect_spawn's; the other 61 do nothing here
 func tick(s: int) -> void:
 	match u8(s + 1):
 		0x1F:
@@ -657,6 +677,8 @@ func tick(s: int) -> void:
 			_tick_fire_wall(s)
 		FIRE_STORM:
 			_tick_fire_storm(s)
+		FLAME:
+			_tick_flame(s)
 		ORLADIN:
 			_tick_orladin(s)
 		BURST:
@@ -1232,6 +1254,158 @@ func actor_mid(t: int) -> Array:
 		return [0, 0, 0]
 	var a = list[t]
 	return [int(a["px"]), s32v(int(a["py"]) - (int(a["height"]) >> 1)), int(a["pz"])]
+
+
+# Flame (0x8005a39c), by +7. 0, flying: effect_move at 0xfa and the height's
+# top bit, the head's clock (+0x14) 0x80 a frame; with a creature marked
+# (+0x45 shots left of five) a fire ball from the head's vertex 0 at its
+# middle, 0x320 a frame; else one time in sixteen a look for one within
+# 0x61a8 (sub_8004d3c4, cones 0x320, noise 0x200), and one in thirty-two,
+# within 0x7530, two breaths (0x6e, the empty arm) from vertices 0x2f and
+# 0x32. Meeting anything or at the end of its life: splashes, a second flame
+# (+0 | 3) set at +7 2 to burst three frames on, and it bursts -- +7 1,
+# model 0x15, +0 | 3, effect_grow(0x4000, 0x800, 0x4b, 0x400, 0x8000) and a
+# turn of 0x40 a frame, the player struck too. 2..4 count to 5, which bursts.
+# @orig game:0x8005a39c effect_tick+0x3ae0  status:verified -- tools/effects.py spell_hit_check against the game's own end to end, 126 of 126 runs; the self-test this to it
+func _tick_flame(s: int) -> void:
+	var ph := u8(s + 7)
+	if ph == 0:
+		var hit := move(0xFA, 0x80000000, 0)
+		if hit != 0 or s16(s + 0x10) < 2:
+			_splash(s + 0x18, 8, 0x190, 0x2000, 0x8000, 0x400)
+			var c := spawn(0xA, u8(s) | 3, FLAME, m.slice(s + 0x18, s + 0x28),
+				[null, m.slice(s + 0x28, s + 0x30)])
+			if c >= 0:
+				w8(c + 7, 2)                # and its sound (0x27), not here
+			_flame_burst(s)
+			return
+		w16(s + 0x14, (u16(s + 0x14) + 0x80) & 0xFFF)
+		if u8(s + 0x45) != 0:
+			var p := head(s, 0)
+			for i in 3:
+				tick_frame.encode_s32(0x1D0 + 4 * i, int(p[i]))
+			var t: Array = world.actor_mid(u8(s + 0x44))
+			for i in 3:
+				tick_frame.encode_s32(0x1C0 + 4 * i, int(t[i]))
+			var v := vec_toward(p, t, 0x320)
+			for i in 3:
+				tick_frame.encode_s16(0x1B8 + 2 * i, int(v[i]))
+			spawn(0xA, u8(s), FIRE_BALL, tick_frame.slice(0x1D0, 0x1E0),
+				[tick_frame.slice(0x1B8, 0x1C0)])
+			w8(s + 0x45, u8(s + 0x45) - 1)
+		elif int(world.rand()) < 0x800:
+			var k := _look(s, 0x61A8)
+			if k >= 0:
+				w8(s + 0x44, k)
+				w8(s + 0x45, 5)
+		if int(world.rand()) < 0x400 and _look(s, 0x7530) >= 0:
+			breath(s, 0x2F)
+			breath(s, 0x32)
+		return
+	if ph == 1:
+		_flame_grow(s)
+	elif ph == 5:
+		_flame_burst(s)
+	else:
+		w8(s + 7, ph + 1)
+
+
+# Flame's burst (0x8005a458): +7 1, model 0x15, its scale 0, a life that
+# does not run out, +0 | 3; then its growth.
+# @orig game:0x8005a458 effect_tick+0x3b9c  status:verified -- through flame, the same runs
+func _flame_burst(s: int) -> void:
+	w8(s + 7, 1)
+	w8(s + 3, 0x15)
+	w8(s + 0xC, 0x34)
+	for o in [0x34, 0x32, 0x30]:
+		w16(s + o, 0)
+	w16(s + 0x10, -1)
+	w8(s, u8(s) | 3)
+	_flame_grow(s)
+
+
+# Flame's growth (0x8005a628): effect_grow(0x4000, 0x800, 0x4b, 0x400,
+# 0x8000), then the mark's tail, a turn of 0x40.
+# @orig game:0x8005a628 effect_tick+0x3d6c  status:verified -- through flame, the same runs
+func _flame_grow(s: int) -> void:
+	grow(0x4000, 0x800, 0x4B, 0x400, 0x8000)
+	w16(s + 0x2A, u16(s + 0x2A) + 0x40)
+
+
+# sub_8004d3c4 from the effect's point along its angles, cones 0x320, noise
+# 0x200; the distance left at effect_tick's sp+0x1e0. The slot, or -1.
+# @port helper -- flame's look for a creature, through the world
+func _look(s: int, reach: int) -> int:
+	var r: Array = world.sight([s32(s + 0x18), s32(s + 0x1C), s32(s + 0x20)], s16(s + 0x2A),
+		s16(s + 0x28), reach, 0x320, 0x320, 0x200)
+	tick_frame.encode_s32(0x1E0, int(r[1]))
+	return int(r[0])
+
+
+# sub_8004d3c4 for an effect: the player's list of the awake creatures,
+# a rand for each one in the cones. [slot or -1, distance].
+# @port helper -- the creature in sight from an effect, from player.gd's sight
+func sight(point: Array, yaw: int, pitch: int, reach: int, ycone: int, pcone: int,
+		noise: int) -> Array:
+	if player == null or not player.has_method("sight_list"):
+		return [-1, -1]
+	var r: Array = player.sight(coll, player.call("sight_list"), point, yaw, pitch, reach, ycone,
+		pcone, noise, rand)
+	return [int(r[0][0]) if r[0] != null else -1, int(r[1])]
+
+
+# sub_80053af4 (through 0x80053a0c and sub_8004352c): vertex `vertex` of the
+# effect's animated model -- model_table[+3 + 0x28], animation +4, clock
+# +0x14 -- each axis by its scale, turned by its angles with the yaw a half
+# turn on (vec_rotate), from its point.
+# @orig game:0x80053af4 sub_80053af4  status:verified -- through flame's fire balls, tools/effects.py spell_hit_check against the game's own
+# @orig game:0x80053a0c sub_80053a0c  status:verified -- the same
+func head(s: int, vertex: int) -> Array:
+	var key := BANK_KEY + u8(s + 3) + 0x28
+	if not KFAnim.models.has(key):
+		KFAnim.load_from("res://anim%02d.json" % (int(player.call("_level")) if player and
+			player.has_method("_level") else 0))
+	var vs := KFAnim.vertices(key, u8(s + 4), u16(s + 0x14)) if KFAnim.models.has(key) else []
+	var v := [0, 0, 0]
+	if vertex < vs.size():
+		var w: Vector3i = vs[vertex]
+		v = [s16v((w.x * s16(s + 0x30)) >> 12), s16v((w.y * s16(s + 0x32)) >> 12),
+			s16v((w.z * s16(s + 0x34)) >> 12)]
+	var r := KFWeapon.vec_rotate(coll, s16(s + 0x28), s16v(u16(s + 0x2A) + 0x800), s16(s + 0x2C), v)
+	return [s32v(int(r[0]) + s32(s + 0x18)), s32v(int(r[1]) + s32(s + 0x1C)),
+		s32v(int(r[2]) + s32(s + 0x20))]
+
+
+# sub_800561d8: from vertex `vertex` of the head, the yaw jittered by
+# (rand >> 7) - 0x80, effect_spawn(10, +0, 0x6e, ...) with a velocity of 0 --
+# the empty arm, so the slot is set up and freed -- and +7 2 written in it.
+# @orig game:0x800561d8 sub_800561d8  status:verified -- through flame, the same runs
+func breath(s: int, vertex: int) -> void:
+	var p := head(s, vertex)
+	var pt := PackedByteArray()
+	pt.resize(16)
+	for i in 3:
+		pt.encode_s32(4 * i, int(p[i]))
+	var _jitter := int(world.rand())        # the yaw's, for angles the empty arm never reads
+	var zero := PackedByteArray()
+	zero.resize(8)
+	var c := spawn(0xA, u8(s), BREATH, pt, [zero, zero])
+	if c >= 0:
+		w8(c + 7, 2)
+
+
+# 0x80016044: from a to b, `speed` long -- each axis times the speed over
+# vec_length_3d, toward 0.
+# @orig game:0x80016044 sub_80016044  status:verified -- through flame's fire balls, tools/effects.py spell_hit_check against the game's own
+func vec_toward(a: Array, b: Array, speed: int) -> Array:
+	var d := []
+	for i in 3:
+		d.append(s32v(int(b[i]) - int(a[i])))
+	var ln := vec_length_3d(d[0], d[1], d[2])
+	var out := []
+	for i in 3:
+		out.append(s16v(_trunc(s32v(int(d[i]) * speed), ln)))
+	return out
 
 
 # Orladin (0x80057fc0): a puff a frame where it was (its velocity three

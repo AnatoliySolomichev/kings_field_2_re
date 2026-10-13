@@ -832,11 +832,12 @@ each one is also in its function's marker, as `partial` and what differs:
   walwind (and its waves, 0x59), earth wave and bortecth (and its hold,
   0x65, with `actor_tick`'s held flinch and death), meteor (and its blast,
   0x5a, and its lead's tile test), orladin (its bursts, 0x58, and rays,
-  0x5b), tornado, fire wall and fire storm (homing: `effect_home`,
-  `effect_steer`), with `effect_strike`'s creature half (`0x8004ceac`).
-  Not yet: the other attacking kinds' effects (lightning's 0x71 -- long, it
-  follows the ground with collide_surface -- flash, freeze, flame and
-  thedek), each of which spends its MP and spawns
+  0x5b), tornado, fire wall, fire storm (homing: `effect_home`,
+  `effect_steer`) and flame (its head's vertex, its fire balls, its two
+  bursts), with `effect_strike`'s creature half (`0x8004ceac`). Not yet:
+  the other attacking kinds' effects (lightning's 0x71 -- long, it follows
+  the ground with collide_surface -- flash, freeze and thedek), each of
+  which spends its MP and spawns
   nothing that stays; tornado's and fire wall's strike points, stack
   leftovers the first reader of a frame takes from the rest of the game's
   frame (FORMATS.md, "Tornado", "Fire wall"); creatures a model's vertex

@@ -6671,6 +6671,55 @@ snapshots' creatures, now and then at the player or at none: **126 of
 has it (`effects.gd`, 390 of 390 machine runs in the self-test, the three
 targets among them).
 
+### Flame
+
+```
+flame (4)        sent at 0xfa from (0, -512, 2000): model 0x29 -- a head,
+                 its one animation run by +0x14 -- scale 0xbb8, the view's
+                 angles, pitch and all; life 0x96, +0xe 0x80, its sound 0x90.
+  +7 0, flying   effect_move at 0xfa and the height's top bit; the clock
+                 +0x14 0x80 a frame. With a creature marked (+0x44 its slot,
+                 +0x45 shots left of five) a fire ball (kind 0, +0 the
+                 flame's) from the head's vertex 0 at the creature's middle,
+                 0x320 a frame (sub_80016044). Else one frame in sixteen
+                 (rand < 0x800) sub_8004d3c4 from its point along its angles,
+                 within 0x61a8, cones 0x320 and noise 0x200 -- a rand for
+                 each creature in the cones -- marks the one it finds, five
+                 shots. Then one in thirty-two (rand < 0x400), within
+                 0x7530: two breaths (sub_800561d8) from vertices 0x2f and
+                 0x32 -- kind 0x6e, the empty arm: the slot set up, freed,
+                 its +7 written 2, nothing more.
+  the burst      meeting anything, or with its life under 2: splashes (8,
+                 0x190, 0x8000), a second flame with +0 | 3 and +7 2, its
+                 sound 0x27, and it bursts: +7 1, model 0x15, scale 0, a life
+                 of -1, +0 | 3 -- effect_grow(0x4000, 0x800, 0x4b, 0x400,
+                 0x8000) a frame and a turn of 0x40, 28 frames. The second
+                 counts +7 2, 3, 4 and at 5 bursts the same: two shells, three
+                 frames apart. +0 | 3 strikes the player too.
+```
+
+**The head's vertex** (`sub_80053af4` through `sub_80053a0c`):
+`sub_8004352c` -- the creatures' `actor_vertex_point` routine -- on
+`model_table[+3 + 0x28]` with the animation `+4` and the clock `+0x14`;
+each axis times its scale (`+0x30..`), `vec_rotate` by the angles with the
+yaw a half turn on, plus the point. The model is the resident bank's
+(FDAT 97 block 10, `tools/modelbank.py`) in MO.T's wrapper:
+`tools/anim.py load_bank`, exported for the port as key `0x20051`.
+
+**The empty arm.** 35 kinds' arm of `effect_spawn` is `0x80055b18`, which
+frees the slot it was handed after the common setting up -- so a spawn of
+one takes and writes a slot and leaves nothing running. Flame's breaths are
+the only such spawns the spells make; meteor's own kind, 8, is another of
+them (player_action spawns 0x5f for it).
+
+Against the game's own end to end (`spell_hit_check`), sent at the
+snapshots' creatures: **126 of 126** runs, 9004 frames, all slots and
+creatures alike, 145 frames a creature struck, 76 killed, **the player struck
+148 times** -- the bursts of flames that met a wall near the cast. The port
+has it (`effects.gd`; 414 of 414 machine runs in the self-test, the export's
+stand-in world letting flame fly long enough to look, shoot and breathe),
+and `sight` (`player.gd`) takes the noise now.
+
 ### The player's death
 
 `apply_damage` that leaves no HP calls `player_throw` (`0x80030a6c`) with the

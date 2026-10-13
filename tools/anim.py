@@ -116,6 +116,22 @@ def load(m):
 
 WEAPON_ENTRY = 0x62        # FDAT.T entry 0x62 + the weapon (sub_8002bdc0)
 WEAPON_KEY = 0x10000       # where the export files a weapon's model
+BANK_KEY = 0x20000         # and a resident model, model_table[index]
+BANK_ANIMATED = (0x51,)    # the resident models an effect takes a vertex of: flame's
+
+
+def load_bank(index):
+    """model_table[index] of the resident bank (tools/modelbank.py) in the
+    same wrapper as MO.T's: flame's head (0x51) has one animation, which
+    sub_8004352c runs by the effect's +0x14."""
+    import modelbank
+    raw, at, _n = modelbank.block(modelbank.FDAT, modelbank.BLOCK if index >= modelbank.FIRST
+                                  else 9)
+    for i, off, size in modelbank.models(modelbank.FDAT, modelbank.BLOCK if index >= modelbank.FIRST
+                                         else 9):
+        if i == index:
+            return Model(raw[at + off:at + off + size])
+    raise ValueError(f"model {index} is not in the bank")
 
 
 def load_weapon(w):
@@ -260,6 +276,8 @@ def export(out_dir, lv=0):
     wanted = [(m, None) for m in sorted({a["model"] for a in actors.table(lv) if a})]
     # every weapon: the equipment screen can put any in hand (equip_weapon)
     wanted += [(WEAPON_KEY + w, w) for w in range(0x22)]
+    # the resident models an effect takes a vertex of (flame's head)
+    wanted += [(BANK_KEY + i, None) for i in BANK_ANIMATED]
     # and the lift doors' and the big chests' models, which draw_model_plain
     # animates by the object's counter (tools/doors.py, tools/chests.py)
     try:
@@ -276,7 +294,8 @@ def export(out_dir, lv=0):
         pass
     for m, w in wanted:
         try:
-            mo = load(m) if w is None else load_weapon(w)
+            mo = (load_bank(m - BANK_KEY) if m >= BANK_KEY else
+                  load(m) if w is None else load_weapon(w))
         except Exception:
             continue
         if mo.nanim == 0:

@@ -715,10 +715,13 @@ func _effects() -> bool:
 			rp.released = []
 			rp.cws = _ints(f.get("cw", []))
 			rp.sfs = _ints(f.get("sf", []))
+			rp.sis = _ints(f.get("si", []))
+			rp.ams = _ints(f.get("am", []))
 			rp.rands = (f.get("rand", []) as Array).map(func(x): return int(x))
 			fx.driver()
 			var same: bool = rp.bad == "" and rp.i == (f["q"] as Array).size() \
-				and rp.cws.is_empty() and rp.sfs.is_empty() \
+				and rp.cws.is_empty() and rp.sfs.is_empty() and rp.sis.is_empty() \
+				and rp.ams.is_empty() \
 				and rp.rands.is_empty() and str(rp.hits) == str(_ints(f["hits"])) \
 				and str(rp.hurts) == str(_ints(f.get("hurts", []))) \
 				and str(rp.strikes) == str(_ints(f.get("strikes", []))) \
@@ -804,8 +807,35 @@ class FxReplay:
 	var collide_actor := -1
 	var collide_mask := 0
 
-	func actor_mid(_t: int) -> Array:
-		return [field("ax"), field("ay"), field("az")]
+	var ams: Array = []
+
+	func actor_mid(t: int) -> Array:
+		if ams.is_empty():
+			if bad == "":
+				bad = "an extra actor_mid %d" % t
+			return [0, 0, 0]
+		var c: Array = ams.pop_front()
+		if int(c[0]) != t and bad == "":
+			bad = "actor_mid %d, python %d" % [t, int(c[0])]
+		return [int(c[1]), int(c[2]), int(c[3])]
+
+	var sis: Array = []
+
+	func sight(point: Array, yaw: int, pitch: int, reach: int, ycone: int, pcone: int,
+			noise: int) -> Array:
+		if sis.is_empty():
+			if bad == "":
+				bad = "an extra sight %s" % str(point)
+			return [-1, -1]
+		var c: Array = sis.pop_front()
+		var asked := [int(point[0]), int(point[1]), int(point[2]), yaw, pitch, reach, ycone,
+			pcone, noise]
+		for k in 9:
+			if int(c[k]) != int(asked[k]) and bad == "":
+				bad = "sight %s, python %s" % [str(asked), str(c.slice(0, 9))]
+		for _k in int(c[11]):
+			rand()
+		return [int(c[9]), int(c[10])]
 	var released: Array = []
 	var cws: Array = []
 	var sfs: Array = []

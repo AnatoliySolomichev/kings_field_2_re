@@ -869,9 +869,9 @@ const AIM_PLAIN := {
 # and 0x200 off each instead; scored by the two differences and the distance
 # over 128. `list` is the awake creatures in slot order, [slot, +0xe, +0x28,
 # x, y, z, ...]; [its entry or null, the distance or -1].
-# @orig game:0x8004d3c4 sub_8004d3c4  status:verified -- through spell_aim; tools/magic.py attack_check, 840 of 840 casts of the game's own player_action; not the noise (rand) no spell asks for
+# @orig game:0x8004d3c4 sub_8004d3c4  status:verified -- through spell_aim; tools/magic.py attack_check, 840 of 840 casts of the game's own player_action; the noise (a rand for each creature in the cones) through flame, tools/effects.py spell_hit_check
 static func sight(c: KFCollision, list: Array, point: Array, yaw: int, pitch: int,
-		reach: int, ycone: int, pcone: int) -> Array:
+		reach: int, ycone: int, pcone: int, noise := 0, rnd: Callable = Callable()) -> Array:
 	var best := 0x7530
 	var chosen = null
 	var dist := -1
@@ -896,13 +896,15 @@ static func sight(c: KFCollision, list: Array, point: Array, yaw: int, pitch: in
 		var bp := (apitch - pitch) & 0xFFF
 		if bp >= 0x800:
 			bp = 0x1000 - bp
-		if flags & 0x20000:
+		if flags & 0x20000 and noise >= 0:
 			d >>= 2
 			by = KFWeapon.s16(by - 0x200)
 			bp = KFWeapon.s16(bp - 0x200)
 		elif ycone < by or pcone < bp:
 			continue
 		var score := by + bp + (d >> 7)
+		if noise > 0:
+			score += _s32(int(rnd.call()) * noise) >> 15
 		if score < best:
 			best = score
 			chosen = e
