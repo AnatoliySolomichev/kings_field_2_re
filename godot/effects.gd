@@ -56,6 +56,9 @@ const BORTECTH := 0x0C
 const HOLD := 0x65                 # bortecth's
 const METEOR := 0x5F
 const BLAST := 0x5A                # meteor's
+const ORLADIN := 0x15
+const BURST := 0x58                # orladin's
+const RAY := 0x5B                  # orladin's
 const TRAIL_ARGS := [0xE10, -0x80, 5, 0x16, 0, 1, 3]   # 0x80058f50's, after the velocity
 const QUERY := {1: 0xA1, 2: 0x31, 3: 0xB1, 4: 0x01}    # effect_collide: +0 & 7 -> flags
 const GROW := 0x96
@@ -200,7 +203,7 @@ func alloc() -> int:
 # effect_spawn(a0, a1, kind, point, ...): `point` the 16 bytes a3 points at
 # (or empty), `args` the stack arguments from the fifth on -- a pointer as the
 # bytes it points at. The slot's offset, or -1 when none is free.
-# @orig game:0x80053c84 effect_spawn  status:partial -- the common setting up and the arms of kinds 0 (fire ball), 6 (stone), 0xd (wind cutter), 0x17, 0x19, 0x1a, 0x1b, 0x1c, 0x1e, 0x1f, 0x22, 0x23, 0x24, 0x26, 0x6f and 0x70 (splash); tools/effects.py's, which the game's own holds (machine_check, magic_check, spell_hit_check) and the self-test holds this to; the other 114 arms are not here
+# @orig game:0x80053c84 effect_spawn  status:partial -- the common setting up and the arms of 30 kinds: 0 (fire ball), 6 (stone), 7 and 0x16 (earth wave), 9 (shudom), 0xb (haze), 0xc (bortecth), 0xd (wind cutter), 0x11 (walwind), 0x15 (orladin), 0x17, 0x19, 0x1a, 0x1b, 0x1c, 0x1e (the healing and protecting), 0x1f, 0x22, 0x23, 0x24, 0x26 (the creatures'), 0x58, 0x59, 0x5a, 0x5b, 0x5e, 0x5f, 0x65 (the spells' children), 0x6f (puff) and 0x70 (splash); tools/effects.py's, which the game's own holds (machine_check, magic_check, spell_hit_check) and the self-test holds this to. 35 kinds have the empty arm, which frees the slot, as here; the other 65 arms are not here
 func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array) -> int:
 	var s := alloc()
 	if s < 0:
@@ -364,6 +367,33 @@ func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array) -> 
 			w16(s + 0x46, int(args[1]))     # the creature held, or -1
 		METEOR:                             # 0x8005593c
 			_spawn_meteor(s)
+		ORLADIN:                            # 0x800543e8
+			particle(s, 0x37, 0x1800, 5)
+			w16(s + 0x10, 0x78)
+			w8(s + 0xD, 1)
+			w16(s + 0x44, 0)
+			w16(s + 0xE, 0x40)              # and its sound (0x9a), not here
+		BURST:                              # 0x800548ec
+			setup(s, 0x15, 0, 5)
+			for o in [0x30, 0x32, 0x34]:
+				w16(s + o, int(args[1]))
+			w16(s + 0x10, 0x2D)
+			for o in [0x28, 0x2A, 0x2C]:
+				w16(s + o, 0)
+			w16(s + 0xE, (int(args[2]) & 0xFFFF) << 6)
+		RAY:                                # 0x80055788
+			w8(s + 4, 0x80)
+			w8(s + 2, 0xB)
+			w8(s + 3, 0xB)
+			w8(s + 8, 5)
+			w8(s + 9, 5)
+			w8(s + 0xC, 0x33)
+			w16(s + 0x32, 0xC00)
+			w16(s + 0x10, 0x14)
+			w16(s + 0x12, 0x1000)
+			w16(s + 0x30, 0x1000)
+			w16(s + 0x34, 0x1000)
+			w16(s + 0xE, 0x40)
 		BLAST:                              # 0x800553a8
 			w8(s + 8, 1)
 			w8(s + 4, 0x80)
@@ -532,7 +562,7 @@ func driver() -> void:
 
 
 # effect_tick's switch on the kind (0x80056908), with the arms the port has.
-# @orig game:0x800568bc effect_tick  status:partial -- the switch, and the arms of the same sixteen kinds as effect_spawn's; the other 114 do nothing here
+# @orig game:0x800568bc effect_tick  status:partial -- the switch, and the arms of the same 30 kinds as effect_spawn's; the other 65 do nothing here
 func tick(s: int) -> void:
 	match u8(s + 1):
 		0x1F:
@@ -571,6 +601,12 @@ func tick(s: int) -> void:
 			_tick_hold(s)
 		METEOR:
 			_tick_meteor(s)
+		ORLADIN:
+			_tick_orladin(s)
+		BURST:
+			_tick_burst(s)
+		RAY:
+			_tick_ray(s)
 		BLAST:
 			_tick_blast(s)
 		0x1A:
@@ -937,6 +973,86 @@ func _tick_blast(s: int) -> void:
 	if s16(s + 0x44) < s16(s + 0x30):
 		w8(s, 0xFF)
 	w16(s + 0x2A, u16(s + 0x2A) + 0x200)
+
+
+# Orladin (0x80057fc0): a puff a frame where it was (its velocity three
+# rands, +-0x10), then effect_move at 0xb4 with no height and no turn; the
+# tiles end it. Meeting a creature (bit 0x10) -- and it goes on through, so a
+# creature it is still inside is met again -- two bursts (0x58) where it is,
+# with +0 0x43, sized 0 and 0x80, and sixteen rays (0x5b) 0x4b0 above,
+# flying out at 360 a frame.
+# @orig game:0x80057fc0 effect_tick+0x1704  status:verified -- tools/effects.py spell_hit_check against the game's own end to end, 126 of 126 runs; the self-test this to it
+func _tick_orladin(s: int) -> void:
+	var v := PackedByteArray()
+	v.resize(8)
+	for i in 3:
+		v.encode_s16(2 * i, ((int(world.rand()) << 5) >> 15) - 0x10)
+	spawn(0xA, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [v, 0x1A90, -0x3E8, 4, 0x25, 0, 1, 1])
+	var hit := move(0xB4, 0, 0)
+	if hit == 0:
+		return
+	if hit & 0xF:
+		w8(s, 0xFF)
+	if hit & 0x10 == 0:
+		return
+	var point := m.slice(s + 0x18, s + 0x28)
+	spawn(0xA, 0x43, BURST, point, [null, 0, 1])
+	spawn(0xA, 0x43, BURST, point, [null, 0x80, 1])     # and its sound (0x25), not here
+	var x := s32(s + 0x18)
+	var y := s32v(s32(s + 0x1C) + 0x4B0)
+	var z := s32(s + 0x20)
+	for a in range(0, 0x1000, 0x100):
+		var pt := PackedByteArray()
+		pt.resize(16)
+		pt.encode_s32(0, x)
+		pt.encode_s32(4, y)
+		pt.encode_s32(8, z)
+		var vr := PackedByteArray()
+		vr.resize(8)
+		vr.encode_s16(0, s16v((45 * coll.game_sin(a)) >> 9))
+		vr.encode_s16(4, s16v((45 * coll.game_cos(a)) >> 9))
+		spawn(0xA, 0, RAY, pt, [vr])
+
+
+# Orladin's burst (0x80059b84, kind 0x58): growing 0x80 a frame from its
+# size, striking a shell four times it -- the player too, its +0 is 0x43 --
+# gone at 0x600; then fire resist's mark's tail (0x8005b5fc), turning 0x40.
+# @orig game:0x80059b84 effect_tick+0x32c8  status:verified -- tools/effects.py spell_hit_check against the game's own end to end; the self-test this to it
+# @orig game:0x8005b5fc effect_tick+0x4d40  status:verified -- the turn of the tail it shares with fire resist's mark
+func _tick_burst(s: int) -> void:
+	grow(0x4000, 0x600, 0x80, 0x400, 0x8000)
+	w16(s + 0x2A, u16(s + 0x2A) + 0x40)
+
+
+# sub_80056134: a sphere growing `step` a frame, its three scales alike; it
+# strikes between mult times its last size and mult times its size less
+# one, `mode` and `edge`, at 0x1000; gone at `limit`.
+# @orig game:0x80056134 sub_80056134  status:verified -- through orladin's burst, tools/effects.py spell_hit_check against the game's own
+func grow(mult: int, limit: int, step: int, edge: int, mode: int) -> void:
+	var s := current
+	var v := (u16(s + 0x30) + step) & 0xFFFF
+	for o in [0x30, 0x34, 0x32]:
+		w16(s + o, v)
+	var r := s32v(mult * s16(s + 0x30)) >> 12
+	strike(point_at(s + 0x18), r - (s32v(mult * step) >> 12), r - 1, mode, edge, 0x1000)
+	if s16(s + 0x30) >= limit:
+		w8(s, 0xFF)
+
+
+# Orladin's ray (0x8005b4b8, kind 0x5b): out by its velocity while its life
+# is 10 or more, back by it and 0x200 taller after, flickering (+4 0x80 and
+# 0x81). It strikes from a step ahead within its scale, mode 0x8000 -- but
+# its +0 is 0, so it strikes nothing.
+# @orig game:0x8005b4b8 effect_tick+0x4bfc  status:verified -- tools/effects.py spell_hit_check against the game's own end to end; the self-test this to it
+func _tick_ray(s: int) -> void:
+	var sign := 1 if s16(s + 0x10) >= 0xA else -1
+	w32(s + 0x18, s32(s + 0x18) + sign * s16(s + 0x38))
+	w32(s + 0x20, s32(s + 0x20) + sign * s16(s + 0x3C))
+	if sign < 0:
+		w16(s + 0x32, u16(s + 0x32) + 0x200)
+	w8(s + 4, (u8(s + 0x10) & 1) - 0x80)
+	strike([s32v(s32(s + 0x18) + s16(s + 0x38)), s32v(s32(s + 0x1C) + s16(s + 0x3A)),
+		s32v(s32(s + 0x20) + s16(s + 0x3C)), 0], 0, s16(s + 0x30), 0x8000, 0x400, 0x1000)
 
 
 # collide_wrapper_actor for an effect: the tiles alone at the radius and

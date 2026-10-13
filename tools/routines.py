@@ -33,7 +33,7 @@ PLAYER_POS = 0x801B25F0
 GAME_SIN, GAME_COS = 0x80076CC4, 0x80076DA0
 ARCTAN_UNIT, VEC_ANGLE, RATAN2 = 0x800742AC, 0x80016AB8, 0x80074380
 GAME_ISQRT = 0x80074508
-IN_RANGE, IN_ORIENTED_RECT = 0x80016EC8, 0x80016D3C
+IN_RANGE, IN_ORIENTED_RECT, IN_RANGE_3D = 0x80016EC8, 0x80016D3C, 0x80016FB4
 FACING_TEST, APPROACH, FIXED_MADD = 0x80016A2C, 0x80015FDC, 0x80017158
 PLAYER_IN_RECT = 0x80046884
 
@@ -99,6 +99,24 @@ def cases(n=300, snap=SNAP):
         rows.append([*p, *q, r, top, own,
                      call(IN_RANGE, SCRATCH, q[0], q[1], q[2], r, top, own)])
     out["in_range"] = rows
+
+    rows = []
+    for _ in range(n * 2):
+        p = (rng.randrange(-0x20000, 0x20000), rng.randrange(-0x8000, 0x2000),
+             rng.randrange(-0x20000, 0x20000))
+        r, own = rng.randrange(0, 0x2000), rng.randrange(0, 0x1000)
+        h = rng.randrange(0, 0x1000)
+        lim = r + own + 0x400
+        q = (p[0] + rng.randrange(-lim, lim), p[1] + rng.randrange(-lim, lim),
+             p[2] + rng.randrange(-lim, lim))
+        if rng.randrange(4) == 0:                       # within its own radius
+            q = (p[0] + rng.randrange(-own // 2 - 1, own // 2 + 1), p[1] + (h >> 1),
+                 p[2] + rng.randrange(-own // 2 - 1, own // 2 + 1))
+        _pos(cpu, SCRATCH, p)
+        _pos(cpu, SCRATCH + 0x10, q)
+        rows.append([*p, r, *q, own, h,
+                     call(IN_RANGE_3D, SCRATCH, r, SCRATCH + 0x10, own, h)])
+    out["in_range_3d"] = rows
 
     rows = []
     for _ in range(n * 2):

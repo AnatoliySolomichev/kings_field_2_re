@@ -950,6 +950,9 @@ func _routines() -> bool:
 					got = coll.isqrt(c[0])
 				"in_range":
 					got = coll.in_range(c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8])
+				"in_range_3d":
+					got = coll.in_range_3d(Vector3i(c[0], c[1], c[2]), c[3],
+						Vector3i(c[4], c[5], c[6]), c[7], c[8])
 				"in_oriented_rect":
 					got = coll.in_oriented_rect(c[0], c[1], c[2], c[3], c[4], c[5], c[6],
 						c[7], c[8], c[9], c[10])

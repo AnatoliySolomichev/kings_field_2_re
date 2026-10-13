@@ -84,7 +84,8 @@ def slot(raw):
 
 
 def in_range_3d(p, radius, target, own=OWN, height=BODY):
-    """0x80016fb4: the length less own, or FAR."""
+    """0x80016fb4: the length less own -- 0 when it is within own
+    (0x80017090) -- or FAR."""
     r = radius + own
     dx = target[0] - p[0]
     if dx < -r or r < dx:
@@ -98,7 +99,7 @@ def in_range_3d(p, radius, target, own=OWN, height=BODY):
     ln = movement.game_isqrt((dx >> 3) ** 2 + (dz >> 3) ** 2 + (dy >> 3) ** 2) << 3
     if r < ln:
         return FAR
-    return ln - own
+    return ln - own if own < ln else 0
 
 
 def strike_scale(p, radius, player, edge=EDGE, scale=0x1000, near=0, mode=0x8000):
@@ -500,6 +501,11 @@ def export(out_dir):
                                   pz + frng.randrange(-0x400, 0x400), 0)
               d = movement.direction_from_angles(frng.randrange(-0x100, 0x100) & 0xFFF, yaw)
               vel = struct.pack("<4h", *[_s16_((c * speed_) >> 12) for c in d], 0)
+              if kind_ in FLAT:
+                  x_, y_, z_, _w = struct.unpack("<4i", point)
+                  point = struct.pack("<4i", x_, y_ + FLAT[kind_], z_, 0)
+                  vel = vel[:2] + bytes(2) + vel[4:]
+              m[TICK_STACK & MASK:(TICK_STACK & MASK) + 8] = bytes(8)   # the port's start
               vy = frng.randrange(0x1000)
               struct.pack_into("<4H", m, VIEW_ANGLES & MASK, 0, vy, 0, 0)
               if frng.randrange(2) == 0:                       # water just under the path
@@ -543,7 +549,9 @@ def export(out_dir):
               mach = Machine(m, w, rnd)
               try:
                   spawn_rand = []
-                  mach.spawn(0xA, a1_, kind_, point, args_)
+                  sps = _spawns(a1_, kind_, point, args_)
+                  for sp in sps:
+                      mach.spawn(*sp)
                   spawn_rand = list(drawn)
                   spawn_ask = {"cw": [list(x) for x in cws], "sf": [list(x) for x in sfs]}
                   frames = []
@@ -567,8 +575,9 @@ def export(out_dir):
               fires.append({"label": f"{os.path.basename(path)[:-4]} kind {kind_:#x}", "layer0": 7,
                             "spawn_rand": spawn_rand, "spawn_ask": spawn_ask,
                             "fields": dict({"px": px, "s18": s18, "vy": vy}, **{f"w{k}": working[k] for k in range(5)}),
-                            "spawns": [[0xA, a1_, kind_, point.hex(),
-                                        [{"b": v.hex()} if isinstance(v, bytes) else v for v in args_]]],
+                            "spawns": [[a0, a1, kd, pt.hex(),
+                                        [{"b": v.hex()} if isinstance(v, bytes) else v for v in args]]
+                                       for a0, a1, kd, pt, args in sps],
                             "frames": frames})
     # and effect_aim: a creature's angles, the target, the speed, the point and
     # the spread, and the velocity and yaw aim() gives -- the game's own, 600
@@ -708,6 +717,7 @@ STONE, WIND_CUTTER = 0x06, 0x0D
 HAZE, SHUDOM, WALWIND, RING, WAVE = 0x0B, 0x09, 0x11, 0x5E, 0x59
 EARTH_WAVE, BORTECTH, HOLD = 0x07, 0x0C, 0x65
 METEOR, BLAST = 0x5F, 0x5A
+ORLADIN, BURST, RAY = 0x15, 0x58, 0x5B
 STRIKE_POINT = 0x801FF0D0           # the machine's stand-in for an arm's point on its stack
 VIEW_ANGLES = 0x801B2608
 SCRATCH_POINT = 0x801FF0C0          # where the check lays a hit's point back
@@ -841,7 +851,8 @@ class Machine:
                HAZE: self._spawn_0b, SHUDOM: self._spawn_09, WALWIND: self._spawn_11,
                RING: self._spawn_5e, WAVE: self._spawn_59, EARTH_WAVE: self._spawn_07,
                0x16: self._spawn_07, BORTECTH: self._spawn_0c, HOLD: self._spawn_65,
-               METEOR: self._spawn_5f, BLAST: self._spawn_5a}.get(kind)
+               METEOR: self._spawn_5f, BLAST: self._spawn_5a, ORLADIN: self._spawn_15,
+               BURST: self._spawn_58, RAY: self._spawn_5b}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_spawn's arm {kind:#x}")
         arm(s, args)
@@ -1297,6 +1308,100 @@ class Machine:
         self.w16(s + 0x10, 0x32)            # sub_800532d4's sound between
         self.w8(s + 0xD, 1)
 
+    def _spawn_15(self, s, args):           # 0x800543e8, orladin
+        self.particle(s, 0x37, 0x1800, 5)
+        self.w16(s + 0x10, 0x78)
+        self.w8(s + 0xD, 1)
+        self.w16(s + 0x44, 0)
+        self.w16(s + 0xE, 0x40)             # and its sound, 0x9a
+
+    def _tick_15(self, s):                  # 0x80057fc0, orladin
+        """A puff a frame where it was (velocity three rands, +-0x10), then
+        effect_move at 0xb4 with no height and no turn; the tiles end it.
+        Meeting a creature (bit 0x10) -- and it goes on through -- two
+        bursts (0x58) where it is, with +0 0x43, sized 0 and 0x80, and
+        sixteen rays (0x5b) 0x4b0 above, flying out at 360 a frame."""
+        v = [((self.rand() << 5) >> 15) - 0x10 for _k in range(3)]
+        self.spawn(0xA, 0, TRAIL, self.get(s + 0x18, 16),
+                   [struct.pack("<4h", *v, 0), 0x1A90, -0x3E8, 4, 0x25, 0, 1, 1])
+        hit = self.move(0xB4, 0, 0)
+        if not hit:
+            return
+        if hit & 0xF:
+            self.w8(s, 0xFF)
+        if not hit & 0x10:
+            return
+        point = self.get(s + 0x18, 16)
+        self.spawn(0xA, 0x43, BURST, point, [None, 0, 1])
+        self.spawn(0xA, 0x43, BURST, point, [None, 0x80, 1])      # and the sound, 0x25
+        x, y, z = self.s32(s + 0x18), self.s32(s + 0x1C), self.s32(s + 0x20)
+        for a in range(0, 0x1000, 0x100):
+            vx = (45 * movement.game_sin(a)) >> 9
+            vz = (45 * movement.game_cos(a)) >> 9
+            self.spawn(0xA, 0, RAY, struct.pack("<3i", x, _s32(y + 0x4B0), z) + bytes(4),
+                       [struct.pack("<4h", _s16_(vx), 0, _s16_(vz), 0)])
+
+    def _spawn_58(self, s, args):           # 0x800548ec, orladin's burst
+        self.setup(s, 0x15, 0, 5)
+        for o in (0x30, 0x32):
+            self.w16(s + o, args[1])
+        self.w16(s + 0x10, 0x2D)
+        for o in (0x28, 0x2A, 0x2C):
+            self.w16(s + o, 0)
+        self.w16(s + 0x34, args[1])
+        self.w16(s + 0xE, (args[2] & 0xFFFF) << 6)
+
+    def _tick_58(self, s):                  # 0x80059b84, orladin's burst
+        """Growing 0x80 a frame from its size, striking a shell four times
+        it; gone at 0x600. Then fire resist's mark's tail (0x8005b5fc): it
+        turns 0x40 a frame."""
+        self.grow(0x4000, 0x600, 0x80, 0x400, 0x8000)
+        self.w16(s + 0x2A, self.u16(s + 0x2A) + 0x40)
+
+    def grow(self, mult, limit, step, edge, mode):      # 0x80056134
+        """A sphere growing `step` a frame, all three scales alike; it
+        strikes between mult times its last size and mult times its size
+        less one, `mode`, `edge`, at 0x1000; gone at `limit`."""
+        s = self.u32(CURRENT)
+        v = (self.u16(s + 0x30) + step) & 0xFFFF
+        for o in (0x30, 0x34, 0x32):
+            self.w16(s + o, v)
+        sc = self.s16(s + 0x30)
+        r = _s32(mult * sc) >> 12
+        self.strike(s + 0x18, r - (_s32(mult * step) >> 12), r - 1, mode, edge, 0x1000)
+        if self.s16(s + 0x30) >= limit:
+            self.w8(s, 0xFF)
+
+    def _spawn_5b(self, s, args):           # 0x80055788, orladin's ray
+        self.w8(s + 4, 0x80)
+        self.w8(s + 2, 0xB)
+        self.w8(s + 3, 0xB)
+        self.w8(s + 8, 5)
+        self.w8(s + 9, 5)
+        self.w8(s + 0xC, 0x33)
+        self.w16(s + 0x32, 0xC00)
+        self.w16(s + 0x10, 0x14)
+        self.w16(s + 0x12, 0x1000)
+        self.w16(s + 0x30, 0x1000)
+        self.w16(s + 0x34, 0x1000)
+        self.w16(s + 0xE, 0x40)
+
+    def _tick_5b(self, s):                  # 0x8005b4b8, orladin's ray
+        """Out by its velocity while its life is 10 or more, back by it and
+        0x200 taller after; flickering (+4 0x80 and 0x81). It strikes from a
+        step ahead within its scale, mode 0x8000 -- but its +0 is 0, so it
+        strikes nothing."""
+        sign = 1 if self.s16(s + 0x10) >= 0xA else -1
+        self.w32(s + 0x18, self.s32(s + 0x18) + sign * self.s16(s + 0x38))
+        self.w32(s + 0x20, self.s32(s + 0x20) + sign * self.s16(s + 0x3C))
+        if sign < 0:
+            self.w16(s + 0x32, self.u16(s + 0x32) + 0x200)
+        self.w8(s + 4, (self.u8(s + 0x10) & 1) - 0x80)
+        self.put(STRIKE_POINT, struct.pack("<3i", *[_s32(self.s32(s + o) + self.s16(s + v))
+                                                    for o, v in ((0x18, 0x38), (0x1C, 0x3A),
+                                                                 (0x20, 0x3C))]))
+        self.strike(STRIKE_POINT, 0, self.s16(s + 0x30), 0x8000, 0x400, 0x1000)
+
     def orbit(self, s, model, angle, y):    # 0x80053c20
         """What the three protecting spells' marks share: drawn by mode 0xe,
         in front of the eye, at (0xa0, y + 0x78, 0), scale 0x100, turned by
@@ -1454,7 +1559,8 @@ class Machine:
                HAZE: self._tick_0b, SHUDOM: self._tick_09, WALWIND: self._tick_11,
                RING: self._tick_5e, WAVE: self._tick_59, EARTH_WAVE: self._tick_07,
                0x16: self._tick_07, BORTECTH: self._tick_0c, HOLD: self._tick_65,
-               METEOR: self._tick_5f, BLAST: self._tick_5a}.get(kind)
+               METEOR: self._tick_5f, BLAST: self._tick_5a, ORLADIN: self._tick_15,
+               BURST: self._tick_58, RAY: self._tick_5b}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_tick's arm {kind:#x}")
         arm(s)
@@ -1990,6 +2096,8 @@ def _leftover(x, i):
         return i in (0x24, 0x25, 0x26, 0x27, 0xD) or 0x38 <= i < 0x40
     if x[1] == BLAST:
         return i in (0x3E, 0x3F)
+    if x[1] == RAY:
+        return i in (0x3E, 0x3F, 0x24, 0x25, 0x26, 0x27)
     return False
 
 
@@ -2227,12 +2335,27 @@ SPELLS_SENT = ((FIRE_BALL, 0x384, "the fire ball", (), 80), (STONE, 0x1F4, "ston
                (SHUDOM, 0xFA, "shudom", ("view",), 160), (WALWIND, 0xFA, "walwind", ("view",), 240),
                (EARTH_WAVE, None, "earth wave", ("player", 0x43, None, 0x1000, 0x100, 0x1000, 1), 40),
                (BORTECTH, None, "bortecth", ("creature", 0x42, None), 80),
-               (METEOR, None, "meteor", ("creature", 0x43, None), 60))
+               (METEOR, None, "meteor", ("creature", 0x43, None), 60),
+               (ORLADIN, 0x104, "orladin", (), 120))
 """The attacking spells the checks send: the kind, the speed its arm of
 player_action gives it, its name, what follows the velocity ("view" a
-pointer to view_angles) and the frames to run. With no speed it is put
-down, not sent: at the player's feet or a creature's, its +0 and its
-arguments after."""
+pointer to view_angles; a tuple, one spawn for each of its values, as the
+arm spawns them) and the frames to run. With no speed it is put down, not
+sent: at the player's feet or a creature's, its +0 and its arguments
+after."""
+
+FLAT = {}
+"""The spells whose arm lowers the cast point by this and zeroes the
+velocity's y: they go level, along the ground."""
+
+
+def _spawns(a1, kind, point, args):
+    """The effect_spawn calls of one cast: (10, a1, kind, point, args), once,
+    or once for each value of a tuple among the arguments."""
+    for i, v in enumerate(args):
+        if isinstance(v, tuple):
+            return [(0xA, a1, kind, point, args[:i] + [x] + args[i + 1:]) for x in v]
+    return [(0xA, a1, kind, point, args)]
 
 
 def _placed(ram, more, creature):
@@ -2293,14 +2416,17 @@ def fire_hit_check(out=sys.stdout, per=10, frames=60, kind=None, speed=0x384, na
             ang = vec_to_angles(t[0] - start[0], t[1] - 0x300 - start[1], t[2] - start[2])
             d = movement.direction_from_angles(ang[0], ang[1])
             vel = struct.pack("<4h", *[_s16_((c * (speed or 0)) >> 12) for c in d], 0)
+            if kind in FLAT:
+                start = (start[0], start[1] + FLAT[kind], start[2])
+                vel = vel[:2] + bytes(2) + vel[4:]
             point = struct.pack("<4i", *start, 0)
             struct.pack_into("<3H", ram, VIEW_ANGLES & MASK, ang[0] & 0xFFFF, ang[1] & 0xFFFF, 0)
             view = bytes(ram[VIEW_ANGLES & MASK:(VIEW_ANGLES & MASK) + 8])
-            sp = (0xA, 0x42, FIRE_BALL if kind is None else kind, point,
-                  [vel] + [view if v == "view" else v for v in more])
+            sps = _spawns(0x42, FIRE_BALL if kind is None else kind, point,
+                          [vel] + [view if v == "view" else v for v in more])
             if speed is None:
                 a1, point, args = _placed(ram, more, t)
-                sp = (0xA, a1, kind, point, args)
+                sps = _spawns(a1, kind, point, args)
             if rng.randrange(4) == 0:                       # water just under the path
                 struct.pack_into("<i", ram, SURFACE & MASK, py - 0x640 - rng.randrange(0, 0x1F4))
             seed = rng.randrange(1 << 30)
@@ -2345,8 +2471,10 @@ def fire_hit_check(out=sys.stdout, per=10, frames=60, kind=None, speed=0x384, na
             w.hurt_player = hurt_player
             mach = Machine(m, w, mlcg)
             try:
-                game_spawn(cpu, *sp)
-                mach.spawn(*sp)
+                for sp in sps:
+                    game_spawn(cpu, *sp)
+                for sp in sps:
+                    mach.spawn(*sp)
                 runs += 1
                 ok = True
                 for f in range(frames):

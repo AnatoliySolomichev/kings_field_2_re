@@ -667,9 +667,9 @@ func in_range(px: int, py: int, pz: int, x: int, y: int, z: int, r: int,
 
 # 0x80016fb4: a box of the radius + own about the point, then the length to
 # the target's middle (height / 2 up from its feet) through the game's root,
-# less own -- 0 or more within, FAR (0xff676981) beyond.
+# less own -- 0 within own (0x80017090), FAR (0xff676981) beyond.
 const FAR := -0x98967F
-# @orig game:0x80016fb4 in_range_3d  status:verified -- through effect_hurt_player, 118 strikes of bp26; through 0x8004ceac, tools/effects.py spell_hit_check against the game's own
+# @orig game:0x80016fb4 in_range_3d  status:verified -- 600 of 600 calls of the game's own (tools/routines.py); through effect_hurt_player, 118 strikes of bp26; through 0x8004ceac, tools/effects.py spell_hit_check against the game's own
 func in_range_3d(p: Vector3i, radius: int, t: Vector3i, own: int, height: int) -> int:
 	var r := radius + own
 	var dx := t.x - p.x
@@ -684,7 +684,7 @@ func in_range_3d(p: Vector3i, radius: int, t: Vector3i, own: int, height: int) -
 	var ln := isqrt((dx >> 3) * (dx >> 3) + (dz >> 3) * (dz >> 3) + (dy >> 3) * (dy >> 3)) << 3
 	if r < ln:
 		return FAR
-	return ln - own
+	return ln - own if own < ln else 0
 
 
 # 0x80016d3c: the offset to polar and back out along the rectangle's own axes.

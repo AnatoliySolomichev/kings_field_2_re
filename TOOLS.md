@@ -516,9 +516,9 @@ flinch, the death, the push -- and `actor_attack_player`, which an effect's
 hit goes to. Held to the game's own over every snapshot's creatures, **1260
 of 1260**; `export` writes `hitcheck.json` in actors.gd's form.
 `tools/effects.py spell_hit_check` runs the fire ball, stone, wind cutter,
-haze, shudom, walwind, earth wave, bortecth and meteor through both,
-against the game's own end to end
--- shudom's rings and walwind's waves through `strike_creatures`
+haze, shudom, walwind, earth wave, bortecth, meteor and orladin through
+both, against the game's own end to end
+-- shudom's rings, walwind's waves and orladin's bursts through `strike_creatures`
 (`0x8004ceac`, the strike on the creatures in an area) and
 `effect_hurt_player`'s other modes; `export_strikes` writes
 `strikecheck.json`, 400 of `strike_creatures`' cases in actors.gd's form.
@@ -1013,11 +1013,13 @@ python3 tools/mipsrun.py --check
 
 **`routines.py`** asks the small routines themselves -- the sine and cosine,
 `vec_angle`, `ratan2`, `arctan_unit`, the square root, `in_range`,
-`in_oriented_rect`, `facing_test`, `approach`, `fixed_madd`,
-`player_in_rect` -- some 13 900 calls over `a1`, corners and all, and writes
+`in_range_3d`, `in_oriented_rect`, `facing_test`, `approach`, `fixed_madd`,
+`player_in_rect` -- some 14 500 calls over `a1`, corners and all, and writes
 the game's answers to `routinecheck.json`; `godot/selftest.gd` puts each to
 the port's copy (`routines:`). It found the port's height test ignoring the
-`0xffff` that tells `in_range` to skip it.
+`0xffff` that tells `in_range` to skip it; `in_range_3d` went in after orladin
+found it answering less than 0 within the target's own radius, where the game
+answers 0.
 
 ```
 python3 tools/routines.py           each routine: how many calls, and a few

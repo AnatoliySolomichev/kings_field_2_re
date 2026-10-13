@@ -6497,6 +6497,59 @@ lead's tile test in `player.gd` now asks the tiles instead of answering no.
 port shows them -- at their place, angles and scale, as `effects.gd`'s draw
 does for every effect, without `+0xe` and the light.
 
+### Orladin
+
+```
+orladin (0x15)   sent at 0x104 like the fire ball: particle(0x37, 0x1800,
+                 5), life 0x78, +0xd 1, +0xe 0x40, its sound 0x9a. Each
+                 frame a puff (0x6f) where it was -- its velocity three
+                 rands, (rand << 5 >> 15) - 0x10, 0x1a90 shrinking 0x3e8, a
+                 life of 4, model 0x25 -- then effect_move at 0xb4 with no
+                 height and no turn. The tiles (the hit's low four bits) end
+                 it; meeting a creature (0x10) -- and it goes on through, so
+                 a creature it is still inside is met again the next frame
+                 -- it leaves two bursts (0x58) where it is, with +0 0x43,
+                 one sized 0 and one 0x80, its sound 0x25, and sixteen rays
+                 (0x5b) 0x4b0 above it, a sixteenth of a turn apart, flying
+                 out at 45 * sin >> 9 -- 360 a frame. It strikes nothing
+                 itself.
+  burst (0x58)   effect_setup(0x15, 0, 5), its size the argument, life
+                 0x2d, +0xe 0x40. sub_80056134(0x4000, 0x600, 0x80, 0x400,
+                 0x8000): all three scales 0x80 larger a frame, a strike
+                 between 4 * (size - 0x80) and 4 * size - 1 from its point,
+                 mode 0x8000, edge 0x400; gone at 0x600 -- the two shells
+                 interleave, eleven and twelve frames. Then fire resist's
+                 mark's tail: it turns 0x40 a frame. With +0 0x43 it strikes
+                 the player too: orladin cast at a creature beside the
+                 player hurts them.
+  ray (0x5b)     model 0xb, +8 5, +9 5, scale (0x1000, 0xc00, 0x1000), life
+                 0x14, +0xe 0x40. Out by its velocity while its life is 10 or
+                 more, back by it and 0x200 taller after, +4 flickering 0x80
+                 and 0x81 by the life's low bit; it strikes from a step ahead
+                 within its scale, mode 0x8000 -- but its +0 is 0, so it
+                 strikes nothing.
+```
+
+Against the game's own end to end, sent at the snapshots' creatures
+(`spell_hit_check`): **126 of 126** runs, 5549 frames, all 128 slots and
+all 200 creatures alike, 32 frames with a creature struck, 24 killed. The
+rays' velocity's fourth halfword and their point's fourth word are the
+stack's, which the check takes from the game's. The port has the three
+kinds (`effects.gd`: 318 of 318 machine runs in the self-test) and draws
+their models.
+
+**`in_range_3d` answers 0 within the target's own radius.** The first run
+of orladin's bursts disagreed with the game on 10 runs of 126: a burst
+struck a creature the model passed over. `0x80016fb4` returns the length
+less the target's own radius only when the length is past it
+(`0x80017090`: `slt own, ln`, else `move $v0, $zero`), and 0 inside; the
+model returned the difference, less than 0, which a strike with `near` 0
+-- the burst's first shell -- reads as nearer than its inner edge. Every
+strike before had `near` at FAR or met the creature from outside its own
+radius, so nothing had shown it. Fixed in `tools/effects.py` and
+`godot/collision.gd`, and the routine is now in `tools/routines.py`: **600 of
+600** calls of the game's own, 158 of them inside; no number above moved.
+
 ### The player's death
 
 `apply_damage` that leaves no HP calls `player_throw` (`0x80030a6c`) with the
