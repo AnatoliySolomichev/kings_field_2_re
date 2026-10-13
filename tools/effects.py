@@ -512,7 +512,17 @@ def export(out_dir):
                   struct.pack_into("<i", m, SURFACE & MASK, py - 0x640 - frng.randrange(0, 0x1F4))
               s18 = struct.unpack_from("<i", m, SURFACE & MASK)[0]
               view = bytes(m[VIEW_ANGLES & MASK:(VIEW_ANGLES & MASK) + 8])
-              args_ = [vel] + [view if v == "view" else v for v in more_]
+              slot, mid = 0xFF, (0, 0, 0)
+              if "slot?" in more_:
+                  awake = [k for k in range(ACTOR_N)
+                           if m[(ACTORS + ACTOR_STRIDE * k + 9) & MASK] == 1] or [0xFF]
+                  slot = frng.choice((frng.choice(awake),) * 3 + (0xFE, 0xFF))
+                  if slot < ACTOR_N:
+                      a = ACTORS + ACTOR_STRIDE * slot
+                      ax, ay, az = struct.unpack_from("<3i", m, (a + 0x2C) & MASK)
+                      mid = (ax, _s32(ay - (struct.unpack_from("<H", m, (a + 0x1E) & MASK)[0] >> 1)),
+                             az)
+              args_ = [vel] + [view if v == "view" else slot if v == "slot?" else v for v in more_]
               a1_ = 0x42
               if not speed_:
                   a1_, point, args_ = _placed(m, more_, struct.unpack_from("<3i", point))
@@ -574,7 +584,9 @@ def export(out_dir):
                   continue
               fires.append({"label": f"{os.path.basename(path)[:-4]} kind {kind_:#x}", "layer0": 7,
                             "spawn_rand": spawn_rand, "spawn_ask": spawn_ask,
-                            "fields": dict({"px": px, "s18": s18, "vy": vy}, **{f"w{k}": working[k] for k in range(5)}),
+                            "fields": dict({"px": px, "py": py, "pz": pz, "s18": s18, "vy": vy,
+                                            "ax": mid[0], "ay": mid[1], "az": mid[2]},
+                                           **{f"w{k}": working[k] for k in range(5)}),
                             "spawns": [[a0, a1, kd, pt.hex(),
                                         [{"b": v.hex()} if isinstance(v, bytes) else v for v in args]]
                                        for a0, a1, kd, pt, args in sps],
@@ -718,7 +730,8 @@ HAZE, SHUDOM, WALWIND, RING, WAVE = 0x0B, 0x09, 0x11, 0x5E, 0x59
 EARTH_WAVE, BORTECTH, HOLD = 0x07, 0x0C, 0x65
 METEOR, BLAST = 0x5F, 0x5A
 ORLADIN, BURST, RAY = 0x15, 0x58, 0x5B
-TORNADO, FIRE_WALL = 0x0F, 0x01
+TORNADO, FIRE_WALL, FIRE_STORM = 0x0F, 0x01, 0x02
+COLLIDE_MASK = 0x801E6488           # collide_query's last answer, kept
 TICK_SP, TICK_FRAME = 0x801FBC20, 0x2B8  # effect_tick's sp, as the check's driver runs it
 STRIKE_POINT = 0x801FF0D0           # the machine's stand-in for an arm's point on its stack
 VIEW_ANGLES = 0x801B2608
@@ -855,7 +868,7 @@ class Machine:
                0x16: self._spawn_07, BORTECTH: self._spawn_0c, HOLD: self._spawn_65,
                METEOR: self._spawn_5f, BLAST: self._spawn_5a, ORLADIN: self._spawn_15,
                BURST: self._spawn_58, RAY: self._spawn_5b, TORNADO: self._spawn_0f,
-               FIRE_WALL: self._spawn_01}.get(kind)
+               FIRE_WALL: self._spawn_01, FIRE_STORM: self._spawn_02}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_spawn's arm {kind:#x}")
         arm(s, args)
@@ -1427,6 +1440,95 @@ class Machine:
         self.spawn(0xA, 0, TRAIL, self.get(s + 0x18, 16),
                    [self.get(TICK_SP + 0x170, 8), 0x1000, 0, 8, 0x1C, 2, 1, 2])
 
+    def _spawn_02(self, s, args):           # 0x800540b8, fire storm
+        """particle(9, 0x1b58, 5), its velocity jittered by (rand >> 8) -
+        0x40 each way, life 0x50, a grace of 3, +0x44 the creature it goes
+        for (args[1]: its slot, 0xfe the player, 0xff none); the last of a
+        cast's three (args[2] 2) its sound, 0x2d."""
+        self.particle(s, 9, 0x1B58, 5)
+        for o in (0x38, 0x3A, 0x3C):
+            self.w16(s + o, self.u16(s + o) - 0x40 + (self.rand() >> 8))
+        self.w16(s + 0x10, 0x50)
+        self.w8(s + 0xB, 3)
+        self.w16(s + 0xE, 0x40)
+        self.w8(s + 0x44, args[1])
+
+    def _tick_02(self, s):                  # 0x80059db8, fire storm
+        """At a creature (+0x44 its slot) it homes on its middle, effect_home
+        at most 0x1c2, slowing within 0x64; at the player (0xfe) on the eye,
+        0x1f4, within 0xbb8; with none (0xff) it falls, 0xa a frame more,
+        through effect_move. Meeting anything: what collide_query last
+        answered (collide_mask) struck, six puffs about it, splashes in the
+        water, gone. Else from its seventh frame a puff a frame behind."""
+        t = self.u8(s + 0x44)
+        if t == 0xFF:
+            self.w16(s + 0x3A, self.u16(s + 0x3A) + 0xA)
+            met = self.move(0xA, 0x80000000, 0) != 0
+        else:
+            if t == 0xFE:
+                x, y, z = struct.unpack_from("<3i", self.m, PLAYER_POS & MASK)
+                target, most, near = (x, _s32(y - 0x640), z), 0x1F4, 0xBB8
+            else:
+                a = ACTORS + ACTOR_STRIDE * t
+                target = (self.s32(a + 0x2C), _s32(self.s32(a + 0x30) - (self.u16(a + 0x1E) >> 1)),
+                          self.s32(a + 0x34))
+                most, near = 0x1C2, 0x64
+            met = self.home(target, most, 0x3C, near, 0, 0xA, 0x80000000) == -1
+        if met:
+            self.attack(s, self.w.collide_mask)
+            for _k in range(6):
+                vx = ((400 * self.rand()) >> 15) - 0xC8
+                vz = ((400 * self.rand()) >> 15) - 0xC8
+                vy = ((400 * self.rand()) >> 15) - 0xC8
+                struct.pack_into("<3h", self.m, (TICK_SP + 0x170) & MASK, vx, vy, vz)
+                self.spawn(0xA, 0, TRAIL, self.get(s + 0x18, 16),
+                           [self.get(TICK_SP + 0x170, 8), 0x1D4C, -0x2EE, 8, 0x16, 0xA, 1, 2])
+            self.splash(s + 0x18, 5, 0x400, 0x2000, 0x4000, 0x1000)
+            self.w8(s, 0xFF)
+            return
+        if self.s16(s + 0x10) < 0x4A:
+            v = [((60 * self.rand()) >> 15) - 0x1E for _k in range(3)]
+            struct.pack_into("<3h", self.m, (TICK_SP + 0x170) & MASK, *v)
+            self.spawn(0xA, 0, TRAIL, self.get(s + 0x18, 16),
+                       [self.get(TICK_SP + 0x170, 8), 0x1000, -0x100, 0xD, 0x1C, 0xA, 1, 2])
+
+    def home(self, target, most, accel, near, reach, radius, height):  # 0x80055f74
+        """effect_home: from the point to the target, vec_length_3d; -2
+        when not past `reach`; within `near` the velocity to three
+        quarters (fixed_madd(0, v, 0xc00)); then effect_steer along the
+        direction, each axis << 12 over the length."""
+        s = self.u32(CURRENT)
+        d = [_s32(target[i] - self.s32(s + 0x18 + 4 * i)) for i in range(3)]
+        ln = vec_length_3d(*d)
+        if not reach < ln:
+            return -2
+        if not near < ln:
+            for o in (0x38, 0x3A, 0x3C):
+                self.w16(s + o, (self.s16(s + o) * 0xC00) >> 12)
+        dirv = [_s16_(movement.trunc(_s32(c << 12), ln)) for c in d]
+        return self.steer(accel, most, radius, height, dirv)
+
+    def steer(self, accel, most, radius, height, dirv):     # 0x80055bd8
+        """effect_steer: the velocity += vec_scale(accel, dir), cut to
+        `most` when longer, the point moved; then effect_collide there --
+        -1 met, 0 not; nothing asked with a height of -1."""
+        s = self.u32(CURRENT)
+        accel = _s16_(accel)
+        for i in range(3):
+            o = s + 0x38 + 2 * i
+            self.w16(o, self.u16(o) + ((dirv[i] * accel) >> 12))
+        v = [self.s16(s + 0x38 + 2 * i) for i in range(3)]
+        ln = vec_length_3d(*v)
+        if most < ln:
+            for i in range(3):
+                self.w16(s + 0x38 + 2 * i, movement.trunc(v[i] * most, ln))
+        for i in range(3):
+            self.w32(s + 0x18 + 4 * i, self.s32(s + 0x18 + 4 * i) + self.s16(s + 0x38 + 2 * i))
+        if height == -1:
+            return 0
+        p = (self.s32(s + 0x18), self.s32(s + 0x1C), self.s32(s + 0x20))
+        return -1 if self.collide(p, radius, height) else 0
+
     def _spawn_15(self, s, args):           # 0x800543e8, orladin
         self.particle(s, 0x37, 0x1800, 5)
         self.w16(s + 0x10, 0x78)
@@ -1680,7 +1782,7 @@ class Machine:
                0x16: self._tick_07, BORTECTH: self._tick_0c, HOLD: self._tick_65,
                METEOR: self._tick_5f, BLAST: self._tick_5a, ORLADIN: self._tick_15,
                BURST: self._tick_58, RAY: self._tick_5b, TORNADO: self._tick_0f,
-               FIRE_WALL: self._tick_01}.get(kind)
+               FIRE_WALL: self._tick_01, FIRE_STORM: self._tick_02}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_tick's arm {kind:#x}")
         arm(s)
@@ -1959,6 +2061,12 @@ def vec_to_angles(dx, dy, dz):
     return [pitch, _s16_(yaw), 0]
 
 
+def vec_length_3d(x, y, z):
+    """0x80016c44: each >> 3, the squares summed in a word, the game's root,
+    << 3."""
+    return movement.game_isqrt(_s32((x >> 3) ** 2 + (y >> 3) ** 2 + (z >> 3) ** 2)) << 3
+
+
 def vec_length_2d(a, b):
     """0x80016c08: through the game's own root, which comes back one short of
     a square -- movement.vlen's math.isqrt does not."""
@@ -2018,6 +2126,7 @@ class RamWorld:
         self.objs = self._solids()
         self.hurts = []
         self.strikes = []
+        self.collide_mask = struct.unpack_from("<I", m, COLLIDE_MASK & MASK)[0]
 
     def _solids(self):
         import objcoll
@@ -2038,6 +2147,11 @@ class RamWorld:
         return out
 
     def collide_query(self, x, y, z, r, h, flags):
+        """collide_query, its answer kept as collide_mask (0x80034148)."""
+        self.collide_mask = self._query(x, y, z, r, h, flags)
+        return self.collide_mask
+
+    def _query(self, x, y, z, r, h, flags):
         import collision
         mask = 0
         cx, cz = x >> 11, z >> 11
@@ -2417,6 +2531,7 @@ class StandIn:
         self.strikes = []
         self.released = []
         self.collide_actor = -1
+        self.collide_mask = 0
         self.m = m
 
     @staticmethod
@@ -2427,6 +2542,7 @@ class StandIn:
         self.asked.append([x & 0xFFFFFFFF, y & 0xFFFFFFFF, z & 0xFFFFFFFF, r, h & 0xFFFFFFFF, flags])
         v = self.answer(_s32(x), _s32(y), _s32(z))
         self.collide_actor = (_s32(x) >> 8) % 200 if v & 0x10 else -1
+        self.collide_mask = v
         return v
 
     def release(self, c):
@@ -2458,11 +2574,13 @@ SPELLS_SENT = ((FIRE_BALL, 0x384, "the fire ball", (), 80), (STONE, 0x1F4, "ston
                (METEOR, None, "meteor", ("creature", 0x43, None), 60),
                (ORLADIN, 0x104, "orladin", (), 120),
                (TORNADO, 0x12C, "tornado", ("view", (0, 1)), 60),
-               (FIRE_WALL, 0x23A, "fire wall", ("view",), 60))
+               (FIRE_WALL, 0x23A, "fire wall", ("view",), 60),
+               (FIRE_STORM, 0x1F4, "fire storm", ("slot?", 2), 90))
 """The attacking spells the checks send: the kind, the speed its arm of
 player_action gives it, its name, what follows the velocity ("view" a
-pointer to view_angles; a tuple, one spawn for each of its values, as the
-arm spawns them) and the frames to run. With no speed it is put down, not
+pointer to view_angles; "slot?" the creature in sight, now and then the
+player (0xfe) or none (0xff); a tuple, one spawn for each of its values, as
+the arm spawns them) and the frames to run. With no speed it is put down, not
 sent: at the player's feet or a creature's, its +0 and its arguments
 after."""
 
@@ -2544,8 +2662,12 @@ def fire_hit_check(out=sys.stdout, per=10, frames=60, kind=None, speed=0x384, na
             point = struct.pack("<4i", *start, 0)
             struct.pack_into("<3H", ram, VIEW_ANGLES & MASK, ang[0] & 0xFFFF, ang[1] & 0xFFFF, 0)
             view = bytes(ram[VIEW_ANGLES & MASK:(VIEW_ANGLES & MASK) + 8])
+            slot = (a - ACTORS) // ACTOR_STRIDE
+            if "slot?" in more:
+                slot = rng.choice((slot, slot, slot, 0xFE, 0xFF))
             sps = _spawns(0x42, FIRE_BALL if kind is None else kind, point,
-                          [vel] + [view if v == "view" else v for v in more])
+                          [vel] + [view if v == "view" else slot if v == "slot?" else v
+                                   for v in more])
             if speed is None:
                 a1, point, args = _placed(ram, more, t)
                 sps = _spawns(a1, kind, point, args)

@@ -61,6 +61,7 @@ const BURST := 0x58                # orladin's
 const RAY := 0x5B                  # orladin's
 const TORNADO := 0x0F
 const FIRE_WALL := 0x01
+const FIRE_STORM := 0x02
 const TRAIL_ARGS := [0xE10, -0x80, 5, 0x16, 0, 1, 3]   # 0x80058f50's, after the velocity
 const QUERY := {1: 0xA1, 2: 0x31, 3: 0xB1, 4: 0x01}    # effect_collide: +0 & 7 -> flags
 const GROW := 0x96
@@ -80,6 +81,7 @@ var layer_offset := 0              # collision_layer_offset after the last tile 
 var world = null                   # what the effects ask of the game; this node, or a stand-in
 var pulse := []                     # this frame's lighting from an effect: [near, far, k, rgb]
 var collide_actor := -1             # 0x801e648c: the creature the last query met
+var collide_mask := 0               # 0x801e6488: what the last query answered
 var tick_frame := PackedByteArray()  # effect_tick's stack frame (0x2b8): what one arm leaves the next
 var surface18 := 100000             # 0x801e647c: the water the last query found
 var acc := 0.0
@@ -208,7 +210,7 @@ func alloc() -> int:
 # effect_spawn(a0, a1, kind, point, ...): `point` the 16 bytes a3 points at
 # (or empty), `args` the stack arguments from the fifth on -- a pointer as the
 # bytes it points at. The slot's offset, or -1 when none is free.
-# @orig game:0x80053c84 effect_spawn  status:partial -- the common setting up and the arms of 32 kinds: 0 (fire ball), 1 (fire wall), 6 (stone), 7 and 0x16 (earth wave), 9 (shudom), 0xb (haze), 0xc (bortecth), 0xd (wind cutter), 0xf (tornado), 0x11 (walwind), 0x15 (orladin), 0x17, 0x19, 0x1a, 0x1b, 0x1c, 0x1e (the healing and protecting), 0x1f, 0x22, 0x23, 0x24, 0x26 (the creatures'), 0x58, 0x59, 0x5a, 0x5b, 0x5e, 0x5f, 0x65 (the spells' children), 0x6f (puff) and 0x70 (splash); tools/effects.py's, which the game's own holds (machine_check, magic_check, spell_hit_check) and the self-test holds this to. 35 kinds have the empty arm, which frees the slot, as here; the other 63 arms are not here
+# @orig game:0x80053c84 effect_spawn  status:partial -- the common setting up and the arms of 33 kinds: 0 (fire ball), 1 (fire wall), 2 (fire storm), 6 (stone), 7 and 0x16 (earth wave), 9 (shudom), 0xb (haze), 0xc (bortecth), 0xd (wind cutter), 0xf (tornado), 0x11 (walwind), 0x15 (orladin), 0x17, 0x19, 0x1a, 0x1b, 0x1c, 0x1e (the healing and protecting), 0x1f, 0x22, 0x23, 0x24, 0x26 (the creatures'), 0x58, 0x59, 0x5a, 0x5b, 0x5e, 0x5f, 0x65 (the spells' children), 0x6f (puff) and 0x70 (splash); tools/effects.py's, which the game's own holds (machine_check, magic_check, spell_hit_check) and the self-test holds this to. 35 kinds have the empty arm, which frees the slot, as here; the other 62 arms are not here
 func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array) -> int:
 	var s := alloc()
 	if s < 0:
@@ -372,6 +374,15 @@ func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array) -> 
 			w16(s + 0x46, int(args[1]))     # the creature held, or -1
 		METEOR:                             # 0x8005593c
 			_spawn_meteor(s)
+		FIRE_STORM:                         # 0x800540b8
+			particle(s, 9, 0x1B58, 5)
+			for o in [0x38, 0x3A, 0x3C]:
+				w16(s + o, u16(s + o) - 0x40 + (int(world.rand()) >> 8))
+			w16(s + 0x10, 0x50)
+			w8(s + 0xB, 3)
+			w16(s + 0xE, 0x40)
+			w8(s + 0x44, int(args[1]))      # its creature: the slot, 0xfe the player, 0xff none
+			# and the last of a cast's three (args[2] 2), its sound (0x2d), not here
 		FIRE_WALL:                          # 0x80053fa8
 			w8(s + 9, 5)
 			w8(s + 2, 0x28)
@@ -601,7 +612,7 @@ func driver() -> void:
 
 
 # effect_tick's switch on the kind (0x80056908), with the arms the port has.
-# @orig game:0x800568bc effect_tick  status:partial -- the switch, and the arms of the same 32 kinds as effect_spawn's; the other 63 do nothing here
+# @orig game:0x800568bc effect_tick  status:partial -- the switch, and the arms of the same 33 kinds as effect_spawn's; the other 62 do nothing here
 func tick(s: int) -> void:
 	match u8(s + 1):
 		0x1F:
@@ -644,6 +655,8 @@ func tick(s: int) -> void:
 			_tick_tornado(s)
 		FIRE_WALL:
 			_tick_fire_wall(s)
+		FIRE_STORM:
+			_tick_fire_storm(s)
 		ORLADIN:
 			_tick_orladin(s)
 		BURST:
@@ -1104,6 +1117,123 @@ func _tick_fire_wall(s: int) -> void:
 		8, 0x1C, 2, 1, 2])
 
 
+# Fire storm (0x80059db8): at a creature (+0x44 its slot) it homes on its
+# middle, effect_home at most 0x1c2 a frame, slowing within 0x64; at the
+# player (0xfe) on the eye, 0x1f4, within 0xbb8; with none (0xff) it falls,
+# 0xa a frame more, through effect_move. Meeting anything: what collide_query
+# last answered (collide_mask) struck, six puffs about it, splashes in the
+# water, gone. Else, from its seventh frame, a puff a frame behind.
+# @orig game:0x80059db8 effect_tick+0x34fc  status:verified -- tools/effects.py spell_hit_check against the game's own end to end, 126 of 126 runs, at a creature, the player and none; the self-test this to it
+func _tick_fire_storm(s: int) -> void:
+	var t := u8(s + 0x44)
+	var met := false
+	if t == 0xFF:
+		w16(s + 0x3A, u16(s + 0x3A) + 0xA)
+		met = move(0xA, 0x80000000, 0) != 0
+	else:
+		var target: Array
+		var most := 0x1C2
+		var near := 0x64
+		if t == 0xFE:
+			target = [int(world.field("px")), s32v(int(world.field("py")) - 0x640),
+				int(world.field("pz"))]
+			most = 0x1F4
+			near = 0xBB8
+		else:
+			target = world.actor_mid(t)
+		met = home(target, most, 0x3C, near, 0, 0xA, 0x80000000) == -1
+	if met:
+		_attack(s, int(world.collide_mask))
+		for _k in 6:
+			tick_frame.encode_s16(0x170, ((400 * int(world.rand())) >> 15) - 0xC8)
+			tick_frame.encode_s16(0x174, ((400 * int(world.rand())) >> 15) - 0xC8)
+			tick_frame.encode_s16(0x172, ((400 * int(world.rand())) >> 15) - 0xC8)
+			spawn(0xA, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [tick_frame.slice(0x170, 0x178),
+				0x1D4C, -0x2EE, 8, 0x16, 0xA, 1, 2])
+		_splash(s + 0x18, 5, 0x400, 0x2000, 0x4000, 0x1000)
+		w8(s, 0xFF)
+		return
+	if s16(s + 0x10) < 0x4A:
+		for at in [0x170, 0x172, 0x174]:
+			tick_frame.encode_s16(at, ((60 * int(world.rand())) >> 15) - 0x1E)
+		spawn(0xA, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [tick_frame.slice(0x170, 0x178),
+			0x1000, -0x100, 0xD, 0x1C, 0xA, 1, 2])
+
+
+# effect_home: from the point to the target, vec_length_3d; -2 when not past
+# `reach`; within `near` the velocity to three quarters (fixed_madd(0, v,
+# 0xc00)); then effect_steer along the direction, each axis << 12 over the
+# length.
+# @orig game:0x80055f74 effect_home  status:verified -- through fire storm, tools/effects.py spell_hit_check against the game's own
+func home(target: Array, most: int, accel: int, near: int, reach: int, radius: int,
+		height: int) -> int:
+	var s := current
+	var d := []
+	for i in 3:
+		d.append(s32v(int(target[i]) - s32(s + 0x18 + 4 * i)))
+	var ln := vec_length_3d(d[0], d[1], d[2])
+	if not reach < ln:
+		return -2
+	if not near < ln:
+		for o in [0x38, 0x3A, 0x3C]:
+			w16(s + o, (s16(s + o) * 0xC00) >> 12)
+	var dirv := []
+	for i in 3:
+		dirv.append(s16v(_trunc(s32v(int(d[i]) << 12), ln)))
+	return steer(accel, most, radius, height, dirv)
+
+
+# effect_steer: the velocity += vec_scale(accel, dir), cut to `most` when
+# longer, the point moved; then effect_collide there -- -1 met, 0 not;
+# nothing asked with a height of -1.
+# @orig game:0x80055bd8 effect_steer  status:verified -- through fire storm, tools/effects.py spell_hit_check against the game's own
+func steer(accel: int, most: int, radius: int, height: int, dirv: Array) -> int:
+	var s := current
+	accel = s16v(accel)
+	for i in 3:
+		var o := s + 0x38 + 2 * i
+		w16(o, u16(o) + ((int(dirv[i]) * accel) >> 12))
+	var v := [s16(s + 0x38), s16(s + 0x3A), s16(s + 0x3C)]
+	var ln := vec_length_3d(v[0], v[1], v[2])
+	if most < ln:
+		for i in 3:
+			w16(s + 0x38 + 2 * i, _trunc(int(v[i]) * most, ln))
+	for i in 3:
+		w32(s + 0x18 + 4 * i, s32(s + 0x18 + 4 * i) + s16(s + 0x38 + 2 * i))
+	if height == -1:
+		return 0
+	return -1 if collide(Vector3i(s32(s + 0x18), s32(s + 0x1C), s32(s + 0x20)), radius,
+		height) != 0 else 0
+
+
+# vec_length_3d: each >> 3, the squares summed in a word, the game's root, << 3.
+# @orig game:0x80016c44 vec_length_3d  status:verified -- through fire storm's homing, tools/effects.py spell_hit_check against the game's own
+func vec_length_3d(x: int, y: int, z: int) -> int:
+	return coll.isqrt(((x >> 3) * (x >> 3) + (y >> 3) * (y >> 3) + (z >> 3) * (z >> 3))
+		& 0xFFFFFFFF) << 3
+
+
+# MIPS div, toward 0.
+# @port helper -- division as the R3000 does it
+static func _trunc(a: int, b: int) -> int:
+	var q := absi(a) / absi(b)
+	return -q if (a < 0) != (b < 0) else q
+
+
+# The middle of creature `t`, as fire storm aims at it: its place, half its
+# height (+0x1e) up.
+# @port helper -- an actor's middle from actors.gd, the world's answer to fire storm
+func actor_mid(t: int) -> Array:
+	var an := get_node_or_null("../Actors")
+	if an == null or an.get("actors") == null:
+		return [0, 0, 0]
+	var list: Array = an.get("actors")
+	if t >= list.size() or list[t] == null:
+		return [0, 0, 0]
+	var a = list[t]
+	return [int(a["px"]), s32v(int(a["py"]) - (int(a["height"]) >> 1)), int(a["pz"])]
+
+
 # Orladin (0x80057fc0): a puff a frame where it was (its velocity three
 # rands, +-0x10), then effect_move at 0xb4 with no height and no turn; the
 # tiles end it. Meeting a creature (bit 0x10) -- and it goes on through, so a
@@ -1153,10 +1283,10 @@ func _tick_burst(s: int) -> void:
 	w16(s + 0x2A, u16(s + 0x2A) + 0x40)
 
 
-# sub_80056134: a sphere growing `step` a frame, its three scales alike; it
+# effect_grow: a sphere growing `step` a frame, its three scales alike; it
 # strikes between mult times its last size and mult times its size less
 # one, `mode` and `edge`, at 0x1000; gone at `limit`.
-# @orig game:0x80056134 sub_80056134  status:verified -- through orladin's burst, tools/effects.py spell_hit_check against the game's own
+# @orig game:0x80056134 effect_grow  status:verified -- through orladin's burst, tools/effects.py spell_hit_check against the game's own
 func grow(mult: int, limit: int, step: int, edge: int, mode: int) -> void:
 	var s := current
 	var v := (u16(s + 0x30) + step) & 0xFFFF
@@ -1450,6 +1580,8 @@ func field(name: String) -> int:
 		"b56c": return int(player.get("shielded"))
 		"b56e": return int(player.get("bonus")[1])
 		"px": return int(player.get("gx"))
+		"py": return int(player.get("gy"))
+		"pz": return int(player.get("gz"))
 		"s18": return surface18
 		"vy": return (int(player.get("facing")) + int(player.get("tilt")[1])) & 0xFFFF
 		"w0", "w1", "w2", "w3", "w4":
@@ -1691,7 +1823,7 @@ func collide_query(x: int, y: int, z: int, r: int, h: int, flags: int) -> int:
 		var at := int(q["at"])
 		layer_offset = 5 if at >= 0 and at % 6 != 0 else 0
 	if not inside:
-		return mask
+		return _kept(mask)
 	var cx := x >> 11
 	var cz := z >> 11
 	var c := cz * KFCollision.W + cx
@@ -1706,7 +1838,7 @@ func collide_query(x: int, y: int, z: int, r: int, h: int, flags: int) -> int:
 		marked = bool(an.call("marks_cell", cx, cz))
 	collide_actor = -1
 	if (coll.occ.is_empty() or coll.occ[c] == 0) and not marked:
-		return mask
+		return _kept(mask)
 	if flags & 0x10 and an and an.has_method("spot_taken"):
 		collide_actor = int(an.call("spot_taken", x, y, z, r, h & 0x0FFFFFFF))
 		if collide_actor != -1:
@@ -1725,6 +1857,13 @@ func collide_query(x: int, y: int, z: int, r: int, h: int, flags: int) -> int:
 		if coll.in_range(int(player.get("gx")), int(player.get("gy")), int(player.get("gz")),
 				x, y, z, r + 0x320, 0x6A4, h & 0x0FFFFFFF) != -1:
 			mask |= 0x80
+	return _kept(mask)
+
+
+# collide_query's end: the answer kept at collide_mask before it is returned.
+# @orig game:0x80034144 collide_query+0x20c  status:verified -- through fire storm's burst, which strikes with it; tools/effects.py spell_hit_check against the game's own
+func _kept(mask: int) -> int:
+	collide_mask = mask
 	return mask
 
 

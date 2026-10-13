@@ -798,9 +798,14 @@ class FxReplay:
 				bad = "query %s, python %s" % [str(asked), str(c.slice(0, 6))]
 		layer_offset = int(c[7])
 		collide_actor = int(c[8]) if c.size() > 8 else -1
+		collide_mask = int(c[6])
 		return int(c[6])
 
 	var collide_actor := -1
+	var collide_mask := 0
+
+	func actor_mid(_t: int) -> Array:
+		return [field("ax"), field("ay"), field("az")]
 	var released: Array = []
 	var cws: Array = []
 	var sfs: Array = []

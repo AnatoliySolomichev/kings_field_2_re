@@ -3042,5 +3042,30 @@
   "name": "map_seen_bits",
   "kind": "data",
   "evidence": "map_mark_seen's bits: 20 bytes a map, indexed by 0x8018fadd, one bit for each of the 160 rectangles of level_map_rects, 32 maps; saved and restored whole at buffer +0x571e"
+ },
+ "0x801e6488": {
+  "name": "collide_mask",
+  "kind": "data",
+  "evidence": "the mask collide_query returns, stored again at its end (0x80034148) on every call; fire storm's burst hands it to sub_800537e8 (0x80059e7c) rather than the mask its own move returned. effect_collide's grace and its unasked answers (flags 0, 5..7) leave the last query's there"
+ },
+ "0x80016c44": {
+  "name": "vec_length_3d",
+  "kind": "code",
+  "evidence": "(x, y, z): each >> 3, the squares summed, game_isqrt, << 3 -- the 3D length to 8 units, as in_range_3d's; the homing effects measure their target with it (sub_80055f74) and cap their speed (sub_80055bd8)"
+ },
+ "0x80055bd8": {
+  "name": "effect_steer",
+  "kind": "code",
+  "evidence": "(accel, most, radius, height, dir): the current effect's velocity += vec_scale(accel, dir), cut to `most` when vec_length_3d says it is longer, the point moved by it, then effect_collide(point, radius, height) -- -1 met, 0 not; a height of -1 asks nothing. Fire storm's homing (through sub_80055f74), held to the game's own by tools/effects.py spell_hit_check"
+ },
+ "0x80055f74": {
+  "name": "effect_home",
+  "kind": "code",
+  "evidence": "(target, most, accel, near, reach, radius, height): from the current effect's point to target, vec_length_3d; -2 when that is not past `reach`; within `near` the velocity to three quarters (fixed_madd 0xc00); then effect_steer along the direction (each axis << 12 / the length). Fire storm's, at a creature's middle (most 0x1c2, near 0x64) or the player's eye (0x1f4, 0xbb8)"
+ },
+ "0x80056134": {
+  "name": "effect_grow",
+  "kind": "code",
+  "evidence": "(mult, limit, step, edge, mode): the current effect's three scales `step` larger, a strike between mult times its last size and mult times its size less one; gone at `limit`. Orladin's burst (0x58): 0x4000, 0x600, 0x80, 0x400, 0x8000 -- held to the game's own by tools/effects.py spell_hit_check"
  }
 }

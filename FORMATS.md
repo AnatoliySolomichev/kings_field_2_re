@@ -6628,6 +6628,49 @@ creatures alike, 7 frames a creature struck, 2 killed. The port has it
 (`effects.gd`, 366 of 366 machine runs in the self-test) and draws its
 model (0x50).
 
+### Fire storm
+
+```
+fire storm (2)   three a cast, sent at 0x1f4, handed the creature in sight
+                 (its slot; 0xff none) and the shots left. particle(9,
+                 0x1b58, 5) -- the fire ball's model, larger -- its velocity
+                 jittered (rand >> 8) - 0x40 each way, life 0x50, a grace of
+                 3, +0xe 0x40, +0x44 the target; the last of the three its
+                 sound 0x2d.
+                 At a creature it homes on its middle (y less half its
+                 +0x1e): effect_home at most 0x1c2 a frame, slowing within
+                 0x64; at the player (0xfe -- a creature's: arms 2 and
+                 0x57 of actor_animation_effects, 0x8004fa60, aim it with
+                 effect_aim at 0x190 and spawn it with +0 0x83, so its
+                 burst asks after the player too) on the eye, 0x1f4,
+                 within 0xbb8; with none
+                 (0xff) it falls, 0xa a frame faster, through effect_move.
+                 Meeting anything (radius 0xa, the height's top bit):
+                 collide_mask struck (sub_800537e8), six puffs (0x6f) about
+                 it, five splashes in the water (sub_80056580), gone. Else
+                 from its seventh frame a puff a frame behind it.
+```
+
+**`effect_home`** (`0x80055f74`): from the point to the target,
+`vec_length_3d` (`0x80016c44`: each axis >> 3, squared, summed, the game's
+root, << 3); -2 when that is not past its `reach` (0 here); within `near`
+the velocity to three quarters (`fixed_madd(0, v, 0xc00)`); then
+**`effect_steer`** (`0x80055bd8`) along the direction, each axis << 12 over
+the length: the velocity plus `vec_scale(accel, dir)` (0x3c), cut to `most`
+by `v * most / length` when longer, the point moved, and `effect_collide`
+there -- -1 met, 0 not. Neither turns the velocity's half-step or the
+layer as `effect_move` does.
+
+**`collide_mask`** (`0x801e6488`) is `collide_query`'s answer, stored again
+at its end on every call (`0x80034148`), and what fire storm's burst hands
+on -- not the -1 its own move returned.
+
+Against the game's own end to end (`spell_hit_check`), sent at the
+snapshots' creatures, now and then at the player or at none: **126 of
+126** runs, 4881 frames, all slots and creatures alike, 17 killed. The port
+has it (`effects.gd`, 390 of 390 machine runs in the self-test, the three
+targets among them).
+
 ### The player's death
 
 `apply_damage` that leaves no HP calls `player_throw` (`0x80030a6c`) with the
