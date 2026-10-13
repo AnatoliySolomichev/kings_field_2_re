@@ -505,7 +505,7 @@ def export(out_dir):
                   x_, y_, z_, _w = struct.unpack("<4i", point)
                   point = struct.pack("<4i", x_, y_ + FLAT[kind_], z_, 0)
                   vel = vel[:2] + bytes(2) + vel[4:]
-              m[TICK_STACK & MASK:(TICK_STACK & MASK) + 8] = bytes(8)   # the port's start
+              m[TICK_SP & MASK:(TICK_SP & MASK) + TICK_FRAME] = bytes(TICK_FRAME)   # the port's start
               vy = frng.randrange(0x1000)
               struct.pack_into("<4H", m, VIEW_ANGLES & MASK, 0, vy, 0, 0)
               if frng.randrange(2) == 0:                       # water just under the path
@@ -718,8 +718,8 @@ HAZE, SHUDOM, WALWIND, RING, WAVE = 0x0B, 0x09, 0x11, 0x5E, 0x59
 EARTH_WAVE, BORTECTH, HOLD = 0x07, 0x0C, 0x65
 METEOR, BLAST = 0x5F, 0x5A
 ORLADIN, BURST, RAY = 0x15, 0x58, 0x5B
-TORNADO = 0x0F
-TICK_STACK = 0x801FBC70             # effect_tick's sp+0x50 as the check's driver runs it
+TORNADO, FIRE_WALL = 0x0F, 0x01
+TICK_SP, TICK_FRAME = 0x801FBC20, 0x2B8  # effect_tick's sp, as the check's driver runs it
 STRIKE_POINT = 0x801FF0D0           # the machine's stand-in for an arm's point on its stack
 VIEW_ANGLES = 0x801B2608
 SCRATCH_POINT = 0x801FF0C0          # where the check lays a hit's point back
@@ -854,7 +854,8 @@ class Machine:
                RING: self._spawn_5e, WAVE: self._spawn_59, EARTH_WAVE: self._spawn_07,
                0x16: self._spawn_07, BORTECTH: self._spawn_0c, HOLD: self._spawn_65,
                METEOR: self._spawn_5f, BLAST: self._spawn_5a, ORLADIN: self._spawn_15,
-               BURST: self._spawn_58, RAY: self._spawn_5b, TORNADO: self._spawn_0f}.get(kind)
+               BURST: self._spawn_58, RAY: self._spawn_5b, TORNADO: self._spawn_0f,
+               FIRE_WALL: self._spawn_01}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_spawn's arm {kind:#x}")
         arm(s, args)
@@ -1350,7 +1351,7 @@ class Machine:
                 self.attack(s, hit)
         else:
             self.w8(s + 0x44, 0)
-        off = struct.unpack_from("<3h", self.m, TICK_STACK & MASK)
+        off = struct.unpack_from("<3h", self.m, (TICK_SP + 0x50) & MASK)
         self.put(STRIKE_POINT, struct.pack("<3i", *[_s32(self.s32(s + 0x18 + 4 * i) + off[i])
                                                     for i in range(3)]))
         self.strike(STRIKE_POINT, 0, self.s16(s + 0x30) >> 3, self.s16(s + 0x32) >> 1, 0x400,
@@ -1358,11 +1359,73 @@ class Machine:
         v = [_div7fff(self.rand() << 9) - 0x100]
         v.append(_div7fff(-(self.rand() << 8)))
         v.append(_div7fff(self.rand() << 9) - 0x100)
-        struct.pack_into("<3h", self.m, TICK_STACK & MASK, *[_s16_(c) for c in v])
+        struct.pack_into("<3h", self.m, (TICK_SP + 0x50) & MASK, *[_s16_(c) for c in v])
         self.spawn(0xA, 0, TRAIL, self.get(s + 0x18, 16),
-                   [self.get(TICK_STACK, 8), 0x270F, -0x80, 5, 0x16, 0, 1, 1])
+                   [self.get(TICK_SP + 0x50, 8), 0x270F, -0x80, 5, 0x16, 0, 1, 1])
         self.w16(s + 0x2A, self.u16(s + 0x2A) + 0x15E)
         self.splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
+
+    def _spawn_01(self, s, args):           # 0x80053fa8, fire wall
+        """Model 0x28, scale (0x7d0, 0xa, 0x7d0), the view's yaw (args[1]
+        points at its angles; pitch and roll zeroed), level, life 0x78."""
+        self.w8(s + 9, 5)
+        self.w8(s + 2, 0x28)
+        self.w8(s + 3, 0x28)
+        self.w8(s + 0xC, 0x34)
+        self.w16(s + 0x12, 0x1000)
+        self.w8(s + 8, 1)
+        self.w8(s + 4, 0)
+        self.w16(s + 0x30, 0x7D0)
+        self.w16(s + 0x32, 0xA)
+        self.w16(s + 0x34, 0x7D0)
+        self.put(s + 0x28, args[1][:8])
+        self.w16(s + 0x28, 0)
+        self.w16(s + 0x2C, 0)
+        self.w16(s + 0x3A, 0)
+        self.w16(s + 0x44, 0)
+        self.w16(s + 0x10, 0x78)
+        self.w16(s + 0xE, 0)
+        self.w8(s + 0xD, 1)                 # and its sound, 0x31
+
+    def _tick_01(self, s):                  # 0x8005a070, fire wall
+        """effect_move at 0xb4 and the height's top bit: walls do not stop
+        it; a creature it meets it strikes (sub_800537e8), every frame.
+        Then a strike about its point, radius its scale x / 4, mode its
+        height -- the point offset by the three halfwords at effect_tick's
+        sp+0x170, which flash, fire storm and this arm write their puffs'
+        velocities to, this one only after. Rising (+0x44 0) 0x1f4 a frame
+        and 0x230 wider to 0x1069, standing three frames (1), sinking back
+        (2) and gone under 0x64; turning 0x1f4 a frame throughout. A puff
+        (0x6f) a frame, rising 0x64 to 0xc8."""
+        hit = self.move(0xB4, 0x80000000, 0)
+        if hit & 0x10:
+            self.attack(s, hit)
+        off = struct.unpack_from("<3h", self.m, (TICK_SP + 0x170) & MASK)
+        self.put(STRIKE_POINT, struct.pack("<3i", *[_s32(self.s32(s + 0x18 + 4 * i) + off[i])
+                                                    for i in range(3)]))
+        self.strike(STRIKE_POINT, 0, self.s16(s + 0x30) >> 2, self.s16(s + 0x32), 0x400, 0x1000)
+        n = self.s16(s + 0x44)
+        if n == 0:
+            for o, d in ((0x30, 0x230), (0x32, 0x1F4), (0x34, 0x230), (0x2A, 0x1F4)):
+                self.w16(s + o, self.u16(s + o) + d)
+            if self.s16(s + 0x32) >= 0x1069:
+                self.w16(s + 0x46, 0)
+                self.w16(s + 0x44, self.u16(s + 0x44) + 1)
+        elif n == 1:
+            self.w16(s + 0x46, self.u16(s + 0x46) + 1)
+            self.w16(s + 0x2A, self.u16(s + 0x2A) + 0x1F4)
+            if self.s16(s + 0x46) >= 3:
+                self.w16(s + 0x44, self.u16(s + 0x44) + 1)
+        elif n == 2:
+            for o, d in ((0x32, 0x1F4), (0x34, 0x230), (0x30, 0x230)):
+                self.w16(s + o, self.u16(s + o) - d)
+            self.w16(s + 0x2A, self.u16(s + 0x2A) + 0x1F4)
+            if self.s16(s + 0x32) < 0x64:
+                self.w8(s, 0xFF)
+        vy = -((100 * self.rand()) >> 15) - 0x64
+        struct.pack_into("<3h", self.m, (TICK_SP + 0x170) & MASK, 0, vy, 0)
+        self.spawn(0xA, 0, TRAIL, self.get(s + 0x18, 16),
+                   [self.get(TICK_SP + 0x170, 8), 0x1000, 0, 8, 0x1C, 2, 1, 2])
 
     def _spawn_15(self, s, args):           # 0x800543e8, orladin
         self.particle(s, 0x37, 0x1800, 5)
@@ -1616,7 +1679,8 @@ class Machine:
                RING: self._tick_5e, WAVE: self._tick_59, EARTH_WAVE: self._tick_07,
                0x16: self._tick_07, BORTECTH: self._tick_0c, HOLD: self._tick_65,
                METEOR: self._tick_5f, BLAST: self._tick_5a, ORLADIN: self._tick_15,
-               BURST: self._tick_58, RAY: self._tick_5b, TORNADO: self._tick_0f}.get(kind)
+               BURST: self._tick_58, RAY: self._tick_5b, TORNADO: self._tick_0f,
+               FIRE_WALL: self._tick_01}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_tick's arm {kind:#x}")
         arm(s)
@@ -2393,7 +2457,8 @@ SPELLS_SENT = ((FIRE_BALL, 0x384, "the fire ball", (), 80), (STONE, 0x1F4, "ston
                (BORTECTH, None, "bortecth", ("creature", 0x42, None), 80),
                (METEOR, None, "meteor", ("creature", 0x43, None), 60),
                (ORLADIN, 0x104, "orladin", (), 120),
-               (TORNADO, 0x12C, "tornado", ("view", (0, 1)), 60))
+               (TORNADO, 0x12C, "tornado", ("view", (0, 1)), 60),
+               (FIRE_WALL, 0x23A, "fire wall", ("view",), 60))
 """The attacking spells the checks send: the kind, the speed its arm of
 player_action gives it, its name, what follows the velocity ("view" a
 pointer to view_angles; a tuple, one spawn for each of its values, as the

@@ -6594,6 +6594,40 @@ on a wall (`0x8002b2fc`, in `effect_hurt_player`). The port has it
 (`effects.gd`, 342 of 342 machine runs in the self-test) and draws its
 model (0x30).
 
+### Fire wall
+
+```
+fire wall (1)    five a cast, three frames apart, sent at 0x23a from
+                 (-2000, 1600, 1000) turned by the view, 1000 further right
+                 each shot. Model 0x28, +9 5, +4 0, scale (0x7d0, 0xa,
+                 0x7d0), the view's yaw (args[1]; pitch and roll zeroed),
+                 level, life 0x78, +0xd 1, its sound 0x31.
+                 Each frame effect_move at 0xb4 and the height's top bit --
+                 a wall does not stop it -- and a creature it meets struck
+                 (sub_800537e8) every frame it is met. Then effect_strike
+                 about its point, radius scale x / 4, mode its height (an
+                 in_range asker as tall as it is), edge 0x400. Rising (+0x44
+                 0) 0x1f4 a frame and 0x230 wider until 0x1069 tall,
+                 standing three frames (1), sinking at the same rates (2),
+                 gone under 0x64 -- 20 frames; turning 0x1f4 a frame
+                 throughout. A puff (0x6f, model 0x1c) a frame, its
+                 velocity (0, -0x64 - 100 rand >> 15, 0) and +0x46 2.
+```
+
+**The same stack leftover as tornado's**, at `effect_tick`'s `sp+0x170`:
+flash's, fire storm's and fire wall's arms write their puffs' velocities
+there, and fire wall reads it for its strike point before writing its own --
+a segment's strike stands off by the last writer's puff, the segment before
+it in the slots, or its own the frame before. The machine keeps the whole
+frame (`TICK_SP`, `0x801fbc20` in the check's run) and the port its own copy
+(`tick_frame`).
+
+Against the game's own end to end (`spell_hit_check`), one segment sent at
+the snapshots' creatures: **126 of 126** runs, 3780 frames, all slots and
+creatures alike, 7 frames a creature struck, 2 killed. The port has it
+(`effects.gd`, 366 of 366 machine runs in the self-test) and draws its
+model (0x50).
+
 ### The player's death
 
 `apply_damage` that leaves no HP calls `player_throw` (`0x80030a6c`) with the
