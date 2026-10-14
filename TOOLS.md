@@ -885,7 +885,10 @@ table, the spring that swings it, and `compass.json` with the page for the
 port.
 
 ```
-python3 tools/compass.py --check  the switches, pitches and twin yaws: 65 of 65
+python3 tools/compass.py --check  the switches, pitches and twin yaws: 105 of 105
+python3 tools/compass.py --quads  the quads NCLIP lets through, at every pitch
+                                  and yaw: their shapes, and what Godot's
+                                  triangulation made of them as one polygon
 ```
 
 **`shots.py`** — the port rendered from where each snapshot's screenshot was

@@ -7,11 +7,15 @@ extends Control
 # the library's RotMatrix (0x80076168) of (view pitch, ball yaw, 0), scaled by
 # the record's 0x55 over 4096, put through MVMVA alone, so x and y of R v plus
 # (290, 32) are the screen position and z sorts the faces. model_prims drops a
-# face whose NCLIP is not positive. The light is class 0x30's, its direction
-# matrix turned by the same R so it stays put on the screen; every face is
-# semi-transparent, the STP texels mixing half and half. tools/compass.py has
-# it all, and compass.json carries the model, the light and RotMatrix's own
-# sine table, which is not the one game_sin reads.
+# face whose NCLIP over its first three corners is not positive and hands the
+# GPU a quad's four in the record's order, which it draws as the triangles
+# 0 1 2 and 1 2 3 whichever way each turns -- so a quad seen edge on at the rim,
+# its corners crossed in the whole-pixel arithmetic, still draws, as it does
+# here (FORMATS.md, "The compass: a model drawn flat"). The light is class
+# 0x30's, its direction matrix turned by the same R so it stays put on the
+# screen; every face is semi-transparent, the STP texels mixing half and half.
+# tools/compass.py has it all, and compass.json carries the model, the light
+# and RotMatrix's own sine table, which is not the one game_sin reads.
 #
 # @exe game
 
@@ -126,7 +130,7 @@ func _shade(n: Array, l: Array) -> Color:
 
 
 # @orig game:0x8003c35c draw_model_cell_lit  status:transcribed -- the compass: orthographic, the class light turned by R
-# @orig game:0x80035ca4 model_prims  status:transcribed -- the faces NCLIP drops; the ordering is by the mean z
+# @orig game:0x80035ca4 model_prims  status:transcribed -- the faces NCLIP drops; the ordering is by the mean z; a quad drawn as the GPU draws its corners, the triangles 0 1 2 and 1 2 3
 func _draw() -> void:
 	if rec.is_empty():
 		return
@@ -172,14 +176,18 @@ func _draw() -> void:
 	for pair in faces:
 		var f: Dictionary = pair[1]
 		var vs: Array = f["v"]
-		var order := [0, 1, 3, 2] if f["quad"] else [0, 1, 2]
 		var pts := PackedVector2Array()
 		var cols := PackedColorArray()
 		var uvs := PackedVector2Array()
-		for i in order:
+		for i in vs.size():
 			var p: Vector3i = scr[int(vs[i])]
 			pts.append(Vector2(right - (SCREEN_W - p.x) * k_scale, p.y * k_scale))
 			var n: Array = doc["normals"][int(f["n"][i])]
 			cols.append(_shade(n, lp))
 			uvs.append(Vector2(float(f["uv"][i][0]) + 0.5, float(f["uv"][i][1]) + 0.5) / 256.0)
-		draw_polygon(pts, cols, uvs, tex[f["png"]])
+		# The GPU's two triangles of a quad, 0 1 2 and 1 2 3, whichever way each
+		# turns; not a polygon, which draw_polygon would have to triangulate and
+		# cannot when the corners of a quad seen edge on have crossed.
+		var tris := PackedInt32Array([0, 1, 2, 1, 2, 3] if f["quad"] else [0, 1, 2])
+		RenderingServer.canvas_item_add_triangle_array(get_canvas_item(), tris, pts, cols, uvs,
+			PackedInt32Array(), PackedFloat32Array(), tex[f["png"]].get_rid())

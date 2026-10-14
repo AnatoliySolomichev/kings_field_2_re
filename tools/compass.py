@@ -4,6 +4,8 @@
     python3 tools/compass.py            the records, the model, the check
     python3 tools/compass.py --check    against every snapshot's RAM
     python3 tools/compass.py --godot    compass.json and its page for the port
+    python3 tools/compass.py --quads    the quads' shapes on the whole-pixel
+                                        screen, at every pitch and yaw
 
 It is a model, drawn without perspective. `compass_models` (`0x80081c20`) is
 two 0x24-byte records, ended by 0xff:
@@ -37,6 +39,16 @@ each frame, its velocity the word at $gp+0xd8:
     yaw += v >> 6            and both records get it, and the view pitch
 
 so the N swings round after a turn, overshoots and settles.
+
+A quad goes to the GPU as the record's four corners in order (the arm for mode
+0x3c, `0x80036384`, stores them as XY0 to XY3), and the GPU draws a quad as
+the triangles 0 1 2 and 1 2 3 whichever way each turns. NCLIP has looked at
+0 1 2 alone, so at the rim a quad seen edge on reaches the GPU bent or with
+its corners crossed, and is drawn all the same. `--quads` counts those shapes
+over every pitch the view takes and every yaw as RotMatrix reads one, and what
+Godot's triangulation made of each as the polygon 0 1 3 2 -- which is how
+godot/compass.gd drew them until it handed over the GPU's two triangles: a
+crossed one it refused, "Invalid polygon data, triangulation failed".
 """
 import glob
 import json
@@ -52,6 +64,7 @@ STRIDE = 0x24
 TRIG = 0x800962E0              # RotMatrix's table: a (sin, cos) pair a word
 VIEW_PITCH, VIEW_YAW = 0x801AEC5C, 0x801AEC5E
 STYLE = 0x801B25DE
+PITCH_LIMIT = 0x2BC            # player_look (0x8002f5c0) stops the pitch here
 
 
 def parse(raw):
@@ -164,6 +177,146 @@ def check(out=sys.stdout):
     return bad == 0
 
 
+def _shape(c):
+    """A closed path of four corners: convex, concave, flat (three corners in
+    a line) or crossed -- two turns each way, its edges crossing."""
+    t = [(c[k][0] - c[k - 1][0]) * (c[(k + 1) % 4][1] - c[k - 1][1])
+         - (c[k][1] - c[k - 1][1]) * (c[(k + 1) % 4][0] - c[k - 1][0])
+         for k in range(4)]
+    if 0 in t:
+        return "flat"
+    left = sum(1 for x in t if x > 0)
+    return "convex" if left in (0, 4) else "crossed" if left == 2 else "concave"
+
+
+def _ear_clip(c):
+    """Godot's triangulation of a polygon, which `draw_polygon` runs first.
+
+    `Triangulate::triangulate` (core/math/triangulate.cpp, Godot 4): ear
+    clipping round a counter-clockwise copy, a second round that allows a flat
+    triangle, and None where that runs out too -- "Invalid polygon data,
+    triangulation failed", and nothing drawn. Its tests are floats against an
+    epsilon of 1e-5; on whole-pixel corners every product is a whole number,
+    so the epsilon only tells zero from not zero and integers say the same.
+    Headless Godot 4.7.2 refused as many quads as this, 2368 of 2368 over 4495
+    pairs.
+    """
+    n = len(c)
+    area = sum(c[p][0] * c[q][1] - c[p][1] * c[q][0]
+               for p, q in zip(range(-1, n - 1), range(n)))
+    v_ = list(range(n)) if area > 0 else list(range(n - 1, -1, -1))
+    tris, relaxed, nv = [], False, n
+    count, v = 2 * nv, nv - 1
+    while nv > 2:
+        was = count
+        count -= 1
+        if was <= 0:
+            if relaxed:
+                return None
+            count, relaxed = 2 * nv, True
+        u = v if v < nv else 0
+        v = u + 1 if u + 1 < nv else 0
+        w = v + 1 if v + 1 < nv else 0
+        (ax, ay), (bx, by), (cx, cy) = c[v_[u]], c[v_[v]], c[v_[w]]
+        turn = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+        if turn < 0 or (turn == 0 and not relaxed):
+            continue
+        ear = True
+        for p in range(nv):
+            if p in (u, v, w):
+                continue
+            px, py = c[v_[p]]
+            k = ((cx - bx) * (py - by) - (cy - by) * (px - bx),
+                 (ax - cx) * (py - cy) - (ay - cy) * (px - cx),
+                 (bx - ax) * (py - ay) - (by - ay) * (px - ax))
+            if all(x > 0 for x in k) if relaxed else all(x >= 0 for x in k):
+                ear = False
+                break
+        if ear:
+            tris.append((v_[u], v_[v], v_[w]))
+            del v_[v]
+            nv -= 1
+            count = 2 * nv
+    return tris
+
+
+def quads(out=sys.stdout):
+    """The quads NCLIP lets through, at every pitch and every yaw: their
+    shapes on the whole-pixel screen, and what Godot made of each as the
+    polygon 0 1 3 2.
+
+    The pitch is the port's, -0x2bc..0x2bc kept in 12 bits; the yaw every one
+    of the 8192 ways RotMatrix reads one (0..0xfff, and 0xf000..0xffff, which
+    it takes as negative). x of R v depends on the yaw alone and y on both, so
+    each screen the pairs make is worked once and counted for each pair.
+    """
+    import modelbank
+    rec = next(r for r in records() if r["index"] == 1)    # compass_style 2
+    o = modelbank.load(rec["model"])[1][0]
+    verts = [tuple(v) for v in o.verts]
+    qs = [tuple(p.verts) for p in o.prims if p.quad and len(p.verts) == 4]
+    s0, s1, s2 = rec["scale"]
+    x0, y0 = rec["place"][0], rec["place"][1]
+    sz, cz = _sc(0)
+    pitches = []
+    for p in range(-PITCH_LIMIT, PITCH_LIMIT + 1):
+        sx, cx = _sc(p & 0xFFF)
+        pitches.append((sx, (sz * cx) >> 12, (cz * cx) >> 12))
+    seen = {}
+    for yaw in list(range(0x1000)) + list(range(0xF000, 0x10000)):
+        sy, cy = _sc(yaw)
+        ny = -sy                                      # as rot_matrix rounds
+        row0 = ((((cz * cy) >> 12) * s0) >> 12,
+                (((-(sz * cy)) >> 12) * s1) >> 12, (sy * s2) >> 12)
+        czny, szny = (cz * ny) >> 12, (sz * ny) >> 12
+        for sx, szcx, czcx in pitches:
+            key = row0 + ((((szcx - ((czny * sx) >> 12)) * s0) >> 12),
+                          (((czcx + ((szny * sx) >> 12)) * s1) >> 12),
+                          ((((-(cy * sx)) >> 12) * s2) >> 12))
+            seen[key] = seen.get(key, 0) + 1
+    gpu = {frozenset((0, 1, 2)), frozenset((1, 2, 3))}
+    corner = (0, 1, 3, 2)                       # polygon slot -> quad corner
+    shapes, made = {}, {}
+    pairs = sum(seen.values())
+    crossed_pairs = visible = 0
+    for (a0, a1, a2, b0, b1, b2), n in seen.items():
+        xs = [((a0 * x + a1 * y + a2 * z) >> 12) + x0 for x, y, z in verts]
+        ys = [((b0 * x + b1 * y + b2 * z) >> 12) + y0 for x, y, z in verts]
+        crossed = False
+        for q in qs:
+            (ax, bx, cx, dx), (ay, by, cy, dy) = ([xs[k] for k in q],
+                                                  [ys[k] for k in q])
+            if ax * by + bx * cy + cx * ay - ax * cy - bx * ay - cx * by <= 0:
+                continue
+            visible += n
+            poly = ((ax, ay), (bx, by), (dx, dy), (cx, cy))
+            sh = _shape(poly)
+            shapes[sh] = shapes.get(sh, 0) + n
+            crossed |= sh == "crossed"
+            tris = _ear_clip(poly)
+            how = ("refused" if tris is None else
+                   "1-2" if {frozenset(corner[k] for k in t) for t in tris} == gpu
+                   else "0-3")
+            made[how, sh] = made.get((how, sh), 0) + n
+        crossed_pairs += n if crossed else 0
+
+    def by_shape(how):
+        got = [(sh, made[how, sh]) for sh in ("convex", "concave", "flat",
+                                               "crossed") if (how, sh) in made]
+        return (f"{sum(c for _s, c in got)} ("
+                + ", ".join(f"{c} {sh}" for sh, c in got) + ")")
+    print(f"  {pairs} pairs of pitch and yaw make {len(seen)} screens; "
+          f"{visible} quads pass NCLIP", file=out)
+    print("  their shapes: " + ", ".join(
+        f"{shapes.get(sh, 0)} {sh}" for sh in ("convex", "concave", "flat",
+                                               "crossed"))
+          + f" -- a crossed one in {crossed_pairs} pairs, "
+          f"{100.0 * crossed_pairs / pairs:.2f} %", file=out)
+    print(f"  as the polygon 0 1 3 2, Godot's triangulation splits "
+          f"{by_shape('1-2')} along 1-2 as the GPU does, {by_shape('0-3')} "
+          f"along 0-3, and refuses {by_shape('refused')}", file=out)
+
+
 def export(out_dir):
     """compass.json -- records, model, light -- and the page it samples."""
     import lighting
@@ -215,6 +368,9 @@ def main():
         sys.exit(0 if check() else 1)
     if a == "--godot":
         print(export(os.path.join(ROOT, "out", "godot")))
+        return
+    if a == "--quads":
+        quads()
         return
     print(__doc__)
     for r in records():

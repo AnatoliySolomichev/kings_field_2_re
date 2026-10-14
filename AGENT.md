@@ -212,7 +212,7 @@ the object loader, against 13 snapshots                angles 4344/4352, scale a
                                                        4226/4226, grid exact on 7
 the lighting table, against every snapshot             89 856 of 89 856 bytes
 the panel's sprite table, against every snapshot       520 of 520 fields
-the compass's records, against every snapshot          65 of 65 fields
+the compass's records, against every snapshot          105 of 105 fields
 the swinging door, against the bp24 recording          226 of 226 steps
 the lift doors, against the bp27 recording             3528 of 3528 steps; the doorway
                                                        answers, the player 1078 of

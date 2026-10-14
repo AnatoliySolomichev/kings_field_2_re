@@ -2167,13 +2167,32 @@ face whose NCLIP over its first three points is not positive, and every face
 is semi-transparent (modes 0x36 and 0x3e): the texels with STP mix half and
 half with the wall behind and the letter's do not, which is why the N reads.
 
+A quad reaches the GPU as the record's four corners in order -- the arm for
+mode 0x3c (`0x80036384`) reads the vertex indices at +0x16, +0x1a, +0x1e and
++0x22 of the primitive, its header word included, and stores the points as
+XY0 to XY3 (`0x8003645c` to `0x80036480`) -- and the GPU draws a quad as two
+triangles, corners 0 1 2 and 1 2 3, whichever way each turns (psx-spx, "GPU
+Render Polygon Commands"). NCLIP has looked at 0 1 2 alone, so at the ball's
+rim a quad seen edge on is drawn even when the whole-pixel arithmetic has bent
+or crossed it. Over every pitch the port allows and every yaw as RotMatrix
+reads one, 1401 by 8192 pairs, 91 510 560 quads pass NCLIP and 452 840 of them
+have their corners crossed, in 3.84 % of the pairs (`python3 tools/compass.py
+--quads`). The port drew a quad as the polygon 0 1 3 2 for Godot to
+triangulate, which refused a crossed one ("Invalid polygon data,
+triangulation failed", and the face missing) and split 874 938 others -- none
+convex: 403 860 concave, 471 078 with three corners in a line -- along 0-3
+where the GPU splits along 1-2. `godot/compass.gd` hands over the GPU's two
+triangles now: headless Godot 4.7.2 over 4495 of the pairs refused 2368 quads
+before, as many as `--quads`'s transcription of its ear clipping predicts,
+and none after.
+
 The yaw lags. `render_frame` (`0x80042448`) runs a spring each frame, its
 velocity the word at $gp+0xd8: the signed difference to the view yaw
 (`0x80016a98`) is added to the velocity, the velocity loses an eighth --
 `(v + 7) >> 3` or `(v - 7) >> 3` by its sign -- and the yaw moves by
 `v >> 6`, into both records with the view pitch. So the N swings round after a
 turn, overshoots and settles. `tools/compass.py --check` holds the switches,
-the pitch and the twin yaws on 65 of 65 fields over 13 snapshots; a render
+the pitch and the twin yaws on 105 of 105 fields over 21 snapshots; a render
 from `a1`'s state with the snapshot's own yaw lays the N where the game's
 screenshot has it. `godot/compass.gd` draws it that way, spring and all.
 

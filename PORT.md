@@ -229,13 +229,13 @@ floor, not a score.
 
 | function | in the game | status |
 | --- | --- | --- |
-| [`_ready`](godot/compass.gd#L33) | — port's own, *data*: reads compass.json: the model, the light, the records and RotMatrix's table, as tools/compass.py takes them | |
-| [`_process`](godot/compass.gd#L55) | — port's own, *engine*: runs _swing at the game's 15 frames a second, and redraws | |
-| [`_swing`](godot/compass.gd#L67) | `game:0x80042448` render_frame+0x190 | transcribed |
-| [`_sc`](godot/compass.gd#L80) | `game:0x80076168` RotMatrix | transcribed |
-| [`_rot`](godot/compass.gd#L93) | `game:0x80076168` RotMatrix | transcribed |
-| [`_shade`](godot/compass.gd#L112) | — port's own, *helper*: the GTE's NCS: the coprocessor's arithmetic, which draw_model_cell_lit asks for | |
-| [`_draw`](godot/compass.gd#L130) | `game:0x8003c35c` draw_model_cell_lit | transcribed |
+| [`_ready`](godot/compass.gd#L37) | — port's own, *data*: reads compass.json: the model, the light, the records and RotMatrix's table, as tools/compass.py takes them | |
+| [`_process`](godot/compass.gd#L59) | — port's own, *engine*: runs _swing at the game's 15 frames a second, and redraws | |
+| [`_swing`](godot/compass.gd#L71) | `game:0x80042448` render_frame+0x190 | transcribed |
+| [`_sc`](godot/compass.gd#L84) | `game:0x80076168` RotMatrix | transcribed |
+| [`_rot`](godot/compass.gd#L97) | `game:0x80076168` RotMatrix | transcribed |
+| [`_shade`](godot/compass.gd#L116) | — port's own, *helper*: the GTE's NCS: the coprocessor's arithmetic, which draw_model_cell_lit asks for | |
+| [`_draw`](godot/compass.gd#L134) | `game:0x8003c35c` draw_model_cell_lit | transcribed |
 |  | `game:0x80035ca4` model_prims | transcribed |
 
 ### [`godot/crossing.gd`](godot/crossing.gd)
@@ -1156,10 +1156,10 @@ The whole file is the port's own: **check** — a model browser for naming thing
 | `game:0x8003456c` sub_8003456c | [`godot/scroll.gd:214`](godot/scroll.gd#L214) | `func set_pulse` | transcribed |
 | `game:0x800351fc` texture_scroll_step | [`godot/scroll.gd:230`](godot/scroll.gd#L230) | `func _process` | transcribed |
 | `game:0x80035358` fog_range_set | [`godot/scroll.gd:148`](godot/scroll.gd#L148) | `func _swap` | transcribed |
-| `game:0x80035ca4` model_prims | [`godot/compass.gd:129`](godot/compass.gd#L129) | `func _draw` | transcribed |
+| `game:0x80035ca4` model_prims | [`godot/compass.gd:133`](godot/compass.gd#L133) | `func _draw` | transcribed |
 | `game:0x8003abfc` draw_tmd_object+0xf8 | [`godot/scroll.gd:149`](godot/scroll.gd#L149) | `func _swap` | transcribed |
 | `game:0x8003c1b8` draw_terrain+0x1e8 | [`godot/doors.gd:580`](godot/doors.gd#L580) | `func _draw_lift` | transcribed |
-| `game:0x8003c35c` draw_model_cell_lit | [`godot/compass.gd:128`](godot/compass.gd#L128) | `func _draw` | transcribed |
+| `game:0x8003c35c` draw_model_cell_lit | [`godot/compass.gd:132`](godot/compass.gd#L132) | `func _draw` | transcribed |
 | `game:0x8003c9dc` load_data_screen | [`godot/cutscene.gd:47`](godot/cutscene.gd#L47) | `func _ready` | partial |
 | `game:0x8003d64c` sub_8003d64c | [`godot/player.gd:2082`](godot/player.gd#L2082) | `func _tints` | transcribed |
 | `game:0x8003d79c` sub_8003d79c | [`godot/player.gd:2083`](godot/player.gd#L2083) | `func _tints` | transcribed |
@@ -1178,7 +1178,7 @@ The whole file is the port's own: **check** — a model browser for naming thing
 | `game:0x80041e68` hud_draw | [`godot/hud.gd:38`](godot/hud.gd#L38) | `func _ready` | transcribed |
 | `game:0x80041eec` announce | [`godot/messages.gd:63`](godot/messages.gd#L63) | `func announce` | transcribed |
 | `game:0x80041f9c` message_tick | [`godot/messages.gd:90`](godot/messages.gd#L90) | `func tick` | transcribed |
-| `game:0x80042448` render_frame+0x190 | [`godot/compass.gd:66`](godot/compass.gd#L66) | `func _swing` | transcribed |
+| `game:0x80042448` render_frame+0x190 | [`godot/compass.gd:70`](godot/compass.gd#L70) | `func _swing` | transcribed |
 | `game:0x80042668` render_frame+0x3b0 | [`godot/hud.gd:95`](godot/hud.gd#L95) | `func _update` | transcribed |
 | `game:0x80042cac` anim_segment | [`godot/anim.gd:51`](godot/anim.gd#L51) | `func pick` | verified |
 | `game:0x80042d70` pose_start | [`godot/anim.gd:67`](godot/anim.gd#L67) | `func overlay` | verified |
@@ -1383,8 +1383,8 @@ The whole file is the port's own: **check** — a model browser for naming thing
 | `game:0x80074380` ratan2 | [`godot/collision.gd:621`](godot/collision.gd#L621) | `func ratan2` | verified |
 | `game:0x80074508` game_isqrt | [`godot/collision.gd:240`](godot/collision.gd#L240) | `func isqrt` | verified |
 | `game:0x80074840` ApplyMatrixLV | [`godot/collision.gd:153`](godot/collision.gd#L153) | `func apply_matrix` | verified |
-| `game:0x80076168` RotMatrix | [`godot/compass.gd:79`](godot/compass.gd#L79) | `func _sc` | transcribed |
-| `game:0x80076168` RotMatrix | [`godot/compass.gd:92`](godot/compass.gd#L92) | `func _rot` | transcribed |
+| `game:0x80076168` RotMatrix | [`godot/compass.gd:83`](godot/compass.gd#L83) | `func _sc` | transcribed |
+| `game:0x80076168` RotMatrix | [`godot/compass.gd:96`](godot/compass.gd#L96) | `func _rot` | transcribed |
 | `game:0x80076cc4` game_sin | [`godot/collision.gd:95`](godot/collision.gd#L95) | `func game_sin` | verified |
 | `game:0x80076da0` game_cos | [`godot/collision.gd:111`](godot/collision.gd#L111) | `func game_cos` | verified |
 | `game:0x800796c0` rand | [`godot/actors.gd:869`](godot/actors.gd#L869) | `func _rand` | transcribed |
