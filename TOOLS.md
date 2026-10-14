@@ -1255,6 +1255,8 @@ The listing shows them that way.
 python3 tools/pseudo.py game 0x8002ed60      one routine
 python3 tools/pseudo.py game --all           every routine, into out/pseudo/
 python3 tools/pseudo.py game 0x8002ed60 -r   keep every register assignment
+python3 tools/pseudo.py --check              every block of the four executables,
+                                             its statements against its instructions
 ```
 
 Reading MIPS is reading three instructions to learn that a byte was compared
@@ -1270,14 +1272,32 @@ block keeps its label, and the order is the routine's own. Recovering `if` and
 and a wrongly recovered loop reads exactly like a correct one — which is the
 worst shape a mistake can take here. `goto` is ugly and it cannot be wrong.
 
-Four things it is careful about, each because the obvious version is wrong:
+What it is careful about, each because the obvious version is wrong:
 
 * **The delay slot runs first**, so it is printed above the branch — unless it
   writes something the branch reads, in which case the branch saw the old
-  value, and the two are printed in their real order with a note.
+  value, and the two are printed in their real order with a note. This held
+  for every branch but `jalr`, which printed above its slot; 102 of the 163
+  in OPEN, GAME and END have something in it.
 * **Nothing folded is ever lost.** A liveness pass says which registers the
   next block reads, and those are written out at the block's end rather than
-  evaporating with the fold.
+  evaporating with the fold. *Withdrawn as it stood:* lo and hi were not in
+  it, so a `mult` in a delay slot, read by `mflo` in the next block,
+  vanished — `angle_lerp` lost its multiply that way. They are now, and the
+  high half prints as `hi($a1 * $a2)` (`hiu` for `multu`) rather than as
+  `<high half>`, which could not be written out.
+* **A folded value is only printed while it is still true.** `$a0` inside a
+  folded text means the `$a0` last written out, and a load inside one means
+  memory as it was. So a folded value that is still to be read is written out
+  first when a store could change what it read, when a statement is about to
+  give a register it names a new value, before a call, and before a GTE move
+  names its register; a swap keeps the old value as `prev_a1`. Without it,
+  `model_prims` read its primitive pointer and printed the read after the
+  pointer moved on, four bytes late — which is how the fourth corner of a
+  quad seemed to come from the third's slot — and `sub_800711a0` printed a
+  store's address from a register the line above had overwritten. Run
+  through `--check` with these safeguards taken out, the printed rule gets
+  874 blocks of the four executables wrong.
 * **A callee-saved register is never folded**, because it survives calls and
   blocks, which is exactly where a reader loses track of where a value came
   from.
@@ -1285,6 +1305,26 @@ Four things it is careful about, each because the obvious version is wrong:
   register into the frame also hid `sw $s3, 0x10($sp)` — the fifth argument
   going into `collide_surface`, and the one thing that call needed saying
   about.
+* **An argument this block did not set is `?`**, the first ones too. Leaving
+  the first out moved the rest one place left: `f($a1, $a2, $a3)` read as
+  a0, a1 and a2.
+* **`lwc2` and `swc2` print as their GTE register** — `VXY0 = ...`,
+  `... = MAC0` — where the 242 in GAME.EXE printed nothing and the 180 named
+  the general register with the same number (`MAC0` as `$t8`). An unaligned
+  word, `lwl` and `lwr` (or `swl` and `swr`) three bytes apart, prints as the
+  one access it is; it printed as two overlapping words, one of them three
+  bytes off.
+
+`--check` holds all of it to the instructions. Every block is printed in an
+exact notation — no names, the frame's bookkeeping kept, `>>>` for `srl`,
+`<u` for `sltu`, `/u` for `divu` — and its statements are evaluated over
+random registers, memory and GTE registers, while a small R3000 runs the
+block's own instructions over the same: the stores, the calls and their four
+argument registers, the GTE moves, the branches taken and the registers the
+next blocks read have to come out alike. Three ways of folding are run,
+because the folding is what goes wrong: everything written out at once (which
+checks the check), the printed rule, and as far as anything lets it. The only
+blocks it leaves are the three with `mfc0`, one in each of OPEN, GAME and END.
 
 **`mipsdis.py`** — the decoder underneath it, and a library rather than a
 command. Written here rather than bound from the emulator's capstone for two

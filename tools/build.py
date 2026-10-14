@@ -244,6 +244,9 @@ def main(quick=False, only_check=False):
     steps.append((["tools/quest.py", "--check"],
         "the conversation hooks, two readings of the same table",
         ["agree"]))
+    steps.append((["tools/pseudo.py", "--check"],
+        "the pseudocode, against the instructions it is read from",
+        ["every block's statements", "differs"]))
     steps.append((["tools/portmap.py"], "the port, function by function, against the game",
         ["functions in", "markers,", "every function", "problems", "godot/"]))
     good = run_all(steps)

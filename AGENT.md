@@ -299,6 +299,9 @@ the video memory, against every snapshot               2 994 944 of 2 998 544;
                                                        object pages 779 760 of
                                                        782 320 (the rest: the
                                                        water's scroll offset)
+the pseudocode, against the instructions it is read    126 168 of 126 168 block runs
+from (tools/pseudo.py --check)                         over the four executables,
+                                                       three ways of folding
 ```
 
 and in the Godot self-test:
