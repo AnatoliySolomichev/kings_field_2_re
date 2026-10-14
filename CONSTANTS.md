@@ -34,7 +34,7 @@ immediates alone cannot see the two numbers that say what the grid is.
 Ten bytes to a terrain cell, from the same index arithmetic.
 
 265 sites: 174 loaded, 55 multiplier, 23 argument, 11 bound, 1 mask, 1 compared with.
-In `game:effect_tick`, `game:player_action`, `game:effect_spawn`, `game:actor_tick`, `game:sub_80028f90`, `game:object_interpreter`, `game:sub_80030e14`, `game:player_controller`, `open:sub_8001b524`, `open:sub_8002842c`, `game:held_item_tick`, `game:sub_80062304` and 74 more.
+In `game:effect_tick`, `game:player_action`, `game:effect_spawn`, `game:actor_tick`, `game:save_loaded_fixup`, `game:object_interpreter`, `game:sub_80030e14`, `game:player_controller`, `open:sub_8001b524`, `open:sub_8002842c`, `game:held_item_tick`, `game:sub_80062304` and 74 more.
 
 `python3 tools/consts.py 0xa` for every site.
 
@@ -54,7 +54,7 @@ In `game:effect_spawn`, `game:options_screen`, `game:player_take_hit`, `game:pla
 68 bytes to an object record. Every walk of the object table steps by it -- `$s2 += 0x44` -- and find_object forms object_table + a0 * 0x44.
 
 37 sites: 27 multiplier, 7 loaded, 2 compared with, 1 argument.
-In `game:object_interpreter`, `open:sub_80029504`, `game:object_give`, `game:sub_80067d4c`, `game:player_recalc_stats`, `game:held_item_tick`, `game:effect_tick`, `open:sub_8001ad3c`, `game:sub_8002bdc0`, `game:sub_80044900`, `game:find_object`, `game:find_free_slot` and 5 more.
+In `game:object_interpreter`, `open:sub_80029504`, `game:object_give`, `game:sub_80067d4c`, `game:player_recalc_stats`, `game:held_item_tick`, `game:effect_tick`, `open:sub_8001ad3c`, `game:equip_weapon`, `game:object_mode`, `game:find_object`, `game:find_free_slot` and 5 more.
 
 `python3 tools/consts.py 0x44` for every site.
 
@@ -74,7 +74,7 @@ In `game:effect_spawn`, `game:sub_80024f88`, `game:sub_8001b88c`, `game:apply_da
 108 bytes to a lighting entry in tile_look, formed as a shift-and-add chain on cell[+9] & 0x3f. 64 entries, reset every frame by light_table_reset from 0x80081c8c.
 
 10 sites: 6 multiplier, 3 loaded, 1 argument.
-In `game:draw_model_plain`, `game:sub_8001b254`, `game:sub_80026acc`, `game:draw_tile`, `game:draw_model_cell_lit`, `game:overlay_plane_18`, `game:draw_held_item`, `game:sub_800400ac`, `game:effect_tick`.
+In `game:draw_model_plain`, `game:item_consume`, `game:ui_frame`, `game:draw_tile`, `game:draw_model_cell_lit`, `game:overlay_plane_18`, `game:draw_held_item`, `game:draw_model_at_eye`, `game:effect_tick`.
 
 `python3 tools/consts.py 0x6c` for every site.
 
@@ -104,7 +104,7 @@ In `game:effect_spawn`, `game:object_interpreter`, `game:effect_tick`, `game:act
 136 bytes to a creature record in the table at 0x80185da8.
 
 23 sites: 20 multiplier, 3 compared with.
-In `game:effect_tick`, `game:actor_take_hit`, `game:actor_attack_player`, `game:held_item_tick`, `game:sub_800460bc`, `game:object_use_state`, `game:object_interpreter`, `game:actor_spawn_slot`, `game:actor_select`, `game:use_item`, `game:object_interact`, `game:apply_level_state`.
+In `game:effect_tick`, `game:actor_take_hit`, `game:actor_attack_player`, `game:held_item_tick`, `game:spawn_thing`, `game:object_use_state`, `game:object_interpreter`, `game:actor_spawn_slot`, `game:actor_select`, `game:use_item`, `game:object_interact`, `game:apply_level_state`.
 
 `python3 tools/consts.py 0x88` for every site.
 
@@ -157,7 +157,7 @@ In `game:object_interpreter`, `game:use_item`, `game:player_vertical`, `game:eff
 A gap wider than 0x400 stops being a step and becomes a fall: below the surface by more than this enters state 0x40, above it enters state 0x20.
 
 153 sites: 73 loaded, 23 multiplier, 22 divisor, 16 mask, 13 bound, 6 argument.
-In `game:effect_tick`, `game:object_interpreter`, `game:actor_animation_effects`, `game:model_prims_flag40`, `game:effect_spawn`, `game:draw_tmd_object`, `game:level_state_write`, `game:sub_80074380`, `game:tile_collision`, `game:actor_move_vertical`, `open:PutDispEnv`, `open:sub_800173b4` and 38 more.
+In `game:effect_tick`, `game:object_interpreter`, `game:actor_animation_effects`, `game:model_prims_flag40`, `game:effect_spawn`, `game:draw_tmd_object`, `game:level_state_write`, `game:ratan2`, `game:tile_collision`, `game:actor_move_vertical`, `open:PutDispEnv`, `open:sub_800173b4` and 38 more.
 
 `python3 tools/consts.py 0x400` for every site.
 
@@ -177,7 +177,7 @@ In `game:cast_spell`, `game:effect_tick`.
 The body height literal in the player's movement, passed to the collision beside the radius.
 
 19 sites: 13 loaded, 6 argument.
-In `game:use_item`, `game:player_horizontal`, `game:player_vertical`, `game:player_in_range`, `game:sub_8002b114`, `game:place_player_on_terrain`, `game:sub_8002b8d8`, `game:player_move`, `game:player_controller`, `game:sub_80033d84`, `game:sub_8004d254`, `game:actor_tick`.
+In `game:use_item`, `game:player_horizontal`, `game:player_vertical`, `game:player_in_range`, `game:effect_hurt_player`, `game:place_player_on_terrain`, `game:sub_8002b8d8`, `game:player_move`, `game:player_controller`, `game:collide_target`, `game:actor_blow`, `game:actor_tick`.
 
 `python3 tools/consts.py 0x6a4` for every site.
 
@@ -187,7 +187,7 @@ In `game:use_item`, `game:player_horizontal`, `game:player_vertical`, `game:play
 World X and Z are 2048 units to the grid cell: actor_stand_at_home forms x = cell_x << 11 + fine x. FORMATS.md, 'World X/Z = 2048 x cell'.
 
 227 sites: 100 divisor, 35 multiplier, 31 loaded, 25 mask, 25 bound, 10 argument, 1 compared with.
-In `game:object_interpreter`, `game:actor_tick`, `game:effect_tick`, `game:effect_spawn`, `game:render_walk`, `game:load_object_placement`, `game:sub_8001aa84`, `game:grid_mark`, `game:draw_cell_walk`, `game:draw_model_plain`, `game:render_frame`, `game:object_set_present` and 71 more.
+In `game:object_interpreter`, `game:actor_tick`, `game:effect_tick`, `game:effect_spawn`, `game:render_walk`, `game:load_object_placement`, `game:menu_use_item`, `game:grid_mark`, `game:draw_cell_walk`, `game:draw_model_plain`, `game:render_frame`, `game:object_set_present` and 71 more.
 
 `python3 tools/consts.py 0x800` for every site.
 
@@ -197,7 +197,7 @@ In `game:object_interpreter`, `game:actor_tick`, `game:effect_tick`, `game:effec
 The fixed point this game multiplies in: `mult` then `sra` by 12, so 0x1000 is 1.0. An object record is initialised with 0x1000 in its three scale fields (+0x2c, +0x2e, +0x30), and a TMD's scale word is the same.
 
 380 sites: 135 loaded, 127 divisor, 39 argument, 30 mask, 27 bound, 19 multiplier, 3 compared with.
-In `game:effect_spawn`, `game:player_horizontal`, `game:object_interpreter`, `game:effect_tick`, `game:sub_80076168`, `game:actor_tick`, `game:player_controller`, `game:ScaleMatrix`, `game:apply_control_scheme`, `game:view_matrix_build`, `game:sub_8003d8ec`, `game:sub_8003da10` and 107 more.
+In `game:effect_spawn`, `game:player_horizontal`, `game:object_interpreter`, `game:effect_tick`, `game:RotMatrix`, `game:actor_tick`, `game:player_controller`, `game:ScaleMatrix`, `game:apply_control_scheme`, `game:view_matrix_build`, `game:sub_8003d8ec`, `game:sub_8003da10` and 107 more.
 
 `python3 tools/consts.py 0x1000` for every site.
 
