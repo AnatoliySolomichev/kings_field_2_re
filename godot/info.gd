@@ -49,6 +49,7 @@ func _ready() -> void:
 	win.size = SIZE
 	win.wrap_controls = false
 	win.close_requested.connect(func() -> void: _show(false))
+	win.window_input.connect(_forward)
 	var root := VBoxContainer.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.add_theme_constant_override("separation", 6)
@@ -74,6 +75,15 @@ func _ready() -> void:
 	var sz := DisplayServer.window_get_size()
 	win.position = Vector2i(at.x + sz.x + 8, at.y)
 	_show(true)
+
+
+# A key pressed while this window has the focus goes on to the game's window.
+# The window manager focuses this one when it opens, and the pad reads Input,
+# which every window feeds, so the game played on while F1..F12 -- which come
+# through the game window's _unhandled_input alone -- went nowhere.
+func _forward(e: InputEvent) -> void:
+	if e is InputEventKey:
+		get_viewport().push_input(e)
 
 
 func _label(parent: Control) -> Label:

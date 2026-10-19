@@ -801,7 +801,11 @@ happens (creatures waking and struck, doors, chests, things taken, gold,
 lines said, banners) -- goes to a window of its own beside the game's
 (`godot/info.gd`, F12 to show and hide it), so the game's screen holds only
 what the game draws. With no display there is no window and the text goes
-back onto the screen.
+back onto the screen. The window manager gives it the focus when it opens,
+and a key pressed there is handed on to the game's window: the pad reads
+`Input`, which every window feeds, but the port's own keys (F1, F2, F9..F12,
+G, Escape, Tab) come through the game window's `_unhandled_input`, and until
+the hand-on they went nowhere while the game played on.
 
 **Chests in the port.** `chests.py` is the small chest's lid (opcode 6), the
 big chest (opcode 7), `object_give`'s frames and the falls of what a dying

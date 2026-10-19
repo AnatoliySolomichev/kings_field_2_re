@@ -43,9 +43,9 @@ and `@port` says which kind of the port's own code a function is:
 
 ## How much is covered
 
-660 functions in 39 files: **368 reproduce
-code of the game** and 292 are the port's own
-(84 check, 23 data, 55 engine, 130 helper). 421 markers, 832 addresses cited in
+661 functions in 39 files: **368 reproduce
+code of the game** and 293 are the port's own
+(84 check, 23 data, 56 engine, 130 helper). 421 markers, 832 addresses cited in
 comments, every one of them with its executable.
 
 | executable | routines | with a marker | stretches marked inside them | instructions | covered |
@@ -504,10 +504,11 @@ The whole file is the port's own: **engine**.
 | --- | --- | --- |
 | [`note`](godot/info.gd#L30) | — port's own, *engine* | |
 | [`_ready`](godot/info.gd#L41) | — port's own, *engine* | |
-| [`_label`](godot/info.gd#L79) | — port's own, *engine* | |
-| [`_show`](godot/info.gd#L88) | — port's own, *engine* | |
-| [`_unhandled_input`](godot/info.gd#L99) | — port's own, *engine* | |
-| [`_process`](godot/info.gd#L104) | — port's own, *engine* | |
+| [`_forward`](godot/info.gd#L84) | — port's own, *engine* | |
+| [`_label`](godot/info.gd#L89) | — port's own, *engine* | |
+| [`_show`](godot/info.gd#L98) | — port's own, *engine* | |
+| [`_unhandled_input`](godot/info.gd#L109) | — port's own, *engine* | |
+| [`_process`](godot/info.gd#L114) | — port's own, *engine* | |
 
 ### [`godot/items.gd`](godot/items.gd)
 
