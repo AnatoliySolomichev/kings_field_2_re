@@ -3399,7 +3399,17 @@ with `overlay_arg` 2 and 3). **Against the game's own code** over menu1
 (`tools/ui.py quit_check`): the frame 8 of 8, and the question run whole on
 scripted words, 100 of 100 runs -- the answer, the words read and
 `overlay_arg`. In the port "yes" goes back to the shell (`boot.tscn`) the
-same way; the "please wait" is not there.
+same way, after the "please wait".
+
+**The message box** (`sub_8001eb3c`: title, lines, n, x, y, w, h, legend)
+is how the system's screens talk: two frames of the system page's line
+`title` (under 8) on its plate, the n lines (28-byte labels), `ui_frame`,
+and with legend 1 the cancel button at (0x80, 0xd6) and "return". QUIT
+GAME's "please wait" is one: title 7 ("quit"), the line at (0x78, 0x70), the
+frame (0x46, 0x57, 0xb2, 0x42), shown 0x5a times while the music's volume
+steps down; LOAD's "checking the memory card" and the rest are others.
+**Against the game's own code** over menu1 (`tools/ui.py box_check`): 4 of 4
+boxes, with and without the legend and the title.
 
 *Corrected in the port:* `_bob` set the bob to 0 whenever the player was
 off the ground. In `player_vertical` every path reaches `.L29`, which goes

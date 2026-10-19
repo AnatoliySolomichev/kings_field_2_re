@@ -202,9 +202,9 @@ the equipment tables, against a RAM snapshot           3264/3264, 2112/2112, 16/
                                                        player_recalc_stats 483 of
                                                        483 values over 21 snapshots
 the conversation hooks, two readings of one table      23 of 23
-the port against the game, function by function        684 of 684 placed: 386
+the port against the game, function by function        685 of 685 placed: 387
                                                        reproduce the game, 298 the
-                                                       port's own; 447 markers and
+                                                       port's own; 449 markers and
                                                        861 cited addresses, every
                                                        one resolving
 the object loader, against 13 snapshots                angles 4344/4352, scale and
@@ -239,6 +239,7 @@ ui_display_values, menu_display and panel_colours      runs; 20 of 20 colour set
 OPTION 1, against the game's own sub_80024a78 and     48 of 48 frames; 160 of 160
 menu_sound over menu1                                  runs
 QUIT GAME, against the game's own over menu1           8 of 8 frames; 100 of 100 runs
+the message box, against the game's own sub_8001eb3c  4 of 4 boxes
 the spells unlocked, against every snapshot            21 of 21
 Silviera's key on a pedestal, silv1 and silv2          7 of 7
 the drops, against the snapshots                       5 of 5 lying as the fall leaves
@@ -324,7 +325,7 @@ levels 40 of 40 · angles 400 of 400
 conversations 43 of 43, and 25 of 25 steps the emulator recorded
 damage 6 of 6 · knock-back 2484 of 2484 · weapon 2336 of 2336
 fences 600 of 600 · animation 540 of 540
-equipment 16 of 16 · menus 73 of 73, 180 of 180 storage, BUTTON CONFIG,
+equipment 16 of 16 · menus 75 of 75, 180 of 180 storage, BUTTON CONFIG,
 OPTION and QUIT runs and panel colours, 28 of 28 control schemes as the game's
 own apply_control_scheme
 directions 400 of 400

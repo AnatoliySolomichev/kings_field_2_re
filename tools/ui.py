@@ -1968,6 +1968,82 @@ def quit_check(out=sys.stdout):
     return ok == n and ok2 == n2
 
 
+# --- the message box --------------------------------------------------------------
+
+PLEASE_WAIT = (0x78, 0x70, [0x0F, 0x0B, 0x04, 0x00, 0x12, 0x04, 0x7F, 0x16, 0x00, 0x08,
+                            0x13, 0xFF])     # menu_system's, an immediate in its code
+
+
+def message_box(f, look, e, title, lines, x, y, w, h, legend):
+    """One frame of sub_8001eb3c (title, lines, n, x, y, w, h, legend): the
+    system page's line `title` -- under 8 -- on its plate where its record
+    puts it, the lines (x, y, glyphs), ui_frame(x, y, w, h), and with legend
+    1 the cancel button at (0x80, 0xd6) and "return" at 0x8a. The routine
+    draws it two frames running."""
+    style = record(e, LABEL_STYLE)
+    if title < 8:
+        a = 0x8007E970 + 28 * title
+        tx, ty = struct.unpack("<hh", e.bytes(a, 4))
+        title_plate(f, look, record(e, RECORDS + 12 * 2), tx, ty)
+        draw_label(f, look, style, tx, ty, list(e.bytes(a + 4, 24)))
+    for lx, ly, g in lines:
+        draw_label(f, look, style, lx, ly, g)
+    frame(f, look, e, x, y, w, h)
+    if legend == 1:
+        button(f, look, e, 0x80, 0xD6, look.cancel)
+        small_text(f, look, e, 0x8A, 0xD6, gp_string(e, 0x74))
+
+
+def box_check(out=sys.stdout):
+    """The message box against the game's own sub_8001eb3c over menu1: the
+    "please wait" QUIT GAME ends with, and the same box with other titles,
+    two lines and its legend."""
+    import mipsrun
+    path = os.path.join(ROOT, "out", "snap", "menu1.ram")
+    if not os.path.exists(path):
+        print("  no menu1 snapshot to run the box over", file=out)
+        return True
+    e = exe()
+    base = bytearray(open(path, "rb").read())
+    at = 0x801F0000
+    other = (0x50, 0x88, [0x02, 0x00, 0x11, 0x03, 0xFF])
+    cases = [(7, [PLEASE_WAIT], 0x46, 0x57, 0xB2, 0x42, 0),
+             (6, [PLEASE_WAIT, other], 0x46, 0x57, 0xB2, 0x42, 1),
+             (8, [other], 0x30, 0x40, 0xD0, 0x60, 1),
+             (5, [], 0x46, 0x57, 0xB2, 0x42, 0)]
+    ok = 0
+    first = None
+    for title, lines, x, y, w, h, legend in cases:
+        ram = bytearray(base)
+        for k, (lx, ly, g) in enumerate(lines):
+            o = (at & 0x1FFFFF) + 28 * k
+            struct.pack_into("<hh", ram, o, lx, ly)
+            ram[o + 4:o + 4 + len(g)] = bytes(g)
+        # the routine draws its two frames itself: frame_end (the BIOS's
+        # PutDispEnv) stood in for, the buffer its last frame_begin chose read
+        import gpuframe
+        cpu = mipsrun.menu_cpu(ram)
+        cpu.hooks[0x800270F8] = lambda c: 0
+        cpu.call(0x8001EB3C, title, at, len(lines), x, y, w, h, legend)
+        prims = gpuframe.frame(cpu.ram, cpu.ram[0x1AEAE8])
+        look = Look(ram)
+        look.pulse = cpu.rd(GP + 0x4C, 4)
+        f = Frame()
+        message_box(f, look, e, title, lines, x, y, w, h, legend)
+        got = mipsrun.two_d(prims)
+        want = [(d, p) for d, p in f.order()]
+        ok += got == want
+        if got != want and first is None:
+            j = next((i for i, (a, b) in enumerate(zip(got, want)) if a != b), min(len(got), len(want)))
+            first = (f"title {title}: {len(got)} primitives, the model {len(want)}; at {j}: game "
+                     f"{got[j] if j < len(got) else None} model {want[j] if j < len(want) else None}")
+    print(f"  the message box as the game's own sub_8001eb3c draws it over menu1: {ok} of "
+          f"{len(cases)} boxes primitive for primitive", file=out)
+    if first:
+        print("  first difference: " + first, file=out)
+    return ok == len(cases)
+
+
 def place(s, sel):
     """sub_80027728: the index held to the list, the first row shown and the
     bar's row."""
@@ -2274,6 +2350,14 @@ def export_cases(e):
                 break
         druns.append({"start": start, "presses": presses, "left": left, "used": used,
                       "end": st})
+    # the message box (which the game's own sub_8001eb3c holds, box_check)
+    for title, lines, legend in ((7, [PLEASE_WAIT], 0), (6, [PLEASE_WAIT], 1)):
+        blook = Look()
+        f = Frame()
+        message_box(f, blook, e, title, lines, 0x46, 0x57, 0xB2, 0x42, legend)
+        cases.append({"screen": "box", "title": title, "lines": [list(l) for l in lines],
+                      "legend": legend, "sel": 0, "pulse": 0,
+                      "prims": [[d, p] for d, p in f.order()]})
     # QUIT GAME's frame (which the game's own holds, quit_check) and runs
     for sel, pulse in ((0, 0x10), (1, 0x44)):
         qlook = Look()
@@ -2520,6 +2604,7 @@ def check(out=sys.stdout, verbose=False):
     menus = display_check(out) and menus
     menus = sound_check(out) and menus
     menus = quit_check(out) and menus
+    menus = box_check(out) and menus
     e = exe()
     ok = bad = 0
     for name in ("inv1", "inv2"):

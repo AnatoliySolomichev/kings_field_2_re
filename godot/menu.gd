@@ -95,6 +95,7 @@ var config := {}                    # BUTTON CONFIG's schemes and row while it i
 var display := {}                   # OPTION 2's five values and row while it is up
 var sound := {}                     # OPTION 1's three sliders and row while it is up
 var quit_sel := 1                   # QUIT GAME's answer lit
+var wait_left := 0                  # menu_system's "please wait": the boxes still to show
 var prompt_sel := 0
 var equip_sel := 0                  # the equipment screen's line
 var records_sel := 0                # status/records' line: offense/defense, conversation
@@ -1079,6 +1080,31 @@ static func answers(o: Dictionary, lk: Dictionary, one: Array, two: Array, sel: 
 		draw_label(o, lk, style, int(two[0]), int(two[1]), two[2])
 
 
+# sub_8001eb3c (title, lines, n, x, y, w, h, legend), one of its two frames:
+# the system page's line `title` -- under 8 -- on its plate where its record
+# puts it, the lines [x, y, glyphs], ui_frame(x, y, w, h), and with legend 1
+# the cancel button at (0x80, 0xd6) and "return" at 0x8a.
+# @orig game:0x8001eb3c sub_8001eb3c  status:verified -- tools/ui.py message_box, 4 of 4 boxes as the game's own draws them over menu1 (box_check); the self-test this to it
+static func message_box(o: Dictionary, lk: Dictionary, title: int, lines: Array, x: int, y: int,
+		w: int, h: int, legend: int) -> void:
+	var style: Array = rec(LABEL_STYLE)
+	if title < 8:
+		var t: Array = data["labels"][3][title]
+		label_plate(o, lk, rec(RECORDS + 12 * 2), int(t[0]), int(t[1]))
+		draw_label(o, lk, style, int(t[0]), int(t[1]), t[2])
+	for l in lines:
+		draw_label(o, lk, style, int(l[0]), int(l[1]), l[2])
+	frame(o, lk, x, y, w, h)
+	if legend == 1:
+		button(o, lk, 0x80, 0xD6, int(lk["cancel"]))
+		small_text(o, lk, 0x8A, 0xD6, data["words"]["return"])
+
+
+# menu_system's "please wait", an immediate in its code
+const PLEASE_WAIT := [0x78, 0x70, [0x0F, 0x0B, 0x04, 0x00, 0x12, 0x04, 0x7F, 0x16, 0x00, 0x08,
+	0x13, 0xFF]]
+
+
 # QUIT GAME's answers, immediates in its code
 const QUIT_YES := [0xAB, 0xA2, [0x18, 0x04, 0x12, 0xFF]]
 const QUIT_NO := [0xE5, 0xA2, [0x0D, 0x0E, 0xFF]]
@@ -1341,11 +1367,12 @@ func _open() -> void:
 	KFInfo.note("menu: open")
 
 
-# QUIT GAME answered "yes": overlay_arg 1, menu_system's -2, pause_menu's,
-# sub_800305d8's game state 2, and game_main's arm for it -- next_exe 0, back
-# to the shell, which runs OPEN.EXE; open_main, seeing overlay_arg 1, goes
-# straight to the title. The "please wait" and the music's fade between
-# (menu_system's tail, sub_8001eb3c) are not here.
+# QUIT GAME answered "yes" and the "please wait" shown: overlay_arg 1,
+# menu_system's -2, pause_menu's, sub_800305d8's game state 2, and game_main's
+# arm for it -- next_exe 0, back to the shell, which runs OPEN.EXE; open_main,
+# seeing overlay_arg 1, goes straight to the title. The music's fade during
+# the wait is not here; nor is the sound.
+# @orig game:0x8001e620 menu_system+0x19c  status:partial -- the "please wait" box, 0x5a times; not the CD's stop (sub_80061e00) or the music's fade
 # @orig game:0x80015034 game_main+0x460  status:transcribed -- state 2: next_exe 0, and back to the shell
 func _quit() -> void:
 	KFInfo.note("menu: quit game")
@@ -1373,7 +1400,7 @@ func _close() -> void:
 # @orig game:0x8001d8a4 menu_ratings  status:transcribed -- the ratings page until a button is pressed
 # @orig game:0x8001c540 menu_use_magic+0xb4  status:transcribed -- its loop: the chrome, the cursor into gp+0x19, ui_prompt(s, 0, 2, 0xff) and the spell handed back; not the guide (TRIANGLE, 0x80024f88) or the sounds
 # @orig game:0x8001dd94 item_menu  status:transcribed -- the storage's page: sub_800221e8 over page 2's two lines, a list for each, the cancel back to the main page
-# @orig game:0x8001e484 menu_system  status:partial -- the page: sub_800221e8 over page 3's five lines, OPTION 1, OPTION 2, BUTTON CONFIG and QUIT GAME, the cancel back to the main page; not LOAD (sub_8001e710), or QUIT GAME's "please wait" (0x8001e620)
+# @orig game:0x8001e484 menu_system  status:partial -- the page: sub_800221e8 over page 3's five lines, OPTION 1, OPTION 2, BUTTON CONFIG and QUIT GAME, the cancel back to the main page; not LOAD (sub_8001e710), the music's fade during QUIT GAME's "please wait"
 func _step(press: int) -> void:
 	var confirm := 0x40 if int(look["confirm"]) == 3 else 0x20
 	var cancel := 0x20 if int(look["confirm"]) == 3 else 0x40
@@ -1565,9 +1592,16 @@ func _step(press: int) -> void:
 			quit_sel = int(q[0])
 			if q[1] != null:
 				if int(q[1]) == 0:
-					_quit()
+					# menu_system's -2 (0x8001e620): "please wait" under the
+					# "quit" title, 0x5a times two frames, while the music fades
+					wait_left = 0x5A
+					state = "please_wait"
 				else:
 					state = "system"
+		"please_wait":
+			wait_left -= 1
+			if wait_left <= 0:
+				_quit()
 		"button_config":
 			if button_config_press(config, press, cancel):
 				KFPad.apply(int(config["move"]), int(config["action"]))
@@ -1794,6 +1828,8 @@ func _build() -> void:
 			sound_page(ot, look, sound["values"], int(sound["row"]))
 		"quit":
 			quit_page(ot, look, quit_sel)
+		"please_wait":
+			message_box(ot, look, 7, [PLEASE_WAIT], 0x46, 0x57, 0xB2, 0x42, 0)
 		"storage_list":
 			if int(stash["mode"]) == 1:
 				panel(ot, look, stash, 7 | 0x8000)

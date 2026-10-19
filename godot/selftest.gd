@@ -1890,6 +1890,9 @@ func _menus() -> bool:
 				KFMenu.sound_page(o, lk, case["values"], int(case["row"]))
 			"quit":
 				KFMenu.quit_page(o, lk, int(case["sel"]))
+			"box":
+				KFMenu.message_box(o, lk, int(case["title"]), case["lines"], 0x46, 0x57, 0xB2, 0x42,
+					int(case["legend"]))
 			"display_runs":
 				# pad words through display_press, and the colours of panel_colours,
 				# against tools/ui.py's

@@ -596,8 +596,8 @@ Eating heals. Left, roughly in order:
   MAGIC"), and "storage" but for the guide and the turning model
   (FORMATS.md, "STORAGE"); of "system" (`menu_system`) the page and BUTTON
   CONFIG are in (FORMATS.md, "SYSTEM"), but not LOAD (`sub_8001e710`, whose
-  0 ends the menu with -3, a load), nor QUIT GAME's "please wait"
-  (`0x8001e620`); QUIT GAME itself is in (FORMATS.md, "QUIT GAME"). OPTION 2 is in
+  0 ends the menu with -3, a load), nor the music's fade in QUIT
+  GAME's "please wait"; QUIT GAME itself is in (FORMATS.md, "QUIT GAME"). OPTION 2 is in
   (FORMATS.md, "OPTION 2"), and OPTION 1 but for the sound it plays and
   the music's volume (the brightness reaches the menus' text, not yet the
   panel's sprites, which render_frame colours by it); OPTION 2's third switch, the lists' turning model, is
