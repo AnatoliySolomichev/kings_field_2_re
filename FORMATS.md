@@ -3367,8 +3367,23 @@ record 0 with `compass_style`'s bit 0 and record 1 with its bit 1;
 the page 72 of 72 frames, every value of the five, half of them with the
 panel solid in the colours `panel_colours` gives; the screen run whole on
 scripted words 120 of 120 runs; `panel_colours` 20 of 20 at both panels and
-ten brightnesses. OPTION 1 (`menu_sound`, `0x8001ec84`: sound effect, music,
-brightness, three sliders in steps of 3) is read, not ported.
+ten brightnesses.
+
+**OPTION 1** (`menu_sound`, `0x8001ec84`; page 4) is three sliders, 0..0x80:
+the sound effects' volume (`0x801b25db`), the music's (`0x801b25dc`, shown
+one more unless 0) and the brightness (`0x801b25e1`, shown as it is plus
+0xc0, so 0x40..0xc0 reads 0..0x80). UP and DOWN go round them, RIGHT moves
+one 3 on (to 0x80 at most) and LEFT 3 back (to 0); a sample is played as the
+first moves and the music's volume set (`sub_800677e8`) as the second does;
+only the cancel leaves, storing the three and, with the panel clear, setting
+the text colours from the brightness as `panel_colours` would (solid, it
+sets nothing). `sub_80024a78` draws the sliders: a track (record 7) at
+(0xa5, 0x34) and a knob (record 6, its u 16 further with the panel clear) at
+x 0xac + 96 v / 128, y 0x3c, 26 apart. **Against the game's own code** over
+menu1 (`tools/ui.py sound_check`): 48 of 48 frames, half with the panel
+solid, and the screen run whole on scripted words, 160 of 160 runs -- the
+bytes stored and the text colours alike. In the port the brightness reaches
+the menus' text; the sound is not in the port.
 
 *Corrected in the port:* `_bob` set the bob to 0 whenever the player was
 off the ground. In `player_vertical` every path reaches `.L29`, which goes

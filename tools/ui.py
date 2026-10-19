@@ -1669,6 +1669,183 @@ def display_check(out=sys.stdout):
     return ok == runs and ok2 == n and ok3 == n3
 
 
+# --- system: OPTION 1, the sound and the brightness ---------------------------
+
+SOUND_BYTES = (0x801B25DB, 0x801B25DC, 0x801B25E1)
+
+
+def sound_values(ram_bytes):
+    """menu_sound's three sliders from the bytes it starts from: the sound
+    effects' 0x801b25db as it is, the music's 0x801b25dc one more unless 0,
+    the brightness 0x801b25e1 plus 0xc0 (0x40..0xc0 as 0..0x80)."""
+    sfx, music, bright = ram_bytes
+    return [sfx, 0 if music == 0 else (music + 1) & 0xFF, (bright + 0xC0) & 0xFF]
+
+
+def sound_bytes(values):
+    """menu_sound's end: the three bytes it stores back."""
+    return [values[0] & 0xFF, 0 if values[1] == 0 else (values[1] - 1) & 0xFF,
+            (values[2] + 0x40) & 0xFF]
+
+
+def sound_sliders(f, look, e, values):
+    """sub_80024a78: a slider for each of the three -- the track (record 7)
+    at (0xa5, 0x34) at depth 0x32, the knob (record 6, its u 16 on with the
+    panel clear) at x 0xac + 96 * v / 128, y 0x3c, at depth 0x31 -- 26
+    apart, both in the boxes' grey."""
+    tr = record(e, RECORDS + 12 * 7)
+    kn = record(e, RECORDS + 12 * 6)
+    f.tpage(0x32, tr[0])
+    for i in range(3):
+        f.add(0x32, sprite(0xA5, 0x34 + 0x1A * i, tr[4], tr[5], tr[2], tr[3], tr[1],
+                           rgb(look.box)))
+        f.add(0x31, sprite(0xAC + ((96 * values[i]) >> 7), 0x3C + 0x1A * i, kn[4], kn[5],
+                           kn[2] + (look.semi << 4), kn[3], kn[1], rgb(look.box)))
+
+
+def sound_page(f, look, e, values, row):
+    """OPTION 1's frame: sub_800252f4(4, 3, row, 1) and the sliders."""
+    menu_page(f, look, e, 4, 3, row, legend_mode=1)
+    sound_sliders(f, look, e, values)
+
+
+def sound_press(st, press, cancel):
+    """One pad word on OPTION 1 (0x8001ec84): UP and DOWN round the three
+    rows; RIGHT moves the row's slider 3 on, to 0x80 at most; LEFT 3 back, to
+    0; the cancel leaves. True when it leaves."""
+    v, r = st["values"], st["row"]
+    if press & UP:
+        st["row"] = 2 if r == 0 else r - 1
+    elif press & DOWN:
+        st["row"] = 0 if r == 2 else r + 1
+    elif press & RIGHT:
+        v[r] = min((v[r] + 3) & 0xFF, 0x80)
+    elif press & LEFT:
+        v[r] = v[r] - 3 if v[r] >= 3 else 0
+    elif press & cancel:
+        return True
+    return False
+
+
+def game_sound(base, bytes_, presses):
+    """0x8001ec84 run whole over `base` with the three bytes laid in, the pad
+    scripted, the drawing and the sound stood in for: (returned, words read,
+    the three values as sound_values has them, the row)."""
+    import mipsrun
+    cpu = mipsrun.menu_cpu(base)
+    for a, v in zip(SOUND_BYTES, bytes_):
+        cpu.ram[a & 0x1FFFFF] = v
+    script = list(presses)
+    read = [0]
+    held = []
+
+    def latch(c):
+        if not script:
+            held.append([c.rd(c.r[29] + 0x10 + k, 1) for k in range(3)])
+            held.append(c.r[17])
+            raise _Out
+        read[0] += 1
+        return script.pop(0)
+
+    cpu.hooks[0x800279A4] = latch
+    for at in (0x80027A40, 0x800279D8, 0x80026FE4, 0x800270F8, 0x800252F4, 0x80024A78,
+               0x800677E8, 0x80015790):
+        cpu.hooks[at] = lambda c: 0
+    try:
+        cpu.call(0x8001EC84)
+    except _Out:
+        return False, read[0], held[0], held[1], None
+    text = [cpu.rd(GP + o, 4) for o in (0x5C, 0x60, 0x64)]
+    return True, read[0], [cpu.ram[a & 0x1FFFFF] for a in SOUND_BYTES], None, text
+
+
+def sound_check(out=sys.stdout):
+    """OPTION 1 against the game's own code over menu1: the page and its
+    sliders drawn for values across the range, a row each, half with the
+    panel solid; and the screen run whole on random runs of pad words --
+    the three bytes it stores and the text colours it sets."""
+    import random
+    import mipsrun
+    path = os.path.join(ROOT, "out", "snap", "menu1.ram")
+    if not os.path.exists(path):
+        print("  no menu1 snapshot to run the options over", file=out)
+        return True
+    e = exe()
+    base = bytearray(open(path, "rb").read())
+    rng = random.Random(0x50D)
+    at = 0x801F0000
+    ok = n = 0
+    first = None
+    for k in range(48):
+        values = [rng.choice((0, 1, 3, 0x40, 0x7F, 0x80, rng.randrange(0x81))) for _ in range(3)]
+        row, pulse = k % 3, rng.randrange(0x60)
+        ram = bytearray(base)
+        ram[at & 0x1FFFFF:(at & 0x1FFFFF) + 3] = bytes(values)
+        if k % 2:
+            lk = panel_look(0, ram[0x1B25E1])
+            ram[0x1B25E4] = 0
+            for o, v in ((0x58, lk["box"]), (0x5C, lk["text"]), (0x60, lk["text"]),
+                         (0x64, lk["text"]), (0x68, lk["shadow"])):
+                struct.pack_into("<I", ram, (GP + o) & 0x1FFFFF, v)
+        prims, _cpu = mipsrun.frame(ram, [(0x800252F4, 4, 3, row, 1), (0x80024A78, at)], pulse)
+        look = Look(ram)
+        look.pulse = pulse
+        f = Frame()
+        sound_page(f, look, e, values, row)
+        got = mipsrun.two_d(prims)
+        want = [(d, p) for d, p in f.order()]
+        n += 1
+        ok += got == want
+        if got != want and first is None:
+            j = next((i for i, (x, y) in enumerate(zip(got, want)) if x != y), min(len(got), len(want)))
+            first = (f"values {values} row {row}: {len(got)} primitives, the model {len(want)}; "
+                     f"at {j}: game {got[j] if j < len(got) else None} model "
+                     f"{want[j] if j < len(want) else None}")
+    print(f"  OPTION 1's page and sliders as the game's own sub_800252f4 and sub_80024a78 "
+          f"draw them over menu1: {ok} of {n} frames primitive for primitive", file=out)
+    if first:
+        print("  first difference: " + first, file=out)
+    cancel = struct.unpack_from("<I", base, (GP + 0x3C) & 0x1FFFFF)[0]
+    ok2, n2 = 0, 160
+    first2 = None
+    for i in range(n2):
+        bytes_ = [rng.randrange(0x81), rng.choice((0, rng.randrange(0x80))),
+                  rng.randrange(0x40, 0xC1)]
+        presses = [rng.choice((UP, DOWN, LEFT, RIGHT, RIGHT, 0x40)) for _ in range(rng.randrange(0, 40))]
+        if rng.randrange(4):
+            presses.append(cancel)
+        semi = rng.randrange(2)
+        b2 = bytearray(base)
+        b2[0x1B25E4] = semi
+        g = game_sound(b2, bytes_, presses)
+        st = {"values": sound_values(bytes_), "row": 0}
+        used, left = 0, False
+        for p in presses:
+            used += 1
+            if sound_press(st, p, cancel):
+                left = True
+                break
+        if left:
+            stored = sound_bytes(st["values"])
+            if semi:
+                t = panel_look(1, stored[2])["text"]
+                text = [t, t, t]
+            else:
+                text = [struct.unpack_from("<I", base, (GP + o) & 0x1FFFFF)[0] for o in (0x5C, 0x60, 0x64)]
+            m = (True, used, stored, None, text)
+        else:
+            m = (False, used, st["values"], st["row"], None)
+        ok2 += g == m
+        if g != m and first2 is None:
+            first2 = f"run {i}: game {g} model {m}"
+    print(f"  OPTION 1 run whole by the game's own code, the pad scripted: {ok2} of {n2} runs "
+          f"end alike, read as many words and leave the three bytes, the text colours (and, "
+          f"still up, the row) alike", file=out)
+    if first2:
+        print("  first difference: " + first2, file=out)
+    return ok == n and ok2 == n2
+
+
 def place(s, sel):
     """sub_80027728: the index held to the list, the first row shown and the
     bar's row."""
@@ -1975,6 +2152,30 @@ def export_cases(e):
                 break
         druns.append({"start": start, "presses": presses, "left": left, "used": used,
                       "end": st})
+    # OPTION 1's page (which the game's own sub_800252f4 and sub_80024a78
+    # hold, sound_check) and runs through sound_press
+    for values, row, pulse in (([0x80, 0x51, 0x80], 0, 0x12), ([0, 3, 0x7F], 2, 0x40),
+                               ([0x40, 0x80, 0x01], 1, 0x5B)):
+        slook = Look()
+        slook.pulse = pulse
+        f = Frame()
+        sound_page(f, slook, e, values, row)
+        cases.append({"screen": "sound", "values": values, "row": row, "sel": row,
+                      "pulse": pulse, "prims": [[d, p] for d, p in f.order()]})
+    for i in range(30):
+        st = {"values": [rng.randrange(0x81), rng.randrange(0x81), rng.randrange(0x81)], "row": 0}
+        start = {"values": list(st["values"]), "row": 0}
+        presses = [rng.choice((UP, DOWN, LEFT, RIGHT, 0x40)) for _ in range(rng.randrange(0, 30))]
+        if rng.randrange(3):
+            presses.append(0x20)
+        used, left = 0, False
+        for p in presses:
+            used += 1
+            if sound_press(st, p, 0x20):
+                left = True
+                break
+        druns.append({"kind": "sound", "start": start, "presses": presses, "left": left,
+                      "used": used, "end": st})
     cases.append({"screen": "display_runs", "runs": druns,
                   "looks": [[semi, bright, panel_look(semi, bright)]
                             for semi in (0, 1) for bright in (0x40, 0x80, 0x81, 0xA0, 0xC0)],
@@ -2175,6 +2376,7 @@ def check(out=sys.stdout, verbose=False):
     menus = storage_check(out) and menus
     menus = options_check(out) and menus
     menus = display_check(out) and menus
+    menus = sound_check(out) and menus
     e = exe()
     ok = bad = 0
     for name in ("inv1", "inv2"):

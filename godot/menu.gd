@@ -18,7 +18,7 @@ extends Control
 #
 # The world stands still while it is up (KFGame.modal). Not here yet: the
 # chosen thing's model turning in the "use item" screen (0x80025be8), the
-# guide pages (0x80024f88), and three of "system"'s five lines.
+# guide pages (0x80024f88), and two of "system"'s five lines.
 #
 # @exe game
 
@@ -93,6 +93,7 @@ var stash_cursor := [0, 0]          # gp+0x1a, gp+0x1b: where each of its lists 
 var system_sel := 0                 # menu_system's line
 var config := {}                    # BUTTON CONFIG's schemes and row while it is up
 var display := {}                   # OPTION 2's five values and row while it is up
+var sound := {}                     # OPTION 1's three sliders and row while it is up
 var prompt_sel := 0
 var equip_sel := 0                  # the equipment screen's line
 var records_sel := 0                # status/records' line: offense/defense, conversation
@@ -930,6 +931,48 @@ static func panel_look(semi: int, bright: int) -> Dictionary:
 	return {"box": 0x78, "text": half + 0x80, "shadow": 0x30}
 
 
+# sub_80024a78: OPTION 1's three sliders -- the track (record 7) at (0xa5,
+# 0x34) at depth 0x32, the knob (record 6, its u 16 on with the panel clear)
+# at x 0xac + 96 * v / 128, y 0x3c, depth 0x31 -- 26 apart, in the boxes' grey.
+# @orig game:0x80024a78 sub_80024a78  status:verified -- tools/ui.py sound_sliders, 48 of 48 frames of the game's own over menu1, half with the panel solid (sound_check); the self-test this to it
+static func sound_sliders(o: Dictionary, lk: Dictionary, values: Array) -> void:
+	var tr: Array = rec(RECORDS + 12 * 7)
+	var kn: Array = rec(RECORDS + 12 * 6)
+	set_tpage(o, 0x32, int(tr[0]))
+	for i in 3:
+		add(o, 0x32, sprite(0xA5, 0x34 + 0x1A * i, int(tr[4]), int(tr[5]), int(tr[2]),
+			int(tr[3]), int(tr[1]), grey(int(lk["box"]))))
+		add(o, 0x31, sprite(0xAC + ((96 * int(values[i])) >> 7), 0x3C + 0x1A * i, int(kn[4]),
+			int(kn[5]), int(kn[2]) + (int(lk["semi"]) << 4), int(kn[3]), int(kn[1]),
+			grey(int(lk["box"]))))
+
+
+# @port helper -- the two calls of OPTION 1's frame (0x8001eefc): page 4's three lines and the sliders
+static func sound_page(o: Dictionary, lk: Dictionary, values: Array, row: int) -> void:
+	menu_page(o, lk, 4, 3, row, 1)
+	sound_sliders(o, lk, values)
+
+
+# One pad word on OPTION 1: UP and DOWN round the three rows; RIGHT moves the
+# row's slider 3 on, to 0x80 at most; LEFT 3 back, to 0; the cancel leaves.
+# The sound it plays and the music's volume it sets as they move are not here.
+# @orig game:0x8001ec84 menu_sound  status:partial -- the pad, the sliders and the bytes stored, verified: tools/ui.py sound_press, 160 of 160 runs as the game's own runs them whole (sound_check); not the sounds or the music's volume
+static func sound_press(st: Dictionary, press: int, cancel: int) -> bool:
+	var v: Array = st["values"]
+	var r := int(st["row"])
+	if press & UP:
+		st["row"] = 2 if r == 0 else r - 1
+	elif press & DOWN:
+		st["row"] = 0 if r == 2 else r + 1
+	elif press & RIGHT:
+		v[r] = mini((int(v[r]) + 3) & 0xFF, 0x80)
+	elif press & LEFT:
+		v[r] = int(v[r]) - 3 if int(v[r]) >= 3 else 0
+	elif press & cancel:
+		return true
+	return false
+
+
 # The MAGIC line's list (0x8001d0c4): the attacking spells 0..0x16 unlocked,
 # their MP beside them in mode 4, and "TAKE OFF"; four rows from y 0x83, the
 # selection on magic A.
@@ -1255,7 +1298,7 @@ func _may_open() -> bool:
 
 # pause_menu's start (0x80027198 and its first frames): the world held, the
 # main page up.
-# @orig game:0x8001a774 pause_menu  status:partial -- the six lines, the status page behind them, "use item", "use magic", "equipment", "status/records", "storage" and "system" (OPTION 2 and BUTTON CONFIG of its five)
+# @orig game:0x8001a774 pause_menu  status:partial -- the six lines, the status page behind them, "use item", "use magic", "equipment", "status/records", "storage" and "system" (OPTION 1, OPTION 2 and BUTTON CONFIG of its five)
 func _open() -> void:
 	KFGame.modal = true
 	state = "main"
@@ -1281,7 +1324,7 @@ func _close() -> void:
 # @orig game:0x8001d8a4 menu_ratings  status:transcribed -- the ratings page until a button is pressed
 # @orig game:0x8001c540 menu_use_magic+0xb4  status:transcribed -- its loop: the chrome, the cursor into gp+0x19, ui_prompt(s, 0, 2, 0xff) and the spell handed back; not the guide (TRIANGLE, 0x80024f88) or the sounds
 # @orig game:0x8001dd94 item_menu  status:transcribed -- the storage's page: sub_800221e8 over page 2's two lines, a list for each, the cancel back to the main page
-# @orig game:0x8001e484 menu_system  status:partial -- the page: sub_800221e8 over page 3's five lines, OPTION 2 and BUTTON CONFIG, the cancel back to the main page; not LOAD (sub_8001e710), OPTION 1 (menu_sound) or QUIT GAME (sub_8001f8b4)
+# @orig game:0x8001e484 menu_system  status:partial -- the page: sub_800221e8 over page 3's five lines, OPTION 1, OPTION 2 and BUTTON CONFIG, the cancel back to the main page; not LOAD (sub_8001e710) or QUIT GAME (sub_8001f8b4)
 func _step(press: int) -> void:
 	var confirm := 0x40 if int(look["confirm"]) == 3 else 0x20
 	var cancel := 0x20 if int(look["confirm"]) == 3 else 0x40
@@ -1425,6 +1468,13 @@ func _step(press: int) -> void:
 				elif system_sel == 2:
 					display = {"values": KFGame.display.duplicate(), "row": 0}
 					state = "display"
+				elif system_sel == 1:
+					# menu_sound's start: the music's byte one on unless 0, the
+					# brightness's 0xc0 on
+					var b: Array = KFGame.sound
+					sound = {"values": [int(b[0]), 0 if int(b[1]) == 0 else int(b[1]) + 1,
+						(int(b[2]) + 0xC0) & 0xFF], "row": 0}
+					state = "sound"
 				else:
 					KFInfo.note("menu: the system's line %d is not ported yet" % system_sel)
 			elif press & cancel:
@@ -1440,6 +1490,21 @@ func _step(press: int) -> void:
 				KFInfo.note("menu: display %s" % str(KFGame.display))
 				state = "system"
 			elif int(display["row"]) != was:
+				moved = true
+		"sound":
+			var was := int(sound["row"])
+			if sound_press(sound, press, cancel):
+				# menu_sound's end: the three stored, and with the panel clear
+				# the text from the brightness
+				var v: Array = sound["values"]
+				KFGame.sound = [int(v[0]), 0 if int(v[1]) == 0 else int(v[1]) - 1,
+					(int(v[2]) + 0x40) & 0xFF]
+				look["bright"] = int(KFGame.sound[2])
+				if int(look["semi"]) == 1:
+					look["text"] = int(panel_look(1, int(look["bright"]))["text"])
+				KFInfo.note("menu: sound %s" % str(KFGame.sound))
+				state = "system"
+			elif int(sound["row"]) != was:
 				moved = true
 		"button_config":
 			if button_config_press(config, press, cancel):
@@ -1663,6 +1728,8 @@ func _build() -> void:
 			options_page(ot, look, int(config["action"]), int(config["move"]), int(config["row"]))
 		"display":
 			display_page(ot, look, display["values"], int(display["row"]))
+		"sound":
+			sound_page(ot, look, sound["values"], int(sound["row"]))
 		"storage_list":
 			if int(stash["mode"]) == 1:
 				panel(ot, look, stash, 7 | 0x8000)

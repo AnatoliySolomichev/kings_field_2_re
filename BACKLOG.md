@@ -596,11 +596,11 @@ Eating heals. Left, roughly in order:
   MAGIC"), and "storage" but for the guide and the turning model
   (FORMATS.md, "STORAGE"); of "system" (`menu_system`) the page and BUTTON
   CONFIG are in (FORMATS.md, "SYSTEM"), but not LOAD (`sub_8001e710`, whose
-  0 ends the menu with -3, a load), OPTION 1 (`menu_sound`: the sound
-  effects' and the music's volumes and the brightness -- the brightness
-  would reach the menus' colours and the panel's sprites) or QUIT GAME
+  0 ends the menu with -3, a load) or QUIT GAME
   (`sub_8001f8b4`, whose 0 ends it with -2, the title). OPTION 2 is in
-  (FORMATS.md, "OPTION 2"); its third switch, the lists' turning model, is
+  (FORMATS.md, "OPTION 2"), and OPTION 1 but for the sound it plays and
+  the music's volume (the brightness reaches the menus' text, not yet the
+  panel's sprites, which render_frame colours by it); OPTION 2's third switch, the lists' turning model, is
   kept and does nothing until the model is ported. Neither the schemes nor
   the five display bytes are carried by a save in the port: `save_restore`
   writes `0x801b25dd..e0`, and `save_loaded_fixup`'s `apply_control_scheme`

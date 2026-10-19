@@ -62,6 +62,9 @@ static var modal := false
 # walking bob, and the menus' boxes clear (1) or solid (0); a new
 # character's, sub_8002b64c
 static var display := [2, 2, 1, 1, 1]
+# OPTION 1's three bytes (0x801b25db, dc, e1): the sound effects' and the
+# music's volumes and the brightness; a new character's, sub_8002b64c
+static var sound := [0x80, 0x50, 0x80]
 # While the port follows the emulator (ghost.gd, C, with bp16 writing
 # live.txt): the creatures, the doors and the swing are the game's, laid over
 # the port's every frame, and their own machines stand still.

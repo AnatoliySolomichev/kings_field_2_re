@@ -805,7 +805,9 @@ self-test holds `godot/pad.gd apply` to. `display_check` holds OPTION 2:
 `ui_display_values` for every value of the five, half with the panel solid,
 72 of 72 frames (the second pulse, `gp+0x50`, laid in beside the first);
 `menu_display` run whole on scripted words against `display_press`, 120 of
-120 runs; and `panel_colours` against `panel_look`, 20 of 20.
+120 runs; and `panel_colours` against `panel_look`, 20 of 20. `sound_check`
+does the same for OPTION 1: its page and sliders 48 of 48 frames, and
+`menu_sound` run whole, 160 of 160 runs.
 
 ```
 python3 tools/ui.py            the use-item screen against both snapshots, both buffers
