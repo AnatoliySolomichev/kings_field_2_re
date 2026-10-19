@@ -3315,6 +3315,29 @@ for the other side, 44 prompts cancelled and 21 moves of more than one;
 their lists as the screens build them, 200 of 200; mode 7 drawn by
 `ui_panel`, 40 of 40 frames.
 
+**SYSTEM** (`menu_system`, `0x8001e484`), the sixth line, is page 3's five
+lines: LOAD (`sub_8001e710`; its 0 ends the menu with -3, and
+`sub_800305d8` then runs `save_loaded_fixup` and the level's state), two
+OPTION screens (`sub_8001ec84`, `sub_8001f004`), BUTTON CONFIG and QUIT
+GAME (`sub_8001f8b4`; its 0 ends the menu with -2, `0x8009c3f8` = 2, after
+a fade). **BUTTON CONFIG** (`menu_button_config`, `0x8001f31c`) holds the
+action scheme (`0x801b25e2`, 0..3) and the movement scheme (`0x801b25e3`,
+0..6) in registers while it is up: UP and DOWN turn between the two rows,
+LEFT and RIGHT step the row's scheme, held at its ends, the confirm does
+nothing, and only the cancel leaves -- storing the two and running
+`apply_control_scheme`, which fills the slots (BOOT.md section 6).
+`options_screen` (`0x80023fd4`) draws it: the four action buttons at x
+0x89 from y 0x31 with the word each scheme gives them ("attack", "event",
+"magic", "status", in the orders 0123, 2103, 0321, 2301), the six movement
+buttons from y 0x6f with theirs (nine words, "move left" .. "turn right"),
+the two schemes' names ("type a" .. "type g") under "action" and "move",
+the pulsing bar on the chosen row, the frame, and a legend of its own.
+**Against the game's own code** over menu1 (`tools/ui.py options_check`):
+the page **112 of 112 frames** -- every scheme, both rows, two pulses --
+the screen run whole with the pad scripted, **120 of 120 runs**; and
+`apply_control_scheme` for all **28 of 28** pairs of schemes fills the
+fourteen slots as `godot/pad.gd apply` does (the self-test).
+
 `ui_menu_chrome`'s up and down (`0x800223a4`), which every list uses: the
 selection moves one and the bar with it, the rows shown moving only when the
 bar is at their edge; past either end it goes round, to the last (the rows

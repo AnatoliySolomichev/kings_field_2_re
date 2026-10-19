@@ -594,11 +594,13 @@ Eating heals. Left, roughly in order:
 * "status/records" is in but for its CONVERSATION line (`text_pager`,
   `0x8001d944`); "use magic" is in but for its guide (FORMATS.md, "USE
   MAGIC"), and "storage" but for the guide and the turning model
-  (FORMATS.md, "STORAGE"); "system" (`0x8001e484`) is not -- page 3, five
-  lines: LOAD (`sub_8001e710`, whose 0 ends the menu with -3, a load),
-  two OPTION screens (`sub_8001ec84`, `sub_8001f004`), BUTTON CONFIG
-  (`sub_8001f31c`) and QUIT GAME (`sub_8001f8b4`, whose 0 ends it with -2,
-  the title);
+  (FORMATS.md, "STORAGE"); of "system" (`menu_system`) the page and BUTTON
+  CONFIG are in (FORMATS.md, "SYSTEM"), but not LOAD (`sub_8001e710`, whose
+  0 ends the menu with -3, a load), the two OPTION screens (`sub_8001ec84`,
+  `sub_8001f004`) or QUIT GAME (`sub_8001f8b4`, whose 0 ends it with -2,
+  the title). The schemes chosen are not carried by a save in the port:
+  `save_loaded_fixup`'s `apply_control_scheme` is one of the things its
+  marker says it leaves out;
 * `ui_menu_chrome`'s kind 1, the shops' gold check, and `ui_quantity(1)`
   with the gold (`sub_80025e80`) -- the shops' lists, modes 0xa, 0xb and
   0xe;

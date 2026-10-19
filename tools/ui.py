@@ -1236,6 +1236,182 @@ def storage_check(out=sys.stdout, n=200):
     return ok == n and built_ok == n
 
 
+# --- system: BUTTON CONFIG ----------------------------------------------------
+
+BUTTON_WORDS = 0x8001135C       # four 8-byte words: attack, event, magic, status
+ACTION_WORDS = 0x8001137C       # nine 16-byte: move left .. turn right
+SCHEME_NAMES = 0x8001140C       # seven 8-byte: type a .. type g
+# options_screen's two switches, read with their delay slots: for each action
+# scheme the word beside each of the four buttons, and for each movement
+# scheme the action beside each of the six after them
+OPTION_ACTIONS = ((0, 1, 2, 3), (2, 1, 0, 3), (0, 3, 2, 1), (2, 3, 0, 1))
+OPTION_MOVES = ((0, 1, 2, 3, 4, 5), (1, 3, 0, 2, 4, 5), (0, 2, 1, 3, 4, 5),
+                (7, 1, 8, 3, 4, 6), (1, 3, 7, 8, 4, 6), (7, 8, 1, 3, 4, 6),
+                (3, 0, 1, 2, 4, 5))
+
+
+def c_string(e, at, n):
+    """The bytes at `at`, up to the first NUL within n."""
+    b = bytes(e.bytes(at, n))
+    return list(b.split(b"\0")[0])
+
+
+def options_page(f, look, e, action, move, row):
+    """options_screen (0x80023fd4), BUTTON CONFIG's page: buttons 0..3 at x
+    0x89 from y 0x31, 14 apart, each with its word for the action scheme
+    beside it at x 0x9b; buttons 4..9 from y 0x6f with their actions for the
+    movement scheme; "action" and the action scheme's name at (0x32, 0x32)
+    and (0x3a, 0x40), "move" and the movement scheme's at (0x32, 0x70) and
+    (0x3a, 0x7e) -- all with their shadows; the pulsing bar 0x35 x 0xf at x
+    0x37 on the row chosen (y 0x3c or 0x7a); the frame 0x102 x 0xb0 at
+    (0x1f, 0x20); and its own legend, button 9 "select" and the cancel's
+    "return"."""
+    for i in range(4):
+        button(f, look, e, 0x89, 0x31 + 14 * i, i)
+        small_text(f, look, e, 0x9B, 0x32 + 14 * i,
+                   c_string(e, BUTTON_WORDS + 8 * OPTION_ACTIONS[action][i], 8), 1, 0)
+    for i in range(6):
+        button(f, look, e, 0x89, 0x6F + 14 * i, 4 + i)
+        small_text(f, look, e, 0x9B, 0x70 + 14 * i,
+                   c_string(e, ACTION_WORDS + 16 * OPTION_MOVES[move][i], 16), 1, 0)
+    small_text(f, look, e, 0x32, 0x32, c_string(e, 0x8009C2A8, 8), 1, 0)
+    small_text(f, look, e, 0x3A, 0x40, c_string(e, SCHEME_NAMES + 8 * action, 8), 1, 0)
+    small_text(f, look, e, 0x32, 0x70, c_string(e, 0x8009C2B0, 8), 1, 0)
+    small_text(f, look, e, 0x3A, 0x7E, c_string(e, SCHEME_NAMES + 8 * move, 8), 1, 0)
+    c0, c1 = bar_colour(look)
+    tpage, clut, u, v, w, h = record(e, RECORDS + 12 * 8)
+    f.add(49, quad(0x37, 0x7A if row else 0x3C, 0x35, 0xF, u, v, w, h,
+                   tpage, clut, c0 | (c0 << 8) | (c1 << 16), 1))
+    frame(f, look, e, 0x1F, 0x20, 0x102, 0xB0)
+    button(f, look, e, 0x5B, 0xD6, 9)
+    small_text(f, look, e, 0x69, 0xD6, c_string(e, 0x8009C290, 8), 0, 0)
+    button(f, look, e, 0xA0, 0xD6, look.cancel)
+    small_text(f, look, e, 0xAA, 0xD6, c_string(e, 0x8009C288, 8), 0, 0)
+
+
+def button_config_press(st, press, cancel):
+    """One pad word on BUTTON CONFIG (0x8001f31c): the cancel leaves; UP or
+    DOWN turns between the two rows, the action scheme (0) and the movement
+    scheme (1); LEFT lowers the row's scheme and RIGHT raises it, held to
+    0..3 and 0..6. `st` holds "action", "move", "row"; True when it leaves,
+    and then the caller stores the two and runs apply_control_scheme."""
+    if press & cancel:
+        return True
+    if press & (UP | DOWN):
+        st["row"] = 1 if st["row"] == 0 else 0
+    elif press & LEFT:
+        k = "move" if st["row"] else "action"
+        if st[k]:
+            st[k] -= 1
+    elif press & RIGHT:
+        k = "move" if st["row"] else "action"
+        st[k] = min(st[k] + 1, 6 if st["row"] else 3)
+    return False
+
+
+def options_check(out=sys.stdout):
+    """BUTTON CONFIG against the game's own code over menu1: options_screen
+    drawn for every action scheme, movement scheme and row, at two pulses;
+    and the screen (0x8001f31c) run whole on random runs of pad words, the
+    two scheme bytes it leaves and the words it reads."""
+    import random
+    import mipsrun
+    path = os.path.join(ROOT, "out", "snap", "menu1.ram")
+    if not os.path.exists(path):
+        print("  no menu1 snapshot to run the options over", file=out)
+        return True
+    e = exe()
+    base = bytearray(open(path, "rb").read())
+    ok = runs = 0
+    first = None
+    for action in range(4):
+        for move in range(7):
+            for row in (0, 1):
+                for pulse in (0x11, 0x47):
+                    prims, _cpu = mipsrun.frame(base, [(0x80023FD4, action, move, row)], pulse)
+                    look = Look(base)
+                    look.pulse = pulse
+                    f = Frame()
+                    options_page(f, look, e, action, move, row)
+                    got = mipsrun.two_d(prims)
+                    want = [(d, p) for d, p in f.order()]
+                    runs += 1
+                    ok += got == want
+                    if got != want and first is None:
+                        k = next((j for j, (a, b) in enumerate(zip(got, want)) if a != b),
+                                 min(len(got), len(want)))
+                        first = (f"action {action} move {move} row {row}: {len(got)} primitives, "
+                                 f"the model {len(want)}; at {k}: game "
+                                 f"{got[k] if k < len(got) else None} model "
+                                 f"{want[k] if k < len(want) else None}")
+    print(f"  BUTTON CONFIG's page as the game's own options_screen draws it over menu1: "
+          f"{ok} of {runs} frames primitive for primitive", file=out)
+    if first:
+        print("  first difference: " + first, file=out)
+    cancel = struct.unpack_from("<I", base, (GP + 0x3C) & 0x1FFFFF)[0]
+    confirm = struct.unpack_from("<I", base, (GP + 0x38) & 0x1FFFFF)[0]
+    rng = random.Random(0xB077)
+    ok2 = 0
+    first2 = None
+    n = 120
+    for i in range(n):
+        st = {"action": rng.randrange(4), "move": rng.randrange(7), "row": 0}
+        words = [UP, DOWN, LEFT, RIGHT, LEFT, RIGHT, confirm, cancel]
+        presses = [rng.choice(words[:-1]) for _ in range(rng.randrange(0, 20))]
+        if rng.randrange(4):
+            presses.append(cancel)
+        g = game_button_config(base, st["action"], st["move"], presses)
+        used = 0
+        left = False
+        for p in presses:
+            used += 1
+            if button_config_press(st, p, cancel):
+                left = True
+                break
+        m = (left, used, st["action"], st["move"], None if left else st["row"])
+        ok2 += g == m
+        if g != m and first2 is None:
+            first2 = f"run {i}: game {g} model {m}"
+    print(f"  BUTTON CONFIG run whole by the game's own code, the pad scripted: {ok2} of {n} "
+          f"runs end alike, read as many words and leave the two schemes (and, still up, "
+          f"the row) alike", file=out)
+    if first2:
+        print("  first difference: " + first2, file=out)
+    return ok == runs and ok2 == n
+
+
+def game_button_config(base, action, move, presses):
+    """0x8001f31c run whole over `base` with 0x801b25e2 and e3 laid in and
+    pad_read_latch answering `presses` a word at a time, the drawing and
+    apply_control_scheme stood in for: (returned, words read, the action
+    scheme, the movement scheme, the row) -- the two bytes it stored when it
+    returned, and while it is still up the registers it keeps them in until
+    then ($s1, $s2; the row $s3)."""
+    import mipsrun
+    cpu = mipsrun.menu_cpu(base)
+    cpu.ram[0x1B25E2] = action
+    cpu.ram[0x1B25E3] = move
+    script = list(presses)
+    read = [0]
+    held = []
+
+    def latch(c):
+        if not script:
+            held.extend((c.r[17] & 0xFF, c.r[18] & 0xFF, c.r[19]))
+            raise _Out
+        read[0] += 1
+        return script.pop(0)
+
+    cpu.hooks[0x800279A4] = latch
+    for at in (0x80027A40, 0x800279D8, 0x80026FE4, 0x800270F8, 0x80023FD4, 0x8001F4C0):
+        cpu.hooks[at] = lambda c: 0
+    try:
+        cpu.call(0x8001F31C)
+    except _Out:
+        return (False, read[0]) + tuple(held)
+    return True, read[0], cpu.ram[0x1B25E2], cpu.ram[0x1B25E3], None
+
+
 def place(s, sel):
     """sub_80027728: the index held to the list, the first row shown and the
     bar's row."""
@@ -1345,6 +1521,11 @@ def export(out_dir):
            "names": [list(e.bytes(NAMES + 24 * i, 24)) for i in range(150)],
            "words": {"select": gp_string(e, 0x7C), "guide": gp_string(e, 0xA4),
                      "return": gp_string(e, 0x74)},
+           # BUTTON CONFIG's words: options_screen's three tables and two headings
+           "options": {"buttons": [c_string(e, BUTTON_WORDS + 8 * k, 8) for k in range(4)],
+                       "actions": [c_string(e, ACTION_WORDS + 16 * k, 16) for k in range(9)],
+                       "schemes": [c_string(e, SCHEME_NAMES + 8 * k, 8) for k in range(7)],
+                       "action": c_string(e, 0x8009C2A8, 8), "move": c_string(e, 0x8009C2B0, 8)},
            "pages": pages,
            # ui_status_page's words: its four labels and the six conditions
            # ui_ratings_page's two headings, OFFENSE and DEFENSE
@@ -1478,19 +1659,57 @@ def export_cases(e):
                      "sel": ss["sel"], "inventory_a": ma, "inventory_b": mb})
     cases.append({"screen": "storage_runs", "inventory_a": sinv_a, "inventory_b": sinv_b,
                   "equip": sst, "runs": runs, "sel": 0, "pulse": 0, "prims": []})
+    # BUTTON CONFIG's page (which the game's own options_screen holds,
+    # options_check) and runs of pad words through button_config_press
+    for action, move, row, pulse in ((0, 0, 0, 0x12), (3, 0, 1, 0x40), (1, 4, 0, 0x2B),
+                                     (2, 6, 1, 0x05), (3, 3, 0, 0x5E)):
+        look.pulse = pulse
+        f = Frame()
+        options_page(f, look, e, action, move, row)
+        cases.append({"screen": "options", "action": action, "move": move, "row": row,
+                      "sel": row, "pulse": pulse, "prims": [[d, p] for d, p in f.order()]})
+    rng = random.Random(0xB078)
+    oruns = []
+    for i in range(40):
+        st = {"action": rng.randrange(4), "move": rng.randrange(7), "row": 0}
+        start = dict(st)
+        presses = [rng.choice((UP, DOWN, LEFT, RIGHT, 0x40)) for _ in range(rng.randrange(0, 16))]
+        if rng.randrange(3):
+            presses.append(0x20)
+        used, left = 0, False
+        for p in presses:
+            used += 1
+            if button_config_press(st, p, 0x20):
+                left = True
+                break
+        oruns.append({"start": start, "presses": presses, "left": left, "used": used,
+                      "end": st})
+    cases.append({"screen": "options_runs", "runs": oruns, "sel": 0, "pulse": 0, "prims": []})
     # ui_ratings_page as the game's own code draws it, run over menu1's RAM by
     # tools/mipsrun.py -- when that snapshot is here
     menu1 = os.path.join(ROOT, "out", "snap", "menu1.ram")
     if os.path.exists(menu1):
         import mipsrun
         ram = open(menu1, "rb").read()
+        # apply_control_scheme, the game's own, for every movement and action
+        # scheme: the fourteen slots it leaves
+        schemes = []
+        for move in range(7):
+            for action in range(4):
+                cpu = mipsrun.menu_cpu(ram)
+                cpu.ram[0x1B25E2], cpu.ram[0x1B25E3] = action, move
+                cpu.call(0x8001F4C0)
+                schemes.append({"move": move, "action": action,
+                                "slots": [cpu.rd(0x80081868 + 2 * k, 2) for k in range(14)]})
+        cases.append({"screen": "schemes", "schemes": schemes, "sel": 0, "pulse": 0,
+                      "prims": []})
         for off, dfn, prims in mipsrun.ratings_cases(ram):
             cases.append({"screen": "ratings", "offense": off, "defense": dfn,
                           "sel": 0, "pulse": 0, "prims": [[d, p] for d, p in prims],
                           "look": "menu1"})
-        for page in (1, 2):
-            for sel, pulse, prims in mipsrun.page_cases(ram, page, 2):
-                cases.append({"screen": "page", "page": page, "n": 2, "sel": sel,
+        for page, n in ((1, 2), (2, 2), (3, 5)):
+            for sel, pulse, prims in mipsrun.page_cases(ram, page, n):
+                cases.append({"screen": "page", "page": page, "n": n, "sel": sel,
                               "pulse": pulse, "prims": [[d, p] for d, p in prims],
                               "look": "menu1"})
     for ps in STATUS_CASES:
@@ -1660,6 +1879,7 @@ def check(out=sys.stdout, verbose=False):
     menus = check_menus(out, verbose)
     menus = panel_check(out) and menus
     menus = storage_check(out) and menus
+    menus = options_check(out) and menus
     e = exe()
     ok = bad = 0
     for name in ("inv1", "inv2"):

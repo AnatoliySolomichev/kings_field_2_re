@@ -90,6 +90,8 @@ const START_MOVE := 0
 const START_ACTION := 3
 
 static var binding := PackedInt32Array()
+static var move_type := START_MOVE      # 0x801b25e3, BUTTON CONFIG's movement scheme
+static var action_type := START_ACTION  # 0x801b25e2, its action scheme
 static var now := 0
 static var prev := 0
 
@@ -126,8 +128,10 @@ const PADS := {
 
 # 0x8001f4c0, the schemes into the slots. See START_MOVE for what the port
 # starts with.
-# @orig game:0x8001f4c0 apply_control_scheme  status:transcribed
-static func apply(move_type := START_MOVE, action_type := START_ACTION) -> void:
+# @orig game:0x8001f4c0 apply_control_scheme  status:verified -- 28 of 28 schemes fill the fourteen slots as the game's own run over menu1 does (the self-test, from tools/ui.py export_cases)
+static func apply(move := START_MOVE, action := START_ACTION) -> void:
+	move_type = move
+	action_type = action
 	binding = PackedInt32Array()
 	binding.resize(14)
 	var m: Array = MOVE_PRESETS[clampi(move_type, 0, MOVE_PRESETS.size() - 1)]

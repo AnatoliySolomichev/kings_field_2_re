@@ -1806,6 +1806,8 @@ func _menus() -> bool:
 	var bad := 0
 	var runs := 0
 	var runs_bad := 0
+	var schemes := 0
+	var schemes_bad := 0
 	var first := ""
 	for case in KFMenu.data["cases"]:
 		var lk := {"box": 0x78, "text": 0x80, "shadow": 0x30, "pulse": int(case["pulse"]),
@@ -1876,6 +1878,40 @@ func _menus() -> bool:
 					KFMenu.panel(o, lk, sl, 7 | 0x8000)
 					KFMenu.options(o, lk, int(case["prompt"]),
 						KFMenu.MOVE_WORD if int(case["which"]) == 1 else KFMenu.STORE_WORD)
+			"options":
+				KFMenu.options_page(o, lk, int(case["action"]), int(case["move"]), int(case["row"]))
+			"options_runs":
+				# pad words through button_config_press, against tools/ui.py's
+				for r in case["runs"]:
+					runs += 1
+					var st := {"action": int(r["start"]["action"]), "move": int(r["start"]["move"]),
+						"row": int(r["start"]["row"])}
+					var used := 0
+					var left := false
+					for press in r["presses"]:
+						used += 1
+						if KFMenu.button_config_press(st, int(press), 0x20):
+							left = true
+							break
+					if not (left == bool(r["left"]) and used == int(r["used"])
+							and int(st["action"]) == int(r["end"]["action"])
+							and int(st["move"]) == int(r["end"]["move"])
+							and int(st["row"]) == int(r["end"]["row"])):
+						runs_bad += 1
+						if first == "":
+							first = "button config run %s: godot %s, python %s" % [
+								str(r["presses"]), str(st), str(r["end"])]
+			"schemes":
+				# KFPad.apply against the game's own apply_control_scheme
+				for sc in case["schemes"]:
+					schemes += 1
+					KFPad.apply(int(sc["move"]), int(sc["action"]))
+					if Array(KFPad.binding) != sc["slots"].map(func(v): return int(v)):
+						schemes_bad += 1
+						if first == "":
+							first = "control scheme move %d action %d: godot %s, the game %s" % [
+								int(sc["move"]), int(sc["action"]), str(KFPad.binding), str(sc["slots"])]
+				KFPad.apply()
 			"storage_runs":
 				# pad words through storage_press, against tools/ui.py storage_run
 				for r in case["runs"]:
@@ -1915,7 +1951,7 @@ func _menus() -> bool:
 				else:
 					KFMenu.panel(o, lk, sl, 5 | 0x8000)
 					KFMenu.options(o, lk, int(case["prompt"]))
-		if str(case["screen"]) == "storage_runs":
+		if str(case["screen"]) in ["storage_runs", "options_runs", "schemes"]:
 			continue                                # runs, not a screen: counted above
 		var got := JSON.stringify(_norm(KFMenu.order(o)))
 		var want := JSON.stringify(_norm(case["prims"]))
@@ -1926,11 +1962,14 @@ func _menus() -> bool:
 				first = "%s sel %d: godot %s ... python %s ..." % [case["screen"], int(case["sel"]),
 					got.substr(0, 300), want.substr(0, 300)]
 	print("menus: %d of %d screens drawn as tools/ui.py draws them" % [n - bad, n])
-	print("menus: %d of %d runs of pad words through the storage as tools/ui.py runs them" % [
+	print("menus: %d of %d runs of pad words through the storage and BUTTON CONFIG as tools/ui.py runs them" % [
 		runs - runs_bad, runs])
-	if bad > 0 or runs_bad > 0:
+	if schemes > 0:
+		print("menus: %d of %d control schemes fill the slots as the game's own apply_control_scheme does" % [
+			schemes - schemes_bad, schemes])
+	if bad > 0 or runs_bad > 0 or schemes_bad > 0:
 		print("  first difference: " + first)
-	return bad == 0 and runs_bad == 0
+	return bad == 0 and runs_bad == 0 and schemes_bad == 0
 
 
 # @port check -- a primitive list with every number an int and every pair an array, for comparing

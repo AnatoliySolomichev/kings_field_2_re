@@ -3092,5 +3092,15 @@
   "kind": "code",
   "name": "ui_quantity",
   "evidence": "(a0): a plate at (0xb7, 0x2e) -- 0x4a with a0 1, after the gold (sub_80025e80) -- with QTY on it and gp+0x48 in two digits 0x54 to the right; ui_panel calls it with 0 for mode 7 (the storage) and 1 for modes 0xa, 0xb and 0xe (the shops). tools/ui.py quantity, 40 of 40 frames of mode 7 as the game's own ui_panel draws them"
+ },
+ "0x8001e484": {
+  "kind": "code",
+  "name": "menu_system",
+  "evidence": "pause_menu's sixth line, 'system': sub_800221e8 over page 3's five lines (LOAD, two OPTIONs, BUTTON CONFIG, QUIT GAME) under its title; sub_8001e710 for LOAD, whose 0 ends the menu with -3 (sub_800305d8 then runs save_loaded_fixup and the level's state), sub_8001ec84 and sub_8001f004 for the two OPTIONs, menu_button_config, and sub_8001f8b4 for QUIT GAME, whose 0 ends it with -2 (sub_800305d8 sets 0x8009c3f8 to 2) after a closing fade (sub_80061e00, sub_8001eb3c)"
+ },
+ "0x8001f31c": {
+  "kind": "code",
+  "name": "menu_button_config",
+  "evidence": "menu_system's fourth line, BUTTON CONFIG: the action scheme 0x801b25e2 (0..3) and the movement scheme 0x801b25e3 (0..6) in registers, UP/DOWN the row, LEFT/RIGHT the scheme held to its ends, options_screen every frame, and only the cancel leaves -- storing the two and running apply_control_scheme. tools/ui.py options_check runs it whole with the pad scripted: 120 of 120 runs as button_config_press"
  }
 }

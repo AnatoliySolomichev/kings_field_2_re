@@ -795,6 +795,12 @@ scripted pad word at a time, the drawing, the models and the guide stood in
 for -- against `storage_run` on random inventories, worn things and runs of
 words: how each ends, the words read, both inventories, the quantity and
 the cursor, 200 of 200, and the lists as they build them, 200 of 200.
+`options_check` holds BUTTON CONFIG the same way: `options_page` against
+the game's own `options_screen` for every scheme and row, 112 of 112
+frames, and `menu_button_config` run whole on scripted words against
+`button_config_press`, 120 of 120 runs. `export_cases` also runs the
+game's own `apply_control_scheme` for all 28 pairs of schemes, which the
+self-test holds `godot/pad.gd apply` to.
 
 ```
 python3 tools/ui.py            the use-item screen against both snapshots, both buffers

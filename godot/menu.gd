@@ -18,7 +18,7 @@ extends Control
 #
 # The world stands still while it is up (KFGame.modal). Not here yet: the
 # chosen thing's model turning in the "use item" screen (0x80025be8), the
-# guide pages (0x80024f88), "storage" and "system".
+# guide pages (0x80024f88), and four of "system"'s five lines.
 #
 # @exe game
 
@@ -90,6 +90,8 @@ var magic_cursor := 0               # gp+0x19: where the use-magic screen's curs
 var storage_sel := 0                # item_menu's line: store, take out
 var stash := {}                     # the storage's list while it is up
 var stash_cursor := [0, 0]          # gp+0x1a, gp+0x1b: where each of its lists was left
+var system_sel := 0                 # menu_system's line
+var config := {}                    # BUTTON CONFIG's schemes and row while it is up
 var prompt_sel := 0
 var equip_sel := 0                  # the equipment screen's line
 var records_sel := 0                # status/records' line: offense/defense, conversation
@@ -337,15 +339,26 @@ static func button(o: Dictionary, lk: Dictionary, x: int, y: int, b: int) -> voi
 	add(o, 6, sprite(x, y, int(r[4]), int(r[5]), int(r[2]) + (b << 4), int(r[3]), int(r[1]), grey(s0 + 0x70)))
 
 
-# @orig game:0x80026570 ui_small_text  status:verified -- tools/ui.py against inv1 and inv2; the shadowed form not checked
-static func small_text(o: Dictionary, lk: Dictionary, x: int, y: int, text: Array) -> void:
+# ui_small_text (x, y, ascii, shadow, row): lower-case ASCII in 8 x 8
+# letters, at depth 5 -- or, shadowed, in the text colour a pixel up and left
+# at depth 5 over the shadow's at depth 6; row 1 takes the letters 16 lower.
+# @orig game:0x80026570 ui_small_text  status:verified -- tools/ui.py against inv1 and inv2; the shadowed form through options_check, 112 of 112 frames of the game's own options_screen
+static func small_text(o: Dictionary, lk: Dictionary, x: int, y: int, text: Array,
+		shadow := 0, row := 0) -> void:
 	var r: Array = rec(SMALL_STYLE)
 	set_tpage(o, 6, int(r[0]))
 	var s0 := ((int(lk["bright"]) - 0x80) >> 1 if int(lk["bright"]) > 0x80 else 0) + 0x70
+	var s6 := 16 if row > 0 else 0
 	var i := 0
 	for ch in text:
 		var u := int(r[2]) + (int(ch) - 0x61) * int(r[4])
-		add(o, 5, sprite(x + 8 * i, y, int(r[4]), int(r[5]), u, int(r[3]), int(r[1]), grey(s0)))
+		if shadow == 0:
+			add(o, 5, sprite(x + 8 * i, y, int(r[4]), int(r[5]), u, int(r[3]) + s6, int(r[1]), grey(s0)))
+		else:
+			add(o, 5, sprite(x + 8 * i - 1, y - 1, int(r[4]), int(r[5]), u, int(r[3]) + s6,
+				int(r[1]), grey(int(lk["text"]))))
+			add(o, 6, sprite(x + 8 * i, y, int(r[4]), int(r[5]), u, int(r[3]) + s6,
+				int(r[1]), grey(int(lk["shadow"]))))
 		i += 1
 
 
@@ -753,6 +766,67 @@ static func prompt_press(sel: int, press: int, confirm: int, cancel: int) -> Arr
 	return [sel, null]
 
 
+# options_screen's two switches, read with their delay slots: for each
+# action scheme the word beside each of the four buttons, and for each
+# movement scheme the action beside each of the six after them
+const OPTION_ACTIONS := [[0, 1, 2, 3], [2, 1, 0, 3], [0, 3, 2, 1], [2, 3, 0, 1]]
+const OPTION_MOVES := [[0, 1, 2, 3, 4, 5], [1, 3, 0, 2, 4, 5], [0, 2, 1, 3, 4, 5],
+	[7, 1, 8, 3, 4, 6], [1, 3, 7, 8, 4, 6], [7, 8, 1, 3, 4, 6], [3, 0, 1, 2, 4, 5]]
+
+
+# options_screen, BUTTON CONFIG's page: buttons 0..3 at x 0x89 from y 0x31,
+# 14 apart, each with its word for the action scheme beside it at x 0x9b;
+# buttons 4..9 from y 0x6f with their actions for the movement scheme;
+# "action" and the action scheme's name, "move" and the movement scheme's --
+# all shadowed; the pulsing bar 0x35 x 0xf at x 0x37 on the row chosen; the
+# frame 0x102 x 0xb0 at (0x1f, 0x20); its own legend, button 9 "select" and
+# the cancel's "return".
+# @orig game:0x80023fd4 options_screen  status:verified -- tools/ui.py options_page, 112 of 112 frames of the game's own over menu1 (every scheme, both rows, two pulses; options_check); the self-test this to it
+static func options_page(o: Dictionary, lk: Dictionary, action: int, move: int, row: int) -> void:
+	var w: Dictionary = data["options"]
+	for i in 4:
+		button(o, lk, 0x89, 0x31 + 14 * i, i)
+		small_text(o, lk, 0x9B, 0x32 + 14 * i, w["buttons"][int(OPTION_ACTIONS[action][i])], 1, 0)
+	for i in 6:
+		button(o, lk, 0x89, 0x6F + 14 * i, 4 + i)
+		small_text(o, lk, 0x9B, 0x70 + 14 * i, w["actions"][int(OPTION_MOVES[move][i])], 1, 0)
+	small_text(o, lk, 0x32, 0x32, w["action"], 1, 0)
+	small_text(o, lk, 0x3A, 0x40, w["schemes"][action], 1, 0)
+	small_text(o, lk, 0x32, 0x70, w["move"], 1, 0)
+	small_text(o, lk, 0x3A, 0x7E, w["schemes"][move], 1, 0)
+	var c: Array = bar_colour(lk)
+	var r: Array = rec(RECORDS + 12 * 8)
+	add(o, 49, quad(0x37, 0x7A if row != 0 else 0x3C, 0x35, 0xF, int(r[2]), int(r[3]),
+		int(r[4]), int(r[5]), int(r[0]), int(r[1]),
+		int(c[0]) | (int(c[0]) << 8) | (int(c[1]) << 16), 1))
+	frame(o, lk, 0x1F, 0x20, 0x102, 0xB0)
+	button(o, lk, 0x5B, 0xD6, 9)
+	small_text(o, lk, 0x69, 0xD6, data["words"]["select"])
+	button(o, lk, 0xA0, 0xD6, int(lk["cancel"]))
+	small_text(o, lk, 0xAA, 0xD6, data["words"]["return"])
+
+
+# One pad word on BUTTON CONFIG: the cancel leaves; UP or DOWN turns between
+# the rows, the action scheme (0) and the movement scheme (1); LEFT lowers
+# the row's scheme and RIGHT raises it, held to 0..3 and 0..6. `st` holds
+# "action", "move", "row"; true when it leaves, the caller then storing the
+# two (0x801b25e2, e3) and running apply_control_scheme.
+# @orig game:0x8001f31c menu_button_config  status:partial -- the pad, verified: tools/ui.py button_config_press, 120 of 120 runs as the game's own runs them whole (options_check); the self-test this to it; not the sounds
+static func button_config_press(st: Dictionary, press: int, cancel: int) -> bool:
+	if press & cancel:
+		return true
+	if press & (UP | DOWN):
+		st["row"] = 1 if int(st["row"]) == 0 else 0
+	elif press & LEFT:
+		var k := "move" if int(st["row"]) != 0 else "action"
+		if int(st[k]) != 0:
+			st[k] = int(st[k]) - 1
+	elif press & RIGHT:
+		var k := "move" if int(st["row"]) != 0 else "action"
+		st[k] = mini(int(st[k]) + 1, 6 if int(st["row"]) != 0 else 3)
+	return false
+
+
 # The MAGIC line's list (0x8001d0c4): the attacking spells 0..0x16 unlocked,
 # their MP beside them in mode 4, and "TAKE OFF"; four rows from y 0x83, the
 # selection on magic A.
@@ -1065,7 +1139,7 @@ func _may_open() -> bool:
 
 # pause_menu's start (0x80027198 and its first frames): the world held, the
 # main page up.
-# @orig game:0x8001a774 pause_menu  status:partial -- the six lines, the status page behind them, "use item", "use magic", "equipment", "status/records" and "storage"; "system" (0x8001e484) answers nothing yet
+# @orig game:0x8001a774 pause_menu  status:partial -- the six lines, the status page behind them, "use item", "use magic", "equipment", "status/records", "storage" and "system" (BUTTON CONFIG alone of its five)
 func _open() -> void:
 	KFGame.modal = true
 	state = "main"
@@ -1091,6 +1165,7 @@ func _close() -> void:
 # @orig game:0x8001d8a4 menu_ratings  status:transcribed -- the ratings page until a button is pressed
 # @orig game:0x8001c540 menu_use_magic+0xb4  status:transcribed -- its loop: the chrome, the cursor into gp+0x19, ui_prompt(s, 0, 2, 0xff) and the spell handed back; not the guide (TRIANGLE, 0x80024f88) or the sounds
 # @orig game:0x8001dd94 item_menu  status:transcribed -- the storage's page: sub_800221e8 over page 2's two lines, a list for each, the cancel back to the main page
+# @orig game:0x8001e484 menu_system  status:partial -- the page: sub_800221e8 over page 3's five lines, BUTTON CONFIG, the cancel back to the main page; not LOAD (sub_8001e710), the two OPTION screens (sub_8001ec84, sub_8001f004) or QUIT GAME (sub_8001f8b4)
 func _step(press: int) -> void:
 	var confirm := 0x40 if int(look["confirm"]) == 3 else 0x20
 	var cancel := 0x20 if int(look["confirm"]) == 3 else 0x40
@@ -1118,6 +1193,9 @@ func _step(press: int) -> void:
 				elif main_sel == 4:
 					storage_sel = 0
 					state = "storage"
+				elif main_sel == 5:
+					system_sel = 0
+					state = "system"
 				else:
 					KFInfo.note("menu: line %d is not ported yet" % main_sel)
 			elif press & cancel:
@@ -1216,6 +1294,28 @@ func _step(press: int) -> void:
 				KFInfo.note("menu: %d of %d %s" % [int(stash["qty"]), end,
 					"stored" if storage_sel == 0 else "taken out"])
 				state = "storage"
+		"system":
+			# menu_system: sub_800221e8 over page 3's five lines
+			if press & UP:
+				system_sel = 4 if system_sel == 0 else system_sel - 1
+				moved = true
+			elif press & DOWN:
+				system_sel = 0 if system_sel == 4 else system_sel + 1
+				moved = true
+			elif press & confirm:
+				if system_sel == 3:
+					config = {"action": KFPad.action_type, "move": KFPad.move_type, "row": 0}
+					state = "button_config"
+				else:
+					KFInfo.note("menu: the system's line %d is not ported yet" % system_sel)
+			elif press & cancel:
+				state = "main"
+		"button_config":
+			if button_config_press(config, press, cancel):
+				KFPad.apply(int(config["move"]), int(config["action"]))
+				KFInfo.note("menu: control type %d, movement type %d" % [int(config["action"]),
+					int(config["move"])])
+				state = "system"
 		"ratings":
 			# sub_8001d8a4: the page until any button is pressed
 			if press != 0:
@@ -1426,6 +1526,10 @@ func _build() -> void:
 			menu_page(ot, look, 1, 2, records_sel)
 		"storage":
 			menu_page(ot, look, 2, 2, storage_sel)
+		"system":
+			menu_page(ot, look, 3, 5, system_sel)
+		"button_config":
+			options_page(ot, look, int(config["action"]), int(config["move"]), int(config["row"]))
 		"storage_list":
 			if int(stash["mode"]) == 1:
 				panel(ot, look, stash, 7 | 0x8000)
