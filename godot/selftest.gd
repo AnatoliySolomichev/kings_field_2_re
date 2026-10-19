@@ -1971,6 +1971,18 @@ func _menus() -> bool:
 						runs_bad += 1
 						if first == "":
 							first = "night %s: godot %s" % [str(h), str(got)]
+			"guide":
+				var inv := PackedByteArray(case["inventory"])
+				var gl := KFMenu.use_item_list(inv, 0)
+				var entry := KFMenu.guide_entry(int(case["kind"]), int(case["id"]), int(case["wis"]),
+					PackedByteArray(KFMenu.data["guide_require"]))
+				if entry != int(case["entry"]):
+					print("  guide: page %d, python's %d" % [entry, int(case["entry"])])
+					bad += 1
+				KFMenu.guide_frame(o, lk, gl, entry)
+				for depth in o:
+					for q in o[depth]:
+						(q as Dictionary).erase("image")
 			"box":
 				KFMenu.message_box(o, lk, int(case["title"]), case["lines"], 0x46, 0x57, 0xB2, 0x42,
 					int(case["legend"]))

@@ -103,6 +103,8 @@ var stall := {}                     # its list while it is up
 var sell_cursor := 0                # gp+0x89
 var inn := {}                       # the inn a conversation has opened: "n", "sel", "gold"
 var night_scene := -1               # the scene a night at the inn starts, or -1
+var guide := {}                     # the guide while it is up: its list, its page, the state it came from
+var guide_tex := {}                 # ITEM.T's pages, by entry
 var prompt_sel := 0
 var equip_sel := 0                  # the equipment screen's line
 var records_sel := 0                # status/records' line: offense/defense, conversation
@@ -1342,6 +1344,42 @@ static func inn_page(o: Dictionary, lk: Dictionary, n: int, sel: int, gold: int)
 		gold_readout(o, lk, gold)
 
 
+# The ITEM.T entry sub_80024f88 (list, kind, id) loads: kind 0, a thing's
+# description, 0x186 + id -- or 0x21c + id while the wise fruits' count
+# (0x801b2530) is under the thing's byte at 0x80081780; kind 1 a spell's,
+# 0x2b2 + id; kind 2 a thing's, 0x186 + id, whatever the count.
+# @orig game:0x80024f88 ui_guide  status:partial -- the page it picks and its frame, verified: tools/ui.py guide_entry and guide_frame, 12 of 12 against the game's own run over menu1 (guide_check); the self-test this to it; not the turning model, or kind 3's setting of the byte, which no caller asks for
+static func guide_entry(kind: int, ident: int, wis: int, require: PackedByteArray) -> int:
+	if kind == 0:
+		return ident + (0x21C if wis < int(require[ident]) else 0x186)
+	if kind == 1:
+		return ident + 0x2B2
+	return ident + 0x186
+
+
+# One frame of the guide: the list's title on its plate (when it has one),
+# ui_frame(0x1b, 0x70, 0x10a, 0x5f), the description -- the top 0xfe x 0x50 of
+# the page loaded at VRAM (960, 256), tpage 0x1f, CLUT 0x7806 -- in the text
+# colour at (0x20, 0x76), depth 0x1d, and in the shadow's a pixel down and
+# right, depth 0x1e; and the cancel button with "return". `entry` names the
+# page, which _draw takes from guide/<entry>.png.
+# @port helper -- sub_80024f88's frame (0x80025140 on), as tools/ui.py guide_frame
+static func guide_frame(o: Dictionary, lk: Dictionary, s: Dictionary, entry: int) -> void:
+	var style: Array = rec(LABEL_STYLE)
+	if int(s["tx"]) != 0:
+		label_plate(o, lk, rec(RECORDS + 12 * 2), int(s["tx"]), int(s["ty"]))
+		draw_label(o, lk, style, int(s["tx"]), int(s["ty"]), s["title"])
+	frame(o, lk, 0x1B, 0x70, 0x10A, 0x5F)
+	var q := quad(0x20, 0x76, 0xFE, 0x50, 0, 0, 0xFE, 0x50, 0x1F, 0x7806, grey(int(lk["text"])), 0)
+	q["image"] = entry
+	add(o, 0x1D, q)
+	var sh := quad(0x21, 0x77, 0xFE, 0x50, 0, 0, 0xFE, 0x50, 0x1F, 0x7806, grey(int(lk["shadow"])), 0)
+	sh["image"] = entry
+	add(o, 0x1E, sh)
+	button(o, lk, 0x80, 0xD6, int(lk["cancel"]))
+	small_text(o, lk, 0x8A, 0xD6, data["words"]["return"])
+
+
 # QUIT GAME's answers, immediates in its code
 const QUIT_YES := [0xAB, 0xA2, [0x18, 0x04, 0x12, 0xFF]]
 const QUIT_NO := [0xE5, 0xA2, [0x0D, 0x0E, 0xFF]]
@@ -1672,6 +1710,58 @@ func open_inn(n: int) -> void:
 	KFInfo.note("menu: inn %d" % (n & 0xF))
 
 
+# TRIANGLE on a list -- with neither SELECT nor START held, and no prompt up
+# -- opens the guide on the chosen row: each list's own call of sub_80024f88,
+# kind 0 for a thing, 1 for a spell, 2 buying; the BUTTON list's thing rows
+# 0 and its spell rows 1, and no row of "TAKE OFF". False when there is none.
+# @port helper -- the lists' calls of sub_80024f88 (menu_use_item 0x8001abf8, menu_use_magic 0x8001c604, ui_equip_page 0x8001cf14, the MAGIC and BUTTON lists 0x8001d2e8 and 0x8001d68c, the storage 0x8001e050 and 0x8001e320, the shops 0x80021478 and 0x800218ac)
+func _open_guide() -> bool:
+	var s := {}
+	var kind := 0
+	var ident := 0xFF
+	match state:
+		"use_item":
+			s = list
+		"use_magic":
+			s = spells
+			kind = 1
+		"equip_list":
+			s = chooser
+		"magic_list":
+			s = chooser
+			kind = 1
+		"button_list":
+			s = chooser
+			if int(s["count"]) > 0 and int(s["items"][int(s["sel"])]) == 0xFF:
+				kind = 1
+				ident = int(s["spells"][int(s["sel"])])
+		"storage_list":
+			if int(stash["mode"]) == 1:
+				return false
+			s = stash
+		"shop_list":
+			if int(stall["mode"]) == 1:
+				return false
+			s = stall
+			kind = 2 if bool(stall["buy"]) else 0
+		_:
+			return false
+	if int(s["count"]) == 0:
+		return false
+	if ident == 0xFF:
+		var ids: Array = s["items"] if state == "button_list" else s["ids"]
+		ident = int(ids[int(s["sel"])])
+	if ident == 0xFF:
+		return false
+	if KFGame.guide_require.is_empty():
+		KFGame.guide_require = PackedByteArray(data["guide_require"])
+	var wis := int(player.character.get("wis", 0))
+	guide = {"list": s, "entry": guide_entry(kind, ident, wis, KFGame.guide_require), "back": state}
+	state = "guide"
+	KFInfo.note("menu: the guide, ITEM.T %d" % int(guide["entry"]))
+	return true
+
+
 # @port helper -- shop n's stock: shop 0's the live one, the others' as the disc has them
 func _shop_stock(n: int) -> PackedByteArray:
 	if n == 0:
@@ -1700,6 +1790,8 @@ func _close() -> void:
 func _step(press: int) -> void:
 	var confirm := 0x40 if int(look["confirm"]) == 3 else 0x20
 	var cancel := 0x20 if int(look["confirm"]) == 3 else 0x40
+	if press & 0x10 and not (press & 0x900) and _open_guide():
+		return
 	match state:
 		"main":
 			if press & UP:
@@ -1962,6 +2054,10 @@ func _step(press: int) -> void:
 				_close()
 			elif a == -1:
 				_close()
+		"guide":
+			# sub_80024f88's loop: the page up until the cancel
+			if press & cancel:
+				state = str(guide["back"])
 		"please_wait":
 			wait_left -= 1
 			if wait_left <= 0:
@@ -2161,6 +2257,26 @@ func _status() -> Dictionary:
 		"poison": player.poison, "gold": player.gold}
 
 
+# @port engine -- a quad drawn from an ITEM.T page the guide loaded (guide/<entry>.png), coloured as the GPU colours a texel
+func _draw_page(p: Dictionary, left: float, k: float) -> void:
+	var entry := int(p["image"])
+	if not guide_tex.has(entry):
+		var path := "res://guide/%d.png" % entry
+		guide_tex[entry] = load(path) if ResourceLoader.exists(path) else null
+	var t: Texture2D = guide_tex[entry]
+	if t == null:
+		return
+	var c := int(p["rgb"])
+	var col := Color(float(c & 0xFF) / 128.0, float((c >> 8) & 0xFF) / 128.0,
+		float((c >> 16) & 0xFF) / 128.0, 1.0)
+	var pts: Array = p["pts"]
+	var x0 := float(int(pts[0][0]))
+	var y0 := float(int(pts[0][1]))
+	var w := float(int(pts[1][0]) - int(pts[0][0]))
+	var h := float(int(pts[2][1]) - int(pts[0][1]))
+	draw_texture_rect_region(t, Rect2(left + x0 * k, y0 * k, w * k, h * k), Rect2(0, 0, w, h), col)
+
+
 # @port engine -- the screen up now, as primitives
 func _build() -> void:
 	ot = {}
@@ -2194,6 +2310,8 @@ func _build() -> void:
 			quit_page(ot, look, quit_sel)
 		"please_wait":
 			message_box(ot, look, 7, [PLEASE_WAIT], 0x46, 0x57, 0xB2, 0x42, 0)
+		"guide":
+			guide_frame(ot, look, guide["list"], int(guide["entry"]))
 		"shop":
 			menu_page(ot, look, 6, 2, shop_sel)
 		"inn":
@@ -2254,6 +2372,9 @@ func _draw() -> void:
 	var left := (vs.x - SCREEN_W * k) * 0.5
 	for e in order(ot):
 		var p: Dictionary = e[1]
+		if p.has("image"):
+			_draw_page(p, left, k)
+			continue
 		var key := "%d_%04x" % [int(p.get("tpage", 0)) & 0x7FF, int(p["clut"])]
 		if not tex.has(key):
 			continue

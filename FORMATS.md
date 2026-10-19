@@ -3502,6 +3502,28 @@ In the port the night is the dream (`tools/opening.py` transcodes the
 eighteen) and then the level's healing; the moves of states 7 and 9 are
 not there.
 
+### The guide
+
+TRIANGLE on a list, with neither SELECT nor START held, calls
+`sub_80024f88` (list, kind, id), and **the description is a picture**: an
+`ITEM.T` entry, read off the CD and loaded where the readable pages go (VRAM
+960, 256). Kind 0 -- the things in every list -- loads `0x186 + id`, but
+`0x21c + id`, a shorter one, while the wise fruits' count (`0x801b2530`) is
+under the thing's figure in the 150-byte table at `0x80081780` (which the
+save carries, and which level 1's sage, service `0x30`, sets to 4 for a
+thing he is asked about); kind 1 -- the spell lists, and the BUTTON list's
+spell rows -- `0x2b2 + id`; kind 2 -- buying -- `0x186 + id` whatever the
+count. Its frame is the list's title, `ui_frame(0x1b, 0x70, 0x10a, 0x5f)`,
+the top 0xfe x 0x50 of the page drawn twice from tpage 0x1f, CLUT 0x7806 --
+in the text colour at (0x20, 0x76), depth 0x1d, and in the shadow's a pixel
+down and right -- the thing's turning model for the kinds but 1, and the
+cancel button with "return"; it stays until the cancel. **Against the
+game's own code** over menu1 (`tools/ui.py guide_check`, the CD's read and
+the upload stood in for): the page asked for and the frame, 12 of 12, the
+count under, at and over the figure; always taking the long page fails
+two. `ui.py export_guide` writes the 331 pages the guide can load into
+`out/godot/guide/`.
+
 *Corrected in the port:* `_bob` set the bob to 0 whenever the player was
 off the ground. In `player_vertical` every path reaches `.L29`, which goes
 past the bob when `player_vstate` is not 0 and leaves it as it was; the

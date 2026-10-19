@@ -3187,5 +3187,15 @@
   "kind": "code",
   "name": "menu_inn",
   "evidence": "a conversation's service 0x4n (script_interpreter .L24): page 7, stay and do not stay, chosen with sub_800221e8; inn 0 shows the gold and charges 150 (refused with less), others are free; stay answers 0 and the interpreter starts scene n & 3 -- the night: a random dream \\DRM\\DXX.S and the level's own entry 7, which heals. tools/ui.py inn_check, 100 of 100 runs"
+ },
+ "0x80024f88": {
+  "kind": "code",
+  "name": "ui_guide",
+  "evidence": "(list, kind, id): TRIANGLE's description in every list -- ITEM.T entry 0x186 + id for a thing (0x21c + id while the wise fruits' count is under 0x80081780[id]), 0x2b2 + id for a spell (kind 1), 0x186 + id buying (kind 2); read off the CD into VRAM (960, 256) and drawn twice from tpage 0x1f, CLUT 0x7806, in a frame under the list's title, with the turning model and return, until the cancel. tools/ui.py guide_check, 12 of 12"
+ },
+ "0x80081780": {
+  "kind": "data",
+  "name": "guide_require",
+  "evidence": "150 bytes: the wise fruits' count (0x801b2530) each thing's full description in the guide wants, else ui_guide shows the short one (ITEM.T 0x21c + id); the level 1 sage (0x80021aac) sets a thing's to 4; the save carries it"
  }
 }

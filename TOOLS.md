@@ -817,7 +817,9 @@ modes `0xd`, `0xa` and `0xb` against the game's own `ui_panel`, 45 of 45
 frames, and `shop_buy` and `shop_sell` run whole for all five shops, 200 of
 200 runs plus 5 of 5 aimed at shop 0's stock. `inn_check` holds the inn:
 its page 4 of 4, the inn run whole 100 of 100, and both levels' night
-hooks run out of their overlays, 24 of 24. `opening.py` now also transcodes
+hooks run out of their overlays, 24 of 24. `guide_check` holds the guide:
+the `ITEM.T` page `sub_80024f88` asks for and its frame, 12 of 12;
+`export_guide` writes the 331 pages into `out/godot/guide/`. `opening.py` now also transcodes
 the eighteen dreams, `\DRM\D00..D17.S`, into `out/godot/opening/`.
 
 ```

@@ -1693,6 +1693,7 @@ def project(lv, out="out/godot", start=(57, 4)):
     try:
         import ui
         ui.export(out)
+        ui.export_guide(out)
     except Exception as e:
         print(f"menu pages skipped: {e}")
     try:

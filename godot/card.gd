@@ -240,6 +240,8 @@ static func put(f: Dictionary) -> void:
 	KFGame.level = int(blk[0])
 	if f.has("items_80080718"):
 		KFGame.shop0 = (f["items_80080718"] as PackedByteArray).duplicate()
+	if f.has("items_80081780"):
+		KFGame.guide_require = (f["items_80081780"] as PackedByteArray).duplicate()
 	var flags: PackedByteArray = f["flags"]
 	KFTalk.flags = []
 	for v in flags:

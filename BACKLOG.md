@@ -584,8 +584,8 @@ Eating heals. Left, roughly in order:
   and 17, and the type-0xa2 locks), the flask, the truth glass, Ichrius'
   things and the spell books are not, nor the level's entry 2 (level 0's is
   empty, level 4's answers item 0x7b alone);
-* the chosen thing's model turning in "use item" (`0x80025be8`), the guide
-  (triangle: the thing's description), the maps and notes (95..100);
+* the chosen thing's model turning in the lists (`0x80025be8`), and the
+  maps and notes (95..100); the guide is in (FORMATS.md, "The guide");
 * "equipment" is in (FORMATS.md, "The equipment screen") but for its MAGIC
   and BUTTON lines (`0x8001d0c4`, `0x8001d3a0`), the thing's turning model
   and the guide; a bow in hand (weapons `0x1b`, `0x1c`) swings as a blade

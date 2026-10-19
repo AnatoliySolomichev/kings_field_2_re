@@ -202,10 +202,10 @@ the equipment tables, against a RAM snapshot           3264/3264, 2112/2112, 16/
                                                        player_recalc_stats 483 of
                                                        483 values over 21 snapshots
 the conversation hooks, two readings of one table      23 of 23
-the port against the game, function by function        701 of 701 placed: 400
-                                                       reproduce the game, 301 the
-                                                       port's own; 464 markers and
-                                                       869 cited addresses, every
+the port against the game, function by function        705 of 705 placed: 401
+                                                       reproduce the game, 304 the
+                                                       port's own; 465 markers and
+                                                       882 cited addresses, every
                                                        one resolving
 the object loader, against 13 snapshots                angles 4344/4352, scale and
                                                        position 4352/4352, opcode
@@ -246,6 +246,7 @@ the shops, against the game's own ui_panel,            45 of 45 frames; 200 of 2
 shop_buy and shop_sell over menu1                      runs, 5 of 5 aimed
 the inn, against the game's own and the levels' own   4 of 4 frames; 100 of 100
 night hooks run from their overlays                    runs; 24 of 24 heals
+the guide, against the game's own sub_80024f88        12 of 12 pages and frames
 the spells unlocked, against every snapshot            21 of 21
 Silviera's key on a pedestal, silv1 and silv2          7 of 7
 the drops, against the snapshots                       5 of 5 lying as the fall leaves
@@ -331,7 +332,7 @@ levels 40 of 40 · angles 400 of 400
 conversations 43 of 43, and 25 of 25 steps the emulator recorded
 damage 6 of 6 · knock-back 2484 of 2484 · weapon 2336 of 2336
 fences 600 of 600 · animation 540 of 540
-equipment 16 of 16 · menus 84 of 84, 256 of 256 storage, shop, inn,
+equipment 16 of 16 · menus 88 of 88, 256 of 256 storage, shop, inn,
 BUTTON CONFIG, OPTION and QUIT runs, heals and panel colours, 28 of 28 control schemes as the game's
 own apply_control_scheme
 directions 400 of 400

@@ -2727,6 +2727,127 @@ def inn_check(out=sys.stdout):
     return ok == n and ok2 == n2 and ok3 == n3
 
 
+# --- the guide: TRIANGLE's description -----------------------------------------
+
+GUIDE_REQUIRE = 0x80081780      # 150 bytes: the wise fruits' count a thing's full description wants
+
+
+def guide_entry(kind, ident, wis, require):
+    """The ITEM.T entry sub_80024f88 (list, kind, id) loads: kind 0, a
+    thing's description, 0x186 + id -- or 0x21c + id while the wise fruits'
+    count (0x801b2530) is under the thing's byte at 0x80081780; kind 1 a
+    spell's, 0x2b2 + id; kind 2 a thing's, 0x186 + id, whatever the count;
+    any other kind 0x186 + id, and it sets the thing's byte to 4."""
+    if kind == 0:
+        return ident + (0x21C if wis < require[ident] else 0x186)
+    if kind == 1:
+        return ident + 0x2B2
+    return ident + 0x186
+
+
+def guide_frame(f, look, e, s):
+    """One frame of the guide: the list's title on its plate (when the list
+    has one), ui_frame(0x1b, 0x70, 0x10a, 0x5f), the description -- the top
+    0xfe x 0x50 of the page it loaded at VRAM (960, 256), tpage 0x1f, CLUT
+    0x7806 -- drawn twice, in the text colour at (0x20, 0x76) at depth 0x1d
+    and in the shadow's a pixel down and right at depth 0x1e, and the cancel
+    button with "return". The chosen thing's turning model (kinds but 1) is
+    filed deeper than any of it and is not here."""
+    style = record(e, LABEL_STYLE)
+    if s["tx"] != 0:
+        title_plate(f, look, record(e, RECORDS + 12 * 2), s["tx"], s["ty"])
+        draw_label(f, look, style, s["tx"], s["ty"], s["title"])
+    frame(f, look, e, 0x1B, 0x70, 0x10A, 0x5F)
+    f.add(0x1D, quad(0x20, 0x76, 0xFE, 0x50, 0, 0, 0xFE, 0x50, 0x1F, 0x7806, rgb(look.text), 0))
+    f.add(0x1E, quad(0x21, 0x77, 0xFE, 0x50, 0, 0, 0xFE, 0x50, 0x1F, 0x7806, rgb(look.shadow), 0))
+    button(f, look, e, 0x80, 0xD6, look.cancel)
+    small_text(f, look, e, 0x8A, 0xD6, gp_string(e, 0x74))
+
+
+def game_guide(base, s, kind, ident, wis, require):
+    """sub_80024f88 run over `base` with the list laid in and the pad
+    answering the cancel at once, its read off the CD, upload and wait stood
+    in for: the entry it asked for, and the 2D primitives of its last frame."""
+    import gpuframe
+    import mipsrun
+    cpu = mipsrun.menu_cpu(base)
+    cpu.wr(0x801B2530, 2, wis)
+    o = GUIDE_REQUIRE & 0x1FFFFF
+    cpu.ram[o:o + 150] = bytes(require)
+    at = _lay_list(cpu.ram, s)
+    asked = []
+    cancel = cpu.rd(GP + 0x3C, 4)
+
+    def read_a(c):
+        asked.append(c.r[5])
+        return 0x800
+
+    def wait(c):
+        c.wr(GP + 0x1C, 4, 0)
+        return 0
+
+    cpu.hooks[0x80019CC4] = read_a                    # read_entry_a
+    cpu.hooks[0x8007910C] = wait                      # VSync: the read's wait ends
+    cpu.hooks[0x800194F0] = lambda c: 0x801F8000      # the buffer it reads into
+    for a in (0x80027D88, 0x80043B38, 0x80019518,     # read_entry_c, the upload, free_resource
+              0x80079D34, 0x80027E60, 0x80025BE8,     # ClearImage, sub_80027e60, the model
+              0x800270F8, 0x80027A40, 0x800279D8):    # frame_end, the pad's waits
+        cpu.hooks[a] = lambda c: 0
+    cpu.hooks[0x800279A4] = lambda c: cancel          # pad_read_latch: the cancel
+    cpu.call(0x80024F88, at, kind, ident)
+    return asked, mipsrun.two_d(gpuframe.frame(cpu.ram, cpu.ram[0x1AEAE8]))
+
+
+def guide_check(out=sys.stdout):
+    """The guide against the game's own code over menu1: the entry it loads
+    for each kind, a thing and a spell, with the wise fruits' count under,
+    at and over the thing's figure; and its frame, primitive for primitive."""
+    import random
+    path = os.path.join(ROOT, "out", "snap", "menu1.ram")
+    if not os.path.exists(path):
+        print("  no menu1 snapshot to run the guide over", file=out)
+        return True
+    e = exe()
+    base = bytearray(open(path, "rb").read())
+    rng = random.Random(0x9D)
+    require = list(e.bytes(GUIDE_REQUIRE, 150))
+    inv = [0] * 150
+    inv[0x68], inv[0x69] = 3, 1
+    ok = n = 0
+    first = None
+    for k in range(12):
+        kind = (0, 1, 2, 0)[k % 4]
+        ident = rng.randrange(0x1F) if kind == 1 else rng.choice((0x68, 0x69, 0x2A, rng.randrange(0x96)))
+        req = list(require)
+        req[ident] = rng.choice((0, 1, 2, 4))
+        wis = rng.choice((0, 1, 2, 3, 4))
+        names, counts, ids = item_list(e, inv)
+        lab = e.bytes(0x8007E67C + 4, 16)
+        s = {"tx": 0x1F if k % 3 else 0, "ty": 0x20, "title": list(lab), "x": 0x1B, "y": 0x93,
+             "rows": 3, "length": 0x18, "count": len(ids), "names": names,
+             "counts": counts + [0xFF], "costs": [-1] * len(ids), "ids": ids, "sel": 0,
+             "first": 0, "sel_row": 0}
+        asked, got = game_guide(base, s, kind, ident, wis, req)
+        look = Look(base)
+        f = Frame()
+        guide_frame(f, look, e, s)
+        want = [(d, p) for d, p in f.order()]
+        same = asked == [guide_entry(kind, ident, wis, req)] and got == want
+        n += 1
+        ok += same
+        if not same and first is None:
+            j = next((i for i, (a, b) in enumerate(zip(got, want)) if a != b), min(len(got), len(want)))
+            first = (f"kind {kind} id {ident:#x} wis {wis} req {req[ident]}: asked {asked}, model "
+                     f"{guide_entry(kind, ident, wis, req)}; {len(got)} primitives, the model "
+                     f"{len(want)}; at {j}: game {got[j] if j < len(got) else None} model "
+                     f"{want[j] if j < len(want) else None}")
+    print(f"  the guide as the game's own ui_guide picks its page and draws it over "
+          f"menu1: {ok} of {n} alike", file=out)
+    if first:
+        print("  first difference: " + first, file=out)
+    return ok == n
+
+
 def place(s, sel):
     """sub_80027728: the index held to the list, the first row shown and the
     bar's row."""
@@ -2797,6 +2918,27 @@ def pages_used(e):
     return sorted(out)
 
 
+def export_guide(out_dir):
+    """guide/<entry>.png: every ITEM.T page the guide can load -- the
+    things' descriptions (0x186 + id), their short ones (0x21c + id) and the
+    spells' (0x2b2 + id) -- as load_entry lays each in VRAM at (960, 256),
+    256 x 208, of which the guide draws the top 0xfe x 0x50."""
+    import readables
+    import tim
+    arc = readables.archive(6)
+    os.makedirs(os.path.join(out_dir, "guide"), exist_ok=True)
+    made = 0
+    for entry in list(range(0x186, 0x186 + 150)) + list(range(0x21C, 0x21C + 150)) + \
+            list(range(0x2B2, 0x2B2 + 0x1F)):
+        if entry + 1 >= len(arc.off):
+            continue
+        png = os.path.join(out_dir, "guide", f"{entry}.png")
+        if not os.path.exists(png):
+            tim.write_png(png, readables.PAGE_W, readables.PAGE_H, readables.page_entry(arc, entry))
+            made += 1
+    return made
+
+
 def export(out_dir):
     """ui.json and ui/ for godot/menu.gd: the descriptors, the label table,
     the item names, the legend's words, and every page the menus draw from
@@ -2836,6 +2978,9 @@ def export(out_dir):
            "names": [list(e.bytes(NAMES + 24 * i, 24)) for i in range(150)],
            "words": {"select": gp_string(e, 0x7C), "guide": gp_string(e, 0xA4),
                      "return": gp_string(e, 0x74)},
+           # the guide's table: the wise fruits' count each thing's full
+           # description wants
+           "guide_require": list(e.bytes(GUIDE_REQUIRE, 150)),
            # the five shops: their stock, their prices, what they pay, the row
            # each list opens at
            "shops": {"stock": list(e.bytes(SHOP_STOCK, 750)),
@@ -3131,6 +3276,22 @@ def export_cases(e):
                       list(night_heal(level, scene, hp, hp_max, mp, mp_max))])
     cases.append({"screen": "inn_runs", "runs": iruns, "heals": heals, "sel": 0, "pulse": 0,
                   "prims": []})
+    # the guide's frames and pages (which the game's own holds, guide_check)
+    require = list(e.bytes(GUIDE_REQUIRE, 150))
+    ginv = [0] * 150
+    ginv[0x68], ginv[0x69], ginv[0x6B] = 2, 1, 1
+    for kind, ident, wis, sel in ((0, 0x68, 0, 0), (0, 0x69, 4, 1), (1, 0x1D, 0, 0), (2, 0x6B, 2, 2)):
+        glook = Look()
+        names, counts, ids = item_list(e, ginv)
+        lab = e.bytes(0x8007E67C + 4, 16)
+        gl = {"tx": 0x1F, "ty": 0x20, "title": list(lab), "x": 0x1B, "y": 0x93, "rows": 3,
+              "length": 0x18, "count": len(ids), "names": names, "counts": counts + [0xFF],
+              "costs": [-1] * len(ids), "ids": ids, "sel": 0, "first": 0, "sel_row": 0}
+        f = Frame()
+        guide_frame(f, glook, e, gl)
+        cases.append({"screen": "guide", "kind": kind, "id": ident, "wis": wis,
+                      "entry": guide_entry(kind, ident, wis, require), "inventory": ginv,
+                      "sel": 0, "pulse": 0, "prims": [[d, p] for d, p in f.order()]})
     # the message box (which the game's own sub_8001eb3c holds, box_check)
     for title, lines, legend in ((7, [PLEASE_WAIT], 0), (6, [PLEASE_WAIT], 1)):
         blook = Look()
@@ -3389,6 +3550,7 @@ def check(out=sys.stdout, verbose=False):
     menus = load_check(out) and menus
     menus = shop_check(out) and menus
     menus = inn_check(out) and menus
+    menus = guide_check(out) and menus
     e = exe()
     ok = bad = 0
     for name in ("inv1", "inv2"):

@@ -68,6 +68,10 @@ static var sound := [0x80, 0x50, 0x80]
 # shop 0's stock (0x80080718, 150 bytes), which buying runs down and selling
 # fills -- the save carries it; empty until the menu's data gives the disc's
 static var shop0 := PackedByteArray()
+# the guide's table (0x80081780, 150 bytes): the wise fruits' count each
+# thing's full description wants -- level 1's sage sets a thing's to 4; the
+# save carries it; empty until the menu's data gives the disc's
+static var guide_require := PackedByteArray()
 # While the port follows the emulator (ghost.gd, C, with bp16 writing
 # live.txt): the creatures, the doors and the swing are the game's, laid over
 # the port's every frame, and their own machines stand still.
