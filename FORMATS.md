@@ -3336,7 +3336,13 @@ the pulsing bar on the chosen row, the frame, and a legend of its own.
 the page **112 of 112 frames** -- every scheme, both rows, two pulses --
 the screen run whole with the pad scripted, **120 of 120 runs**; and
 `apply_control_scheme` for all **28 of 28** pairs of schemes fills the
-fourteen slots as `godot/pad.gd apply` does (the self-test).
+fourteen slots as `godot/pad.gd apply` does (the self-test). It also sets
+**the menus' confirm and cancel** (`0x8001f858`): action schemes 0 and 1
+confirm with CIRCLE and cancel with CROSS -- the masks at `gp+0x38` and
+`gp+0x3c` 0x20 and 0x40, the icons at `+0x40` and `+0x44` 1 and 3 -- and
+schemes 2 and 3 the other way round; the port's menus had CROSS confirm
+whatever the scheme, and take it from the scheme now (28 of 28 against the
+game's own).
 
 **OPTION 2** (`menu_display`, `0x8001f004`; page 5) sets five bytes, in its
 rows' order: `hud_style` (`0x801b25dd`) and `compass_style` (`0x801b25de`),

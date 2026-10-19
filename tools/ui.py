@@ -3363,7 +3363,10 @@ def export_cases(e):
                 cpu.ram[0x1B25E2], cpu.ram[0x1B25E3] = action, move
                 cpu.call(0x8001F4C0)
                 schemes.append({"move": move, "action": action,
-                                "slots": [cpu.rd(0x80081868 + 2 * k, 2) for k in range(14)]})
+                                "slots": [cpu.rd(0x80081868 + 2 * k, 2) for k in range(14)],
+                                # and the menus' confirm and cancel: their masks
+                                # (gp+0x38, +0x3c) and icons (+0x40, +0x44)
+                                "menu": [cpu.rd(GP + o, 4) for o in (0x38, 0x3C, 0x40, 0x44)]})
         cases.append({"screen": "schemes", "schemes": schemes, "sel": 0, "pulse": 0,
                       "prims": []})
         for off, dfn, prims in mipsrun.ratings_cases(ram):

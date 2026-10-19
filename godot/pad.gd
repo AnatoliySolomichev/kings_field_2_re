@@ -92,6 +92,9 @@ const START_ACTION := 3
 static var binding := PackedInt32Array()
 static var move_type := START_MOVE      # 0x801b25e3, BUTTON CONFIG's movement scheme
 static var action_type := START_ACTION  # 0x801b25e2, its action scheme
+# the menus' confirm and cancel, as apply_control_scheme leaves them: the
+# masks (gp+0x38, +0x3c) and the buttons' icons (+0x40, +0x44)
+static var menu_buttons := [0x40, 0x20, 3, 1]
 static var now := 0
 static var prev := 0
 
@@ -128,7 +131,7 @@ const PADS := {
 
 # 0x8001f4c0, the schemes into the slots. See START_MOVE for what the port
 # starts with.
-# @orig game:0x8001f4c0 apply_control_scheme  status:verified -- 28 of 28 schemes fill the fourteen slots as the game's own run over menu1 does (the self-test, from tools/ui.py export_cases)
+# @orig game:0x8001f4c0 apply_control_scheme  status:verified -- 28 of 28 schemes fill the fourteen slots and the menus' four words (gp+0x38..0x44) as the game's own run over menu1 does (the self-test, from tools/ui.py export_cases)
 static func apply(move := START_MOVE, action := START_ACTION) -> void:
 	move_type = move
 	action_type = action
@@ -147,6 +150,9 @@ static func apply(move := START_MOVE, action := START_ACTION) -> void:
 		binding[slot] = ACTION_PRESETS[action_type][slot]
 	binding[MAP] = SELECT
 	binding[PAUSE] = START
+	# 0x8001f858: action schemes 0 and 1 confirm with CIRCLE and cancel with
+	# CROSS, 2 and 3 the other way round
+	menu_buttons = [0x20, 0x40, 1, 3] if action_type < 2 else [0x40, 0x20, 3, 1]
 
 
 # PadRead: one word, a set bit meaning pressed.

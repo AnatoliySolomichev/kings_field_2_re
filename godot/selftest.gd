@@ -2060,6 +2060,11 @@ func _menus() -> bool:
 				for sc in case["schemes"]:
 					schemes += 1
 					KFPad.apply(int(sc["move"]), int(sc["action"]))
+					if sc.has("menu") and Array(KFPad.menu_buttons) != sc["menu"].map(func(v): return int(v)):
+						schemes_bad += 1
+						if first == "":
+							first = "control scheme %d's menu buttons: godot %s, the game %s" % [
+								int(sc["action"]), str(KFPad.menu_buttons), str(sc["menu"])]
 					if Array(KFPad.binding) != sc["slots"].map(func(v): return int(v)):
 						schemes_bad += 1
 						if first == "":

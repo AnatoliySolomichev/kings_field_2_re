@@ -1788,8 +1788,11 @@ func _close() -> void:
 # @orig game:0x8001dd94 item_menu  status:transcribed -- the storage's page: sub_800221e8 over page 2's two lines, a list for each, the cancel back to the main page
 # @orig game:0x8001e484 menu_system  status:partial -- the page: sub_800221e8 over page 3's five lines, LOAD, OPTION 1, OPTION 2, BUTTON CONFIG and QUIT GAME, the cancel back to the main page; not the music's fade during QUIT GAME's "please wait"
 func _step(press: int) -> void:
-	var confirm := 0x40 if int(look["confirm"]) == 3 else 0x20
-	var cancel := 0x20 if int(look["confirm"]) == 3 else 0x40
+	# the confirm and the cancel as apply_control_scheme left them
+	look["confirm"] = int(KFPad.menu_buttons[2])
+	look["cancel"] = int(KFPad.menu_buttons[3])
+	var confirm := int(KFPad.menu_buttons[0])
+	var cancel := int(KFPad.menu_buttons[1])
 	if press & 0x10 and not (press & 0x900) and _open_guide():
 		return
 	match state:
