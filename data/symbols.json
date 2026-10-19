@@ -2936,7 +2936,7 @@
  "0x8002bdc0": {
   "name": "equip_weapon",
   "kind": "code",
-  "evidence": "(id): swing_pause 0xa, the weapon meter and swing strength 0, equipped_weapon = id; unless 0xff, held_item_record = weapon_table + 68*id, FDAT.T entry 0x62 + id read and installed as model_table[0x20], and a sound from a per-weapon byte table at 0x80011760; swing clock -1; with story flags 0x801ba9af and 0x801ba9b5, some spells' +0 set; player_recalc_stats. ui_equip_page and new_character call it"
+  "evidence": "(id): swing_pause 0xa, the weapon meter and swing strength 0, equipped_weapon = id; unless 0xff, held_item_record = weapon_table + 68*id, FDAT.T entry 0x62 + id read and installed as model_table[0x20], and a sound from a per-weapon byte table at 0x80011760; swing clock -1; with story flag 39 (0x801ba9af) the unlocked byte of spells 0x38, 0x3a, 0x3c, 0x3e, 0x40, 0x4c set, with flag 45 (0x801ba9b5) that of 0x36, 0x37, 0x42..0x4b -- the weapons' spells, which the hooks of levels 6 and 8 set first; player_recalc_stats. ui_equip_page and new_character call it"
  },
  "0x8002bb84": {
   "name": "equip_armour",

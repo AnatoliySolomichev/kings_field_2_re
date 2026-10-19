@@ -3719,11 +3719,48 @@ icons (below, "The menus, as they are drawn") name the five skills -- 0 fire,
 (*haze*) and 8 wind; how a skill's thresholds reach a group is
 `skill_unlock_list`'s, not yet read against the bits.
 
-Six of the 31 have no name, at 3, 10, 14, 18, 22 and 24 — the end of each group,
-so the elements have room for more spells than the game ships with. None of the
-six is in `skill_unlock`'s five lists, and nothing else in play sets a spell's
-unlocked byte (`game_main` zeroes the table, `init_level_state` copies it,
-`save_restore` puts it back), so the game never lists them.
+Six of the 31 have no name, at 3, 10, 14, 18, 22 and 24 — the end of each group.
+Four of them are shaped like spells and two are not: 3 is in the fire group with
+160 of fire for 21 MP (between *fire storm* and *flame*), 10 in *haze*'s group
+with 15 of water for 12, 14 in the wind group with 50 slash and 25 wind for 14,
+and 24 in the earth group with no attack at all for 11, shaped like the healing
+spells it sits among. Neither 18 nor 22 has a cost: 22 is in the `0x10` group
+with 80 blow and 80 earth, and 18 has no group and holds the numbers `0x4c`,
+`0x4f`, `0x4d`, `0x4e` -- records of the weapons' part, below -- where the others
+hold their attacks. **None of the six has any code.** Both switches on the
+spell's number send all six to the arms every spell without one shares:
+`player_action`'s `0x8002ce84` (35 numbers; a bare return, nothing spawned) and
+`cast_spell`'s `0x8002e3d4` (42; it only records `casting_spell`), and 24, which
+falls in `cast_spell`'s eight-arm condition switch, lands on `.L13`, the switch's
+own default. So one cast would take its MP and do nothing -- data for spells
+whose code is not in the game. None of the six is in `skill_unlock`'s five
+lists, and nothing else sets their unlocked byte, so the game never lists them.
+
+**The unlocked byte has other writers, for the weapons' spells.**
+`new_character` zeroes it on all 96 records and sets it on 29, *light*;
+`skill_unlock` sets it on the 25 its lists hold; and the weapons' spells, records
+`0x36..0x4c`, are set by the level's own code: **level 6** (the Forest of Varde),
+conversation entity 10 at pc 35 ("How about a lesson before you go?"), calls the
+hook arm `ov06:0x801e89b8`, which sets story flag 39 and records `0x38`, `0x3a`,
+`0x3c`, `0x3e`, `0x40` and `0x4c`; **level 8** (the Palace of the Wind), entity 0
+at pc 13, after "the techniques of swordsmanship…", calls `ov08:0x801e8838`, which
+sets flag 45 and `0x36`, `0x37` and `0x42..0x4b`. `equip_weapon` sets the same
+two groups again on every weapon put in hand while the flag is set
+(`0x801ba9af` is flag 39, `0x801ba9b5` flag 45). A weapon's record (68 bytes at
+`weapon_table`) names its two spells at `+3` and `+4`: with flag 39, *ryu-ga*
+`0x38`, *capricorn* `0x3a`, *anorium sword* `0x3e`, *vaculacia sword* `0x40` and
+*morguline axe* `0x4c`, one each; with flag 45, *excellector* `0x36`/`0x37`,
+*Seath's sword* `0x42`/`0x43`, *dark slayer* `0x45`/`0x44`, *triple fang*
+`0x46`/`0x47` and the two *moonlight swords* `0x48`/`0x49` and `0x4a`/`0x4b`.
+`0x3c` is unlocked with the first group and no weapon names it (weapon 10, the
+*groundal blade*, names none). `sub_8002cfe0` asks of the weapon in hand whether
+its spell's byte is set. None of these records is in the menus' lists, which
+stop at `0x1e`, and none has a name. In the port the weapons' magic is not yet
+(BACKLOG.md).
+
+*Corrected:* this paragraph said "nothing else in play sets a spell's unlocked
+byte", from a look at four of the sixteen routines that touch the table; it
+holds for the 31 the menus list, and not for the weapons' records.
 
 ### Casting: the buttons, cast_spell, and what keeps running
 

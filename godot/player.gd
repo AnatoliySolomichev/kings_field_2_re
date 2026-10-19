@@ -555,9 +555,11 @@ func _unhandled_input(e: InputEvent) -> void:
 # raised to the cap (0x3e7) and filled -- to try what the game gives late, on
 # level 0. The spells then stand in the MAGIC and BUTTON lists of the
 # equipment screen and in "use magic". "Every spell" is the 25 in
-# skill_unlock's five lists, the only thing in play that sets a spell's
-# unlocked byte: the six with no name (3, 10, 14, 0x12, 0x16, 0x18) are in
-# none, and the game never lists them.
+# skill_unlock's five lists, the only thing that sets the unlocked byte of one
+# the menus list (equip_weapon and the hooks of levels 6 and 8 set the
+# weapons' records, 0x36..0x4c, past the lists' end): the six with no name
+# (3, 10, 14, 0x12, 0x16, 0x18) are in none, have no code, and the game never
+# lists them.
 # @port check -- F11: every spell the game gives, and MP to spare
 func _learn_all() -> void:
 	var sp: Array = character.get("spells", KFLevels.new_spells())

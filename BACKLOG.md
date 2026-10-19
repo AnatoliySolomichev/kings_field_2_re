@@ -857,7 +857,9 @@ each one is also in its function's marker, as `partial` and what differs:
   push handed to its leader (the healing and protecting six are in), the
   drawing of everything with `+8 & 0xc` set -- the protecting marks and the
   sparkles, in front of the eye -- the weapons' magic (`0x36`..`0x4c`, `spell_begin`,
-  `held_item_tick`'s `0x801b25b2`), and the button's thing (`use_item` from
+  `held_item_tick`'s `0x801b25b2`, `sub_8002cfe0`; which weapon has which and
+  what unlocks them is read, FORMATS.md "The unlocked byte has other
+  writers"), and the button's thing (`use_item` from
   `0x8002ff28`). The equipment screen's MAGIC and BUTTON lines are in
   (light goes on the button: magic A lists the attacking spells alone); not
   their guide page or the spells' sound banks.
