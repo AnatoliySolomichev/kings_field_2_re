@@ -596,11 +596,15 @@ Eating heals. Left, roughly in order:
   MAGIC"), and "storage" but for the guide and the turning model
   (FORMATS.md, "STORAGE"); of "system" (`menu_system`) the page and BUTTON
   CONFIG are in (FORMATS.md, "SYSTEM"), but not LOAD (`sub_8001e710`, whose
-  0 ends the menu with -3, a load), the two OPTION screens (`sub_8001ec84`,
-  `sub_8001f004`) or QUIT GAME (`sub_8001f8b4`, whose 0 ends it with -2,
-  the title). The schemes chosen are not carried by a save in the port:
-  `save_loaded_fixup`'s `apply_control_scheme` is one of the things its
-  marker says it leaves out;
+  0 ends the menu with -3, a load), OPTION 1 (`menu_sound`: the sound
+  effects' and the music's volumes and the brightness -- the brightness
+  would reach the menus' colours and the panel's sprites) or QUIT GAME
+  (`sub_8001f8b4`, whose 0 ends it with -2, the title). OPTION 2 is in
+  (FORMATS.md, "OPTION 2"); its third switch, the lists' turning model, is
+  kept and does nothing until the model is ported. Neither the schemes nor
+  the five display bytes are carried by a save in the port: `save_restore`
+  writes `0x801b25dd..e0`, and `save_loaded_fixup`'s `apply_control_scheme`
+  is one of the things its marker says it leaves out;
 * `ui_menu_chrome`'s kind 1, the shops' gold check, and `ui_quantity(1)`
   with the gold (`sub_80025e80`) -- the shops' lists, modes 0xa, 0xb and
   0xe;

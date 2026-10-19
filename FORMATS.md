@@ -3338,6 +3338,44 @@ the screen run whole with the pad scripted, **120 of 120 runs**; and
 `apply_control_scheme` for all **28 of 28** pairs of schemes fills the
 fourteen slots as `godot/pad.gd apply` does (the self-test).
 
+**OPTION 2** (`menu_display`, `0x8001f004`; page 5) sets five bytes, in its
+rows' order: `hud_style` (`0x801b25dd`) and `compass_style` (`0x801b25de`),
+0..2, and three switches, 0 or 1 -- `0x801b25df`, which the lists' turning
+model of the chosen thing reads (`sub_80025be8` and its loader), `0x801b25e0`,
+the walking bob, and `0x801b25e4`, the menus' boxes clear or solid. A new
+character has 2, 2, 1, 1, 1 (`sub_8002b64c`). UP and DOWN go round the rows;
+the confirm, RIGHT or LEFT change the row's value -- the styles stepping 2, 1,
+0, 2 on the confirm and RIGHT and back on LEFT, the switches turned over --
+and only the cancel leaves, storing the five and calling `panel_colours`
+(`0x8001f274`), which sets the menus' colours: clear, boxes `0x78`, shadow
+`0x30`, text `0x80` plus half of what the brightness is over `0x80`; solid,
+boxes `0x57`, shadow `0x80`, text `0x30` less that half. The page is
+`sub_800252f4(5, 5, row, 1)` and `ui_display_values` (`0x800246bc`): the
+styles as three plates lettered A, B, C -- A lit for 2, B for 1, C for 0 --
+the switches as "on"/"off" ("clear"/"solid" on the last), the first lit for
+1. Two things in it were new to the model: **the values' lit plates pulse
+with `gp+0x50`**, a second counter `frame_begin` steps beside the
+selection's `gp+0x4c` and never puts back; and **`sub_800252f4`'s fourth
+argument is the legend** -- 0 the confirm button at `0x5f`, 1 button 9 at
+`0x5b` (the two OPTION pages), anything else no button (no caller). What the
+switches do: `render_frame` turns the panel's records 0..12 on with the
+style's bit 0 (style 1: HP and MP as bars, `48 * HP / HP max`, and the two
+meters over 48) and 15..29 with bit 1 (style 2, the digits), and compass
+record 0 with `compass_style`'s bit 0 and record 1 with its bit 1;
+`player_vertical` skips the bob when `0x801b25e0` is 0 (`.L31`, the bob 0).
+**Against the game's own code** over menu1 (`tools/ui.py display_check`):
+the page 72 of 72 frames, every value of the five, half of them with the
+panel solid in the colours `panel_colours` gives; the screen run whole on
+scripted words 120 of 120 runs; `panel_colours` 20 of 20 at both panels and
+ten brightnesses. OPTION 1 (`menu_sound`, `0x8001ec84`: sound effect, music,
+brightness, three sliders in steps of 3) is read, not ported.
+
+*Corrected in the port:* `_bob` set the bob to 0 whenever the player was
+off the ground. In `player_vertical` every path reaches `.L29`, which goes
+past the bob when `player_vstate` is not 0 and leaves it as it was; the
+zero was read without that branch, and it wiped what `_dying` adds to the
+bob while the player is thrown.
+
 `ui_menu_chrome`'s up and down (`0x800223a4`), which every list uses: the
 selection moves one and the bar with it, the rows shown moving only when the
 bar is at their edge; past either end it goes round, to the last (the rows

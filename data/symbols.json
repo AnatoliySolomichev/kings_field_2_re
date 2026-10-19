@@ -3102,5 +3102,25 @@
   "kind": "code",
   "name": "menu_button_config",
   "evidence": "menu_system's fourth line, BUTTON CONFIG: the action scheme 0x801b25e2 (0..3) and the movement scheme 0x801b25e3 (0..6) in registers, UP/DOWN the row, LEFT/RIGHT the scheme held to its ends, options_screen every frame, and only the cancel leaves -- storing the two and running apply_control_scheme. tools/ui.py options_check runs it whole with the pad scripted: 120 of 120 runs as button_config_press"
+ },
+ "0x8001f004": {
+  "kind": "code",
+  "name": "menu_display",
+  "evidence": "menu_system's third line, OPTION 2 (page 5: display hp/mp, display compass, display items, walking effect, panel): the five bytes 0x801b25dd, de, df, e0, e4 copied to its stack; UP/DOWN round the five rows, the confirm, RIGHT or LEFT change the row's value -- the two styles stepping 2, 1, 0 on the confirm and RIGHT and back on LEFT, the three switches turned over -- and only the cancel leaves, storing the five and calling panel_colours. sub_800252f4(5, 5, row, 1) and ui_display_values draw it. tools/ui.py display_check runs it whole with the pad scripted: 120 of 120 runs as display_press"
+ },
+ "0x800246bc": {
+  "kind": "code",
+  "name": "ui_display_values",
+  "evidence": "(values): OPTION 2's five values beside its lines -- the two styles as three plates (record 5) lettered A, B, C at x 0xab, 0xc7, 0xe3, A lit for 2, B for 1, C for 0; the three switches as two smaller plates (record 1), on/off, clear/solid on the last, the first lit for 1; the lit plates pulse with gp+0x50, not the selection's gp+0x4c. tools/ui.py display_values, 72 of 72 frames of the game's own"
+ },
+ "0x8001f274": {
+  "kind": "code",
+  "name": "panel_colours",
+  "evidence": "the menus' colours for the panel switch 0x801b25e4 and the brightness 0x801b25e1: clear (1) boxes gp+0x58 = 0x78, shadow gp+0x68 = 0x30, text gp+0x5c..0x64 = 0x80 + (brightness - 0x80) / 2; solid (0) boxes 0x57, shadow 0x80, text 0x30 less that half above 0x80. menu_display's end calls it. tools/ui.py panel_look, 20 of 20 against the game's own"
+ },
+ "0x8001ec84": {
+  "kind": "code",
+  "name": "menu_sound",
+  "evidence": "menu_system's second line, OPTION 1 (page 4: sound effect, music, brightness): three sliders 0..0x80 in steps of 3 -- 0x801b25db, 0x801b25dc + 1 (0 kept 0) and 0x801b25e1 + 0xc0 -- UP/DOWN round them, RIGHT and LEFT move one, a sound played as the first moves and the music's volume set (sub_800677e8) as the second does; the cancel stores them back and, with the panel clear, sets the text colours from the brightness. sub_800252f4(4, 3, row, 1) and sub_80024a78 draw it. Read, not in the port"
  }
 }

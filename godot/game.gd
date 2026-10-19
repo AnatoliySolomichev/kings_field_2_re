@@ -56,6 +56,12 @@ enum Exit { RUNNING = 0, TO_OPENING = 2, TO_ENDING_A = 3, TO_ENDING_B = 4 }
 # creatures, the doors and the effects stand still, and only render_frame's
 # part goes on (the banners, messages.gd).
 static var modal := false
+# OPTION 2's five bytes (0x801b25dd, de, df, e0, e4): the panel's style and
+# the compass's (0..2, a bit each for the two sets of records render_frame
+# switches on), the chosen thing's turning model in the menus' lists, the
+# walking bob, and the menus' boxes clear (1) or solid (0); a new
+# character's, sub_8002b64c
+static var display := [2, 2, 1, 1, 1]
 # While the port follows the emulator (ghost.gd, C, with bp16 writing
 # live.txt): the creatures, the doors and the swing are the game's, laid over
 # the port's every frame, and their own machines stand still.

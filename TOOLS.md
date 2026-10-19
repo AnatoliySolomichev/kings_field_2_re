@@ -800,7 +800,12 @@ the game's own `options_screen` for every scheme and row, 112 of 112
 frames, and `menu_button_config` run whole on scripted words against
 `button_config_press`, 120 of 120 runs. `export_cases` also runs the
 game's own `apply_control_scheme` for all 28 pairs of schemes, which the
-self-test holds `godot/pad.gd apply` to.
+self-test holds `godot/pad.gd apply` to. `display_check` holds OPTION 2:
+`display_page` against the game's own `sub_800252f4` and
+`ui_display_values` for every value of the five, half with the panel solid,
+72 of 72 frames (the second pulse, `gp+0x50`, laid in beside the first);
+`menu_display` run whole on scripted words against `display_press`, 120 of
+120 runs; and `panel_colours` against `panel_look`, 20 of 20.
 
 ```
 python3 tools/ui.py            the use-item screen against both snapshots, both buffers

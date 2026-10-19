@@ -202,10 +202,10 @@ the equipment tables, against a RAM snapshot           3264/3264, 2112/2112, 16/
                                                        player_recalc_stats 483 of
                                                        483 values over 21 snapshots
 the conversation hooks, two readings of one table      23 of 23
-the port against the game, function by function        671 of 671 placed: 378
-                                                       reproduce the game, 293 the
-                                                       port's own; 436 markers and
-                                                       844 cited addresses, every
+the port against the game, function by function        677 of 677 placed: 382
+                                                       reproduce the game, 295 the
+                                                       port's own; 443 markers and
+                                                       855 cited addresses, every
                                                        one resolving
 the object loader, against 13 snapshots                angles 4344/4352, scale and
                                                        position 4352/4352, opcode
@@ -234,6 +234,8 @@ the storage, against the game's own menu_store and    200 of 200 runs of scripte
 menu_take_out run whole over menu1                     pad words; 200 of 200 lists
 BUTTON CONFIG, against the game's own options_screen   112 of 112 frames; 120 of
 and menu_button_config over menu1                      120 runs of scripted words
+OPTION 2, against the game's own sub_800252f4,         72 of 72 frames; 120 of 120
+ui_display_values, menu_display and panel_colours      runs; 20 of 20 colour sets
 the spells unlocked, against every snapshot            21 of 21
 Silviera's key on a pedestal, silv1 and silv2          7 of 7
 the drops, against the snapshots                       5 of 5 lying as the fall leaves
@@ -319,8 +321,9 @@ levels 40 of 40 · angles 400 of 400
 conversations 43 of 43, and 25 of 25 steps the emulator recorded
 damage 6 of 6 · knock-back 2484 of 2484 · weapon 2336 of 2336
 fences 600 of 600 · animation 540 of 540
-equipment 16 of 16 · menus 64 of 64, 80 of 80 storage and BUTTON CONFIG
-runs, 28 of 28 control schemes as the game's own apply_control_scheme
+equipment 16 of 16 · menus 68 of 68, 130 of 130 storage, BUTTON CONFIG
+and OPTION 2 runs and panel colours, 28 of 28 control schemes as the game's
+own apply_control_scheme
 directions 400 of 400
 routines 14458 of 14458
 saves 45 of 45 · level states 46 of 46 streams, 958 of 958 things made,

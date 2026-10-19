@@ -25,6 +25,7 @@ const TICK_HZ := 15.0
 
 var doc := {}
 var rec := {}
+var style := -1                    # compass_style (0x801b25de) as the record was last picked by it
 var trig := PackedInt32Array()
 var tex := {}                      # png -> Texture2D
 var yaw := 0                       # the record's +0x1a
@@ -46,17 +47,29 @@ func _ready() -> void:
 		return
 	doc = d
 	trig = PackedInt32Array(d["trig"])
-	# compass_style 2, which a new character has: the second record
-	for r in d["records"]:
-		if int(r["index"]) == 1:
-			rec = r
+	_pick(int(KFGame.display[1]))
 	for f in d["faces"]:
 		if not tex.has(f["png"]):
 			tex[f["png"]] = load("res://" + str(f["png"]))
 
 
-# @port engine -- runs _swing at the game's 15 frames a second, and redraws
+# render_frame (0x8004233c): compass_style's bit 0 switches compass record 0
+# on, its bit 1 record 1 -- style 2, a new character's, the second; OPTION 2
+# turns it to 1, the first, or 0, neither.
+# @orig game:0x8004233c render_frame+0x84  status:transcribed -- compass_style's two bits over the records' +0
+func _pick(to: int) -> void:
+	style = to
+	rec = {}
+	for r in doc.get("records", []):
+		if (style & 2 and int(r["index"]) == 1) or (not (style & 2) and style & 1 and int(r["index"]) == 0):
+			rec = r
+	queue_redraw()
+
+
+# @port engine -- runs _swing at the game's 15 frames a second, and redraws; the record again when OPTION 2 has changed the style
 func _process(dt: float) -> void:
+	if not doc.is_empty() and int(KFGame.display[1]) != style:
+		_pick(int(KFGame.display[1]))
 	if rec.is_empty() or player == null:
 		return
 	acc = minf(acc + dt, 0.25)

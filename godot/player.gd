@@ -2473,10 +2473,17 @@ static func _signed(a: int) -> int:
 
 # 0x8002f298, the tail of player_vertical: the phase walks forward by the
 # magnitude of the step and the lift is three quarters of |sin| shifted down by
-# five, so it peaks at 96 units and never goes negative. Grounded only.
+# five, so it peaks at 96 units and never goes negative. Grounded only: in the
+# air (.L29) every path goes past it and the bob stays as it is -- the port
+# had it 0 there, read without the branch, which wiped what _dying adds to it
+# while the player is thrown -- and with OPTION 2's walking effect off
+# (0x801b25e0) it is 0 (.L31).
+# @orig game:0x8002f270 player_vertical+0x510  status:transcribed -- .L29: the state and the walking effect tested before the bob
 # @orig game:0x8002f298 player_bob  status:transcribed -- a label inside player_vertical, not a routine of its own
 func _bob(mag: int) -> void:
 	if vstate != 0:
+		return
+	if int(KFGame.display[3]) == 0:
 		bob = 0
 		return
 	bob_phase = (bob_phase + mag) & 0xFFF

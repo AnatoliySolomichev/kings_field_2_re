@@ -18,7 +18,7 @@ extends Control
 #
 # The world stands still while it is up (KFGame.modal). Not here yet: the
 # chosen thing's model turning in the "use item" screen (0x80025be8), the
-# guide pages (0x80024f88), and four of "system"'s five lines.
+# guide pages (0x80024f88), and three of "system"'s five lines.
 #
 # @exe game
 
@@ -81,7 +81,7 @@ static var data := {}
 var tex := {}                       # "tpage_clut" -> [solid, semi]
 var ot := {}                        # the screen being drawn: depth -> [prim]
 var look := {"box": 0x78, "text": 0x80, "shadow": 0x30, "pulse": 0,
-	"confirm": 3, "cancel": 1, "semi": 1, "bright": 0x80}
+	"confirm": 3, "cancel": 1, "semi": 1, "bright": 0x80, "pulse2": 0}
 var state := ""                     # "", "main", "use_item", "prompt", "use_magic", "use_magic_prompt", "equip", ...
 var main_sel := 0
 var list := {}                      # the use-item screen's list
@@ -92,6 +92,7 @@ var stash := {}                     # the storage's list while it is up
 var stash_cursor := [0, 0]          # gp+0x1a, gp+0x1b: where each of its lists was left
 var system_sel := 0                 # menu_system's line
 var config := {}                    # BUTTON CONFIG's schemes and row while it is up
+var display := {}                   # OPTION 2's five values and row while it is up
 var prompt_sel := 0
 var equip_sel := 0                  # the equipment screen's line
 var records_sel := 0                # status/records' line: offense/defense, conversation
@@ -254,9 +255,14 @@ static func bar_colour(lk: Dictionary) -> Array:
 	return [b + 0x5F - a, b + 0x2F - (a >> 1)]
 
 
+# sub_80026020 (rec, label, pulse): a plate in the pulsing colour -- of the
+# selection's pulse (gp+0x4c) for every caller but ui_display_values, which hands
+# it the second (gp+0x50, lk["pulse2"]).
 # @orig game:0x80026020 sub_80026020  status:transcribed
-static func lit_plate(o: Dictionary, lk: Dictionary, r: Array, x: int, y: int) -> void:
+static func lit_plate(o: Dictionary, lk: Dictionary, r: Array, x: int, y: int, pulse := -1) -> void:
 	var c: Array = bar_colour(lk)
+	if pulse >= 0:
+		c = bar_colour({"pulse": pulse, "box": lk["box"]})
 	add(o, 50, quad(x - 6, y - 6, int(r[4]), int(r[5]), int(r[2]), int(r[3]), int(r[4]), int(r[5]),
 		int(r[0]), int(r[1]), int(c[0]) | (int(c[0]) << 8) | (int(c[1]) << 16), int(lk["semi"])))
 
@@ -827,6 +833,103 @@ static func button_config_press(st: Dictionary, press: int, cancel: int) -> bool
 	return false
 
 
+# ui_display_values's words, immediates in its code: the three plates' letters,
+# and "on"/"off" -- "clear"/"solid" on the last row
+const STYLE_LETTERS := [[0x00, 0xFF], [0x01, 0xFF], [0x02, 0xFF]]
+const WORD_ON := [0x7F, 0x7F, 0x0E, 0x0D, 0xFF]
+const WORD_OFF := [0x7F, 0x7F, 0x0E, 0x05, 0x05, 0xFF]
+const WORD_CLEAR := [0x02, 0x0B, 0x04, 0x00, 0x11, 0xFF]
+const WORD_SOLID := [0x12, 0x0E, 0x0B, 0x08, 0x03, 0xFF]
+
+
+# ui_display_values (0x800246bc), OPTION 2's five values beside its lines: the two styles, rows
+# at y 0x3a and 0x54, three plates (record 5) at x 0xab, 0xc7 and 0xe3
+# lettered A, B, C -- A lit for 2, B for 1, C for 0 -- each letter 4 right of
+# its plate's place; the three switches, from y 0x6e 26 apart, two smaller
+# plates (record 1) at 0xab and 0xe5, "on" and "off" ("clear" and "solid" on
+# the last), the first lit for 1. The lit plates pulse with gp+0x50.
+# @orig game:0x800246bc ui_display_values  status:verified -- tools/ui.py display_values, 72 of 72 frames of the game's own over menu1, half with the panel solid (display_check); the self-test this to it
+static func display_values(o: Dictionary, lk: Dictionary, values: Array) -> void:
+	var style: Array = rec(LABEL_STYLE)
+	var big: Array = rec(RECORDS + 12 * 5)
+	var small: Array = rec(RECORDS + 12 * 1)
+	var y := 0x3A
+	for row in 2:
+		var v := int(values[row])
+		var lit := 0 if v == 2 else (1 if v == 1 else 2)
+		var i := 0
+		for x in [0xAB, 0xC7, 0xE3]:
+			if i == lit:
+				lit_plate(o, lk, big, x, y, int(lk["pulse2"]))
+				draw_label(o, lk, style, x + 4, y, STYLE_LETTERS[i])
+			else:
+				label_plate(o, lk, big, x, y)
+				dim_label(o, lk, style, x + 4, y, STYLE_LETTERS[i])
+			i += 1
+		y += 0x1A
+	for row in 3:
+		var one: Array = WORD_CLEAR if row == 2 else WORD_ON
+		var two: Array = WORD_SOLID if row == 2 else WORD_OFF
+		if int(values[2 + row]) == 1:
+			lit_plate(o, lk, small, 0xAB, y, int(lk["pulse2"]))
+			draw_label(o, lk, style, 0xAB, y, one)
+			label_plate(o, lk, small, 0xE5, y)
+			dim_label(o, lk, style, 0xE5, y, two)
+		else:
+			label_plate(o, lk, small, 0xAB, y)
+			dim_label(o, lk, style, 0xAB, y, one)
+			lit_plate(o, lk, small, 0xE5, y, int(lk["pulse2"]))
+			draw_label(o, lk, style, 0xE5, y, two)
+		y += 0x1A
+
+
+# OPTION 2's frame: sub_800252f4(5, 5, row, 1) -- page 5's five lines, the
+# row chosen lit, button 9's legend -- and the values beside them.
+# @port helper -- the two calls of OPTION 2's frame (0x8001f1e0)
+static func display_page(o: Dictionary, lk: Dictionary, values: Array, row: int) -> void:
+	menu_page(o, lk, 5, 5, row, 1)
+	display_values(o, lk, values)
+
+
+# One pad word on OPTION 2: UP and DOWN move round the five rows; the
+# confirm, RIGHT or LEFT change the row's value -- the two styles stepping 2,
+# 1, 0, 2 on the confirm and RIGHT and the other way on LEFT, the three
+# switches turned over by any of them -- and the cancel leaves. `st` holds
+# "values" (five) and "row"; true when it leaves, the caller then storing the
+# five and running panel_colours.
+# @orig game:0x8001f004 menu_display  status:partial -- the pad, verified: tools/ui.py display_press, 120 of 120 runs as the game's own runs them whole (display_check); the self-test this to it; not the sounds
+static func display_press(st: Dictionary, press: int, confirm: int, cancel: int) -> bool:
+	var v: Array = st["values"]
+	var r := int(st["row"])
+	if press & UP:
+		st["row"] = 4 if r == 0 else r - 1
+	elif press & DOWN:
+		st["row"] = 0 if r == 4 else r + 1
+	elif press & (confirm | RIGHT | LEFT):
+		if r >= 2:
+			v[r] = 1 if int(v[r]) < 1 else 0
+		elif press & (confirm | RIGHT):
+			v[r] = 2 if int(v[r]) == 0 else int(v[r]) - 1
+		else:
+			v[r] = 0 if int(v[r]) == 2 else int(v[r]) + 1
+	elif press & cancel:
+		return true
+	return false
+
+
+# panel_colours (0x8001f274): the menus' colours for the panel's switch (0x801b25e4) and the
+# brightness (0x801b25e1) -- clear (1): boxes 0x78, the shadow 0x30, the text
+# 0x80 plus half what the brightness is over 0x80; solid (0): boxes 0x57, the
+# shadow 0x80, the text 0x30 less that half. The halving rounds toward zero.
+# @orig game:0x8001f274 panel_colours  status:verified -- tools/ui.py panel_look, 20 of 20 colour sets as the game's own leaves gp+0x58..0x68 (display_check); the self-test this to it
+static func panel_look(semi: int, bright: int) -> Dictionary:
+	var d := bright - 0x80
+	var half := -((-d) >> 1) if d < 0 else d >> 1
+	if semi == 0:
+		return {"box": 0x57, "text": 0x30 - half if bright >= 0x81 else 0x30, "shadow": 0x80}
+	return {"box": 0x78, "text": half + 0x80, "shadow": 0x30}
+
+
 # The MAGIC line's list (0x8001d0c4): the attacking spells 0..0x16 unlocked,
 # their MP beside them in mode 4, and "TAKE OFF"; four rows from y 0x83, the
 # selection on magic A.
@@ -926,8 +1029,12 @@ static func options(o: Dictionary, lk: Dictionary, sel: int, word: Array = USE_W
 
 # sub_800252f4: a page of the menu's lines on their plates, the chosen one lit,
 # and the two-button legend. Page 0 is the menu itself, with no title.
+# The legend by the fourth argument (0x800253c4): 0 the confirm button at
+# 0x5f, 1 button 9 at 0x5b (OPTION 1 and 2), anything else none (no caller
+# passes one); "select", then the cancel button and "return", each time.
 # @orig game:0x800252f4 sub_800252f4  status:transcribed
-static func menu_page(o: Dictionary, lk: Dictionary, page: int, n: int, sel: int) -> void:
+static func menu_page(o: Dictionary, lk: Dictionary, page: int, n: int, sel: int,
+		legend_mode := 0) -> void:
 	var style: Array = rec(LABEL_STYLE)
 	var plate: Array = rec(RECORDS + 12 * 2)
 	var title: Array = data["page_minus"] if page == 0 else data["labels"][page - 1][8]
@@ -944,7 +1051,14 @@ static func menu_page(o: Dictionary, lk: Dictionary, page: int, n: int, sel: int
 		else:
 			label_plate(o, lk, plate, x, y)
 			dim_label(o, lk, style, x, y, line[2])
-	legend(o, lk, true)
+	if legend_mode == 0:
+		legend(o, lk, true)
+		return
+	if legend_mode == 1:
+		button(o, lk, 0x5B, 0xD6, 9)
+	small_text(o, lk, 0x69, 0xD6, data["words"]["select"])
+	button(o, lk, 0xA0, 0xD6, int(lk["cancel"]))
+	small_text(o, lk, 0xAA, 0xD6, data["words"]["return"])
 
 
 # ui_status_page (0x800227ec), behind the main page every frame: experience,
@@ -1121,10 +1235,12 @@ func _process(dt: float) -> void:
 
 
 # frame_begin (0x80026fe4): the chosen row's pulse goes round 0..0x5f, one a
-# frame, and starts again from 0x30 when the choice has just moved (gp+0x54).
+# frame, and starts again from 0x30 when the choice has just moved (gp+0x54);
+# the second (gp+0x50) goes round beside it and is never put back.
 # @orig game:0x80027090 frame_begin+0xac  status:transcribed
 func pulse_step() -> void:
 	look["pulse"] = (int(look["pulse"]) + 1) % 0x60
+	look["pulse2"] = (int(look["pulse2"]) + 1) % 0x60
 	if moved:
 		look["pulse"] = 0x30
 		moved = false
@@ -1139,7 +1255,7 @@ func _may_open() -> bool:
 
 # pause_menu's start (0x80027198 and its first frames): the world held, the
 # main page up.
-# @orig game:0x8001a774 pause_menu  status:partial -- the six lines, the status page behind them, "use item", "use magic", "equipment", "status/records", "storage" and "system" (BUTTON CONFIG alone of its five)
+# @orig game:0x8001a774 pause_menu  status:partial -- the six lines, the status page behind them, "use item", "use magic", "equipment", "status/records", "storage" and "system" (OPTION 2 and BUTTON CONFIG of its five)
 func _open() -> void:
 	KFGame.modal = true
 	state = "main"
@@ -1165,7 +1281,7 @@ func _close() -> void:
 # @orig game:0x8001d8a4 menu_ratings  status:transcribed -- the ratings page until a button is pressed
 # @orig game:0x8001c540 menu_use_magic+0xb4  status:transcribed -- its loop: the chrome, the cursor into gp+0x19, ui_prompt(s, 0, 2, 0xff) and the spell handed back; not the guide (TRIANGLE, 0x80024f88) or the sounds
 # @orig game:0x8001dd94 item_menu  status:transcribed -- the storage's page: sub_800221e8 over page 2's two lines, a list for each, the cancel back to the main page
-# @orig game:0x8001e484 menu_system  status:partial -- the page: sub_800221e8 over page 3's five lines, BUTTON CONFIG, the cancel back to the main page; not LOAD (sub_8001e710), the two OPTION screens (sub_8001ec84, sub_8001f004) or QUIT GAME (sub_8001f8b4)
+# @orig game:0x8001e484 menu_system  status:partial -- the page: sub_800221e8 over page 3's five lines, OPTION 2 and BUTTON CONFIG, the cancel back to the main page; not LOAD (sub_8001e710), OPTION 1 (menu_sound) or QUIT GAME (sub_8001f8b4)
 func _step(press: int) -> void:
 	var confirm := 0x40 if int(look["confirm"]) == 3 else 0x20
 	var cancel := 0x20 if int(look["confirm"]) == 3 else 0x40
@@ -1306,10 +1422,25 @@ func _step(press: int) -> void:
 				if system_sel == 3:
 					config = {"action": KFPad.action_type, "move": KFPad.move_type, "row": 0}
 					state = "button_config"
+				elif system_sel == 2:
+					display = {"values": KFGame.display.duplicate(), "row": 0}
+					state = "display"
 				else:
 					KFInfo.note("menu: the system's line %d is not ported yet" % system_sel)
 			elif press & cancel:
 				state = "main"
+		"display":
+			var was := int(display["row"])
+			if display_press(display, press, confirm, cancel):
+				# menu_display's end: the five stored, and panel_colours
+				KFGame.display = (display["values"] as Array).duplicate()
+				var semi := int(KFGame.display[4])
+				look.merge(panel_look(semi, int(look["bright"])), true)
+				look["semi"] = semi
+				KFInfo.note("menu: display %s" % str(KFGame.display))
+				state = "system"
+			elif int(display["row"]) != was:
+				moved = true
 		"button_config":
 			if button_config_press(config, press, cancel):
 				KFPad.apply(int(config["move"]), int(config["action"]))
@@ -1530,6 +1661,8 @@ func _build() -> void:
 			menu_page(ot, look, 3, 5, system_sel)
 		"button_config":
 			options_page(ot, look, int(config["action"]), int(config["move"]), int(config["row"]))
+		"display":
+			display_page(ot, look, display["values"], int(display["row"]))
 		"storage_list":
 			if int(stash["mode"]) == 1:
 				panel(ot, look, stash, 7 | 0x8000)

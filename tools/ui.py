@@ -89,9 +89,10 @@ class Frame:
 
 class Look:
     """The colours and switches the drawing reads: gp + 0x58 the boxes, + 0x5c
-    the text, + 0x68 the shadow, + 0x4c the bar's pulse, + 0x40 and + 0x44 the
-    confirm and cancel buttons; 0x801b25e4 the boxes' semi-transparency,
-    0x801b25e1 the brightness."""
+    the text, + 0x68 the shadow, + 0x4c the bar's pulse, + 0x50 a second
+    pulse frame_begin steps beside it and never puts back (OPTION 2's values
+    light with it), + 0x40 and + 0x44 the confirm and cancel buttons;
+    0x801b25e4 the boxes' semi-transparency, 0x801b25e1 the brightness."""
 
     def __init__(self, ram=None):
         def w(off):
@@ -99,9 +100,11 @@ class Look:
         if ram is None:
             self.box, self.text, self.shadow, self.pulse = 0x78, 0x80, 0x30, 0
             self.confirm, self.cancel, self.semi, self.bright = 3, 1, 1, 0x80
+            self.pulse2 = 0
             return
         self.box, self.text, self.shadow = w(0x58) & 0xFF, w(0x5C) & 0xFF, w(0x68) & 0xFF
         self.pulse = w(0x4C)
+        self.pulse2 = w(0x50)
         self.confirm, self.cancel = w(0x40), w(0x44)
         self.semi = ram[0x801B25E4 & 0x1FFFFF]
         self.bright = ram[0x801B25E1 & 0x1FFFFF]
@@ -368,9 +371,11 @@ def legend(f, look, e, mode, two=None):
     small_text(f, look, e, 0xC6, 0xD6, gp_string(e, 0x74))
 
 
-def lit_plate(f, look, rec, x, y):
-    """sub_80026020: a plate in the selection's pulsing colour."""
-    c0, c1 = bar_colour(look)
+def lit_plate(f, look, rec, x, y, pulse=None):
+    """sub_80026020 (rec, label, pulse): a plate in the pulsing colour -- of
+    the selection's pulse (gp+0x4c) for every caller but ui_display_values, which
+    hands it the second (gp+0x50)."""
+    c0, c1 = bar_colour(look) if pulse is None else bar_colour_with(look, pulse)
     tpage, clut, u, v, w, h = rec
     f.add(50, quad(x - 6, y - 6, w, h, u, v, w, h, tpage, clut,
                    c0 | (c0 << 8) | (c1 << 16), look.semi))
@@ -441,8 +446,17 @@ def menu_page(f, look, e, page, n, sel, legend_mode=0):
         else:
             title_plate(f, look, plate, x, y)
             dim_label(f, look, style, x, y, g)
-    if legend_mode in (0, 1):
+    # the legend by the fourth argument (0x800253c4): 0 the confirm button at
+    # 0x5f, 1 button 9 at 0x5b (OPTION 1 and 2), anything else none (no caller
+    # passes one); "select", then the cancel button and "return", each time
+    if legend_mode == 0:
         legend(f, look, e, 0, two=True)
+        return
+    if legend_mode == 1:
+        button(f, look, e, 0x5B, 0xD6, 9)
+    small_text(f, look, e, 0x69, 0xD6, gp_string(e, 0x7C))
+    button(f, look, e, 0xA0, 0xD6, look.cancel)
+    small_text(f, look, e, 0xAA, 0xD6, gp_string(e, 0x74))
 
 
 STATUS_LABELS = {"experience": 0x8007F350, "level": 0x8007F368,
@@ -1412,6 +1426,249 @@ def game_button_config(base, action, move, presses):
     return True, read[0], cpu.ram[0x1B25E2], cpu.ram[0x1B25E3], None
 
 
+# --- system: OPTION 2, the display ----------------------------------------------
+
+# the five bytes OPTION 2 sets, in its rows' order: the panel's style, the
+# compass's (0..2 each), the turning model in the lists, the walking bob, and
+# the menus' boxes clear or solid (0 or 1 each); a new character's (sub_8002b64c)
+DISPLAY_BYTES = (0x801B25DD, 0x801B25DE, 0x801B25DF, 0x801B25E0, 0x801B25E4)
+DISPLAY_DEFAULT = (2, 2, 1, 1, 1)
+# ui_display_values's words, immediates in its code: three plates' letters for the
+# two styles, and "on"/"off" -- "clear"/"solid" on the last row
+STYLE_LETTERS = ([0x00, 0xFF], [0x01, 0xFF], [0x02, 0xFF])
+WORD_ON = [0x7F, 0x7F, 0x0E, 0x0D, 0xFF]
+WORD_OFF = [0x7F, 0x7F, 0x0E, 0x05, 0x05, 0xFF]
+WORD_CLEAR = [0x02, 0x0B, 0x04, 0x00, 0x11, 0xFF]
+WORD_SOLID = [0x12, 0x0E, 0x0B, 0x08, 0x03, 0xFF]
+
+
+def display_values(f, look, e, values):
+    """ui_display_values (0x800246bc): OPTION 2's five values beside its lines.
+    The two styles, rows at y 0x3a and 0x54, are three plates (record 5) at x
+    0xab, 0xc7 and 0xe3 lettered A, B, C -- A lit for 2, B for 1, C for 0 --
+    each letter 4 to the right of its plate's place; the three switches, from
+    y 0x6e, 26 apart, are two smaller plates (record 1) at 0xab and 0xe5,
+    "on" and "off" ("clear" and "solid" on the last), the first lit for 1.
+    A plate lit is sub_80026020's and its word ui_draw_label's; the others
+    ui_label_plate's and sub_80026158's."""
+    style = record(e, LABEL_STYLE)
+    big = record(e, RECORDS + 12 * 5)
+    small = record(e, RECORDS + 12 * 1)
+    y = 0x3A
+    for row in range(2):
+        v = values[row]
+        lit = 0 if v == 2 else 1 if v == 1 else 2
+        for i, x in enumerate((0xAB, 0xC7, 0xE3)):
+            if i == lit:
+                lit_plate(f, look, big, x, y, look.pulse2)
+                draw_label(f, look, style, x + 4, y, STYLE_LETTERS[i])
+            else:
+                title_plate(f, look, big, x, y)
+                dim_label(f, look, style, x + 4, y, STYLE_LETTERS[i])
+        y += 0x1A
+    for row in range(3):
+        one, two = (WORD_CLEAR, WORD_SOLID) if row == 2 else (WORD_ON, WORD_OFF)
+        if values[2 + row] == 1:
+            lit_plate(f, look, small, 0xAB, y, look.pulse2)
+            draw_label(f, look, style, 0xAB, y, one)
+            title_plate(f, look, small, 0xE5, y)
+            dim_label(f, look, style, 0xE5, y, two)
+        else:
+            title_plate(f, look, small, 0xAB, y)
+            dim_label(f, look, style, 0xAB, y, one)
+            lit_plate(f, look, small, 0xE5, y, look.pulse2)
+            draw_label(f, look, style, 0xE5, y, two)
+        y += 0x1A
+
+
+def display_page(f, look, e, values, row):
+    """OPTION 2's frame: sub_800252f4(5, 5, row, 1) -- page 5's five lines,
+    the row chosen lit -- and ui_display_values's values beside them."""
+    menu_page(f, look, e, 5, 5, row, legend_mode=1)
+    display_values(f, look, e, values)
+
+
+def display_press(st, press, confirm, cancel):
+    """One pad word on OPTION 2 (0x8001f004): UP and DOWN move round the five
+    rows; the confirm, RIGHT or LEFT change the row's value -- the two styles
+    stepping 2, 1, 0, 2 on the confirm and RIGHT and the other way on LEFT,
+    the three switches turned over by any of them (v < 1) -- and the cancel
+    leaves. `st` holds "values" (five) and "row"; True when it leaves, the
+    caller then storing the five and running panel_colours."""
+    v = st["values"]
+    r = st["row"]
+    if press & UP:
+        st["row"] = 4 if r == 0 else r - 1
+    elif press & DOWN:
+        st["row"] = 0 if r == 4 else r + 1
+    elif press & (confirm | RIGHT | LEFT):
+        if r >= 2:
+            v[r] = 1 if v[r] < 1 else 0
+        elif press & (confirm | RIGHT):
+            v[r] = 2 if v[r] == 0 else v[r] - 1
+        else:
+            v[r] = 0 if v[r] == 2 else v[r] + 1
+    elif press & cancel:
+        return True
+    return False
+
+
+def panel_look(semi, bright):
+    """panel_colours (0x8001f274): the menus' colours for the panel's switch (0x801b25e4)
+    and the brightness (0x801b25e1) -- clear (1): boxes 0x78, the shadow 0x30
+    and the text 0x80 plus half of what the brightness is over 0x80; solid
+    (0): boxes 0x57, the shadow 0x80 and the text 0x30 less that half. The
+    halving rounds toward zero. {"box", "text", "shadow"} as gp+0x58, +0x5c
+    (+0x60, +0x64 the same) and +0x68."""
+    half = int((bright - 0x80) / 2)
+    if semi == 0:
+        text = 0x30 - half if bright >= 0x81 else 0x30
+        return {"box": 0x57, "text": text & 0xFFFFFFFF, "shadow": 0x80}
+    return {"box": 0x78, "text": (half + 0x80) & 0xFFFFFFFF, "shadow": 0x30}
+
+
+def game_display(base, values, presses):
+    """0x8001f004 run whole over `base` with the five bytes laid in and
+    pad_read_latch answering `presses` a word at a time, the drawing stood in
+    for: (returned, words read, the five values, the row) -- the bytes it
+    stored when it returned, and while it is still up the five it keeps on
+    its stack (sp+0x10) and the row ($s1)."""
+    import mipsrun
+    cpu = mipsrun.menu_cpu(base)
+    for a, v in zip(DISPLAY_BYTES, values):
+        cpu.ram[a & 0x1FFFFF] = v
+    script = list(presses)
+    read = [0]
+    held = []
+
+    def latch(c):
+        if not script:
+            held.append([c.rd(c.r[29] + 0x10 + k, 1) for k in range(5)])
+            held.append(c.r[17])
+            raise _Out
+        read[0] += 1
+        return script.pop(0)
+
+    cpu.hooks[0x800279A4] = latch
+    for at in (0x80027A40, 0x800279D8, 0x80026FE4, 0x800270F8, 0x800252F4, 0x800246BC):
+        cpu.hooks[at] = lambda c: 0
+    try:
+        cpu.call(0x8001F004)
+    except _Out:
+        return False, read[0], held[0], held[1]
+    return True, read[0], [cpu.ram[a & 0x1FFFFF] for a in DISPLAY_BYTES], None
+
+
+def display_check(out=sys.stdout):
+    """OPTION 2 against the game's own code over menu1: the page and its
+    values drawn for every value of the five and a row each; the screen run
+    whole on random runs of pad words; and the colours of panel_colours for both
+    panels at brightnesses across the byte."""
+    import random
+    import mipsrun
+    path = os.path.join(ROOT, "out", "snap", "menu1.ram")
+    if not os.path.exists(path):
+        print("  no menu1 snapshot to run the options over", file=out)
+        return True
+    e = exe()
+    base = bytearray(open(path, "rb").read())
+    at = 0x801F0000
+    ok = runs = 0
+    first = None
+    k = 0
+    for a in range(3):
+        for b in range(3):
+            for c in range(2):
+                for d in range(2):
+                    for p in range(2):
+                        values = [a, b, c, d, p]
+                        row, pulse = k % 5, (0x0B, 0x33, 0x52)[k % 3]
+                        pulse2 = (0x21, 0x44, 0x5F, 0x00)[k % 4]
+                        k += 1
+                        ram = bytearray(base)
+                        ram[at & 0x1FFFFF:(at & 0x1FFFFF) + 5] = bytes(values)
+                        # frame_begin steps gp+0x50 as it does gp+0x4c
+                        struct.pack_into("<I", ram, (GP + 0x50) & 0x1FFFFF, (pulse2 - 1) % 0x60)
+                        # every other frame with the panel solid, in the colours
+                        # panel_colours gives it
+                        if k % 2:
+                            lk = panel_look(0, ram[0x1B25E1])
+                            ram[0x1B25E4] = 0
+                            for o, v in ((0x58, lk["box"]), (0x5C, lk["text"]), (0x60, lk["text"]),
+                                         (0x64, lk["text"]), (0x68, lk["shadow"])):
+                                struct.pack_into("<I", ram, (GP + o) & 0x1FFFFF, v)
+                        prims, _cpu = mipsrun.frame(ram, [(0x800252F4, 5, 5, row, 1),
+                                                          (0x800246BC, at)], pulse)
+                        look = Look(ram)
+                        look.pulse, look.pulse2 = pulse, pulse2
+                        f = Frame()
+                        display_page(f, look, e, values, row)
+                        got = mipsrun.two_d(prims)
+                        want = [(dd, pp) for dd, pp in f.order()]
+                        runs += 1
+                        ok += got == want
+                        if got != want and first is None:
+                            j = next((i for i, (x, y) in enumerate(zip(got, want)) if x != y),
+                                     min(len(got), len(want)))
+                            first = (f"values {values} row {row}: {len(got)} primitives, the "
+                                     f"model {len(want)}; at {j}: game "
+                                     f"{got[j] if j < len(got) else None} model "
+                                     f"{want[j] if j < len(want) else None}")
+    print(f"  OPTION 2's page and values as the game's own sub_800252f4 and ui_display_values "
+          f"draw them over menu1: {ok} of {runs} frames primitive for primitive, half "
+          f"with the panel solid", file=out)
+    if first:
+        print("  first difference: " + first, file=out)
+    confirm = struct.unpack_from("<I", base, (GP + 0x38) & 0x1FFFFF)[0]
+    cancel = struct.unpack_from("<I", base, (GP + 0x3C) & 0x1FFFFF)[0]
+    rng = random.Random(0xD15)
+    ok2, n = 0, 120
+    first2 = None
+    for i in range(n):
+        values = [rng.randrange(3), rng.randrange(3), rng.randrange(2), rng.randrange(2),
+                  rng.randrange(2)]
+        presses = [rng.choice((UP, DOWN, LEFT, RIGHT, confirm, confirm, 0x10))
+                   for _ in range(rng.randrange(0, 20))]
+        if rng.randrange(4):
+            presses.append(cancel)
+        g = game_display(base, values, presses)
+        st = {"values": list(values), "row": 0}
+        used, left = 0, False
+        for p in presses:
+            used += 1
+            if display_press(st, p, confirm, cancel):
+                left = True
+                break
+        m = (left, used, st["values"], None if left else st["row"])
+        ok2 += g == m
+        if g != m and first2 is None:
+            first2 = f"run {i}: game {g} model {m}"
+    print(f"  OPTION 2 run whole by the game's own code, the pad scripted: {ok2} of {n} runs "
+          f"end alike, read as many words and leave the five values (and, still up, the "
+          f"row) alike", file=out)
+    if first2:
+        print("  first difference: " + first2, file=out)
+    ok3 = n3 = 0
+    first3 = None
+    for semi in (0, 1):
+        for bright in (0x00, 0x40, 0x7F, 0x80, 0x81, 0x82, 0x83, 0xA0, 0xC0, 0xFF):
+            cpu = mipsrun.menu_cpu(base)
+            cpu.ram[0x1B25E4], cpu.ram[0x1B25E1] = semi, bright
+            cpu.call(0x8001F274)
+            g = [cpu.rd(GP + o, 4) for o in (0x58, 0x5C, 0x60, 0x64, 0x68)]
+            lk = panel_look(semi, bright)
+            m = [lk["box"], lk["text"], lk["text"], lk["text"], lk["shadow"]]
+            n3 += 1
+            ok3 += g == m
+            if g != m and first3 is None:
+                first3 = f"panel {semi} brightness {bright:#x}: game {g} model {m}"
+    print(f"  panel_colours, the game's own, for both panels and {n3 // 2} "
+          f"brightnesses: {ok3} of {n3} alike", file=out)
+    if first3:
+        print("  first difference: " + first3, file=out)
+    return ok == runs and ok2 == n and ok3 == n3
+
+
 def place(s, sel):
     """sub_80027728: the index held to the list, the first row shown and the
     bar's row."""
@@ -1685,6 +1942,43 @@ def export_cases(e):
         oruns.append({"start": start, "presses": presses, "left": left, "used": used,
                       "end": st})
     cases.append({"screen": "options_runs", "runs": oruns, "sel": 0, "pulse": 0, "prims": []})
+    # OPTION 2's page (which the game's own sub_800252f4 and ui_display_values hold,
+    # display_check), some with the panel solid, runs through display_press,
+    # and the colours of panel_colours
+    for values, row, pulse, pulse2, semi in (([2, 2, 1, 1, 1], 0, 0x12, 0x40, 1),
+                                             ([0, 1, 0, 1, 0], 3, 0x4C, 0x07, 0),
+                                             ([1, 0, 1, 0, 1], 4, 0x30, 0x5A, 1),
+                                             ([2, 1, 0, 0, 0], 2, 0x01, 0x33, 0)):
+        dlook = Look()
+        dlook.pulse, dlook.pulse2 = pulse, pulse2
+        if semi == 0:
+            lk = panel_look(0, dlook.bright)
+            dlook.box, dlook.text, dlook.shadow, dlook.semi = lk["box"], lk["text"], lk["shadow"], 0
+        f = Frame()
+        display_page(f, dlook, e, values, row)
+        cases.append({"screen": "display", "values": values, "row": row, "sel": row,
+                      "pulse": pulse, "pulse2": pulse2, "semi": semi,
+                      "prims": [[d, p] for d, p in f.order()]})
+    druns = []
+    for i in range(40):
+        st = {"values": [rng.randrange(3), rng.randrange(3), rng.randrange(2), rng.randrange(2),
+                         rng.randrange(2)], "row": 0}
+        start = {"values": list(st["values"]), "row": 0}
+        presses = [rng.choice((UP, DOWN, LEFT, RIGHT, 0x40)) for _ in range(rng.randrange(0, 16))]
+        if rng.randrange(3):
+            presses.append(0x20)
+        used, left = 0, False
+        for p in presses:
+            used += 1
+            if display_press(st, p, 0x40, 0x20):
+                left = True
+                break
+        druns.append({"start": start, "presses": presses, "left": left, "used": used,
+                      "end": st})
+    cases.append({"screen": "display_runs", "runs": druns,
+                  "looks": [[semi, bright, panel_look(semi, bright)]
+                            for semi in (0, 1) for bright in (0x40, 0x80, 0x81, 0xA0, 0xC0)],
+                  "sel": 0, "pulse": 0, "prims": []})
     # ui_ratings_page as the game's own code draws it, run over menu1's RAM by
     # tools/mipsrun.py -- when that snapshot is here
     menu1 = os.path.join(ROOT, "out", "snap", "menu1.ram")
@@ -1880,6 +2174,7 @@ def check(out=sys.stdout, verbose=False):
     menus = panel_check(out) and menus
     menus = storage_check(out) and menus
     menus = options_check(out) and menus
+    menus = display_check(out) and menus
     e = exe()
     ok = bad = 0
     for name in ("inv1", "inv2"):

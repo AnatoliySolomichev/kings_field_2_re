@@ -1811,7 +1811,8 @@ func _menus() -> bool:
 	var first := ""
 	for case in KFMenu.data["cases"]:
 		var lk := {"box": 0x78, "text": 0x80, "shadow": 0x30, "pulse": int(case["pulse"]),
-			"confirm": 3, "cancel": 1, "semi": 1, "bright": 0x80}
+			"confirm": 3, "cancel": 1, "semi": 1, "bright": 0x80,
+			"pulse2": int(case.get("pulse2", 0))}
 		var o := {}
 		match str(case["screen"]):
 			"use_item":
@@ -1880,6 +1881,40 @@ func _menus() -> bool:
 						KFMenu.MOVE_WORD if int(case["which"]) == 1 else KFMenu.STORE_WORD)
 			"options":
 				KFMenu.options_page(o, lk, int(case["action"]), int(case["move"]), int(case["row"]))
+			"display":
+				if int(case["semi"]) == 0:
+					lk.merge(KFMenu.panel_look(0, int(lk["bright"])), true)
+					lk["semi"] = 0
+				KFMenu.display_page(o, lk, case["values"], int(case["row"]))
+			"display_runs":
+				# pad words through display_press, and the colours of panel_colours,
+				# against tools/ui.py's
+				for r in case["runs"]:
+					runs += 1
+					var st := {"values": (r["start"]["values"] as Array).map(func(v): return int(v)),
+						"row": 0}
+					var used := 0
+					var left := false
+					for press in r["presses"]:
+						used += 1
+						if KFMenu.display_press(st, int(press), 0x40, 0x20):
+							left = true
+							break
+					var want: Array = (r["end"]["values"] as Array).map(func(v): return int(v))
+					if not (left == bool(r["left"]) and used == int(r["used"])
+							and st["values"] == want and int(st["row"]) == int(r["end"]["row"])):
+						runs_bad += 1
+						if first == "":
+							first = "OPTION 2 run %s: godot %s, python %s" % [str(r["presses"]),
+								str(st), str(r["end"])]
+				for l in case["looks"]:
+					runs += 1
+					var got := KFMenu.panel_look(int(l[0]), int(l[1]))
+					if int(got["box"]) != int(l[2]["box"]) or int(got["text"]) != int(l[2]["text"]) \
+							or int(got["shadow"]) != int(l[2]["shadow"]):
+						runs_bad += 1
+						if first == "":
+							first = "panel_look %s: godot %s" % [str(l), str(got)]
 			"options_runs":
 				# pad words through button_config_press, against tools/ui.py's
 				for r in case["runs"]:
@@ -1951,7 +1986,7 @@ func _menus() -> bool:
 				else:
 					KFMenu.panel(o, lk, sl, 5 | 0x8000)
 					KFMenu.options(o, lk, int(case["prompt"]))
-		if str(case["screen"]) in ["storage_runs", "options_runs", "schemes"]:
+		if str(case["screen"]) in ["storage_runs", "options_runs", "schemes", "display_runs"]:
 			continue                                # runs, not a screen: counted above
 		var got := JSON.stringify(_norm(KFMenu.order(o)))
 		var want := JSON.stringify(_norm(case["prims"]))
@@ -1962,7 +1997,7 @@ func _menus() -> bool:
 				first = "%s sel %d: godot %s ... python %s ..." % [case["screen"], int(case["sel"]),
 					got.substr(0, 300), want.substr(0, 300)]
 	print("menus: %d of %d screens drawn as tools/ui.py draws them" % [n - bad, n])
-	print("menus: %d of %d runs of pad words through the storage and BUTTON CONFIG as tools/ui.py runs them" % [
+	print("menus: %d of %d runs of pad words through the storage, BUTTON CONFIG and OPTION 2, and panel colours, as tools/ui.py has them" % [
 		runs - runs_bad, runs])
 	if schemes > 0:
 		print("menus: %d of %d control schemes fill the slots as the game's own apply_control_scheme does" % [
