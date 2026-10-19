@@ -101,6 +101,8 @@ var shop := -1                      # the shop a conversation has opened, or -1
 var shop_sel := 0                   # its page's line: buy, sell
 var stall := {}                     # its list while it is up
 var sell_cursor := 0                # gp+0x89
+var inn := {}                       # the inn a conversation has opened: "n", "sel", "gold"
+var night_scene := -1               # the scene a night at the inn starts, or -1
 var prompt_sel := 0
 var equip_sel := 0                  # the equipment screen's line
 var records_sel := 0                # status/records' line: offense/defense, conversation
@@ -1305,6 +1307,41 @@ static func shop_press(s: Dictionary, press: int, inv: PackedByteArray, stock0: 
 	return -0x63
 
 
+# One pad word on the inn: sub_800221e8 over its two lines; "stay" at inn 0
+# takes 150 gold, or with less is refused and the choosing goes on; at
+# another inn it is free. 0 for a night, -1 for "do not stay" or the cancel,
+# -0x63 while it asks. `st` holds "n", "sel" and "gold".
+# @orig game:0x8002200c menu_inn  status:verified -- tools/ui.py inn_press, 100 of 100 runs as the game's own runs it whole (inn_check); the self-test this to it; not the sounds
+static func inn_press(st: Dictionary, press: int, confirm: int, cancel: int) -> int:
+	var sel := int(st["sel"])
+	var line := -1
+	if press & UP:
+		sel = 1 if sel == 0 else sel - 1
+	elif press & DOWN:
+		sel = 0 if sel == 1 else sel + 1
+	elif press & confirm:
+		line = sel
+	elif press & cancel:
+		return -1
+	st["sel"] = sel
+	if line == 1:
+		return -1
+	if line == 0:
+		if int(st["n"]) != 0:
+			return 0
+		if int(st["gold"]) >= 0x96:
+			st["gold"] = int(st["gold"]) - 0x96
+			return 0
+	return -0x63
+
+
+# @port helper -- the inn's frame (0x80022064): page 7, "stay" and "do not stay", and at inn 0 the gold
+static func inn_page(o: Dictionary, lk: Dictionary, n: int, sel: int, gold: int) -> void:
+	menu_page(o, lk, 7, 2, sel, 0)
+	if n == 0:
+		gold_readout(o, lk, gold)
+
+
 # QUIT GAME's answers, immediates in its code
 const QUIT_YES := [0xAB, 0xA2, [0x18, 0x04, 0x12, 0xFF]]
 const QUIT_NO := [0xE5, 0xA2, [0x0D, 0x0E, 0xFF]]
@@ -1622,6 +1659,19 @@ func open_shop(n: int) -> void:
 	KFInfo.note("menu: shop %d" % n)
 
 
+# The service at a conversation's end that is an inn (+0x12's high nibble
+# 4): render_frame_bare, then the inn's question; its 0 starts the night.
+# @orig game:0x8005c6e0 script_interpreter+0x3d8  status:transcribed -- .L24: the inn's service, and the scene it starts (n & 3)
+func open_inn(n: int) -> void:
+	KFGame.modal = true
+	inn = {"n": n & 0xF, "sel": 0, "gold": int(player.gold)}
+	night_scene = -1
+	state = "inn"
+	visible = true
+	acc = 0.0
+	KFInfo.note("menu: inn %d" % (n & 0xF))
+
+
 # @port helper -- shop n's stock: shop 0's the live one, the others' as the disc has them
 func _shop_stock(n: int) -> PackedByteArray:
 	if n == 0:
@@ -1898,6 +1948,20 @@ func _step(press: int) -> void:
 						"bought" if bool(stall["buy"]) else "sold", int(stall["qty"]), end,
 						int(player.gold)])
 				state = "shop"
+		"inn":
+			var was := int(inn["sel"])
+			var a := inn_press(inn, press, confirm, cancel)
+			if int(inn["sel"]) != was:
+				moved = true
+			if a == 0:
+				# script_interpreter's service arm 0x40: the night, cutscene
+				# phase 1 for scene n & 3
+				player.gold = int(inn["gold"])
+				night_scene = int(inn["n"]) & 3
+				KFInfo.note("inn %d: a night, gold %d" % [int(inn["n"]), int(player.gold)])
+				_close()
+			elif a == -1:
+				_close()
 		"please_wait":
 			wait_left -= 1
 			if wait_left <= 0:
@@ -2132,6 +2196,8 @@ func _build() -> void:
 			message_box(ot, look, 7, [PLEASE_WAIT], 0x46, 0x57, 0xB2, 0x42, 0)
 		"shop":
 			menu_page(ot, look, 6, 2, shop_sel)
+		"inn":
+			inn_page(ot, look, int(inn["n"]), int(inn["sel"]), int(inn["gold"]))
 		"shop_list":
 			if int(stall["mode"]) == 1:
 				panel(ot, look, stall, shop_mode(stall) | 0x8000)

@@ -815,7 +815,10 @@ titles, 33 of 33 with the BIOS's file calls stood in for in Python, and
 `ui_panel` mode 8, 40 of 40. `shop_check` holds the shops: their lists in
 modes `0xd`, `0xa` and `0xb` against the game's own `ui_panel`, 45 of 45
 frames, and `shop_buy` and `shop_sell` run whole for all five shops, 200 of
-200 runs plus 5 of 5 aimed at shop 0's stock.
+200 runs plus 5 of 5 aimed at shop 0's stock. `inn_check` holds the inn:
+its page 4 of 4, the inn run whole 100 of 100, and both levels' night
+hooks run out of their overlays, 24 of 24. `opening.py` now also transcodes
+the eighteen dreams, `\DRM\D00..D17.S`, into `out/godot/opening/`.
 
 ```
 python3 tools/ui.py            the use-item screen against both snapshots, both buffers

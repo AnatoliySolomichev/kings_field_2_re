@@ -2541,6 +2541,192 @@ def shop_check(out=sys.stdout, n=200):
     return ok == runs and ok2 == n and targeted == 5
 
 
+# --- the inn and the night ----------------------------------------------------------
+
+INN_PRICE = 0x96                 # 150 gold, inn 0's; inn 1 is free
+
+
+def page_press(sel, last, press, confirm, cancel):
+    """sub_800221e8 (sel, last, &line, &asked, &result): one pad word on a
+    page of lines -- UP and DOWN round 0..last, the confirm choosing the
+    line, the cancel leaving. (sel, the line chosen or -1, -1 on the cancel
+    or None)."""
+    if press & UP:
+        return (last if sel == 0 else sel - 1), -1, None
+    if press & DOWN:
+        return (0 if sel == last else sel + 1), -1, None
+    if press & confirm:
+        return sel, sel, None
+    if press & cancel:
+        return sel, -1, -1
+    return sel, -1, None
+
+
+def inn_page(f, look, e, n, sel, gold):
+    """The inn's frame (0x8002200c): page 7, "stay" and "do not stay", the
+    chosen one lit -- sub_800252f4(7, 2, sel, 0) -- and at inn 0 the gold
+    (ui_gold)."""
+    menu_page(f, look, e, 7, 2, sel, 0)
+    if n == 0:
+        gold_readout(f, look, e, gold)
+
+
+def inn_press(st, press, confirm, cancel):
+    """One pad word on the inn (0x8002200c): sub_800221e8 over its two
+    lines; "stay" at inn 0 takes 150 gold, or with less than that is refused
+    (sound 0xe) and the choosing goes on; at another inn it is free. 0 for a
+    night, -1 for "do not stay" or the cancel, None while it asks. `st`
+    holds "n", "sel" and "gold"."""
+    st["sel"], line, result = page_press(st["sel"], 1, press, confirm, cancel)
+    if result == -1 or line == 1:
+        return -1
+    if line == 0:
+        if st["n"] != 0:
+            return 0
+        if st["gold"] >= INN_PRICE:
+            st["gold"] -= INN_PRICE
+            return 0
+    return None
+
+
+def night_heal(level, scene, hp, hp_max, mp, mp_max):
+    """The level's own entry 7 (level_hooks + 0x1c), which cutscene_step's
+    phase 8 calls with the scene after the dream: level 0's, for scene 0
+    alone, the HP to its most and the MP 30 on, held to its most; level 1's
+    the HP to its most, for any scene. (hp, mp)."""
+    if level == 0 and scene & 0xFF == 0:
+        mp = (mp + 0x1E) & 0xFFFF
+        hp = hp_max
+        if mp_max < mp:
+            mp = mp_max
+    elif level == 1:
+        hp = hp_max
+    return hp, mp
+
+
+def game_inn(base, n, gold, presses):
+    """0x8002200c run whole over `base` with the gold laid in, the pad
+    scripted, the drawing stood in for: (returned, its answer, words read,
+    the gold)."""
+    import mipsrun
+    cpu = mipsrun.menu_cpu(base)
+    cpu.wr(0x801B2534, 4, gold)
+    script = list(presses)
+    read = [0]
+
+    def latch(c):
+        if not script:
+            raise _Out
+        read[0] += 1
+        return script.pop(0)
+
+    cpu.hooks[0x800279A4] = latch
+    for at in (0x80027A40, 0x800279D8, 0x80026FE4, 0x800270F8, 0x800252F4, 0x80025E80,
+               0x80027198, 0x80027310):
+        cpu.hooks[at] = lambda c: 0
+    try:
+        v = cpu.call(0x8002200C, n)
+    except _Out:
+        return False, None, read[0], cpu.rd(0x801B2534, 4)
+    return True, mipsrun.s32(v), read[0], cpu.rd(0x801B2534, 4)
+
+
+def inn_check(out=sys.stdout):
+    """The inn against the game's own code over menu1: its page for both
+    inns and both lines; the inn run whole on scripted words with gold
+    short and enough; and the two levels' own healing hooks, level 0's out
+    of the snapshot's overlay and level 1's laid in from the disc."""
+    import random
+    import mipsrun
+    import overlay
+    from tarc import TArc
+    path = os.path.join(ROOT, "out", "snap", "menu1.ram")
+    if not os.path.exists(path):
+        print("  no menu1 snapshot to run the inn over", file=out)
+        return True
+    e = exe()
+    base = bytearray(open(path, "rb").read())
+    ok = n = 0
+    first = None
+    for inn in (0, 1):
+        for sel in (0, 1):
+            ram = bytearray(base)
+            gold = 1234 + 1111 * sel
+            struct.pack_into("<I", ram, 0x1B2534, gold)
+            calls = [(0x800252F4, 7, 2, sel, 0)] + ([(0x80025E80,)] if inn == 0 else [])
+            prims, _cpu = mipsrun.frame(ram, calls, 0x21)
+            look = Look(ram)
+            look.pulse = 0x21
+            f = Frame()
+            inn_page(f, look, e, inn, sel, gold)
+            got = mipsrun.two_d(prims)
+            want = [(d, p) for d, p in f.order()]
+            n += 1
+            ok += got == want
+            if got != want and first is None:
+                first = f"inn {inn} sel {sel}: {len(got)} primitives, the model {len(want)}"
+    print(f"  the inn's page as the game's own sub_800252f4 and ui_gold draw it: {ok} of {n} frames",
+          file=out)
+    if first:
+        print("  first difference: " + first, file=out)
+    confirm = struct.unpack_from("<I", base, (GP + 0x38) & 0x1FFFFF)[0]
+    cancel = struct.unpack_from("<I", base, (GP + 0x3C) & 0x1FFFFF)[0]
+    rng = random.Random(0x1A4)
+    ok2, n2 = 0, 100
+    first2 = None
+    for i in range(n2):
+        inn = i % 2
+        gold = rng.choice((0, 149, 150, 151, 9999))
+        presses = [rng.choice((UP, DOWN, confirm, confirm, 0x10)) for _ in range(rng.randrange(1, 8))]
+        if rng.randrange(3):
+            presses.append(rng.choice((cancel, confirm)))
+        g = game_inn(base, inn, gold, presses)
+        st = {"n": inn, "sel": 0, "gold": gold}
+        used, ans = 0, None
+        for p in presses:
+            used += 1
+            ans = inn_press(st, p, confirm, cancel)
+            if ans is not None:
+                break
+        m = (ans is not None, ans, used, st["gold"])
+        ok2 += g == m
+        if g != m and first2 is None:
+            first2 = f"run {i} (inn {inn}, gold {gold}): game {g} model {m}"
+    print(f"  the inn run whole by the game's own code, the pad scripted: {ok2} of {n2} runs "
+          f"answer alike, read as many words and leave the gold alike", file=out)
+    if first2:
+        print("  first difference: " + first2, file=out)
+    ok3 = n3 = 0
+    first3 = None
+    for level in (0, 1):
+        raw = TArc(overlay.FDAT).raw(level * 3 + 2)
+        _h, ptrs = overlay.hooks(level)
+        for k in range(12):
+            scene = (0, 1, 2, 0)[k % 4]
+            hp_max = rng.randrange(50, 999)
+            mp_max = rng.randrange(30, 999)
+            hp, mp = rng.randrange(0, hp_max + 1), rng.choice((0, mp_max - 29, mp_max - 30,
+                                                                rng.randrange(mp_max + 1)))
+            cpu = mipsrun.menu_cpu(base)
+            o = overlay.BASE & 0x1FFFFF
+            cpu.ram[o:o + len(raw)] = raw
+            for a, v in ((0x801B24FC, hp), (0x801B24FA, hp_max), (0x801B2500, mp),
+                         (0x801B24FE, mp_max)):
+                cpu.wr(a, 2, v)
+            cpu.call(ptrs[7], scene)
+            g = (cpu.rd(0x801B24FC, 2), cpu.rd(0x801B2500, 2))
+            m = night_heal(level, scene, hp, hp_max, mp, mp_max)
+            n3 += 1
+            ok3 += g == m
+            if g != m and first3 is None:
+                first3 = f"level {level} scene {scene}: game {g} model {m}"
+    print(f"  the levels' own night hooks (entry 7, level_hooks + 0x1c), levels 0 and 1 run "
+          f"from their overlays: {ok3} of {n3} alike", file=out)
+    if first3:
+        print("  first difference: " + first3, file=out)
+    return ok == n and ok2 == n2 and ok3 == n3
+
+
 def place(s, sel):
     """sub_80027728: the index held to the list, the first row shown and the
     bar's row."""
@@ -2915,6 +3101,36 @@ def export_cases(e):
                        "stock0": stock0, "gold": s["gold"], "sel": s["sel"]})
     cases.append({"screen": "shop_runs", "runs": shruns, "equip": sst, "sel": 0, "pulse": 0,
                   "prims": []})
+    # the inn's page and runs (which the game's own holds, inn_check), and the
+    # levels' night hooks
+    for inn, sel, gold in ((0, 0, 1234), (0, 1, 99), (1, 0, 0)):
+        ilook = Look()
+        ilook.pulse = 0x19
+        f = Frame()
+        inn_page(f, ilook, e, inn, sel, gold)
+        cases.append({"screen": "inn", "inn": inn, "sel": sel, "gold": gold, "pulse": 0x19,
+                      "prims": [[d, p] for d, p in f.order()]})
+    iruns = []
+    for i in range(30):
+        st = {"n": i % 2, "sel": 0, "gold": rng.choice((0, 149, 150, 999))}
+        start = dict(st)
+        presses = [rng.choice((UP, DOWN, 0x40, 0x40)) for _ in range(rng.randrange(1, 6))] + [0x20]
+        used, ans = 0, None
+        for p in presses:
+            used += 1
+            ans = inn_press(st, p, 0x40, 0x20)
+            if ans is not None:
+                break
+        iruns.append({"start": start, "presses": presses, "used": used, "answer": ans,
+                      "end": st})
+    heals = []
+    for level, scene, hp, hp_max, mp, mp_max in ((0, 0, 10, 50, 5, 30), (0, 0, 50, 50, 25, 30),
+                                                 (0, 1, 10, 50, 5, 30), (1, 1, 7, 80, 3, 40),
+                                                 (1, 0, 80, 80, 40, 40), (2, 0, 1, 9, 1, 9)):
+        heals.append([level, scene, hp, hp_max, mp, mp_max,
+                      list(night_heal(level, scene, hp, hp_max, mp, mp_max))])
+    cases.append({"screen": "inn_runs", "runs": iruns, "heals": heals, "sel": 0, "pulse": 0,
+                  "prims": []})
     # the message box (which the game's own sub_8001eb3c holds, box_check)
     for title, lines, legend in ((7, [PLEASE_WAIT], 0), (6, [PLEASE_WAIT], 1)):
         blook = Look()
@@ -3172,6 +3388,7 @@ def check(out=sys.stdout, verbose=False):
     menus = box_check(out) and menus
     menus = load_check(out) and menus
     menus = shop_check(out) and menus
+    menus = inn_check(out) and menus
     e = exe()
     ok = bad = 0
     for name in ("inv1", "inv2"):

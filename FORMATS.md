@@ -3472,6 +3472,36 @@ gold, inventory, stock and sell cursor, and five runs aimed at shop 0's
 stock -- buying `0x6b`, selling into 97..99 -- 5 of 5; dropping the `0x6b`
 exception fails one of those, dropping the cap three.
 
+### The inn, and a night's dream
+
+Service `0x4n` puts up **the inn** (`0x8002200c`): page 7, "stay" and "do
+not stay", chosen with `sub_800221e8`. Inn 0 -- level 0's innkeeper, entity
+7 -- shows the gold and charges **150** (`0x96`): with less, "stay" is
+refused with a sound and the choosing goes on; inn 1 -- level 1's, entity 18
+-- is free. "Stay" answers 0, and the interpreter's arm starts the scene `n
+& 3`: `cutscene_phase` 1, `cutscene_number` n & 3. What follows is
+`cutscene_step`'s machine (17 phases, `0x800136a0`): phase 1 tests the
+scene record's gate and sets player state 7, which moves the player to the
+scene's place; phase 4 calls the level's entry 10 (`level_hooks + 0x28`)
+and `str_play`; state 9 moves the player back; phase 8 calls the level's
+entry 7 (`level_hooks + 0x1c`, at `0x80061b8c`) with the scene. **The inn's
+scenes have no movie of their own**: their record's first byte is `0xff`,
+and `str_play` builds the name, for a first byte of 0x10 or more, from its
+second template, `\DRM\DXX.S`, with `rand() * 18 >> 15` -- one of the
+disc's eighteen **dreams**, at random. **The healing is the level's own
+code**, entry 7 of its overlay: level 0's (`0x801e89d8`), for scene 0 alone,
+puts the HP at its most and the MP 30 on, held to its most; level 1's
+(`0x801e88cc`) puts the HP at its most, for any scene. Nothing in GAME.EXE
+heals there -- the HP writers are the eaten things, the spells, the hits,
+the revive and the regeneration (`sub_80030be0`, `sub_80030c6c`, a point at
+a time). **Against the game's own code** over menu1 (`tools/ui.py
+inn_check`): the page 4 of 4 frames, the inn run whole on scripted words
+100 of 100 runs (the answer, the words read and the gold), and the two
+levels' entry 7 run out of their overlays, laid in from the disc, 24 of 24.
+In the port the night is the dream (`tools/opening.py` transcodes the
+eighteen) and then the level's healing; the moves of states 7 and 9 are
+not there.
+
 *Corrected in the port:* `_bob` set the bob to 0 whenever the player was
 off the ground. In `player_vertical` every path reaches `.L29`, which goes
 past the bob when `player_vstate` is not 0 and leaves it as it was; the

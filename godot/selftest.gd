@@ -1946,6 +1946,31 @@ func _menus() -> bool:
 						runs_bad += 1
 						if first == "":
 							first = "shop run %s: godot end %d used %d gold %d" % [str(r["presses"]), end, used, int(sl["gold"])]
+			"inn":
+				KFMenu.inn_page(o, lk, int(case["inn"]), int(case["sel"]), int(case["gold"]))
+			"inn_runs":
+				for r in case["runs"]:
+					runs += 1
+					var st := {"n": int(r["start"]["n"]), "sel": 0, "gold": int(r["start"]["gold"])}
+					var used := 0
+					var ans := -0x63
+					for press in r["presses"]:
+						used += 1
+						ans = KFMenu.inn_press(st, int(press), 0x40, 0x20)
+						if ans != -0x63:
+							break
+					if not (used == int(r["used"]) and ans == int(r["answer"]) and
+							int(st["gold"]) == int(r["end"]["gold"]) and int(st["sel"]) == int(r["end"]["sel"])):
+						runs_bad += 1
+						if first == "":
+							first = "inn run %s: godot %d %d" % [str(r["presses"]), used, ans]
+				for h in case["heals"]:
+					runs += 1
+					var got := KFTalk.night(int(h[0]), int(h[1]), int(h[2]), int(h[3]), int(h[4]), int(h[5]))
+					if int(got[0]) != int(h[6][0]) or int(got[1]) != int(h[6][1]):
+						runs_bad += 1
+						if first == "":
+							first = "night %s: godot %s" % [str(h), str(got)]
 			"box":
 				KFMenu.message_box(o, lk, int(case["title"]), case["lines"], 0x46, 0x57, 0xB2, 0x42,
 					int(case["legend"]))
@@ -2068,7 +2093,8 @@ func _menus() -> bool:
 				else:
 					KFMenu.panel(o, lk, sl, 5 | 0x8000)
 					KFMenu.options(o, lk, int(case["prompt"]))
-		if str(case["screen"]) in ["storage_runs", "options_runs", "schemes", "display_runs", "shop_runs"]:
+		if str(case["screen"]) in ["storage_runs", "options_runs", "schemes", "display_runs", "shop_runs",
+				"inn_runs"]:
 			continue                                # runs, not a screen: counted above
 		var got := JSON.stringify(_norm(KFMenu.order(o)))
 		var want := JSON.stringify(_norm(case["prims"]))
@@ -2079,7 +2105,7 @@ func _menus() -> bool:
 				first = "%s sel %d: godot %s ... python %s ..." % [case["screen"], int(case["sel"]),
 					got.substr(0, 300), want.substr(0, 300)]
 	print("menus: %d of %d screens drawn as tools/ui.py draws them" % [n - bad, n])
-	print("menus: %d of %d runs of pad words through the storage, the shops, BUTTON CONFIG, OPTIONs 1 and 2 and QUIT GAME, and panel colours, as tools/ui.py has them" % [
+	print("menus: %d of %d runs of pad words through the storage, the shops, the inn, BUTTON CONFIG, OPTIONs 1 and 2 and QUIT GAME, and panel colours, as tools/ui.py has them" % [
 		runs - runs_bad, runs])
 	if schemes > 0:
 		print("menus: %d of %d control schemes fill the slots as the game's own apply_control_scheme does" % [

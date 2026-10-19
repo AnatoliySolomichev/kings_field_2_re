@@ -178,6 +178,22 @@ static func _end(c: Dictionary, why: String) -> int:
 	return -1
 
 
+# The level's own entry 7 (level_hooks + 0x1c), which cutscene_step's phase
+# 8 calls with the scene after the movie -- a night's dream at the inn:
+# level 0's, for scene 0 alone, the HP to its most and the MP 30 on, held to
+# its most; level 1's the HP to its most, for any scene. [hp, mp].
+# @orig game:0x80061b8c cutscene_step+0x24c  status:verified -- the call of the level's entry 7; level 0's (overlay 0x801e89d8) and level 1's (overlay 0x801e88cc) written out here, tools/ui.py night_heal, each 12 of 12 against the overlay's own code run over menu1 (inn_check)
+static func night(level: int, scene: int, hp: int, hp_max: int, mp: int, mp_max: int) -> Array:
+	if level == 0 and scene & 0xFF == 0:
+		mp = (mp + 0x1E) & 0xFFFF
+		hp = hp_max
+		if mp_max < mp:
+			mp = mp_max
+	elif level == 1:
+		hp = hp_max
+	return [hp, mp]
+
+
 # What 0xf4 calls: the level's own entry 4 (level_hooks + 0x10), which lives
 # in the level's overlay. Level 0's arms 0, 1 and 5, as tools/quest.py reads
 # them -- whether the player holds the three pieces of Ichrius (130, 131, 132)

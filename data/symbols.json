@@ -3182,5 +3182,10 @@
   "kind": "data",
   "name": "shop_start_rows",
   "evidence": "five bytes, gp+0x84: the row each shop's buy list opens at (0, 0x0b, 7, 2, 0 on the disc), copied by shop_buy and never written"
+ },
+ "0x8002200c": {
+  "kind": "code",
+  "name": "menu_inn",
+  "evidence": "a conversation's service 0x4n (script_interpreter .L24): page 7, stay and do not stay, chosen with sub_800221e8; inn 0 shows the gold and charges 150 (refused with less), others are free; stay answers 0 and the interpreter starts scene n & 3 -- the night: a random dream \\DRM\\DXX.S and the level's own entry 7, which heals. tools/ui.py inn_check, 100 of 100 runs"
  }
 }

@@ -61,6 +61,13 @@ TITLE_STREAM = ("/OP/M2.S", "the title screen's streamed music")
 # three men there repeat afterwards, TALK 676 and on.
 CUTSCENES = [(3, "/STR/S03.S", "the opening: the sword handed over")]
 
+# The dreams. A scene whose record's first byte is 0x10 or more has no movie
+# of its own, and str_play builds the name from its second template instead,
+# \DRM\DXX.S;1, with a number rand() * 18 >> 15 -- one of eighteen, at
+# random. The inns' nights are such scenes (level 0's and level 1's scene 0
+# and 1 records start 0xff), so a night at the inn is a dream.
+DREAMS = [(n, f"/DRM/D{n:02d}.S") for n in range(18)]
+
 TIMS = [
     ("the title artwork", "8 bit, VRAM (640,0)"),
     ("KING'S", "8 bit, VRAM (640,256)"),
@@ -208,6 +215,7 @@ def video(out="out/godot/opening", only=None):
     jobs = [(f"movie{i}", p) for i, p, _f, _w in MOVIES]
     jobs.append(("title_music", TITLE_STREAM[0]))
     jobs += [(f"cutscene{n:02d}", p) for n, p, _w in CUTSCENES]
+    jobs += [(f"dream{n:02d}", p) for n, p in DREAMS]
     for name, path in jobs:
         if only and name != only:
             continue
@@ -332,6 +340,8 @@ def main(out="out/godot/opening"):
                if not os.path.exists(f"{out}/movie{i}.ogv")]
     missing += [f"cutscene{n:02d}" for n, _p, _w in CUTSCENES
                 if not os.path.exists(f"{out}/cutscene{n:02d}.ogv")]
+    missing += [f"dream{n:02d}" for n, _p in DREAMS
+                if not os.path.exists(f"{out}/dream{n:02d}.ogv")]
     if not os.path.exists(f"{out}/title_music.ogg"):
         missing.append("title_music")
     if not missing:

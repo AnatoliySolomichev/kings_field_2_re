@@ -81,6 +81,9 @@ const SPELL := 0x17
 const EMPTY := 0x1A
 const GOLD := 0x19
 
+var dream: VideoStreamPlayer       # the night's dream while it plays
+var dream_layer: CanvasLayer
+var night := -1                     # its scene
 var after_service := false         # a service a conversation ended in is up
 var player: Node3D
 var rows := {}                     # slot -> row, lootNN.json and the state
@@ -311,12 +314,25 @@ func _exit_tree() -> void:
 func _process(dt: float) -> void:
 	if rows.is_empty():
 		return
+	if dream != null:
+		# the night's dream: START or a face button ends it, as play_movie's
+		# rule does -- the port's; str_play's own loop waits for the end
+		KFPad.poll()
+		var skip := KFPad.hit_mask(KFPad.START | KFPad.TRIANGLE | KFPad.SQUARE
+			| KFPad.CIRCLE | KFPad.CROSS) or Input.is_key_pressed(KEY_ESCAPE)
+		if skip or not dream.is_playing():
+			_wake()
+		return
 	if after_service:
-		# the shop the conversation's end opened, until it closes
+		# the shop or the inn the conversation's end opened, until it closes
 		var menu = get_node_or_null("../UI/Menu")
 		if menu != null and str(menu.state) != "":
 			return
 		after_service = false
+		if menu != null and int(menu.night_scene) >= 0:
+			_sleep(int(menu.night_scene))
+			menu.night_scene = -1
+			return
 		KFGame.modal = false
 		player.clear_movement()
 		_interact(0, true)
@@ -711,10 +727,13 @@ func _talk_next() -> void:
 	# .L19, the end of the call: the service of the header's +0x12
 	var svc := int(talking["sc"]["header"]["service"])
 	talking = {}
-	if svc != KFTalk.NO_SERVICE and svc & 0xF0 == 0x00:
+	if svc != KFTalk.NO_SERVICE and (svc & 0xF0 == 0x00 or svc & 0xF0 == 0x40):
 		var menu = get_node_or_null("../UI/Menu")
 		if menu != null:
-			menu.open_shop(svc & 0xF)
+			if svc & 0xF0 == 0x00:
+				menu.open_shop(svc & 0xF)
+			else:
+				menu.open_inn(svc & 0xF)
 			after_service = true
 			return
 	KFGame.modal = false
@@ -1334,3 +1353,56 @@ static func game_basis(rx: int, ry: int, rz: int) -> Basis:
 static func _facing(a: int, b: int, tol: int) -> bool:
 	var d := (a - b) & 0xFFF
 	return d <= tol or d >= 0x1000 - tol
+
+
+# A night at the inn: cutscene_step's phase 1 for the scene, state 7 taking
+# the player to the scene's place, phase 4 the movie -- the inns' scenes'
+# first byte is 0xff, so str_play makes the name from its second template,
+# \DRM\DXX.S, with a number rand() * 18 >> 15: one of eighteen dreams at
+# random -- then state 9 back, and phase 8 the level's entry 7 (_wake). The
+# two moves are not here; nor is the game's rand's sequence.
+# @orig game:0x80060ea0 str_play+0x180  status:partial -- the dream's name: 0x10 and over takes \DRM\DXX.S and rand() * 18 >> 15; the streaming is Godot's
+func _sleep(scene: int) -> void:
+	night = scene
+	var k := (18 * (randi() & 0x7FFF)) >> 15
+	var path := "res://opening/dream%02d.ogv" % k
+	KFInfo.note("inn: scene %d, the dream D%02d.S" % [scene, k])
+	if not ResourceLoader.exists(path):
+		_wake()
+		return
+	dream_layer = CanvasLayer.new()
+	dream_layer.layer = 10
+	var back := ColorRect.new()
+	back.color = Color.BLACK
+	back.anchor_right = 1.0
+	back.anchor_bottom = 1.0
+	dream_layer.add_child(back)
+	dream = VideoStreamPlayer.new()
+	dream.stream = load(path)
+	dream.expand = true
+	dream.anchor_right = 1.0
+	dream.anchor_bottom = 1.0
+	dream_layer.add_child(dream)
+	add_child(dream_layer)
+	dream.play()
+
+
+# The night's end: phase 8's call of the level's entry 7 with the scene --
+# the inn's healing (KFTalk.night) -- and the world going on.
+# @orig game:0x80061b64 cutscene_step+0x224  status:transcribed -- phase 8: the level's entry 7 with the scene
+func _wake() -> void:
+	if dream_layer != null:
+		dream_layer.queue_free()
+	dream = null
+	dream_layer = null
+	var mp_max := int(player.character.get("mp_max", player.mp))
+	var r := KFTalk.night(player._level(), night, int(player.hp), int(player.hp_max),
+		int(player.mp), mp_max)
+	player.hp = int(r[0])
+	player.mp = int(r[1])
+	KFInfo.note("inn: the night over, HP %d of %d, MP %d of %d" % [player.hp, player.hp_max,
+		player.mp, mp_max])
+	night = -1
+	KFGame.modal = false
+	player.clear_movement()
+	_interact(0, true)

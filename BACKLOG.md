@@ -606,10 +606,12 @@ Eating heals. Left, roughly in order:
   the five display bytes are carried by a save in the port: `save_restore`
   writes `0x801b25dd..e0`, and `save_loaded_fixup`'s `apply_control_scheme`
   is one of the things its marker says it leaves out;
-* the shops are in (FORMATS.md, "The shops"); the inn (service `0x40`,
-  `sub_8002200c`, page 7, and the night's scene it starts) and service
-  `0x30` (`0x80021aac`, which opens when the wise fruit's count is 4) are
-  not;
+* the shops and the inn are in (FORMATS.md, "The shops", "The inn"), but
+  for the inn's night the moves of player states 7 and 9 into and out of the
+  scene's place, and the rest of `cutscene_step`'s machine (the scenes with
+  movies of their own, `\STR\S04..S15`, and the gates on story flags);
+  service `0x30` (`0x80021aac`, which opens when the wise fruit's count is
+  4) is not;
 * `pad_read_latch`'s repeat while a direction is held -- the port reads new
   presses only.
 
