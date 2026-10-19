@@ -97,6 +97,10 @@ var sound := {}                     # OPTION 1's three sliders and row while it 
 var quit_sel := 1                   # QUIT GAME's answer lit
 var wait_left := 0                  # menu_system's "please wait": the boxes still to show
 var saves := {}                     # LOAD's list while it is up
+var shop := -1                      # the shop a conversation has opened, or -1
+var shop_sel := 0                   # its page's line: buy, sell
+var stall := {}                     # its list while it is up
+var sell_cursor := 0                # gp+0x89
 var prompt_sel := 0
 var equip_sel := 0                  # the equipment screen's line
 var records_sel := 0                # status/records' line: offense/defense, conversation
@@ -418,6 +422,11 @@ static func panel(o: Dictionary, lk: Dictionary, s: Dictionary, mode: int) -> vo
 			x += 0xCE
 			draw_number(o, lk, rec(NUMBER_STYLE), x, y,
 				number_digits(int(s["costs"][k]), 3, 0, 3))
+		if m in [0xA, 0xB, 0xD, 0xE, 0xF]:
+			# .L6, the shops' modes: the u32 column (+0x30), the price, in six
+			# digits and the G behind at x + 0xa1, with no -1 test
+			x += 0xA1
+			draw_number(o, lk, rec(NUMBER_STYLE), x, y, number_digits(int(s["costs"][k]), 6, 0, 2))
 		if m == 8 or m == 9:
 			# .L9: the u32 column (+0x30) in seven digits behind its prefix at
 			# x + 0x73 unless -1, then the u8 one (+0x2c) in three at 0x5b on
@@ -453,18 +462,38 @@ static func panel(o: Dictionary, lk: Dictionary, s: Dictionary, mode: int) -> vo
 			int(c[0]) | (int(c[0]) << 8) | (int(c[1]) << 16), 1))
 	if m == 7:
 		quantity(o, lk, int(s.get("qty", 1)))
+	elif m in [0xA, 0xB, 0xE]:
+		quantity(o, lk, int(s.get("qty", 1)), int(s.get("gold", 0)))
+	elif m == 0xD:
+		gold_readout(o, lk, int(s.get("gold", 0)))
 	legend(o, lk, m in [3, 8, 9, 0xC] or (mode & 0x8000) != 0)
 
 
-# ui_quantity(0) (0x80025db8), ui_panel's for mode 7 after the bar: a plate at (0xb7,
-# 0x2e) with "QTY" on it, and the quantity (gp+0x48) in two digits 0x54 to
-# the right. Its 1 -- the shops' modes, at y 0x4a after the gold
-# (sub_80025e80) -- is not here.
-# @orig game:0x80025db8 ui_quantity  status:partial -- its 0, mode 7's; drawn as tools/ui.py draws it, which the game's own ui_panel holds (panel_check, 40 of 40 frames); not its 1
-static func quantity(o: Dictionary, lk: Dictionary, qty: int) -> void:
+# ui_quantity (0x80025db8), ui_panel's after the bar: a plate at (0xb7, 0x2e)
+# with "QTY" on it and the quantity (gp+0x48) in two digits 0x54 to the
+# right -- its 0, mode 7's; its 1, the shops' 0xa, 0xb and 0xe, draws the gold
+# first (gold >= 0) and the plate at y 0x4a.
+# @orig game:0x80025db8 ui_quantity  status:verified -- tools/ui.py quantity, through the game's own ui_panel: mode 7 40 of 40 frames (panel_check), modes 0xa and 0xb with the gold (shop_check)
+static func quantity(o: Dictionary, lk: Dictionary, qty: int, gold := -1) -> void:
+	var y := 0x2E
+	if gold >= 0:
+		gold_readout(o, lk, gold)
+		y = 0x4A
+	label_plate(o, lk, rec(RECORDS + 12 * 2), 0xB7, y)
+	draw_label(o, lk, rec(LABEL_STYLE), 0xB7, y, QTY_WORD)
+	draw_number(o, lk, rec(NUMBER_STYLE), 0xB7 + 0x54, y, number_digits(qty, 2, 0, 1))
+
+
+const GOLD_WORD := [0x06, 0x0E, 0x0B, 0x03, 0xFF]           # "gold"
+
+
+# sub_80025e80: a plate at (0xb7, 0x2e) with "GOLD" on it and the gold in
+# seven digits behind its G, 0x31 to the right -- mode 0xd's, and ui_quantity(1)'s first.
+# @orig game:0x80025e80 ui_gold  status:verified -- tools/ui.py gold_readout, through the game's own ui_panel in the shops' modes (shop_check, 45 of 45 frames)
+static func gold_readout(o: Dictionary, lk: Dictionary, gold: int) -> void:
 	label_plate(o, lk, rec(RECORDS + 12 * 2), 0xB7, 0x2E)
-	draw_label(o, lk, rec(LABEL_STYLE), 0xB7, 0x2E, QTY_WORD)
-	draw_number(o, lk, rec(NUMBER_STYLE), 0xB7 + 0x54, 0x2E, number_digits(qty, 2, 0, 1))
+	draw_label(o, lk, rec(LABEL_STYLE), 0xB7, 0x2E, GOLD_WORD)
+	draw_number(o, lk, rec(NUMBER_STYLE), 0xB7 + 0x31, 0x2E, number_digits(gold, 7, 0, 2))
 
 
 # item_list (0x8001aea4): the things first..last carried in inventory_a --
@@ -748,19 +777,24 @@ static func storage_press(s: Dictionary, press: int, inv_a: PackedByteArray,
 
 # ui_menu_chrome's pad: one word read, one thing done, in this order -- an
 # empty list goes at any button; UP and DOWN move the selection
-# (chrome_move); with kind 2 (the storage) RIGHT raises the quantity
-# (s["qty"], gp+0x48) while the chosen row's count holds one more, and with
-# any kind LEFT lowers it to no less than 1; the confirm asks (mode 1), the
-# cancel leaves (-1). [mode, result -0x63 or -1]. Kind 1, the shops' gold
-# check, is not here.
-# @orig game:0x80022374 ui_menu_chrome+0x78  status:partial -- the pad's arms, verified through storage_check (200 of 200 runs as the game's own): the up, the down, the quantity, the confirm and the cancel; not kind 1 (the shops' gold), the model's turning or the sounds
+# (chrome_move); RIGHT raises the quantity (s["qty"], gp+0x48) -- with kind 2
+# (the storage, selling) while the chosen row's count holds one more, with
+# kind 1 (buying) while the gold pays for one more at the row's price and
+# what is carried stays under 100 with it -- and with any kind LEFT lowers
+# it to no less than 1; the confirm asks (mode 1), the cancel leaves (-1).
+# [mode, result -0x63 or -1].
+# @orig game:0x80022374 ui_menu_chrome+0x78  status:partial -- the pad's arms, verified through storage_check and shop_check (200 of 200 runs each as the game's own): the up, the down, both quantities, the confirm and the cancel; not the model's turning or the sounds
 static func chrome_pad(s: Dictionary, press: int, kind: int, confirm: int, cancel: int) -> Array:
 	if int(s["count"]) == 0:
 		return [0, -1 if press != 0 else -0x63]
 	if press & (UP | DOWN):
 		chrome_move(s, press)
 	elif press & RIGHT:
-		if kind == 2 and int(s["counts"][int(s["sel"])]) >= int(s["qty"]) + 1:
+		var k := int(s["sel"])
+		if kind == 2 and int(s["counts"][k]) >= int(s["qty"]) + 1:
+			s["qty"] = int(s["qty"]) + 1
+		elif kind == 1 and int(s["gold"]) >= (int(s["qty"]) + 1) * int(s["costs"][k]) \
+				and int(s["counts"][k]) + 1 + int(s["qty"]) < 0x64:
 			s["qty"] = int(s["qty"]) + 1
 	elif press & LEFT:
 		if kind != 0 and int(s["qty"]) >= 2:
@@ -1166,6 +1200,111 @@ const YES_WORD := [0x18, 0x04, 0x12, 0xFF]
 const NO_WORD := [0x0D, 0x0E, 0xFF]
 
 
+# shop_buy's list (0x80021298): item_list over shop n's stock 0..0x95, and
+# sub_800216a4 beside it -- each row's count what the player carries, its
+# price off the shop's table -- under ui_menu_label(6, 0), "BUY"; three rows
+# from y 0x93, opening at the row the shop's byte at 0x8009c298 gives.
+# @orig game:0x800216a4 shop_rows  status:verified -- the counts and prices, through shop_check's runs (200 of 200 as the game's own)
+static func shop_buy_list(n: int, stock: PackedByteArray, inv: PackedByteArray, gold: int) -> Dictionary:
+	var l := item_list(stock, 0, 0x95)
+	var ids: Array = l["ids"]
+	var price: Array = data["shops"]["price"][n]
+	var counts := []
+	var costs := []
+	for i in ids:
+		counts.append(int(inv[int(i)]))
+		costs.append(int(price[int(i)]))
+	var s := {"tx": 0x1F, "ty": 0x20, "title": data["labels"][6][0][2], "x": 0x1B, "y": 0x93,
+		"rows": 3, "length": 0x18, "count": ids.size(), "names": l["names"], "counts": counts,
+		"costs": costs, "ids": ids, "qty": 1, "gold": gold, "mode": 0, "prompt": 0, "shop": n,
+		"buy": true, "sel": 0, "first": 0, "sel_row": 0}
+	place(s, int(data["shops"]["start"][n]))
+	return s
+
+
+# shop_sell's list (0x80021724): item_list_unheld over the things carried,
+# each at shop n's paying price (sub_80021a4c), under ui_menu_label(6, 1),
+# "SELL"; the selection where gp+0x89 left it.
+# @orig game:0x80021a4c shop_pays_rows  status:verified -- the paying prices, through shop_check's runs
+static func shop_sell_list(n: int, inv: PackedByteArray, st: Dictionary, gold: int, cursor: int) -> Dictionary:
+	var l := store_rows(inv, st)
+	var ids: Array = l["ids"]
+	var pays: Array = data["shops"]["pays"][n]
+	var costs := []
+	for i in ids:
+		costs.append(int(pays[int(i)]))
+	var s := {"tx": 0x1F, "ty": 0x20, "title": data["labels"][6][1][2], "x": 0x1B, "y": 0x93,
+		"rows": 3, "length": 0x18, "count": ids.size(), "names": l["names"], "counts": l["counts"],
+		"costs": costs, "ids": ids, "qty": 1, "gold": gold, "mode": 0, "prompt": 0, "shop": n,
+		"buy": false, "sel": 0, "first": 0, "sel_row": 0}
+	place(s, cursor)
+	return s
+
+
+# @port helper -- ui_panel's mode for a shop's list: 0xd buying from shop 0, 0xa from the others, 0xb selling
+static func shop_mode(s: Dictionary) -> int:
+	if not bool(s["buy"]):
+		return 0xB
+	return 0xD if int(s["shop"]) == 0 else 0xA
+
+
+# One pad word on a shop's list. Buying: ui_menu_chrome with kind 1 (shop 0
+# kind 0, no quantity); the confirm refused when the gold is short of the
+# price (times the quantity) or what is carried would reach 100;
+# ui_prompt(s, 3) "yes"/"no"; yes takes the gold, adds the quantity (shop 0
+# one) and at shop 0 takes one off its stock unless the thing is 0x6b.
+# Selling: kind 2, refused when the row's count is under the quantity,
+# ui_prompt(s, 4); yes adds the gold, takes the quantity, and puts it into
+# shop 0's stock, held to 99. -0x63 while up, -1 when it goes, or the id.
+# @orig game:0x80021298 shop_buy  status:partial -- the pad, the checks and the purchase, verified: tools/ui.py shop_press, 200 of 200 runs of both as the game's own and 5 of 5 aimed at shop 0's stock (shop_check); the self-test this to it; not the model's turning, the guide or the sounds
+# @orig game:0x80021724 shop_sell  status:partial -- the same, selling, verified with it
+static func shop_press(s: Dictionary, press: int, inv: PackedByteArray, stock0: PackedByteArray,
+		confirm: int, cancel: int) -> int:
+	var n := int(s["shop"])
+	if int(s["mode"]) == 1:
+		var r := prompt_press(int(s["prompt"]), press, confirm, cancel)
+		s["prompt"] = int(r[0])
+		if r[1] == null:
+			return -0x63
+		if int(r[1]) != 0:
+			s["mode"] = 0
+			return -0x63
+		var k := int(s["sel"])
+		var i := int(s["ids"][k])
+		if bool(s["buy"]):
+			if n == 0:
+				s["qty"] = 1
+			s["gold"] = int(s["gold"]) - int(s["costs"][k]) * int(s["qty"])
+			inv[i] = (int(inv[i]) + int(s["qty"])) & 0xFF
+			if n == 0 and i != 0x6B:
+				stock0[i] = (int(stock0[i]) - 1) & 0xFF
+		else:
+			s["gold"] = int(s["gold"]) + int(s["costs"][k]) * int(s["qty"])
+			inv[i] = (int(inv[i]) - int(s["qty"])) & 0xFF
+			var v := (int(stock0[i]) + int(s["qty"])) & 0xFF
+			stock0[i] = v if v < 0x64 else 0x63
+		return i
+	var kind := 2
+	if bool(s["buy"]):
+		kind = 1 if n > 0 else 0
+	var c := chrome_pad(s, press, kind, confirm, cancel)
+	if int(c[1]) == -1:
+		return -1
+	if int(c[0]) == 1:
+		var k := int(s["sel"])
+		var i := int(s["ids"][k])
+		var bad := false
+		if bool(s["buy"]):
+			var q := 1 if n == 0 else int(s["qty"])
+			bad = int(s["gold"]) < int(s["costs"][k]) * q or int(inv[i]) + q >= 0x64
+		else:
+			bad = int(s["counts"][k]) < int(s["qty"])
+		if not bad:
+			s["mode"] = 1
+			s["prompt"] = 0
+	return -0x63
+
+
 # QUIT GAME's answers, immediates in its code
 const QUIT_YES := [0xAB, 0xA2, [0x18, 0x04, 0x12, 0xFF]]
 const QUIT_NO := [0xE5, 0xA2, [0x0D, 0x0E, 0xFF]]
@@ -1466,6 +1605,30 @@ func _quit() -> void:
 	get_tree().change_scene_to_file("res://boot.tscn")
 
 
+# The service at a conversation's end that is a shop (+0x12's high nibble
+# 0): render_frame_bare, then menu_shop(n) -- page 6, "buy" and "sell" -- and
+# the conversation's end after it.
+# @orig game:0x8005c6a8 script_interpreter+0x3a0  status:transcribed -- .L21: the shop's service
+# @orig game:0x80021114 menu_shop  status:transcribed -- the page: sub_800221e8 over its two lines, a list for each, the cancel ending it
+func open_shop(n: int) -> void:
+	KFGame.modal = true
+	shop = n
+	shop_sel = 0
+	state = "shop"
+	visible = true
+	acc = 0.0
+	if KFGame.shop0.is_empty():
+		KFGame.shop0 = PackedByteArray(data["shops"]["stock"].slice(0, 150))
+	KFInfo.note("menu: shop %d" % n)
+
+
+# @port helper -- shop n's stock: shop 0's the live one, the others' as the disc has them
+func _shop_stock(n: int) -> PackedByteArray:
+	if n == 0:
+		return KFGame.shop0
+	return PackedByteArray((data["shops"]["stock"] as Array).slice(150 * n, 150 * n + 150))
+
+
 # @port helper -- the menu closed, the world going again
 func _close() -> void:
 	state = ""
@@ -1703,6 +1866,38 @@ func _step(press: int) -> void:
 					_load(int(saves["ids"][int(saves["sel"])]))
 				else:
 					state = "load"
+		"shop":
+			# menu_shop (0x80021114): sub_800221e8 over page 6's two lines; the
+			# cancel ends it, and the conversation with it
+			if press & UP:
+				shop_sel = 1 if shop_sel == 0 else shop_sel - 1
+				moved = true
+			elif press & DOWN:
+				shop_sel = 0 if shop_sel == 1 else shop_sel + 1
+				moved = true
+			elif press & confirm:
+				var inv: KFItems = player.inventory
+				var stock: PackedByteArray = _shop_stock(shop)
+				stall = shop_buy_list(shop, stock, inv.a, int(player.gold)) if shop_sel == 0 \
+					else shop_sell_list(shop, inv.a, _equip_state(), int(player.gold), sell_cursor)
+				state = "shop_list"
+			elif press & cancel:
+				_close()
+		"shop_list":
+			var inv: KFItems = player.inventory
+			var was := int(stall["prompt"])
+			var end := shop_press(stall, press, inv.a, KFGame.shop0, confirm, cancel)
+			if int(stall["mode"]) == 1 and int(stall["prompt"]) != was:
+				moved = true
+			if not bool(stall["buy"]):
+				sell_cursor = int(stall["sel"])                # gp+0x89
+			if end != -0x63:
+				if end >= 0:
+					player.gold = int(stall["gold"])
+					KFInfo.note("shop %d: %s %d of %d, gold %d" % [shop,
+						"bought" if bool(stall["buy"]) else "sold", int(stall["qty"]), end,
+						int(player.gold)])
+				state = "shop"
 		"please_wait":
 			wait_left -= 1
 			if wait_left <= 0:
@@ -1935,6 +2130,17 @@ func _build() -> void:
 			quit_page(ot, look, quit_sel)
 		"please_wait":
 			message_box(ot, look, 7, [PLEASE_WAIT], 0x46, 0x57, 0xB2, 0x42, 0)
+		"shop":
+			menu_page(ot, look, 6, 2, shop_sel)
+		"shop_list":
+			if int(stall["mode"]) == 1:
+				panel(ot, look, stall, shop_mode(stall) | 0x8000)
+				var one: Array = rec("0x8007e778")
+				var two: Array = rec("0x8007e794")
+				answers(ot, look, [int(one[0]), int(one[1]), YES_WORD],
+					[int(two[0]), int(two[1]), NO_WORD], int(stall["prompt"]))
+			else:
+				panel(ot, look, stall, shop_mode(stall))
 		"load":
 			panel(ot, look, saves, 8)
 		"load_prompt":

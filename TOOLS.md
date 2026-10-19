@@ -812,7 +812,10 @@ of 8, and the question run whole, 100 of 100; `box_check` the message box,
 4 of 4, run on a machine of its own because it draws its own two frames;
 `load_check` LOAD's `save_title_numbers` on the card's saves and made-up
 titles, 33 of 33 with the BIOS's file calls stood in for in Python, and
-`ui_panel` mode 8, 40 of 40.
+`ui_panel` mode 8, 40 of 40. `shop_check` holds the shops: their lists in
+modes `0xd`, `0xa` and `0xb` against the game's own `ui_panel`, 45 of 45
+frames, and `shop_buy` and `shop_sell` run whole for all five shops, 200 of
+200 runs plus 5 of 5 aimed at shop 0's stock.
 
 ```
 python3 tools/ui.py            the use-item screen against both snapshots, both buffers

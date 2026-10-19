@@ -310,6 +310,12 @@ def panel(f, look, e, s, mode):
             x += 0xCE
             draw_number(f, look, record(e, NUMBER_STYLE), x, y,
                         number_digits(s["costs"][k], 3, 0, 3))
+        if m in (0xA, 0xB, 0xD, 0xE, 0xF):
+            # .L6, the shops' modes: the u32 column (+0x30), the price, in six
+            # digits and the G behind at x + 0xa1 -- with no -1 test
+            x += 0xA1
+            draw_number(f, look, record(e, NUMBER_STYLE), x, y,
+                        number_digits(s["costs"][k], 6, 0, 2))
         if m in (8, 9):
             # .L9: the u32 column (+0x30) in seven digits behind its prefix at
             # x + 0x73 unless -1, then the u8 one (+0x2c) in three at 0x5b on
@@ -346,21 +352,42 @@ def panel(f, look, e, s, mode):
                        tpage, clut, c0 | (c0 << 8) | (c1 << 16), 1))
     if m == 7:
         quantity(f, look, e, s.get("qty", 1))
+    elif m in (0xA, 0xB, 0xE):
+        quantity(f, look, e, s.get("qty", 1), s.get("gold", 0))
+    elif m == 0xD:
+        gold_readout(f, look, e, s.get("gold", 0))
     legend(f, look, e, mode)
 
 
 QTY_WORD = [0x10, 0x13, 0x18, 0xFF]              # "qty"
 
 
-def quantity(f, look, e, qty):
-    """ui_quantity(0) (0x80025db8), ui_panel's for mode 7 after the bar: a plate at
-    (0xb7, 0x2e) with "QTY" on it, and the quantity (gp+0x48) in two digits
-    0x54 to the right. Its 1 (the shops' modes) moves it to y 0x4a and draws
-    the gold first (sub_80025e80); not here."""
-    title_plate(f, look, record(e, RECORDS + 12 * 2), 0xB7, 0x2E)
-    draw_label(f, look, record(e, LABEL_STYLE), 0xB7, 0x2E, QTY_WORD)
-    draw_number(f, look, record(e, NUMBER_STYLE), 0xB7 + 0x54, 0x2E,
+def quantity(f, look, e, qty, gold=None):
+    """ui_quantity (0x80025db8), ui_panel's after the bar: a plate at (0xb7,
+    0x2e) with "QTY" on it and the quantity (gp+0x48) in two digits 0x54 to
+    the right -- its 0, mode 7's; its 1, the shops' modes 0xa, 0xb and 0xe,
+    draws the gold first (sub_80025e80) and the plate at y 0x4a."""
+    y = 0x2E
+    if gold is not None:
+        gold_readout(f, look, e, gold)
+        y = 0x4A
+    title_plate(f, look, record(e, RECORDS + 12 * 2), 0xB7, y)
+    draw_label(f, look, record(e, LABEL_STYLE), 0xB7, y, QTY_WORD)
+    draw_number(f, look, record(e, NUMBER_STYLE), 0xB7 + 0x54, y,
                 number_digits(qty, 2, 0, 1))
+
+
+GOLD_WORD = [0x06, 0x0E, 0x0B, 0x03, 0xFF]          # "gold"
+
+
+def gold_readout(f, look, e, gold):
+    """sub_80025e80: a plate at (0xb7, 0x2e) with "GOLD" on it and
+    player_gold in seven digits behind its G, 0x31 to the right -- ui_panel's
+    for mode 0xd, and ui_quantity(1)'s first."""
+    title_plate(f, look, record(e, RECORDS + 12 * 2), 0xB7, 0x2E)
+    draw_label(f, look, record(e, LABEL_STYLE), 0xB7, 0x2E, GOLD_WORD)
+    draw_number(f, look, record(e, NUMBER_STYLE), 0xB7 + 0x31, 0x2E,
+                number_digits(gold, 7, 0, 2))
 
 
 def legend(f, look, e, mode, two=None):
@@ -769,11 +796,12 @@ def chrome(s, press, kind, confirm, cancel):
     """ui_menu_chrome's pad (0x800222fc): one word read, one thing done, in
     this order -- an empty list goes at any button; UP and DOWN move the
     selection (wrapping, the rows shown moving only at their edge); with kind
-    2 (the storage) RIGHT raises the quantity (s["qty"], gp+0x48) while the
-    chosen row's count holds one more, and with any kind LEFT lowers it to no
-    less than 1; the confirm asks (mode 1), the cancel leaves (-1). Kind 1,
-    the shops' gold check, is not here. Returns (mode, result): mode 0 or 1,
-    result -0x63 for nothing or -1."""
+    2 (the storage, selling) RIGHT raises the quantity (s["qty"], gp+0x48)
+    while the chosen row's count holds one more, with kind 1 (buying) while
+    the gold pays for one more at the row's price and what is carried stays
+    under 100 with it, and with any kind LEFT lowers it to no less than 1;
+    the confirm asks (mode 1), the cancel leaves (-1). Returns (mode,
+    result): mode 0 or 1, result -0x63 for nothing or -1."""
     n = s["count"]
     if n == 0:
         return (0, -1) if press else (0, -0x63)
@@ -802,6 +830,9 @@ def chrome(s, press, kind, confirm, cancel):
             s["sel"] = s["first"] = s["sel_row"] = 0
     elif press & RIGHT:
         if kind == 2 and s["counts"][s["sel"]] >= s["qty"] + 1:
+            s["qty"] += 1
+        elif kind == 1 and s["gold"] >= (s["qty"] + 1) * s["costs"][s["sel"]] \
+                and s["counts"][s["sel"]] + 1 + s["qty"] < 0x64:
             s["qty"] += 1
     elif press & LEFT:
         if kind and s["qty"] >= 2:
@@ -2217,6 +2248,299 @@ def load_check(out=sys.stdout):
     return ok == len(heads) and other and ok2 == n2
 
 
+# --- the shops: shop_buy and shop_sell ------------------------------------------
+
+SHOP_STOCK = 0x80080718     # 150 bytes a shop: what it has of each thing
+SHOP_PRICE = 0x80080A9C     # 300 a shop: u16, what each costs
+SHOP_PAYS = 0x800811A4      # 300 a shop: u16, what it pays for each
+SHOP_START = 0x8009C298     # five bytes: the row each shop's list opens at
+SHOP_SELL_CURSOR = GP + 0x89
+
+
+def shop_prices(e, n):
+    """Shop n's two price tables, 150 u16 each, as the disc has them."""
+    buy = list(struct.unpack("<150H", e.bytes(SHOP_PRICE + 300 * n, 300)))
+    pays = list(struct.unpack("<150H", e.bytes(SHOP_PAYS + 300 * n, 300)))
+    return buy, pays
+
+
+def shop_buy_list(e, n, stock, inv, gold):
+    """shop_buy's list (0x80021298): item_list over shop n's stock 0..0x95,
+    and sub_800216a4 beside it -- each row's count what the player carries,
+    its price off the shop's table -- under ui_menu_label(6, 0), "BUY"; three
+    rows from y 0x93, opening at the row the shop's byte at 0x8009c298 says."""
+    names, _c, ids = item_list(e, stock, 0, 0x95)
+    buy, _pays = shop_prices(e, n)
+    lab = e.bytes(0x8007E67C + 252 * 6 + 4, 16)
+    out = {"tx": 0x1F, "ty": 0x20, "title": list(lab), "x": 0x1B, "y": 0x93, "rows": 3,
+           "length": 0x18, "count": len(ids), "names": names,
+           "counts": [inv[i] for i in ids], "costs": [buy[i] for i in ids], "ids": ids,
+           "qty": 1, "gold": gold, "mode": 0, "prompt": 0, "shop": n, "buy": True}
+    place(out, e.bytes(SHOP_START + n, 1)[0])
+    return out
+
+
+def shop_sell_list(e, n, inv, st, gold, cursor):
+    """shop_sell's list (0x80021724): item_list_unheld over the things
+    carried, 0..0x95, each at shop n's paying price (sub_80021a4c), under
+    ui_menu_label(6, 1), "SELL"; the selection where gp+0x89 left it."""
+    names, counts, ids = store_rows(e, inv, st)
+    _buy, pays = shop_prices(e, n)
+    lab = e.bytes(0x8007E67C + 252 * 6 + 28 + 4, 16)
+    out = {"tx": 0x1F, "ty": 0x20, "title": list(lab), "x": 0x1B, "y": 0x93, "rows": 3,
+           "length": 0x18, "count": len(ids), "names": names, "counts": counts,
+           "costs": [pays[i] for i in ids], "ids": ids, "qty": 1, "gold": gold,
+           "mode": 0, "prompt": 0, "shop": n, "buy": False}
+    place(out, cursor)
+    return out
+
+
+def shop_mode(s):
+    """ui_panel's mode for a shop's list: 0xd buying from shop 0 (no
+    quantity), 0xa buying from the others, 0xb selling."""
+    return (0xD if s["shop"] == 0 else 0xA) if s["buy"] else 0xB
+
+
+def shop_press(s, press, inv, stock0, confirm, cancel):
+    """One pad word on a shop's list. Buying: ui_menu_chrome with kind 1
+    (shop 0 kind 0, no quantity); the confirm refused -- sound 0xe, back to
+    the list -- when the gold is short of the price (times the quantity) or
+    what is carried would reach 100; ui_prompt(s, 3) "yes"/"no"; yes takes
+    the gold, adds the quantity (shop 0 always one) and, at shop 0, takes
+    one off its stock unless the thing is 0x6b. Selling: kind 2, refused
+    when the row's count is under the quantity, ui_prompt(s, 4); yes adds
+    the gold, takes the quantity, and puts it into shop 0's stock, held to
+    99. `inv`, `stock0` change in place, s["gold"] with them. None while up,
+    -1 when it goes, or the id bought or sold."""
+    n = s["shop"]
+    if s["mode"] == 1:
+        s["prompt"], ans = prompt_press(s["prompt"], press, confirm, cancel)
+        if ans is None:
+            return None
+        if ans != 0:
+            s["mode"] = 0
+            return None
+        k = s["sel"]
+        i = s["ids"][k]
+        if s["buy"]:
+            if n == 0:
+                s["qty"] = 1
+            s["gold"] -= s["costs"][k] * s["qty"]
+            inv[i] = (inv[i] + s["qty"]) & 0xFF
+            if n == 0 and i != 0x6B:
+                stock0[i] = (stock0[i] - 1) & 0xFF
+        else:
+            s["gold"] += s["costs"][k] * s["qty"]
+            inv[i] = (inv[i] - s["qty"]) & 0xFF
+            v = (stock0[i] + s["qty"]) & 0xFF
+            stock0[i] = v if v < 0x64 else 0x63
+        return i
+    kind = (1 if n > 0 else 0) if s["buy"] else 2
+    mode, result = chrome(s, press, kind, confirm, cancel)
+    if result == -1:
+        return -1
+    if mode == 1:
+        k = s["sel"]
+        i = s["ids"][k]
+        if s["buy"]:
+            q = 1 if n == 0 else s["qty"]
+            bad = s["gold"] < s["costs"][k] * q or inv[i] + q >= 0x64
+        else:
+            bad = s["counts"][k] < s["qty"]
+        if not bad:
+            s["mode"], s["prompt"] = 1, 0
+    return None
+
+
+SHOP_ROUTINES = {True: 0x80021298, False: 0x80021724}
+
+
+def game_shop(base, buy, n, inv, gold, stocks, st, cursor, presses):
+    """shop_buy(n) or shop_sell(n) run whole over `base`, with the
+    inventory, the gold, the five shops' stock, the worn things and the sell
+    cursor laid in, the pad scripted, the drawing, the models and the guide
+    stood in for: (returned, words read, inventory_a, gold, the stock, the
+    sell cursor)."""
+    import mipsrun
+    cpu = mipsrun.menu_cpu(base)
+    a = INVENTORY_A & 0x1FFFFF
+    cpu.ram[a:a + 150] = bytes(inv)
+    cpu.wr(0x801B2534, 4, gold)
+    o = SHOP_STOCK & 0x1FFFFF
+    cpu.ram[o:o + len(stocks)] = bytes(stocks)
+    cpu.ram[0x1B25AF] = st["weapon"]
+    cpu.ram[0x1B25AD] = st["item_b"]
+    cpu.ram[0x1B25D4:0x1B25DB] = bytes(st["worn"])
+    cpu.wr(SHOP_SELL_CURSOR, 1, cursor)
+    script = list(presses)
+    read = [0]
+
+    def latch(c):
+        if not script:
+            raise _Out
+        read[0] += 1
+        return script.pop(0)
+
+    cpu.hooks[0x800279A4] = latch
+    for at in (0x80027A40, 0x800279D8, 0x80026FE4, 0x800270F8, 0x80025468, 0x80025B24,
+               0x80025BE8, 0x80027A9C, 0x80024F88):
+        cpu.hooks[at] = lambda c: 0
+    try:
+        cpu.call(SHOP_ROUTINES[buy], n)
+        returned = True
+    except _Out:
+        returned = False
+    return (returned, read[0], list(cpu.ram[a:a + 150]), cpu.rd(0x801B2534, 4),
+            list(cpu.ram[o:o + len(stocks)]), cpu.rd(SHOP_SELL_CURSOR, 1))
+
+
+def shop_check(out=sys.stdout, n=200):
+    """The shops against the game's own code over menu1: the buy and sell
+    lists drawn in modes 0xd, 0xa and 0xb with the gold and the quantity;
+    and shop_buy and shop_sell run whole for each of the five shops on
+    random inventories, gold and runs of pad words -- the gold, the
+    inventory, the stock and the sell cursor after."""
+    import random
+    import mipsrun
+    path = os.path.join(ROOT, "out", "snap", "menu1.ram")
+    if not os.path.exists(path):
+        print("  no menu1 snapshot to run the shops over", file=out)
+        return True
+    e = exe()
+    base = bytearray(open(path, "rb").read())
+    stocks0 = list(e.bytes(SHOP_STOCK, 150 * 5))
+    confirm = struct.unpack_from("<I", base, (GP + 0x38) & 0x1FFFFF)[0]
+    cancel = struct.unpack_from("<I", base, (GP + 0x3C) & 0x1FFFFF)[0]
+    rng = random.Random(0x5409)
+    ok = runs = 0
+    first = None
+    for k in range(45):
+        shop, buy = k % 5, (k // 5) % 3 != 2
+        inv = [0] * 150
+        for i in rng.sample(range(0x96), rng.randrange(0, 14)):
+            inv[i] = rng.randrange(1, 100)
+        stock = list(stocks0[150 * shop:150 * shop + 150])
+        st = {"weapon": 0xFF, "worn": [0xFF] * 7, "item_b": 0xFF}
+        gold = rng.choice((0, 50, 1234, 99999, rng.randrange(10 ** 7)))
+        s = (shop_buy_list(e, shop, stock, inv, gold) if buy
+             else shop_sell_list(e, shop, inv, st, gold, rng.randrange(8)))
+        s["qty"] = rng.choice((1, 2, 9, 99))
+        mode = shop_mode(s) | (0x8000 if rng.randrange(3) == 0 else 0)
+        pulse = rng.randrange(0x60)
+        ram = bytearray(base)
+        at = _lay_list(ram, s)
+        struct.pack_into("<I", ram, (GP + 0x48) & 0x1FFFFF, s["qty"])
+        struct.pack_into("<I", ram, 0x1B2534, gold)
+        prims, _cpu = mipsrun.frame(ram, [(0x80025468, at, mode)], pulse)
+        look = Look(ram)
+        look.pulse = pulse
+        f = Frame()
+        panel(f, look, e, s, mode)
+        got = mipsrun.two_d(prims)
+        want = [(d, p) for d, p in f.order()]
+        runs += 1
+        ok += got == want
+        if got != want and first is None:
+            j = next((i for i, (a, b) in enumerate(zip(got, want)) if a != b), min(len(got), len(want)))
+            first = (f"shop {shop} mode {mode:#x}: {len(got)} primitives, the model {len(want)}; at {j}: "
+                     f"game {got[j] if j < len(got) else None} model {want[j] if j < len(want) else None}")
+    print(f"  the shops' lists, ui_panel modes 0xd, 0xa and 0xb with the gold and the "
+          f"quantity, as the game's own draws them over menu1: {ok} of {runs} frames", file=out)
+    if first:
+        print("  first difference: " + first, file=out)
+    ok2 = 0
+    first2 = None
+    tally = {"bought": 0, "sold": 0, "left": 0}
+    for i in range(n):
+        shop, buy = i % 5, (i // 5) % 2 == 0
+        inv = [0] * 150
+        for j in rng.sample(range(0x96), rng.randrange(0, 14)):
+            inv[j] = rng.choice((1, 2, rng.randrange(1, 100), 98, 99))
+        stocks = list(stocks0)
+        for j in rng.sample(range(150), 20):
+            stocks[j] = rng.choice((0, 1, 2, 98, 99))
+        carried = [j for j in range(0x96) if inv[j]] or [0xFF]
+        st = {"weapon": rng.choice(carried + [0xFF]), "worn": [rng.choice(carried + [0xFF] * 3)
+                                                             for _ in range(7)],
+              "item_b": rng.choice(carried + [0xFF] * 3)}
+        gold = rng.choice((0, 30, 500, 5000, 99999, rng.randrange(100000)))
+        cursor = rng.randrange(8)
+        words = [UP, DOWN, LEFT, RIGHT, RIGHT, confirm, confirm, cancel]
+        presses = [rng.choice(words) for _ in range(rng.randrange(1, 18))]
+        if i % 3 == 0:
+            # a quantity raised and the answer "yes": a purchase or a sale,
+            # or a refusal when the gold or the count will not stand it
+            presses = ([rng.choice((UP, DOWN))] * rng.randrange(3) + [RIGHT] * rng.randrange(6)
+                       + [confirm, confirm])
+        presses += [cancel, cancel]
+        g = game_shop(base, buy, shop, inv, gold, stocks, st, cursor, presses)
+        ma, mstocks = list(inv), list(stocks)
+        stock = mstocks[150 * shop:150 * shop + 150]
+        s = (shop_buy_list(e, shop, stock, ma, gold) if buy
+             else shop_sell_list(e, shop, ma, st, gold, cursor))
+        stock0 = mstocks[0:150]
+        used, end = 0, None
+        for p in presses:
+            used += 1
+            end = shop_press(s, p, ma, stock0, confirm, cancel)
+            if end is not None:
+                break
+        mstocks[0:150] = stock0
+        m = (end is not None, used, ma, s["gold"] & 0xFFFFFFFF, mstocks,
+             s["sel"] if not buy else cursor)
+        ok2 += g == m
+        tally["left" if end in (None, -1) else ("bought" if buy else "sold")] += 1
+        if g != m and first2 is None:
+            j = next(j for j in range(6) if g[j] != m[j])
+            first2 = (f"run {i} (shop {shop}, {'buy' if buy else 'sell'}), "
+                      f"{('returned', 'words', 'inventory', 'gold', 'stock', 'cursor')[j]}: "
+                      f"game {g[j] if j not in (2, 4) else [x for x in range(len(g[j])) if g[j][x] != m[j][x]][:6]} "
+                      f"model {m[j] if j not in (2, 4) else ''}")
+    # two paths the random runs seldom reach: buying 0x6b at shop 0, whose
+    # stock it does not run down, and selling into a stock of shop 0's
+    # already near 99, which holds at 99
+    targeted = 0
+    for buy, item, stock_v, qty in ((True, 0x6B, 5, 1), (True, 0x68, 3, 1),
+                                    (False, 0x68, 98, 2), (False, 0x68, 97, 5),
+                                    (False, 0x6B, 99, 3)):
+        inv = [0] * 150
+        inv[item] = 9
+        inv[0x69] = 4
+        stocks = list(stocks0)
+        stocks[item] = stock_v
+        st = {"weapon": 0xFF, "worn": [0xFF] * 7, "item_b": 0xFF}
+        gold = 99999
+        probe = (shop_buy_list(e, 0, stocks[0:150], inv, gold) if buy
+                 else shop_sell_list(e, 0, inv, st, gold, 0))
+        row = probe["ids"].index(item)
+        presses = [DOWN] * row + [RIGHT] * (qty - 1) + [confirm, confirm, cancel, cancel]
+        g = game_shop(base, buy, 0, inv, gold, stocks, st, 0, presses)
+        ma, mstocks = list(inv), list(stocks)
+        s = (shop_buy_list(e, 0, mstocks[0:150], ma, gold) if buy
+             else shop_sell_list(e, 0, ma, st, gold, 0))
+        stock0 = mstocks[0:150]
+        used, end = 0, None
+        for p in presses:
+            used += 1
+            end = shop_press(s, p, ma, stock0, confirm, cancel)
+            if end is not None:
+                break
+        mstocks[0:150] = stock0
+        m = (end is not None, used, ma, s["gold"] & 0xFFFFFFFF, mstocks, s["sel"] if not buy else 0)
+        targeted += g == m
+        if g != m and first2 is None:
+            first2 = f"targeted {'buy' if buy else 'sell'} {item:#x}: game {g[4][item]} model {m[4][item]}"
+    print(f"  ... and five runs aimed at shop 0's stock -- buying 0x6b, selling into 97..99: "
+          f"{targeted} of 5", file=out)
+    print(f"  shop_buy and shop_sell, the game's own run whole over menu1 for the five "
+          f"shops: {ok2} of {n} runs alike -- gold, inventory, stock and the sell "
+          f"cursor ({tally['bought']} bought, {tally['sold']} sold, {tally['left']} left)",
+          file=out)
+    if first2:
+        print("  first difference: " + first2, file=out)
+    return ok == runs and ok2 == n and targeted == 5
+
+
 def place(s, sel):
     """sub_80027728: the index held to the list, the first row shown and the
     bar's row."""
@@ -2326,6 +2650,12 @@ def export(out_dir):
            "names": [list(e.bytes(NAMES + 24 * i, 24)) for i in range(150)],
            "words": {"select": gp_string(e, 0x7C), "guide": gp_string(e, 0xA4),
                      "return": gp_string(e, 0x74)},
+           # the five shops: their stock, their prices, what they pay, the row
+           # each list opens at
+           "shops": {"stock": list(e.bytes(SHOP_STOCK, 750)),
+                     "price": [shop_prices(e, n)[0] for n in range(5)],
+                     "pays": [shop_prices(e, n)[1] for n in range(5)],
+                     "start": list(e.bytes(SHOP_START, 5))},
            # BUTTON CONFIG's words: options_screen's three tables and two headings
            "options": {"buttons": [c_string(e, BUTTON_WORDS + 8 * k, 8) for k in range(4)],
                        "actions": [c_string(e, ACTION_WORDS + 16 * k, 16) for k in range(9)],
@@ -2542,6 +2872,49 @@ def export_cases(e):
             options(f, llook, e, (45, 58, LOAD_PROMPT[0] + [0xFF]), (45, 84, LOAD_PROMPT[1] + [0xFF]), prompt)
         cases.append({"screen": "load", "saves": [[s, h.hex()] for s, h in lsaves], "prompt": prompt,
                       "sel": 0, "pulse": 0x21, "prims": [[d, p] for d, p in f.order()]})
+    # the shops' lists (which the game's own ui_panel holds, shop_check) and
+    # runs through shop_press
+    stocks0 = list(e.bytes(SHOP_STOCK, 750))
+    sinv = [0] * 150
+    for k, v in ((0, 1), (0x68, 5), (0x69, 98), (0x6B, 2), (0x76, 1), (0x22, 1)):
+        sinv[k] = v
+    sst = {"weapon": 0, "worn": [0x22, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF], "item_b": 0xFF}
+    for shop, buy, gold, qty, prompt in ((1, True, 777, 3, None), (0, True, 50, 1, None),
+                                         (2, False, 12345, 2, None), (4, True, 99999, 1, 0)):
+        plook = Look()
+        plook.pulse = 0x2E
+        sl = (shop_buy_list(e, shop, stocks0[150 * shop:150 * shop + 150], sinv, gold) if buy
+              else shop_sell_list(e, shop, sinv, sst, gold, 1))
+        sl["qty"] = qty
+        f = Frame()
+        panel(f, plook, e, sl, shop_mode(sl) | (0x8000 if prompt is not None else 0))
+        if prompt is not None:
+            options(f, plook, e, (45, 58, LOAD_PROMPT[0] + [0xFF]), (45, 84, LOAD_PROMPT[1] + [0xFF]), prompt)
+        cases.append({"screen": "shop", "shop": shop, "buy": buy, "gold": gold, "qty": qty,
+                      "inventory": sinv, "equip": sst, "prompt": prompt, "sel": sl["sel"],
+                      "pulse": 0x2E, "prims": [[d, p] for d, p in f.order()]})
+    shruns = []
+    for i in range(40):
+        shop, buy = i % 5, (i // 5) % 2 == 0
+        inv = list(sinv)
+        stock0 = list(stocks0[0:150])
+        gold = rng.choice((0, 40, 999, 99999))
+        presses = [rng.choice((UP, DOWN, LEFT, RIGHT, RIGHT, 0x40, 0x40)) for _ in range(rng.randrange(1, 14))]
+        presses += [0x20, 0x20]
+        s = (shop_buy_list(e, shop, stocks0[150 * shop:150 * shop + 150] if shop else stock0, inv, gold)
+             if buy else shop_sell_list(e, shop, inv, sst, gold, 2))
+        start = {"inv": list(inv), "stock0": list(stock0), "gold": gold}
+        used, end = 0, None
+        for p in presses:
+            used += 1
+            end = shop_press(s, p, inv, stock0, 0x40, 0x20)
+            if end is not None:
+                break
+        shruns.append({"shop": shop, "buy": buy, "start": start, "presses": presses,
+                       "used": used, "end": -0x63 if end is None else end, "inv": inv,
+                       "stock0": stock0, "gold": s["gold"], "sel": s["sel"]})
+    cases.append({"screen": "shop_runs", "runs": shruns, "equip": sst, "sel": 0, "pulse": 0,
+                  "prims": []})
     # the message box (which the game's own sub_8001eb3c holds, box_check)
     for title, lines, legend in ((7, [PLEASE_WAIT], 0), (6, [PLEASE_WAIT], 1)):
         blook = Look()
@@ -2798,6 +3171,7 @@ def check(out=sys.stdout, verbose=False):
     menus = quit_check(out) and menus
     menus = box_check(out) and menus
     menus = load_check(out) and menus
+    menus = shop_check(out) and menus
     e = exe()
     ok = bad = 0
     for name in ("inv1", "inv2"):

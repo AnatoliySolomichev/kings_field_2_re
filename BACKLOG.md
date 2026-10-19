@@ -606,9 +606,10 @@ Eating heals. Left, roughly in order:
   the five display bytes are carried by a save in the port: `save_restore`
   writes `0x801b25dd..e0`, and `save_loaded_fixup`'s `apply_control_scheme`
   is one of the things its marker says it leaves out;
-* `ui_menu_chrome`'s kind 1, the shops' gold check, and `ui_quantity(1)`
-  with the gold (`sub_80025e80`) -- the shops' lists, modes 0xa, 0xb and
-  0xe;
+* the shops are in (FORMATS.md, "The shops"); the inn (service `0x40`,
+  `sub_8002200c`, page 7, and the night's scene it starts) and service
+  `0x30` (`0x80021aac`, which opens when the wise fruit's count is 4) are
+  not;
 * `pad_read_latch`'s repeat while a direction is held -- the port reads new
   presses only.
 

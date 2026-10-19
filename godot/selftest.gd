@@ -1903,6 +1903,49 @@ func _menus() -> bool:
 					var two: Array = KFMenu.rec("0x8007e794")
 					KFMenu.answers(o, lk, [int(one[0]), int(one[1]), KFMenu.YES_WORD],
 						[int(two[0]), int(two[1]), KFMenu.NO_WORD], int(case["prompt"]))
+			"shop":
+				var inv := PackedByteArray(case["inventory"])
+				var stocks := PackedByteArray(KFMenu.data["shops"]["stock"])
+				var sh := int(case["shop"])
+				var sl := KFMenu.shop_buy_list(sh, stocks.slice(150 * sh, 150 * sh + 150), inv,
+					int(case["gold"])) if bool(case["buy"]) \
+					else KFMenu.shop_sell_list(sh, inv, case["equip"], int(case["gold"]), 1)
+				sl["qty"] = int(case["qty"])
+				if int(sl["sel"]) != int(case["sel"]):
+					print("  shop %d: the selection %d, python's %d" % [sh, int(sl["sel"]), int(case["sel"])])
+				if case["prompt"] == null:
+					KFMenu.panel(o, lk, sl, KFMenu.shop_mode(sl))
+				else:
+					KFMenu.panel(o, lk, sl, KFMenu.shop_mode(sl) | 0x8000)
+					var one: Array = KFMenu.rec("0x8007e778")
+					var two: Array = KFMenu.rec("0x8007e794")
+					KFMenu.answers(o, lk, [int(one[0]), int(one[1]), KFMenu.YES_WORD],
+						[int(two[0]), int(two[1]), KFMenu.NO_WORD], int(case["prompt"]))
+			"shop_runs":
+				# pad words through shop_press, against tools/ui.py's
+				var stocks := PackedByteArray(KFMenu.data["shops"]["stock"])
+				for r in case["runs"]:
+					runs += 1
+					var sh := int(r["shop"])
+					var inv := PackedByteArray(r["start"]["inv"])
+					var stock0 := PackedByteArray(r["start"]["stock0"])
+					var gold := int(r["start"]["gold"])
+					var sl := KFMenu.shop_buy_list(sh, stock0 if sh == 0 else stocks.slice(150 * sh, 150 * sh + 150),
+						inv, gold) if bool(r["buy"]) \
+						else KFMenu.shop_sell_list(sh, inv, case["equip"], gold, 2)
+					var used := 0
+					var end := -0x63
+					for press in r["presses"]:
+						used += 1
+						end = KFMenu.shop_press(sl, int(press), inv, stock0, 0x40, 0x20)
+						if end != -0x63:
+							break
+					if not (used == int(r["used"]) and end == int(r["end"]) and int(sl["gold"]) == int(r["gold"])
+							and int(sl["sel"]) == int(r["sel"]) and inv == PackedByteArray(r["inv"])
+							and stock0 == PackedByteArray(r["stock0"])):
+						runs_bad += 1
+						if first == "":
+							first = "shop run %s: godot end %d used %d gold %d" % [str(r["presses"]), end, used, int(sl["gold"])]
 			"box":
 				KFMenu.message_box(o, lk, int(case["title"]), case["lines"], 0x46, 0x57, 0xB2, 0x42,
 					int(case["legend"]))
@@ -2025,7 +2068,7 @@ func _menus() -> bool:
 				else:
 					KFMenu.panel(o, lk, sl, 5 | 0x8000)
 					KFMenu.options(o, lk, int(case["prompt"]))
-		if str(case["screen"]) in ["storage_runs", "options_runs", "schemes", "display_runs"]:
+		if str(case["screen"]) in ["storage_runs", "options_runs", "schemes", "display_runs", "shop_runs"]:
 			continue                                # runs, not a screen: counted above
 		var got := JSON.stringify(_norm(KFMenu.order(o)))
 		var want := JSON.stringify(_norm(case["prims"]))
@@ -2036,7 +2079,7 @@ func _menus() -> bool:
 				first = "%s sel %d: godot %s ... python %s ..." % [case["screen"], int(case["sel"]),
 					got.substr(0, 300), want.substr(0, 300)]
 	print("menus: %d of %d screens drawn as tools/ui.py draws them" % [n - bad, n])
-	print("menus: %d of %d runs of pad words through the storage, BUTTON CONFIG, OPTIONs 1 and 2 and QUIT GAME, and panel colours, as tools/ui.py has them" % [
+	print("menus: %d of %d runs of pad words through the storage, the shops, BUTTON CONFIG, OPTIONs 1 and 2 and QUIT GAME, and panel colours, as tools/ui.py has them" % [
 		runs - runs_bad, runs])
 	if schemes > 0:
 		print("menus: %d of %d control schemes fill the slots as the game's own apply_control_scheme does" % [

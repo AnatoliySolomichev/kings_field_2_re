@@ -81,6 +81,7 @@ const SPELL := 0x17
 const EMPTY := 0x1A
 const GOLD := 0x19
 
+var after_service := false         # a service a conversation ended in is up
 var player: Node3D
 var rows := {}                     # slot -> row, lootNN.json and the state
 var slots := []                    # in slot order, as object_interact asks
@@ -309,6 +310,16 @@ func _exit_tree() -> void:
 # @port engine -- USE into _interact, the arms at 15 a second, and object_give's own frames while it runs
 func _process(dt: float) -> void:
 	if rows.is_empty():
+		return
+	if after_service:
+		# the shop the conversation's end opened, until it closes
+		var menu = get_node_or_null("../UI/Menu")
+		if menu != null and str(menu.state) != "":
+			return
+		after_service = false
+		KFGame.modal = false
+		player.clear_movement()
+		_interact(0, true)
 		return
 	if not talking.is_empty():
 		var doc = get_node_or_null("../UI/Document")
@@ -697,7 +708,15 @@ func _talk_next() -> void:
 			KFInfo.note("talk: TALK.T %d, pc %d" % [entry, int(talking["pc"])])
 			return
 		KFTalk.closed(talking, false)       # no page: as if closed without USE
+	# .L19, the end of the call: the service of the header's +0x12
+	var svc := int(talking["sc"]["header"]["service"])
 	talking = {}
+	if svc != KFTalk.NO_SERVICE and svc & 0xF0 == 0x00:
+		var menu = get_node_or_null("../UI/Menu")
+		if menu != null:
+			menu.open_shop(svc & 0xF)
+			after_service = true
+			return
 	KFGame.modal = false
 	player.clear_movement()
 	_interact(0, true)

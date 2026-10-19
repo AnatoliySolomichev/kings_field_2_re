@@ -65,6 +65,9 @@ static var display := [2, 2, 1, 1, 1]
 # OPTION 1's three bytes (0x801b25db, dc, e1): the sound effects' and the
 # music's volumes and the brightness; a new character's, sub_8002b64c
 static var sound := [0x80, 0x50, 0x80]
+# shop 0's stock (0x80080718, 150 bytes), which buying runs down and selling
+# fills -- the save carries it; empty until the menu's data gives the disc's
+static var shop0 := PackedByteArray()
 # While the port follows the emulator (ghost.gd, C, with bp16 writing
 # live.txt): the creatures, the doors and the swing are the game's, laid over
 # the port's every frame, and their own machines stand still.

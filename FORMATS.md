@@ -3431,6 +3431,47 @@ game's file refused); mode 8, 40 of 40 frames. In the port LOAD lists the
 card the port reads (by slot -- the directory's order is the BIOS's) and
 loads as the title's CONTINUE does; the boxes are not there.
 
+### The shops
+
+A conversation's header byte `+0x12` (the service, `tools/escript.py`) is
+looked at at **every** end of a call (`.L19`, where opcode `0xff` jumps and
+where `.L18` goes when no step is left): its high nibble 0 opens a shop,
+`menu_shop(n)` (`0x80021114`) after `render_frame_bare`; `0x40` the inn;
+`0x30`, when the wise fruit's count (`0x801b2530`) is 4, `0x80021aac`.
+Five shops are opened: level 0 entity 6 is shop 1, level 1 entity 7 shop
+2, level 2 entity 6 shop 4, level 3 entity 7 shop 3, level 4 entity 10 shop
+0. `menu_shop` is page 6, "buy" and "sell", chosen as the storage's are,
+the cancel ending it and the conversation with it.
+
+**Buying** (`shop_buy`, `0x80021298`): `item_list` over the shop's stock
+(`shop_stock`, `0x80080718`, 150 bytes a shop), each row beside it what the
+player carries and the price (`shop_rows`, off `shop_prices`, `0x80080a9c`,
+u16, 300 bytes a shop), under "BUY"; the list opens at a row of the shop's
+own (`shop_start_rows`, `0x8009c298`: 0, 11, 7, 2, 0 -- constants, never
+written). Shop 0 is drawn in `ui_panel` mode `0xd` -- the price in six
+digits and G at x + 0xa1, the count "x N", and the gold (`ui_gold`,
+`0x80025e80`: a GOLD plate at (0xb7, 0x2e), seven digits) -- and sells one
+at a time; the others are mode `0xa`, the same with `ui_quantity(1)`, whose
+QTY sits under the gold at y 0x4a, and `ui_menu_chrome`'s kind 1: RIGHT adds
+one while the gold pays for one more at the row's price and what is carried
+stays under 100. The confirm is refused when the gold is short of price
+times quantity or what is carried would reach 100; `ui_prompt(s, 3)` asks
+yes/no; yes takes the gold, adds the quantity and, at shop 0, takes one off
+its stock -- not for item `0x6b`, which it holds 99 of and never runs out
+of. **Selling** (`shop_sell`, `0x80021724`): `item_list_unheld` over what is
+carried, at the shop's paying price (`shop_pays_rows`, off `shop_pays`,
+`0x800811a4`), mode `0xb`, kind 2, the cursor in `gp+0x89`; refused when the
+count is under the quantity; yes adds the gold, takes the things, and puts
+them **into shop 0's stock** whichever shop bought them, held to 99. Only
+shop 0's stock changes, and the save carries its 150 bytes (`card.gd`'s
+`items_80080718`). **Against the game's own code** over menu1 (`tools/ui.py
+shop_check`): the lists in modes `0xd`, `0xa` and `0xb` with the gold and
+the quantity, 45 of 45 frames; `shop_buy` and `shop_sell` run whole for the
+five shops on random inventories, gold and words, 200 of 200 runs alike in
+gold, inventory, stock and sell cursor, and five runs aimed at shop 0's
+stock -- buying `0x6b`, selling into 97..99 -- 5 of 5; dropping the `0x6b`
+exception fails one of those, dropping the cap three.
+
 *Corrected in the port:* `_bob` set the bob to 0 whenever the player was
 off the ground. In `player_vertical` every path reaches `.L29`, which goes
 past the bob when `player_vstate` is not 0 and leaves it as it was; the

@@ -3142,5 +3142,45 @@
   "kind": "code",
   "name": "load_rows",
   "evidence": "LOAD's rows: for each of the card's 15 directory entries save_title_numbers accepts, the name 'data' and the slot's digit (slot + 0x20), the EXP into the u32 column, the LV into the u8 one, the slot kept; the count"
+ },
+ "0x80021114": {
+  "kind": "code",
+  "name": "menu_shop",
+  "evidence": "a conversation's service 0x0n (script_interpreter .L21, after render_frame_bare): page 6's two lines, buy and sell, chosen with sub_800221e8; shop_buy(n) or shop_sell(n) for the one chosen, the cancel ending it. Five shops open it: level 0 entity 6 (1), level 1 entity 7 (2), level 2 entity 6 (4), level 3 entity 7 (3), level 4 entity 10 (0)"
+ },
+ "0x800216a4": {
+  "kind": "code",
+  "name": "shop_rows",
+  "evidence": "shop_buy's columns: for each row of the stock's list, the count the player carries (inventory_a[id]) and the price off shop_prices + 300 * n (u16). tools/ui.py shop_buy_list, through shop_check's 200 runs"
+ },
+ "0x80021a4c": {
+  "kind": "code",
+  "name": "shop_pays_rows",
+  "evidence": "shop_sell's column: for each row, what shop n pays, off 0x800811a4 + 300 * n (u16). tools/ui.py shop_sell_list"
+ },
+ "0x80025e80": {
+  "kind": "code",
+  "name": "ui_gold",
+  "evidence": "a plate at (0xb7, 0x2e) reading GOLD and player_gold in seven digits behind its G, 0x31 on: ui_panel's for mode 0xd, ui_quantity(1)'s first. tools/ui.py gold_readout, 45 of 45 frames of the game's own ui_panel"
+ },
+ "0x80080718": {
+  "kind": "data",
+  "name": "shop_stock",
+  "evidence": "150 bytes a shop, five shops: what each holds of each thing. Only shop 0's changes -- shop_buy takes one off it (not item 0x6b), shop_sell puts what is sold into it, held to 99 -- and the save carries those 150 bytes"
+ },
+ "0x80080a9c": {
+  "kind": "data",
+  "name": "shop_prices",
+  "evidence": "300 bytes a shop: u16, what each thing costs there (shop_rows)"
+ },
+ "0x800811a4": {
+  "kind": "data",
+  "name": "shop_pays",
+  "evidence": "300 bytes a shop: u16, what the shop pays for each thing (shop_pays_rows)"
+ },
+ "0x8009c298": {
+  "kind": "data",
+  "name": "shop_start_rows",
+  "evidence": "five bytes, gp+0x84: the row each shop's buy list opens at (0, 0x0b, 7, 2, 0 on the disc), copied by shop_buy and never written"
  }
 }
