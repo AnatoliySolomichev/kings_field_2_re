@@ -3385,6 +3385,22 @@ solid, and the screen run whole on scripted words, 160 of 160 runs -- the
 bytes stored and the text colours alike. In the port the brightness reaches
 the menus' text; the sound is not in the port.
 
+**QUIT GAME** (`sub_8001f8b4`) asks "yes" or "no" -- at (0xab, 0xa2) and
+(0xe5, 0xa2), immediates in its code, drawn by `sub_80025b24` under the
+system page with its last line lit -- starting on "no". Any of the four
+directions turns between them; the confirm on "yes" sets `0x800102f8`,
+`overlay_arg`, to 1 and answers 0, on "no" -1; the cancel -1. `menu_system`
+turns the 0 into -2 after a "please wait" while the music fades
+(`0x8001e620`, `sub_8001eb3c`); `pause_menu` hands it on, `sub_800305d8`
+sets the game state (`0x8009c3f8`) to 2, and `game_main`'s arm for 2 sets
+`next_exe` to 0 and returns to the shell: OPEN.EXE again, whose `open_main`
+goes straight to the title on `overlay_arg` 1 (states 3 and 4 are END.EXE,
+with `overlay_arg` 2 and 3). **Against the game's own code** over menu1
+(`tools/ui.py quit_check`): the frame 8 of 8, and the question run whole on
+scripted words, 100 of 100 runs -- the answer, the words read and
+`overlay_arg`. In the port "yes" goes back to the shell (`boot.tscn`) the
+same way; the "please wait" is not there.
+
 *Corrected in the port:* `_bob` set the bob to 0 whenever the player was
 off the ground. In `player_vertical` every path reaches `.L29`, which goes
 past the bob when `player_vstate` is not 0 and leaves it as it was; the

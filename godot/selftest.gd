@@ -1888,11 +1888,29 @@ func _menus() -> bool:
 				KFMenu.display_page(o, lk, case["values"], int(case["row"]))
 			"sound":
 				KFMenu.sound_page(o, lk, case["values"], int(case["row"]))
+			"quit":
+				KFMenu.quit_page(o, lk, int(case["sel"]))
 			"display_runs":
 				# pad words through display_press, and the colours of panel_colours,
 				# against tools/ui.py's
 				for r in case["runs"]:
 					runs += 1
+					if str(r.get("kind", "")) == "quit":
+						var sel := 1
+						var used := 0
+						var ans = null
+						for press in r["presses"]:
+							used += 1
+							var q := KFMenu.quit_press(sel, int(press), 0x40, 0x20)
+							sel = int(q[0])
+							ans = q[1]
+							if ans != null:
+								break
+						if not (used == int(r["used"]) and sel == int(r["sel"]) and int(ans) == int(r["answer"])):
+							runs_bad += 1
+							if first == "":
+								first = "QUIT GAME run %s: godot %d %d %s" % [str(r["presses"]), used, sel, str(ans)]
+						continue
 					var st := {"values": (r["start"]["values"] as Array).map(func(v): return int(v)),
 						"row": 0}
 					var used := 0
@@ -2002,7 +2020,7 @@ func _menus() -> bool:
 				first = "%s sel %d: godot %s ... python %s ..." % [case["screen"], int(case["sel"]),
 					got.substr(0, 300), want.substr(0, 300)]
 	print("menus: %d of %d screens drawn as tools/ui.py draws them" % [n - bad, n])
-	print("menus: %d of %d runs of pad words through the storage, BUTTON CONFIG and OPTIONs 1 and 2, and panel colours, as tools/ui.py has them" % [
+	print("menus: %d of %d runs of pad words through the storage, BUTTON CONFIG, OPTIONs 1 and 2 and QUIT GAME, and panel colours, as tools/ui.py has them" % [
 		runs - runs_bad, runs])
 	if schemes > 0:
 		print("menus: %d of %d control schemes fill the slots as the game's own apply_control_scheme does" % [

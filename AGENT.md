@@ -202,10 +202,10 @@ the equipment tables, against a RAM snapshot           3264/3264, 2112/2112, 16/
                                                        player_recalc_stats 483 of
                                                        483 values over 21 snapshots
 the conversation hooks, two readings of one table      23 of 23
-the port against the game, function by function        680 of 680 placed: 384
-                                                       reproduce the game, 296 the
-                                                       port's own; 445 markers and
-                                                       857 cited addresses, every
+the port against the game, function by function        684 of 684 placed: 386
+                                                       reproduce the game, 298 the
+                                                       port's own; 447 markers and
+                                                       861 cited addresses, every
                                                        one resolving
 the object loader, against 13 snapshots                angles 4344/4352, scale and
                                                        position 4352/4352, opcode
@@ -238,6 +238,7 @@ OPTION 2, against the game's own sub_800252f4,         72 of 72 frames; 120 of 1
 ui_display_values, menu_display and panel_colours      runs; 20 of 20 colour sets
 OPTION 1, against the game's own sub_80024a78 and     48 of 48 frames; 160 of 160
 menu_sound over menu1                                  runs
+QUIT GAME, against the game's own over menu1           8 of 8 frames; 100 of 100 runs
 the spells unlocked, against every snapshot            21 of 21
 Silviera's key on a pedestal, silv1 and silv2          7 of 7
 the drops, against the snapshots                       5 of 5 lying as the fall leaves
@@ -323,8 +324,8 @@ levels 40 of 40 · angles 400 of 400
 conversations 43 of 43, and 25 of 25 steps the emulator recorded
 damage 6 of 6 · knock-back 2484 of 2484 · weapon 2336 of 2336
 fences 600 of 600 · animation 540 of 540
-equipment 16 of 16 · menus 71 of 71, 160 of 160 storage, BUTTON CONFIG
-and OPTION runs and panel colours, 28 of 28 control schemes as the game's
+equipment 16 of 16 · menus 73 of 73, 180 of 180 storage, BUTTON CONFIG,
+OPTION and QUIT runs and panel colours, 28 of 28 control schemes as the game's
 own apply_control_scheme
 directions 400 of 400
 routines 14458 of 14458

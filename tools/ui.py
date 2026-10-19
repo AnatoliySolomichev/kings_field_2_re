@@ -1846,6 +1846,128 @@ def sound_check(out=sys.stdout):
     return ok == n and ok2 == n2
 
 
+# --- system: QUIT GAME ------------------------------------------------------------
+
+QUIT_YES = (0xAB, 0xA2, [0x18, 0x04, 0x12, 0xFF])      # "yes", an immediate in its code
+QUIT_NO = (0xE5, 0xA2, [0x0D, 0x0E, 0xFF])             # "no"
+
+
+def quit_page(f, look, e, sel):
+    """QUIT GAME's frame (0x8001f8b4): the system page with its last line
+    lit, sub_800252f4(3, 5, 4, 0), and the two answers, sub_80025b24 -- "yes"
+    at (0xab, 0xa2), "no" at (0xe5, 0xa2), the chosen one lit."""
+    menu_page(f, look, e, 3, 5, 4, 0)
+    options(f, look, e, QUIT_YES, QUIT_NO, sel)
+
+
+def quit_press(sel, press, confirm, cancel):
+    """One pad word on QUIT GAME: any of the four directions turns between
+    the answers; the confirm answers 0 on "yes" -- which also sets
+    0x800102f8, overlay_arg, to 1 -- and -1 on "no"; the cancel answers -1.
+    (sel, the answer or None). It starts on "no", 1."""
+    if press & (UP | DOWN | LEFT | RIGHT):
+        return 1 - sel, None
+    if press & confirm:
+        return sel, 0 if sel == 0 else -1
+    if press & cancel:
+        return sel, -1
+    return sel, None
+
+
+def game_quit(base, presses):
+    """0x8001f8b4 run whole over `base`, the pad scripted, the drawing stood
+    in for: (returned, its answer, words read, overlay_arg, the answer lit)."""
+    import mipsrun
+    cpu = mipsrun.menu_cpu(base)
+    cpu.wr(0x800102F8, 1, 0)
+    script = list(presses)
+    read = [0]
+    held = []
+
+    def latch(c):
+        if not script:
+            held.append(c.r[18])
+            raise _Out
+        read[0] += 1
+        return script.pop(0)
+
+    cpu.hooks[0x800279A4] = latch
+    for at in (0x80027A40, 0x800279D8, 0x80026FE4, 0x800270F8, 0x800252F4, 0x80025B24):
+        cpu.hooks[at] = lambda c: 0
+    try:
+        v = cpu.call(0x8001F8B4)
+    except _Out:
+        return False, None, read[0], cpu.rd(0x800102F8, 1), held[0]
+    return True, mipsrun.s32(v), read[0], cpu.rd(0x800102F8, 1), None
+
+
+def quit_check(out=sys.stdout):
+    """QUIT GAME against the game's own code over menu1: its frame for both
+    answers lit at a few pulses, and the question run whole on scripted pad
+    words -- its answer, the words read and overlay_arg."""
+    import random
+    import mipsrun
+    path = os.path.join(ROOT, "out", "snap", "menu1.ram")
+    if not os.path.exists(path):
+        print("  no menu1 snapshot to run QUIT GAME over", file=out)
+        return True
+    e = exe()
+    base = bytearray(open(path, "rb").read())
+    ok = n = 0
+    first = None
+    at = 0x801F0000
+    for sel in (0, 1):
+        for pulse in (0x03, 0x2F, 0x30, 0x5E):
+            ram = bytearray(base)
+            for k, (x, y, g) in enumerate((QUIT_YES, QUIT_NO)):
+                o = (at & 0x1FFFFF) + 0x40 * k
+                struct.pack_into("<hh", ram, o, x, y)
+                ram[o + 4:o + 4 + len(g)] = bytes(g)
+            prims, _cpu = mipsrun.frame(ram, [(0x800252F4, 3, 5, 4, 0),
+                                              (0x80025B24, at, at + 0x40, sel)], pulse)
+            look = Look(ram)
+            look.pulse = pulse
+            f = Frame()
+            quit_page(f, look, e, sel)
+            got = mipsrun.two_d(prims)
+            want = [(d, p) for d, p in f.order()]
+            n += 1
+            ok += got == want
+            if got != want and first is None:
+                j = next((i for i, (a, b) in enumerate(zip(got, want)) if a != b), min(len(got), len(want)))
+                first = f"sel {sel}: at {j}: game {got[j] if j < len(got) else None} model {want[j] if j < len(want) else None}"
+    print(f"  QUIT GAME's frame as the game's own sub_800252f4 and sub_80025b24 draw it over "
+          f"menu1: {ok} of {n} frames primitive for primitive", file=out)
+    if first:
+        print("  first difference: " + first, file=out)
+    confirm = struct.unpack_from("<I", base, (GP + 0x38) & 0x1FFFFF)[0]
+    cancel = struct.unpack_from("<I", base, (GP + 0x3C) & 0x1FFFFF)[0]
+    rng = random.Random(0x0917)
+    ok2, n2 = 0, 100
+    first2 = None
+    for i in range(n2):
+        presses = [rng.choice((UP, DOWN, LEFT, RIGHT, 0x10, 0x80)) for _ in range(rng.randrange(0, 8))]
+        if rng.randrange(5):
+            presses.append(rng.choice((confirm, confirm, cancel)))
+        g = game_quit(base, presses)
+        sel, used, ans = 1, 0, None
+        for p in presses:
+            used += 1
+            sel, ans = quit_press(sel, p, confirm, cancel)
+            if ans is not None:
+                break
+        m = ((True, ans, used, 1 if ans == 0 else 0, None) if ans is not None
+             else (False, None, used, 0, sel))
+        ok2 += g == m
+        if g != m and first2 is None:
+            first2 = f"run {i}: game {g} model {m}"
+    print(f"  QUIT GAME run whole by the game's own code, the pad scripted: {ok2} of {n2} runs "
+          f"answer alike, read as many words and leave overlay_arg alike", file=out)
+    if first2:
+        print("  first difference: " + first2, file=out)
+    return ok == n and ok2 == n2
+
+
 def place(s, sel):
     """sub_80027728: the index held to the list, the first row shown and the
     bar's row."""
@@ -2152,6 +2274,26 @@ def export_cases(e):
                 break
         druns.append({"start": start, "presses": presses, "left": left, "used": used,
                       "end": st})
+    # QUIT GAME's frame (which the game's own holds, quit_check) and runs
+    for sel, pulse in ((0, 0x10), (1, 0x44)):
+        qlook = Look()
+        qlook.pulse = pulse
+        f = Frame()
+        quit_page(f, qlook, e, sel)
+        cases.append({"screen": "quit", "sel": sel, "pulse": pulse,
+                      "prims": [[d, p] for d, p in f.order()]})
+    for i in range(20):
+        presses = [rng.choice((UP, DOWN, LEFT, RIGHT, 0x10)) for _ in range(rng.randrange(0, 8))]
+        presses.append(rng.choice((0x40, 0x20, 0x40)))
+        sel, used, ans = 1, 0, None
+        for p in presses:
+            used += 1
+            sel, ans = quit_press(sel, p, 0x40, 0x20)
+            if ans is not None:
+                break
+        druns.append({"kind": "quit", "presses": presses, "used": used, "sel": sel,
+                      "answer": ans, "start": {"values": [], "row": 0}, "left": True,
+                      "end": {"values": [], "row": 0}})
     # OPTION 1's page (which the game's own sub_800252f4 and sub_80024a78
     # hold, sound_check) and runs through sound_press
     for values, row, pulse in (([0x80, 0x51, 0x80], 0, 0x12), ([0, 3, 0x7F], 2, 0x40),
@@ -2377,6 +2519,7 @@ def check(out=sys.stdout, verbose=False):
     menus = options_check(out) and menus
     menus = display_check(out) and menus
     menus = sound_check(out) and menus
+    menus = quit_check(out) and menus
     e = exe()
     ok = bad = 0
     for name in ("inv1", "inv2"):

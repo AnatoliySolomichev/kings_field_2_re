@@ -3122,5 +3122,10 @@
   "kind": "code",
   "name": "menu_sound",
   "evidence": "menu_system's second line, OPTION 1 (page 4: sound effect, music, brightness): three sliders 0..0x80 in steps of 3 -- 0x801b25db, 0x801b25dc + 1 (0 kept 0) and 0x801b25e1 + 0xc0 -- UP/DOWN round them, RIGHT and LEFT move one, a sound played as the first moves and the music's volume set (sub_800677e8) as the second does; the cancel stores them back and, with the panel clear, sets the text colours from the brightness. sub_800252f4(4, 3, row, 1) and sub_80024a78 draw it. Read, not in the port"
+ },
+ "0x8001f8b4": {
+  "kind": "code",
+  "name": "menu_quit",
+  "evidence": "menu_system's fifth line, QUIT GAME: yes/no at (0xab, 0xa2) and (0xe5, 0xa2) through sub_80025b24, starting on no; any direction turns, the confirm on yes sets 0x800102f8 (overlay_arg) to 1 and answers 0, else -1; the cancel -1. menu_system turns 0 into -2 and game_main's state 2 runs OPEN.EXE again. tools/ui.py quit_check, 100 of 100 runs as the model"
  }
 }
