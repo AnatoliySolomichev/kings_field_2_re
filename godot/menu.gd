@@ -31,7 +31,13 @@ const SMALL_STYLE := "0x8007e57c"
 const RECORDS := 0x8007E588
 const UP := 0x1000
 const DOWN := 0x4000
+const LEFT := 0x8000
+const RIGHT := 0x2000
 const USE_WORD := [0x14, 0x12, 0x04, 0xFF]                    # "use"
+const STORE_WORD := [0x12, 0x13, 0x0E, 0x11, 0x04, 0xFF]      # "store", ui_prompt's kind 1
+const MOVE_WORD := [0x0C, 0x0E, 0x15, 0x04, 0xFF]             # "move", its kind 0xa
+const QTY_WORD := [0x10, 0x13, 0x18, 0xFF]                    # "qty"
+const STORE_LAST := 0x95                                      # the storage's lists run 0..0x95
 const CANCEL_WORD := [0x02, 0x00, 0x0D, 0x02, 0x04, 0x0B, 0xFF]   # "cancel"
 const FIRST_THING := 0x5F
 const LAST_THING := 0x95
@@ -81,6 +87,9 @@ var main_sel := 0
 var list := {}                      # the use-item screen's list
 var spells := {}                    # the use-magic screen's list
 var magic_cursor := 0               # gp+0x19: where the use-magic screen's cursor was left
+var storage_sel := 0                # item_menu's line: store, take out
+var stash := {}                     # the storage's list while it is up
+var stash_cursor := [0, 0]          # gp+0x1a, gp+0x1b: where each of its lists was left
 var prompt_sel := 0
 var equip_sel := 0                  # the equipment screen's line
 var records_sel := 0                # status/records' line: offense/defense, conversation
@@ -363,7 +372,7 @@ static func legend(o: Dictionary, lk: Dictionary, two: bool) -> void:
 # (the equipment screen's), modes 1 and 5 the count "x N" at x + 0xe9; the
 # legend is two buttons for modes 3, 8, 9 and 12 and with flag 0x8000; modes
 # 2 and 4 the cost behind the MP sign, one arm (.L8) for both.
-# @orig game:0x80025468 ui_panel  status:partial -- modes 1, 2, 3, 4, 5 and 0x10 and the 0x8000 flag; tools/ui.py, 116 of 116 primitives of inv1 and inv2, and modes 4, 0x10 and 2 120 of 120 frames of the game's own (panel_check); the number columns of modes 8, 9, 0xa..0xf not here
+# @orig game:0x80025468 ui_panel  status:partial -- modes 1, 2, 3, 4, 5, 7 and 0x10 and the 0x8000 flag; tools/ui.py, 116 of 116 primitives of inv1 and inv2, and modes 4, 0x10, 2 and 7 160 of 160 frames of the game's own (panel_check); the number columns of modes 8, 9, 0xa..0xf not here
 static func panel(o: Dictionary, lk: Dictionary, s: Dictionary, mode: int) -> void:
 	var style: Array = rec(LABEL_STYLE)
 	var m := mode & 0xFFF
@@ -409,7 +418,20 @@ static func panel(o: Dictionary, lk: Dictionary, s: Dictionary, mode: int) -> vo
 		add(o, 49, quad(int(s["x"]) + 6, int(s["y"]) + (row << 4) + 5, int(r[4]), int(r[5]),
 			int(r[2]), int(r[3]), int(r[4]), int(r[5]), int(r[0]), int(r[1]),
 			int(c[0]) | (int(c[0]) << 8) | (int(c[1]) << 16), 1))
+	if m == 7:
+		quantity(o, lk, int(s.get("qty", 1)))
 	legend(o, lk, m in [3, 8, 9, 0xC] or (mode & 0x8000) != 0)
+
+
+# ui_quantity(0) (0x80025db8), ui_panel's for mode 7 after the bar: a plate at (0xb7,
+# 0x2e) with "QTY" on it, and the quantity (gp+0x48) in two digits 0x54 to
+# the right. Its 1 -- the shops' modes, at y 0x4a after the gold
+# (sub_80025e80) -- is not here.
+# @orig game:0x80025db8 ui_quantity  status:partial -- its 0, mode 7's; drawn as tools/ui.py draws it, which the game's own ui_panel holds (panel_check, 40 of 40 frames); not its 1
+static func quantity(o: Dictionary, lk: Dictionary, qty: int) -> void:
+	label_plate(o, lk, rec(RECORDS + 12 * 2), 0xB7, 0x2E)
+	draw_label(o, lk, rec(LABEL_STYLE), 0xB7, 0x2E, QTY_WORD)
+	draw_number(o, lk, rec(NUMBER_STYLE), 0xB7 + 0x54, 0x2E, number_digits(qty, 2, 0, 1))
 
 
 # item_list (0x8001aea4): the things first..last carried in inventory_a --
@@ -463,7 +485,7 @@ static func place(s: Dictionary, selected: int) -> void:
 # moves one, the bar with it until it reaches the edge of the rows shown and
 # then the rows under it; past either end it goes round -- to the last, the
 # rows showing the end of the list, or to the first.
-# @orig game:0x800223a4 ui_menu_chrome+0xa8  status:transcribed -- the up and down, the rows shown after them as inv3 holds them; the sound (0xc) not here
+# @orig game:0x800223a4 ui_menu_chrome+0xa8  status:verified -- the up and down: the rows shown after them as inv3 holds them, and through chrome_pad 200 of 200 runs of the storage as the game's own (storage_check); the sound (0xc) not here
 static func chrome_move(s: Dictionary, press: int) -> bool:
 	var n := int(s["count"])
 	var rows := int(s["rows"])
@@ -588,7 +610,7 @@ static func spell_rows(table: PackedByteArray, first: int, last: int) -> Diction
 # 0x17..0x1e unlocked, their MP beside them in mode 2, under ui_menu_label(0,
 # 1)'s title "USE MAGIC" -- four rows from y 0x83, no "TAKE OFF" -- the
 # selection where gp+0x19 left it (list_place).
-# @orig game:0x8001c48c menu_use_magic  status:verified -- the list up to list_place, 40 of 40 as the game's own builds it over menu1 (tools/ui.py panel_check); the self-test this to it
+# @orig game:0x8001c48c menu_use_magic  status:partial -- the list up to list_place, verified 40 of 40 as the game's own builds it over menu1 (tools/ui.py panel_check); the self-test this to it
 static func use_magic_list(table: PackedByteArray, cursor: int) -> Dictionary:
 	var r := spell_rows(table, 0x17, 0x1E)
 	var ids: Array = r["ids"]
@@ -597,6 +619,138 @@ static func use_magic_list(table: PackedByteArray, cursor: int) -> Dictionary:
 		"costs": r["costs"], "counts": [], "ids": ids, "sel": 0, "first": 0, "sel_row": 0}
 	place(s, cursor)
 	return s
+
+
+# item_list_unheld (0x8001af88): item_list's names, counts and ids, but a thing worn or held
+# -- the weapon (0x801b25af), the seven worn bytes 0x801b25d4..da, the
+# button's thing (0x801b25ad) -- counted one less, two less when both item
+# slots (d9, da) hold it, and left out when that leaves none.
+# @orig game:0x8001af88 item_list_unheld  status:verified -- through storage_check, 200 of 200 lists as the game's own builds them over menu1
+static func store_rows(inv: PackedByteArray, st: Dictionary) -> Dictionary:
+	var w: Array = st["worn"]
+	var held := [int(st["weapon"]), int(st["item_b"])]
+	for b in w:
+		held.append(int(b))
+	var names := []
+	var counts := []
+	var ids := []
+	for i in STORE_LAST + 1:
+		var c := int(inv[i])
+		if c == 0:
+			continue
+		if i in held:
+			c = (c - 2 if i == int(w[5]) and i == int(w[6]) else c - 1) & 0xFF
+		if c == 0:
+			continue
+		names.append(data["names"][i])
+		counts.append(c)
+		ids.append(i)
+	return {"names": names, "counts": counts, "ids": ids}
+
+
+# item_menu's two lists, under ui_menu_label(2, which): "STORE" (0,
+# menu_store) the things carried as item_list_unheld counts them, "TAKE OUT"
+# (1, menu_take_out) the things in storage, inventory_b, as item_list does;
+# three rows from y 0x93, the selection where gp+0x1a or gp+0x1b left it, the
+# quantity 1 as ui_menu_label leaves it.
+# @orig game:0x8001dee4 menu_store  status:partial -- "store": verified, the list 200 of 200 as the game's own builds it, and runs of pad words through storage_press as the game's own runs them, over menu1 (tools/ui.py storage_check); not the thing's turning model or the guide
+# @orig game:0x8001e1b4 menu_take_out  status:partial -- "take out", verified by the same check; not the model or the guide
+static func storage_list(which: int, inv: PackedByteArray, st: Dictionary, cursor: int) -> Dictionary:
+	var l := store_rows(inv, st) if which == 0 else item_list(inv, 0, STORE_LAST)
+	var counts: Array = l["counts"]
+	if which == 1:
+		counts.pop_back()
+	var n := (l["ids"] as Array).size()
+	var costs := []
+	for k in n:
+		costs.append(-1)
+	var s := {"tx": 0x1F, "ty": 0x20, "title": data["labels"][2][which][2], "x": 0x1B,
+		"y": 0x93, "rows": 3, "length": 0x18, "count": n, "names": l["names"],
+		"counts": counts, "costs": costs, "ids": l["ids"], "which": which, "qty": 1,
+		"mode": 0, "prompt": 0, "sel": 0, "first": 0, "sel_row": 0}
+	place(s, cursor)
+	return s
+
+
+# One pad word on the storage's list: while the list is up (s["mode"] 0)
+# its ui_menu_chrome with kind 2 -- the confirm refused, back to the list,
+# when the chosen row's count is under the quantity or the other side would
+# reach 100 -- and while ui_prompt(s, 1 or 0xa, 7) asks (mode 1, s["prompt"]
+# the answer lit) "STORE" or "MOVE", and "CANCEL" back to the list. The first
+# answer moves the quantity across. -0x63 while the screen is up, -1 when it
+# goes, or the id of the thing moved.
+# @orig game:0x8001dfcc menu_store+0xe8  status:partial -- its loop, tools/ui.py storage_press: verified, storage_check 200 of 200 runs of both screens as the game's own, the self-test this to it; not the guide, the model or the sounds
+# @orig game:0x8001e29c menu_take_out+0xe8  status:partial -- the same loop, take out's, verified with it; not the guide, the model or the sounds
+static func storage_press(s: Dictionary, press: int, inv_a: PackedByteArray,
+		inv_b: PackedByteArray, confirm: int, cancel: int) -> int:
+	if int(s["mode"]) == 1:
+		var r := prompt_press(int(s["prompt"]), press, confirm, cancel)
+		s["prompt"] = int(r[0])
+		if r[1] == null:
+			return -0x63
+		if int(r[1]) == 0:
+			var i := int(s["ids"][int(s["sel"])])
+			var q := int(s["qty"])
+			if int(s["which"]) == 0:
+				inv_a[i] = (int(inv_a[i]) - q) & 0xFF
+				inv_b[i] = (int(inv_b[i]) + q) & 0xFF
+			else:
+				inv_a[i] = (int(inv_a[i]) + q) & 0xFF
+				inv_b[i] = (int(inv_b[i]) - q) & 0xFF
+			return i
+		s["mode"] = 0
+		return -0x63
+	var c := chrome_pad(s, press, 2, confirm, cancel)
+	if int(c[1]) == -1:
+		return -1
+	if int(c[0]) == 1:
+		var k := int(s["sel"])
+		var other := inv_b if int(s["which"]) == 0 else inv_a
+		if not (int(s["counts"][k]) < int(s["qty"]) \
+				or int(other[int(s["ids"][k])]) + int(s["qty"]) >= 0x64):
+			s["mode"] = 1
+			s["prompt"] = 0
+	return -0x63
+
+
+# ui_menu_chrome's pad: one word read, one thing done, in this order -- an
+# empty list goes at any button; UP and DOWN move the selection
+# (chrome_move); with kind 2 (the storage) RIGHT raises the quantity
+# (s["qty"], gp+0x48) while the chosen row's count holds one more, and with
+# any kind LEFT lowers it to no less than 1; the confirm asks (mode 1), the
+# cancel leaves (-1). [mode, result -0x63 or -1]. Kind 1, the shops' gold
+# check, is not here.
+# @orig game:0x80022374 ui_menu_chrome+0x78  status:partial -- the pad's arms, verified through storage_check (200 of 200 runs as the game's own): the up, the down, the quantity, the confirm and the cancel; not kind 1 (the shops' gold), the model's turning or the sounds
+static func chrome_pad(s: Dictionary, press: int, kind: int, confirm: int, cancel: int) -> Array:
+	if int(s["count"]) == 0:
+		return [0, -1 if press != 0 else -0x63]
+	if press & (UP | DOWN):
+		chrome_move(s, press)
+	elif press & RIGHT:
+		if kind == 2 and int(s["counts"][int(s["sel"])]) >= int(s["qty"]) + 1:
+			s["qty"] = int(s["qty"]) + 1
+	elif press & LEFT:
+		if kind != 0 and int(s["qty"]) >= 2:
+			s["qty"] = int(s["qty"]) - 1
+	elif press & confirm:
+		return [1, -0x63]
+	elif press & cancel:
+		return [0, -1]
+	return [0, -0x63]
+
+
+# One word of ui_prompt's loop: UP or DOWN turns between its two answers,
+# the confirm answers -- 0 for the first, -1 for the second -- and the
+# cancel answers -1. [sel, the answer or null].
+# @orig game:0x80024e84 ui_prompt+0x214  status:partial -- the answer, verified through storage_check, 200 of 200 runs as the game's own; its drawing is the callers' (panel, options); not the model or the sounds
+static func prompt_press(sel: int, press: int, confirm: int, cancel: int) -> Array:
+	if press & (UP | DOWN):
+		return [1 - sel, null]
+	if press & confirm:
+		return [sel, -sel]
+	if press & cancel:
+		return [sel, -1]
+	return [sel, null]
 
 
 # The MAGIC line's list (0x8001d0c4): the attacking spells 0..0x16 unlocked,
@@ -679,7 +833,7 @@ static func use_item_screen(lk: Dictionary, s: Dictionary) -> Dictionary:
 
 # sub_80025b24: the prompt's two answers, the chosen one lit.
 # @orig game:0x80025b24 sub_80025b24  status:transcribed
-static func options(o: Dictionary, lk: Dictionary, sel: int) -> void:
+static func options(o: Dictionary, lk: Dictionary, sel: int, word: Array = USE_WORD) -> void:
 	var r: Array = rec(RECORDS + 12 * 1)
 	var style: Array = rec(LABEL_STYLE)
 	var one: Array = rec("0x8007e778")
@@ -687,12 +841,12 @@ static func options(o: Dictionary, lk: Dictionary, sel: int) -> void:
 	if sel == 0:
 		lit_plate(o, lk, r, int(one[0]), int(one[1]))
 		label_plate(o, lk, r, int(two[0]), int(two[1]))
-		draw_label(o, lk, style, int(one[0]), int(one[1]), USE_WORD)
+		draw_label(o, lk, style, int(one[0]), int(one[1]), word)
 		dim_label(o, lk, style, int(two[0]), int(two[1]), CANCEL_WORD)
 	else:
 		label_plate(o, lk, r, int(one[0]), int(one[1]))
 		lit_plate(o, lk, r, int(two[0]), int(two[1]))
-		dim_label(o, lk, style, int(one[0]), int(one[1]), USE_WORD)
+		dim_label(o, lk, style, int(one[0]), int(one[1]), word)
 		draw_label(o, lk, style, int(two[0]), int(two[1]), CANCEL_WORD)
 
 
@@ -911,7 +1065,7 @@ func _may_open() -> bool:
 
 # pause_menu's start (0x80027198 and its first frames): the world held, the
 # main page up.
-# @orig game:0x8001a774 pause_menu  status:partial -- the six lines, the status page behind them, "use item", "use magic", "equipment" and "status/records"; "storage" (item_menu) and "system" (0x8001e484) answer nothing yet
+# @orig game:0x8001a774 pause_menu  status:partial -- the six lines, the status page behind them, "use item", "use magic", "equipment", "status/records" and "storage"; "system" (0x8001e484) answers nothing yet
 func _open() -> void:
 	KFGame.modal = true
 	state = "main"
@@ -931,11 +1085,12 @@ func _close() -> void:
 
 # One frame of whichever screen is up, on the buttons newly down.
 # @orig game:0x800221e8 sub_800221e8  status:transcribed -- the main page's choice: up and down round the six, the confirm and the cancel
-# @orig game:0x800222fc ui_menu_chrome  status:partial -- the list's up and down, the confirm and the cancel; not the quantity or the model's turning
+# @orig game:0x800222fc ui_menu_chrome  status:partial -- the list's up and down, the confirm and the cancel, for the lists _step runs itself (the storage's go through chrome_pad, which has the quantity); not the model's turning
 # @orig game:0x80024c70 ui_prompt  status:partial -- kind 0, "use" and "cancel"
 # @orig game:0x8001d784 menu_records  status:partial -- status/records' two lines; CONVERSATION (text_pager) not here
 # @orig game:0x8001d8a4 menu_ratings  status:transcribed -- the ratings page until a button is pressed
 # @orig game:0x8001c540 menu_use_magic+0xb4  status:transcribed -- its loop: the chrome, the cursor into gp+0x19, ui_prompt(s, 0, 2, 0xff) and the spell handed back; not the guide (TRIANGLE, 0x80024f88) or the sounds
+# @orig game:0x8001dd94 item_menu  status:transcribed -- the storage's page: sub_800221e8 over page 2's two lines, a list for each, the cancel back to the main page
 func _step(press: int) -> void:
 	var confirm := 0x40 if int(look["confirm"]) == 3 else 0x20
 	var cancel := 0x20 if int(look["confirm"]) == 3 else 0x40
@@ -960,6 +1115,9 @@ func _step(press: int) -> void:
 				elif main_sel == 3:
 					records_sel = 0
 					state = "records"
+				elif main_sel == 4:
+					storage_sel = 0
+					state = "storage"
 				else:
 					KFInfo.note("menu: line %d is not ported yet" % main_sel)
 			elif press & cancel:
@@ -1030,6 +1188,34 @@ func _step(press: int) -> void:
 					KFInfo.note("menu: the conversations' record is not ported yet")
 			elif press & cancel:
 				state = "main"
+		"storage":
+			# item_menu: sub_800221e8 over page 2's two lines
+			if press & UP:
+				storage_sel = 1 if storage_sel == 0 else storage_sel - 1
+				moved = true
+			elif press & DOWN:
+				storage_sel = 0 if storage_sel == 1 else storage_sel + 1
+				moved = true
+			elif press & confirm:
+				var inv: KFItems = player.inventory
+				stash = storage_list(storage_sel, inv.b if storage_sel == 1 else inv.a,
+					_equip_state(), int(stash_cursor[storage_sel]))
+				state = "storage_list"
+			elif press & cancel:
+				state = "main"
+		"storage_list":
+			var inv: KFItems = player.inventory
+			var was := int(stash["prompt"])
+			var end := storage_press(stash, press, inv.a, inv.b, confirm, cancel)
+			if int(stash["mode"]) == 1 and int(stash["prompt"]) != was:
+				moved = true
+			stash_cursor[storage_sel] = int(stash["sel"])        # gp+0x1a, gp+0x1b
+			if end == -1:
+				state = "storage"
+			elif end != -0x63:
+				KFInfo.note("menu: %d of %d %s" % [int(stash["qty"]), end,
+					"stored" if storage_sel == 0 else "taken out"])
+				state = "storage"
 		"ratings":
 			# sub_8001d8a4: the page until any button is pressed
 			if press != 0:
@@ -1238,6 +1424,14 @@ func _build() -> void:
 			options(ot, look, prompt_sel)
 		"records":
 			menu_page(ot, look, 1, 2, records_sel)
+		"storage":
+			menu_page(ot, look, 2, 2, storage_sel)
+		"storage_list":
+			if int(stash["mode"]) == 1:
+				panel(ot, look, stash, 7 | 0x8000)
+				options(ot, look, int(stash["prompt"]), MOVE_WORD if storage_sel == 1 else STORE_WORD)
+			else:
+				panel(ot, look, stash, 7)
 		"ratings":
 			ratings_page(ot, look, player.offense, player.defence + [player.resist])
 		"equip":

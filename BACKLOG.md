@@ -593,7 +593,15 @@ Eating heals. Left, roughly in order:
   The screens hold against `equip1`..`equip4`, 8 of 8 frames;
 * "status/records" is in but for its CONVERSATION line (`text_pager`,
   `0x8001d944`); "use magic" is in but for its guide (FORMATS.md, "USE
-  MAGIC"); "storage" (`item_menu`) and "system" (`0x8001e484`) are not;
+  MAGIC"), and "storage" but for the guide and the turning model
+  (FORMATS.md, "STORAGE"); "system" (`0x8001e484`) is not -- page 3, five
+  lines: LOAD (`sub_8001e710`, whose 0 ends the menu with -3, a load),
+  two OPTION screens (`sub_8001ec84`, `sub_8001f004`), BUTTON CONFIG
+  (`sub_8001f31c`) and QUIT GAME (`sub_8001f8b4`, whose 0 ends it with -2,
+  the title);
+* `ui_menu_chrome`'s kind 1, the shops' gold check, and `ui_quantity(1)`
+  with the gold (`sub_80025e80`) -- the shops' lists, modes 0xa, 0xb and
+  0xe;
 * `pad_read_latch`'s repeat while a direction is held -- the port reads new
   presses only.
 

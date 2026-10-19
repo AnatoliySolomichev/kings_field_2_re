@@ -3285,6 +3285,36 @@ call after `list_place`, **40 of 40** with none, some or all of the eight
 unlocked and the cursor anywhere the byte reaches; drawn by `ui_panel` mode
 2, **40 of 40 frames** (`tools/ui.py panel_check`).
 
+**STORAGE** (`item_menu`, `0x8001dd94`), the main page's fifth line, is a
+page of two lines (page 2 of the label table, "STORE" and "TAKE OUT")
+chosen with `sub_800221e8` as "status/records" is, each a list three rows
+from y `0x93`: **`menu_store`** (`0x8001dee4`) lists `inventory_a` 0..0x95
+with `item_list_unheld` (`0x8001af88`), which counts a thing that is the
+weapon (`0x801b25af`), one of the seven worn bytes `0x801b25d4..da` or the
+button's thing (`0x801b25ad`) one less -- two less when both item slots
+`d9` and `da` hold it -- and leaves it out at 0; **`menu_take_out`**
+(`0x8001e1b4`) lists `inventory_b` with `item_list`. Their cursors are
+`gp+0x1a` and `gp+0x1b`, written after every `ui_menu_chrome` -- an empty
+list's too, as 0. Both pass `ui_menu_chrome` kind 2: **RIGHT raises the
+quantity** (`gp+0x48`, which `ui_menu_label` sets to 1) while the chosen
+row's count holds one more, **LEFT lowers it** to no less than 1, and it
+stays as the selection moves. The confirm is refused (sound `0xe`, back to
+the list) when the chosen row's count is under the quantity or the other
+side would reach 100; else `ui_prompt(s, 1, 7, id)` asks "STORE"/"CANCEL"
+(`ui_prompt(s, 0xa, 7, id)`, "MOVE"/"CANCEL", for TAKE OUT), "CANCEL"
+going back to the list, and the answer moves the quantity across and
+returns to the page. `ui_panel` mode 7 draws them: the count at x + 0xe9,
+and after the bar `ui_quantity(0)` (`0x80025db8`), a plate at (0xb7, 0x2e)
+with "QTY" and the quantity in two digits 0x54 on. **Against the game's
+own code** over menu1 (`tools/ui.py storage_check`): both screens run
+whole with the pad scripted a word at a time -- the drawing, the models
+and the guide stood in for -- **200 of 200 runs** end, read as many words
+and leave both inventories, the quantity and the cursor as
+`storage_run` does, among them 19 confirms refused for the count and 13
+for the other side, 44 prompts cancelled and 21 moves of more than one;
+their lists as the screens build them, 200 of 200; mode 7 drawn by
+`ui_panel`, 40 of 40 frames.
+
 `ui_menu_chrome`'s up and down (`0x800223a4`), which every list uses: the
 selection moves one and the bar with it, the rows shown moving only when the
 bar is at their edge; past either end it goes round, to the last (the rows
@@ -3305,7 +3335,7 @@ deeper than any 2D part (from depth 0x100 on), so it is left out.
 the equipping, as `tools/ui.py` draws them (8 of the 25 screens the
 self-test holds); `godot/player.gd equip_weapon`, `equip_armour`, and every
 weapon's model in hand (`tools/level3d.py build_held_gltf`), the MAGIC and
-BUTTON lines and the USE MAGIC screen. Not there: the turning model, the
+BUTTON lines, the USE MAGIC screen and the storage. Not there: the turning model, the
 guide, and a bow's own path through `held_item_tick` (weapons `0x1b`,
 `0x1c`).
 

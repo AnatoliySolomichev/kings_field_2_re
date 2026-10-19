@@ -788,7 +788,13 @@ prompt's `0x8000`: 80 of 80 frames alike; and the USE MAGIC screen's
 (`use_magic_list`) in mode 2, 40 of 40, after running the game's own
 `menu_use_magic` up to `list_place` to build the list itself
 (`game_use_magic_list`, which stops it with a hook on its next call): 40 of
-40 lists alike.
+40 lists alike; and the storage's in mode 7, with the quantity, 40 of 40.
+`storage_check` runs the storage's two screens, `menu_store` and
+`menu_take_out`, whole over menu1 -- `pad_read_latch` hooked to hand them a
+scripted pad word at a time, the drawing, the models and the guide stood in
+for -- against `storage_run` on random inventories, worn things and runs of
+words: how each ends, the words read, both inventories, the quantity and
+the cursor, 200 of 200, and the lists as they build them, 200 of 200.
 
 ```
 python3 tools/ui.py            the use-item screen against both snapshots, both buffers

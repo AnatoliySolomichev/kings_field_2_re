@@ -459,7 +459,7 @@
  "0x8001dd94": {
   "name": "item_menu",
   "kind": "code",
-  "evidence": "parent of the two inventory-reading routines"
+  "evidence": "pause_menu's fifth line, 'storage': sub_800221e8 over page 2's two lines (STORE, TAKE OUT) under the page's title, menu_store or menu_take_out for the one chosen, the cancel back to the main page. Was 'parent of the two inventory-reading routines', which it is: the two lists read inventory_a and inventory_b"
  },
  "0x8005e2d0": {
   "name": "object_interact",
@@ -3072,5 +3072,25 @@
   "kind": "code",
   "name": "menu_use_magic",
   "evidence": "pause_menu's second line, 'use magic': sub_8001c6c0 lists the spells 0x17..0x1e whose spell_table +0 is 1 (the healing and protecting ones) under ui_menu_label(0, 1) -- the main page's own label, USE MAGIC -- four rows from y 0x83, the cursor kept in gp+0x19 (list_place on entry, written back after every ui_menu_chrome); ui_panel mode 2 draws it, ui_prompt(s, 0, 2, 0xff) asks, TRIANGLE opens the guide (0x80024f88), and the chosen spell goes back with 0x1000 set, which pause_menu casts (cast_spell at 0x8001a9a0) as the menu closes. tools/ui.py panel_check runs it over menu1 to list_place: 40 of 40 lists built alike"
+ },
+ "0x8001dee4": {
+  "kind": "code",
+  "name": "menu_store",
+  "evidence": "item_menu's first line, STORE: item_list_unheld over inventory_a 0..0x95 under ui_menu_label(2, 0), the cursor in gp+0x1a; ui_menu_chrome with kind 2 (the quantity, gp+0x48), the confirm refused when the row's count is under the quantity or inventory_b would reach 100, ui_prompt(s, 1, 7, id) -- STORE/CANCEL -- and the quantity moved from inventory_a to inventory_b. tools/ui.py storage_check runs it whole over menu1 with the pad scripted: 200 of 200 runs (both screens) and lists as the model's"
+ },
+ "0x8001e1b4": {
+  "kind": "code",
+  "name": "menu_take_out",
+  "evidence": "item_menu's second line, TAKE OUT: item_list over inventory_b 0..0x95 under ui_menu_label(2, 1), the cursor in gp+0x1b; menu_store's loop with the sides swapped -- refused when inventory_a would reach 100, ui_prompt(s, 0xa, 7, id), MOVE/CANCEL. tools/ui.py storage_check, with menu_store"
+ },
+ "0x8001af88": {
+  "kind": "code",
+  "name": "item_list_unheld",
+  "evidence": "item_list's (inventory, names, counts, ids; first, last), but a thing that is the weapon (0x801b25af), one of the seven worn bytes 0x801b25d4..da or the button's thing (0x801b25ad) counted one less -- two less when 0x801b25d9 and 0x801b25da both hold it -- and left out at 0; menu_store's list. tools/ui.py store_rows, 200 of 200 lists as the game's own builds them"
+ },
+ "0x80025db8": {
+  "kind": "code",
+  "name": "ui_quantity",
+  "evidence": "(a0): a plate at (0xb7, 0x2e) -- 0x4a with a0 1, after the gold (sub_80025e80) -- with QTY on it and gp+0x48 in two digits 0x54 to the right; ui_panel calls it with 0 for mode 7 (the storage) and 1 for modes 0xa, 0xb and 0xe (the shops). tools/ui.py quantity, 40 of 40 frames of mode 7 as the game's own ui_panel draws them"
  }
 }

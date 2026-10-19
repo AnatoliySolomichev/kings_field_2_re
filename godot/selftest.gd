@@ -1804,6 +1804,8 @@ func _menus() -> bool:
 		return false
 	var n := 0
 	var bad := 0
+	var runs := 0
+	var runs_bad := 0
 	var first := ""
 	for case in KFMenu.data["cases"]:
 		var lk := {"box": 0x78, "text": 0x80, "shadow": 0x30, "pulse": int(case["pulse"]),
@@ -1859,6 +1861,46 @@ func _menus() -> bool:
 				else:
 					KFMenu.panel(o, lk, sl, 2 | 0x8000)
 					KFMenu.options(o, lk, int(case["prompt"]))
+			"storage":
+				var inv := PackedByteArray()
+				inv.resize(150)
+				for key in case["inventory"]:
+					inv[int(key)] = int(case["inventory"][key])
+				var sl := KFMenu.storage_list(int(case["which"]), inv, case["equip"], int(case["cursor"]))
+				sl["qty"] = int(case["qty"])
+				if int(sl["sel"]) != int(case["sel"]):
+					print("  storage: the selection %d, python's %d" % [int(sl["sel"]), int(case["sel"])])
+				if case["prompt"] == null:
+					KFMenu.panel(o, lk, sl, 7)
+				else:
+					KFMenu.panel(o, lk, sl, 7 | 0x8000)
+					KFMenu.options(o, lk, int(case["prompt"]),
+						KFMenu.MOVE_WORD if int(case["which"]) == 1 else KFMenu.STORE_WORD)
+			"storage_runs":
+				# pad words through storage_press, against tools/ui.py storage_run
+				for r in case["runs"]:
+					runs += 1
+					var ia := PackedByteArray(case["inventory_a"])
+					var ib := PackedByteArray(case["inventory_b"])
+					var which := int(r["which"])
+					var sl := KFMenu.storage_list(which, ib if which == 1 else ia, case["equip"],
+						int(r["cursor"]))
+					var end := -0x63
+					var used := 0
+					for press in r["presses"]:
+						used += 1
+						end = KFMenu.storage_press(sl, int(press), ia, ib, 0x40, 0x20)
+						if end != -0x63:
+							break
+					var same: bool = end == int(r["end"]) and used == int(r["used"]) \
+						and int(sl["qty"]) == int(r["qty"]) and int(sl["sel"]) == int(r["sel"]) \
+						and ia == PackedByteArray(r["inventory_a"]) and ib == PackedByteArray(r["inventory_b"])
+					if not same:
+						runs_bad += 1
+						if first == "":
+							first = "storage run %s: godot end %d used %d qty %d sel %d, python %s" % [
+								str(r["presses"]), end, used, int(sl["qty"]), int(sl["sel"]),
+								str([r["end"], r["used"], r["qty"], r["sel"]])]
 			"equip_list":
 				var inv := PackedByteArray()
 				inv.resize(150)
@@ -1873,6 +1915,8 @@ func _menus() -> bool:
 				else:
 					KFMenu.panel(o, lk, sl, 5 | 0x8000)
 					KFMenu.options(o, lk, int(case["prompt"]))
+		if str(case["screen"]) == "storage_runs":
+			continue                                # runs, not a screen: counted above
 		var got := JSON.stringify(_norm(KFMenu.order(o)))
 		var want := JSON.stringify(_norm(case["prims"]))
 		n += 1
@@ -1882,9 +1926,11 @@ func _menus() -> bool:
 				first = "%s sel %d: godot %s ... python %s ..." % [case["screen"], int(case["sel"]),
 					got.substr(0, 300), want.substr(0, 300)]
 	print("menus: %d of %d screens drawn as tools/ui.py draws them" % [n - bad, n])
-	if bad > 0:
+	print("menus: %d of %d runs of pad words through the storage as tools/ui.py runs them" % [
+		runs - runs_bad, runs])
+	if bad > 0 or runs_bad > 0:
 		print("  first difference: " + first)
-	return bad == 0
+	return bad == 0 and runs_bad == 0
 
 
 # @port check -- a primitive list with every number an int and every pair an array, for comparing

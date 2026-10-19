@@ -329,7 +329,23 @@ def panel(f, look, e, s, mode):
         tpage, clut, u, v, w, h = record(e, RECORDS + 12 * 8)
         f.add(49, quad(s["x"] + 6, s["y"] + (row << 4) + 5, w, h, u, v, w, h,
                        tpage, clut, c0 | (c0 << 8) | (c1 << 16), 1))
+    if m == 7:
+        quantity(f, look, e, s.get("qty", 1))
     legend(f, look, e, mode)
+
+
+QTY_WORD = [0x10, 0x13, 0x18, 0xFF]              # "qty"
+
+
+def quantity(f, look, e, qty):
+    """ui_quantity(0) (0x80025db8), ui_panel's for mode 7 after the bar: a plate at
+    (0xb7, 0x2e) with "QTY" on it, and the quantity (gp+0x48) in two digits
+    0x54 to the right. Its 1 (the shops' modes) moves it to y 0x4a and draws
+    the gold first (sub_80025e80); not here."""
+    title_plate(f, look, record(e, RECORDS + 12 * 2), 0xB7, 0x2E)
+    draw_label(f, look, record(e, LABEL_STYLE), 0xB7, 0x2E, QTY_WORD)
+    draw_number(f, look, record(e, NUMBER_STYLE), 0xB7 + 0x54, 0x2E,
+                number_digits(qty, 2, 0, 1))
 
 
 def legend(f, look, e, mode, two=None):
@@ -395,7 +411,8 @@ def options(f, look, e, one, two, sel):
         draw_label(f, look, style, *two)
 
 
-PROMPT_WORDS = {0: [0x14, 0x12, 0x04], 1: [0x12, 0x13, 0x0E, 0x11, 0x04]}   # use, store
+PROMPT_WORDS = {0: [0x14, 0x12, 0x04], 1: [0x12, 0x13, 0x0E, 0x11, 0x04],   # use, store
+                0xA: [0x0C, 0x0E, 0x15, 0x04]}                             # move
 CANCEL = [0x02, 0x00, 0x0D, 0x02, 0x04, 0x0B]                              # cancel
 
 
@@ -703,17 +720,175 @@ def button_list(e, inventory, table, st):
     return out
 
 
-def list_screen(e, look, s, mode, prompt=None):
-    """A chooser's frame: ui_panel(s, mode), or while ui_prompt(s, 5, mode)
-    asks, the list in mode | 0x8000 under "USE" and "CANCEL"."""
+def list_screen(e, look, s, mode, prompt=None, word=0):
+    """A chooser's frame: ui_panel(s, mode), or while ui_prompt(s, word,
+    mode) asks, the list in mode | 0x8000 under the kind's word -- "USE",
+    "STORE", "MOVE" -- and "CANCEL"."""
     f = Frame()
     if prompt is None:
         panel(f, look, e, s, mode)
     else:
         panel(f, look, e, s, mode | 0x8000)
-        options(f, look, e, (45, 58, PROMPT_WORDS[0] + [0xFF]), (45, 84, CANCEL + [0xFF]),
+        options(f, look, e, (45, 58, PROMPT_WORDS[word] + [0xFF]), (45, 84, CANCEL + [0xFF]),
                 prompt)
     return f.order()
+
+
+# --- the pad on a list: ui_menu_chrome and ui_prompt ----------------------
+
+UP, DOWN, LEFT, RIGHT = 0x1000, 0x4000, 0x8000, 0x2000
+
+
+def chrome(s, press, kind, confirm, cancel):
+    """ui_menu_chrome's pad (0x800222fc): one word read, one thing done, in
+    this order -- an empty list goes at any button; UP and DOWN move the
+    selection (wrapping, the rows shown moving only at their edge); with kind
+    2 (the storage) RIGHT raises the quantity (s["qty"], gp+0x48) while the
+    chosen row's count holds one more, and with any kind LEFT lowers it to no
+    less than 1; the confirm asks (mode 1), the cancel leaves (-1). Kind 1,
+    the shops' gold check, is not here. Returns (mode, result): mode 0 or 1,
+    result -0x63 for nothing or -1."""
+    n = s["count"]
+    if n == 0:
+        return (0, -1) if press else (0, -0x63)
+    rows = s["rows"]
+    if press & UP:
+        if s["sel"]:
+            s["sel"] -= 1
+            if s["sel_row"]:
+                s["sel_row"] -= 1
+            else:
+                s["first"] -= 1
+        else:
+            s["sel"] = n - 1
+            if n < rows:
+                s["first"], s["sel_row"] = 0, n - 1
+            else:
+                s["first"], s["sel_row"] = n - rows, rows - 1
+    elif press & DOWN:
+        if s["sel"] < n - 1:
+            s["sel"] += 1
+            if s["sel_row"] == rows - 1:
+                s["first"] += 1
+            else:
+                s["sel_row"] += 1
+        else:
+            s["sel"] = s["first"] = s["sel_row"] = 0
+    elif press & RIGHT:
+        if kind == 2 and s["counts"][s["sel"]] >= s["qty"] + 1:
+            s["qty"] += 1
+    elif press & LEFT:
+        if kind and s["qty"] >= 2:
+            s["qty"] -= 1
+    elif press & confirm:
+        return 1, -0x63
+    elif press & cancel:
+        return 0, -1
+    return 0, -0x63
+
+
+def prompt_press(sel, press, confirm, cancel):
+    """One word of ui_prompt's loop (0x80024c70): UP or DOWN turns between
+    its two answers, the confirm answers -- 0 for the first, -1 for the
+    second -- and the cancel answers -1. (sel, answer or None)."""
+    if press & (UP | DOWN):
+        return 1 - sel, None
+    if press & confirm:
+        return sel, -sel
+    if press & cancel:
+        return sel, -1
+    return sel, None
+
+
+# --- storage: item_menu, its two lists --------------------------------------
+
+STORE_LAST = 0x95              # the two lists run over 0..0x95
+
+
+def store_rows(e, inventory, st, first=0, last=STORE_LAST):
+    """item_list_unheld (0x8001af88): item_list's (names, counts, ids), but a thing worn or
+    held -- the weapon (0x801b25af), the seven worn bytes 0x801b25d4..da,
+    the button's thing (0x801b25ad) -- counted one less, two less when both
+    item slots (d9, da) hold it, and left out when that leaves none."""
+    held = [st["weapon"]] + list(st["worn"]) + [st["item_b"]]
+    names, counts, ids = [], [], []
+    for i in range(first, last + 1):
+        c = inventory[i]
+        if c == 0:
+            continue
+        if i in held:
+            c = (c - 2 if i == st["worn"][5] == st["worn"][6] else c - 1) & 0xFF
+        if c == 0:
+            continue
+        names.append(list(e.bytes(NAMES + 24 * i, 24)))
+        counts.append(c)
+        ids.append(i)
+    return names, counts, ids
+
+
+def storage_list(e, which, inventory, st=None, cursor=0):
+    """item_menu's two lists, under ui_menu_label(2, which): "STORE" (0,
+    menu_store) the things carried as item_list_unheld counts them, "TAKE OUT"
+    (1, menu_take_out) the things in storage (inventory_b) as item_list does;
+    three rows from y 0x93, the selection where gp+0x1a or gp+0x1b left it,
+    the quantity 1 as ui_menu_label leaves it."""
+    if which == 0:
+        names, counts, ids = store_rows(e, inventory, st)
+    else:
+        names, counts, ids = item_list(e, inventory, 0, STORE_LAST)
+    lab = e.bytes(0x8007E67C + 252 * 2 + 28 * which + 4, 16)
+    out = {"tx": 0x1F, "ty": 0x20, "title": list(lab), "x": 0x1B, "y": 0x93, "rows": 3,
+           "length": 0x18, "count": len(ids), "names": names, "counts": counts,
+           "costs": [-1] * len(ids), "ids": ids, "which": which, "qty": 1,
+           "mode": 0, "prompt": 0}
+    place(out, cursor)
+    return out
+
+
+def storage_press(s, press, inv_a, inv_b, confirm, cancel):
+    """One pad word on the storage's list (menu_store for which 0,
+    menu_take_out for 1): while the list is up (s["mode"] 0) the list's
+    ui_menu_chrome with kind 2 -- its confirm refused, back to the list with
+    sound 0xe, when the chosen row's count is under the quantity or the other
+    side would reach 100 -- and while ui_prompt(s, 1 or 0xa, 7) asks (mode
+    1, s["prompt"] the answer lit) "STORE" or "MOVE", and "CANCEL" back to
+    the list. The first answer moves the quantity across; `inv_a`, `inv_b`
+    change in place. None while the screen is up, -1 when it goes, or the id
+    of the thing moved."""
+    if s["mode"] == 1:
+        s["prompt"], ans = prompt_press(s["prompt"], press, confirm, cancel)
+        if ans is None:
+            return None
+        if ans == 0:
+            i, q = s["ids"][s["sel"]], s["qty"]
+            if s["which"] == 0:
+                inv_a[i], inv_b[i] = (inv_a[i] - q) & 0xFF, (inv_b[i] + q) & 0xFF
+            else:
+                inv_a[i], inv_b[i] = (inv_a[i] + q) & 0xFF, (inv_b[i] - q) & 0xFF
+            return i
+        s["mode"] = 0
+        return None
+    mode, result = chrome(s, press, 2, confirm, cancel)
+    if result == -1:
+        return -1
+    if mode == 1:
+        k = s["sel"]
+        other = inv_b if s["which"] == 0 else inv_a
+        if not (s["counts"][k] < s["qty"] or other[s["ids"][k]] + s["qty"] >= 0x64):
+            s["mode"], s["prompt"] = 1, 0
+    return None
+
+
+def storage_run(s, presses, inv_a, inv_b, confirm, cancel):
+    """storage_press over `presses` until the screen goes: (how it ended --
+    None while still up, -1 left, or the id moved -- and the words read)."""
+    used = 0
+    for press in presses:
+        used += 1
+        end = storage_press(s, press, inv_a, inv_b, confirm, cancel)
+        if end is not None:
+            return end, used
+    return None, used
 
 
 def _lay_list(ram, s, at=0x801F0000):
@@ -860,9 +1035,25 @@ def panel_check(out=sys.stdout, n=40):
             first_built = f"use magic's list, {k}: game {g[k]} model {s[k]}"
         mode = 2 | (0x8000 if rng.randrange(3) == 0 else 0)
         run("use magic", s, mode, rng.randrange(0x60), cursor)
+    # the storage's lists, mode 7 -- the count and the quantity plate --
+    # with the quantity (gp+0x48) laid in too
+    rng = random.Random(0x7A4E3)
+    for i in range(n):
+        which = i & 1
+        inv = [0] * 150
+        for k in rng.sample(range(0x96), rng.randrange(0, 12)):
+            inv[k] = rng.randrange(1, 100)
+        st = {"weapon": 0xFF, "worn": [0xFF] * 7, "item_b": 0xFF}
+        s = storage_list(e, which, inv, st, rng.randrange(8))
+        s["qty"] = rng.choice((1, 2, rng.randrange(1, 100), 99))
+        base_qty = bytearray(base)
+        struct.pack_into("<I", base_qty, (GP + 0x48) & 0x1FFFFF, s["qty"])
+        saved, base = base, base_qty
+        run("storage", s, 7 | (0x8000 if rng.randrange(3) == 0 else 0), rng.randrange(0x60))
+        base = saved
     ok = sum(v[0] for v in tally.values())
     runs = sum(v[1] for v in tally.values())
-    print(f"  the MAGIC, BUTTON and USE MAGIC lists, ui_panel's modes 4, 0x10 and 2 as "
+    print(f"  the MAGIC, BUTTON, USE MAGIC and storage lists, ui_panel's modes 4, 0x10, 2 and 7 as "
           f"the game's own draws them over menu1: {ok} of {runs} frames primitive for "
           f"primitive (" + ", ".join(f"{w} {a} of {b}" for w, (a, b) in tally.items()) + ")",
           file=out)
@@ -873,6 +1064,176 @@ def panel_check(out=sys.stdout, n=40):
     if first_built:
         print("  first difference: " + first_built, file=out)
     return ok == runs and built_ok == n
+
+
+class _Out(Exception):
+    """The scripted pad has no more words: the screen is still up."""
+
+
+INVENTORY_B = 0x800C867E
+STORAGE_SCREENS = (0x8001DEE4, 0x8001E1B4)      # "store", "take out"
+
+
+def game_storage_run(base, which, inv_a, inv_b, st, cursor, presses):
+    """menu_store (which 0) or menu_take_out (1) run whole by
+    tools/mipsrun.py over `base`, the inventories, the worn and held bytes and
+    the cursor (gp+0x1a, gp+0x1b) laid in, each pad_read_latch answered with
+    the next of `presses` and the drawing, the models and the guide stood in
+    for: (returned, words read, inventory_a, inventory_b, gp+0x48, the
+    cursor)."""
+    import mipsrun
+    cpu = mipsrun.menu_cpu(base)
+    a, b = INVENTORY_A & 0x1FFFFF, INVENTORY_B & 0x1FFFFF
+    cpu.ram[a:a + 150] = bytes(inv_a)
+    cpu.ram[b:b + 150] = bytes(inv_b)
+    cpu.ram[0x1B25AF] = st["weapon"]
+    cpu.ram[0x1B25AD] = st["item_b"]
+    cpu.ram[0x1B25D4:0x1B25DB] = bytes(st["worn"])
+    where = GP + 0x1A + which
+    cpu.wr(where, 1, cursor)
+    script = list(presses)
+    read = [0]
+
+    def latch(c):
+        if not script:
+            raise _Out
+        read[0] += 1
+        return script.pop(0)
+
+    cpu.hooks[0x800279A4] = latch                      # pad_read_latch
+    for at in (0x80027A40, 0x800279D8,                 # pad_wait_release, pad_drain_press
+               0x80026FE4, 0x800270F8,                 # frame_begin, frame_end
+               0x80025468, 0x80025B24,                 # ui_panel, the prompt's answers
+               0x80025BE8, 0x80027A9C, 0x80024F88):    # the model, its load, the guide
+        cpu.hooks[at] = lambda c: 0
+    try:
+        cpu.call(STORAGE_SCREENS[which])
+        returned = True
+    except _Out:
+        returned = False
+    return (returned, read[0], list(cpu.ram[a:a + 150]), list(cpu.ram[b:b + 150]),
+            cpu.rd(GP + 0x48, 4), cpu.rd(where, 1))
+
+
+STORAGE_ARRAYS = ((0x50, 0xE90, 0xF28), (0x50, 0x770, 0x808))   # names, counts, ids on each frame
+
+
+def game_storage_list(base, which, inv_a, inv_b, st, cursor):
+    """The list menu_store or menu_take_out builds, run by tools/mipsrun.py
+    to its first ui_menu_chrome and read off its stack as storage_list's
+    fields."""
+    import mipsrun
+    cpu = mipsrun.menu_cpu(base)
+    a, b = INVENTORY_A & 0x1FFFFF, INVENTORY_B & 0x1FFFFF
+    cpu.ram[a:a + 150] = bytes(inv_a)
+    cpu.ram[b:b + 150] = bytes(inv_b)
+    cpu.ram[0x1B25AF] = st["weapon"]
+    cpu.ram[0x1B25AD] = st["item_b"]
+    cpu.ram[0x1B25D4:0x1B25DB] = bytes(st["worn"])
+    cpu.wr(GP + 0x1A + which, 1, cursor)
+    got = {}
+    names, counts, ids = STORAGE_ARRAYS[which]
+
+    def built(c):
+        sp = c.r[29]
+        r = bytes(c.rd(sp + 0x18 + i, 1) for i in range(0x34))
+        n = r[0x1E]
+        got.update({
+            "tx": struct.unpack_from("<h", r, 0)[0], "ty": struct.unpack_from("<h", r, 2)[0],
+            "title": list(r[4:20]), "x": r[0x1C], "y": r[0x1D], "count": n,
+            "rows": r[0x1F], "first": r[0x20], "sel": r[0x21], "sel_row": r[0x22],
+            "length": r[0x23],
+            "names": [[c.rd(sp + names + 24 * k + i, 1) for i in range(24)] for k in range(n)],
+            "counts": [c.rd(sp + counts + k, 1) for k in range(n)],
+            "ids": [c.rd(sp + ids + k, 1) for k in range(n)],
+            "qty": c.rd(GP + 0x48, 4)})
+        raise _Out
+
+    cpu.hooks[0x800222FC] = built                     # ui_menu_chrome
+    cpu.hooks[0x80027A9C] = lambda c: 0               # the model's load
+    try:
+        cpu.call(STORAGE_SCREENS[which])
+    except _Out:
+        pass
+    return got
+
+
+def storage_check(out=sys.stdout, n=200):
+    """The storage's two screens, against the game's own run whole over
+    menu1's RAM: random carried and stored things -- some worn or held, some
+    in both item slots, some near 99 -- and a random run of pad words; how
+    it ends, how many words it read, both inventories, the quantity and the
+    cursor alike."""
+    import random
+    path = os.path.join(ROOT, "out", "snap", "menu1.ram")
+    if not os.path.exists(path):
+        print("  no menu1 snapshot to run the storage over", file=out)
+        return True
+    e = exe()
+    base = bytearray(open(path, "rb").read())
+    confirm = struct.unpack_from("<I", base, (GP + 0x38) & 0x1FFFFF)[0]
+    cancel = struct.unpack_from("<I", base, (GP + 0x3C) & 0x1FFFFF)[0]
+    rng = random.Random(0x5704A6E)
+    ok = 0
+    first = None
+    ends = {"left": 0, "moved": 0, "up": 0}
+    built_ok = 0
+    first_built = None
+    for i in range(n):
+        which = i & 1
+        inv_a, inv_b = [0] * 150, [0] * 150
+        for k in rng.sample(range(0x96), rng.randrange(0, 14)):
+            inv_a[k] = rng.choice((1, 2, 3, rng.randrange(1, 100), 98, 99))
+        for k in rng.sample(range(0x96), rng.randrange(0, 14)):
+            inv_b[k] = rng.choice((1, 2, rng.randrange(1, 100), 97, 99))
+        if rng.randrange(2):
+            # the other side nearly full of one listed thing, for the refusal
+            mine = [k for k in range(0x96) if (inv_b if which else inv_a)[k]]
+            if mine:
+                (inv_a if which else inv_b)[rng.choice(mine)] = rng.randrange(95, 100)
+        carried = [k for k in range(0x96) if inv_a[k]] or [0xFF]
+        worn = [rng.choice(carried + [0xFF] * 3) for _ in range(7)]
+        if rng.randrange(4) == 0:
+            worn[6] = worn[5]
+        st = {"weapon": rng.choice(carried + [0xFF]), "worn": worn,
+              "item_b": rng.choice(carried + [0xFF] * 3)}
+        cursor = rng.randrange(0x100) if rng.randrange(4) == 0 else rng.randrange(6)
+        words = [UP, DOWN, LEFT, RIGHT, RIGHT, confirm, confirm, cancel]
+        presses = [rng.choice(words) for _ in range(rng.randrange(1, 16))]
+        if rng.randrange(4) == 0:
+            # the quantity raised on one row, then another chosen: the refusal
+            presses = ([RIGHT] * rng.randrange(2, 7) + [rng.choice((UP, DOWN)), confirm]
+                       + presses)
+        g = game_storage_run(base, which, inv_a, inv_b, st, cursor, presses)
+        s = storage_list(e, which, inv_b if which else inv_a, st, cursor)
+        gl = game_storage_list(base, which, inv_a, inv_b, st, cursor)
+        keys = [k for k in gl if k in s]
+        built_ok += all(gl[k] == s[k] for k in keys)
+        if first_built is None and not all(gl[k] == s[k] for k in keys):
+            k = next(k for k in keys if gl[k] != s[k])
+            first_built = (f"case {i} ({'take out' if which else 'store'})'s list, {k}: "
+                           f"game {gl[k]} model {s[k]}")
+        ma, mb = list(inv_a), list(inv_b)
+        end, used = storage_run(s, presses, ma, mb, confirm, cancel)
+        m = (end is not None, used, ma, mb, s["qty"], s["sel"])
+        same = g == m
+        ok += same
+        ends["up" if end is None else "left" if end == -1 else "moved"] += 1
+        if not same and first is None:
+            k = next(j for j in range(6) if g[j] != m[j])
+            name = ("returned", "words read", "inventory_a", "inventory_b", "quantity", "cursor")[k]
+            first = f"case {i} ({'take out' if which else 'store'}), {name}: game {g[k]} model {m[k]}"
+    print(f"  the storage's STORE and TAKE OUT, as the game's own menu_store and "
+          f"menu_take_out run them press by press over menu1: {ok} of {n} runs alike "
+          f"({ends['moved']} moved something, {ends['left']} left, {ends['up']} still up)",
+          file=out)
+    if first:
+        print("  first difference: " + first, file=out)
+    print(f"  their lists as the game's own builds them, to the first ui_menu_chrome: "
+          f"{built_ok} of {n}", file=out)
+    if first_built:
+        print("  first difference: " + first_built, file=out)
+    return ok == n and built_ok == n
 
 
 def place(s, sel):
@@ -1079,6 +1440,44 @@ def export_cases(e):
         cases.append({"screen": "use_magic", "table": table.hex(), "cursor": cursor,
                       "prompt": prompt, "sel": us["sel"], "pulse": 0x1B,
                       "prims": [[d, p] for d, p in list_screen(e, look, us, 2, prompt)]})
+    # the storage's two lists, mode 7 (which the game's own ui_panel holds,
+    # panel_check), their prompts, and runs of pad words through
+    # storage_press (which the game's own two screens hold, storage_check)
+    sinv_a, sinv_b = [0] * 150, [0] * 150
+    for k, v in ((0, 1), (0x22, 1), (0x33, 2), (0x68, 5), (0x6B, 1), (0x6D, 98), (0x85, 1),
+                 (0x92, 3)):
+        sinv_a[k] = v
+    for k, v in ((0x68, 96), (0x6D, 2), (0x77, 1), (0x8B, 1)):
+        sinv_b[k] = v
+    sst = {"weapon": 0, "worn": [0x22, 0xFF, 0x33, 0xFF, 0xFF, 0x6B, 0x6B], "item_b": 0x92}
+    for which, cursor, qty, prompt in ((0, 0, 1, None), (0, 4, 3, None), (0, 1, 2, 0),
+                                       (1, 0, 1, None), (1, 3, 12, 1)):
+        look.pulse = 0x3A
+        ss = storage_list(e, which, sinv_b if which else sinv_a, sst, cursor)
+        ss["qty"] = qty
+        cases.append({"screen": "storage", "which": which, "cursor": cursor, "qty": qty,
+                      "inventory": {str(k): v for k, v in enumerate(sinv_b if which else sinv_a) if v},
+                      "equip": sst, "prompt": prompt, "sel": ss["sel"], "pulse": 0x3A,
+                      "prims": [[d, p] for d, p in list_screen(e, look, ss, 7, prompt,
+                                                             0xA if which else 1)]})
+    import random
+    rng = random.Random(0x5704A6F)
+    runs = []
+    for i in range(40):
+        which = i & 1
+        words = [UP, DOWN, LEFT, RIGHT, RIGHT, 0x40, 0x40, 0x20]
+        presses = [rng.choice(words) for _ in range(rng.randrange(1, 14))]
+        if i % 4 == 0:
+            presses = [RIGHT] * rng.randrange(2, 7) + [rng.choice((UP, DOWN)), 0x40] + presses
+        cursor = rng.randrange(6)
+        ma, mb = list(sinv_a), list(sinv_b)
+        ss = storage_list(e, which, mb if which else ma, sst, cursor)
+        end, used = storage_run(ss, presses, ma, mb, 0x40, 0x20)
+        runs.append({"which": which, "cursor": cursor, "presses": presses,
+                     "end": -0x63 if end is None else end, "used": used, "qty": ss["qty"],
+                     "sel": ss["sel"], "inventory_a": ma, "inventory_b": mb})
+    cases.append({"screen": "storage_runs", "inventory_a": sinv_a, "inventory_b": sinv_b,
+                  "equip": sst, "runs": runs, "sel": 0, "pulse": 0, "prims": []})
     # ui_ratings_page as the game's own code draws it, run over menu1's RAM by
     # tools/mipsrun.py -- when that snapshot is here
     menu1 = os.path.join(ROOT, "out", "snap", "menu1.ram")
@@ -1089,9 +1488,11 @@ def export_cases(e):
             cases.append({"screen": "ratings", "offense": off, "defense": dfn,
                           "sel": 0, "pulse": 0, "prims": [[d, p] for d, p in prims],
                           "look": "menu1"})
-        for sel, pulse, prims in mipsrun.page_cases(ram, 1, 2):
-            cases.append({"screen": "page", "page": 1, "n": 2, "sel": sel, "pulse": pulse,
-                          "prims": [[d, p] for d, p in prims], "look": "menu1"})
+        for page in (1, 2):
+            for sel, pulse, prims in mipsrun.page_cases(ram, page, 2):
+                cases.append({"screen": "page", "page": page, "n": 2, "sel": sel,
+                              "pulse": pulse, "prims": [[d, p] for d, p in prims],
+                              "look": "menu1"})
     for ps in STATUS_CASES:
         look.pulse = 0x2A
         cases.append({"screen": "main", "sel": 2, "pulse": 0x2A, "status": ps,
@@ -1258,6 +1659,7 @@ def check_menus(out=sys.stdout, verbose=False, names=("menu1", "equip1", "equip2
 def check(out=sys.stdout, verbose=False):
     menus = check_menus(out, verbose)
     menus = panel_check(out) and menus
+    menus = storage_check(out) and menus
     e = exe()
     ok = bad = 0
     for name in ("inv1", "inv2"):
