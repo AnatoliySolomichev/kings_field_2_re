@@ -1849,6 +1849,16 @@ func _menus() -> bool:
 				else:
 					KFMenu.panel(o, lk, sl, mode | 0x8000)
 					KFMenu.options(o, lk, int(case["prompt"]))
+			"use_magic":
+				var sl := KFMenu.use_magic_list((case["table"] as String).hex_decode(),
+					int(case["cursor"]))
+				if int(sl["sel"]) != int(case["sel"]):
+					print("  use_magic: the selection %d, python's %d" % [int(sl["sel"]), int(case["sel"])])
+				if case["prompt"] == null:
+					KFMenu.panel(o, lk, sl, 2)
+				else:
+					KFMenu.panel(o, lk, sl, 2 | 0x8000)
+					KFMenu.options(o, lk, int(case["prompt"]))
 			"equip_list":
 				var inv := PackedByteArray()
 				inv.resize(150)

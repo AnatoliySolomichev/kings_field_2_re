@@ -3067,5 +3067,10 @@
   "name": "effect_grow",
   "kind": "code",
   "evidence": "(mult, limit, step, edge, mode): the current effect's three scales `step` larger, a strike between mult times its last size and mult times its size less one; gone at `limit`. Orladin's burst (0x58): 0x4000, 0x600, 0x80, 0x400, 0x8000 -- held to the game's own by tools/effects.py spell_hit_check"
+ },
+ "0x8001c48c": {
+  "kind": "code",
+  "name": "menu_use_magic",
+  "evidence": "pause_menu's second line, 'use magic': sub_8001c6c0 lists the spells 0x17..0x1e whose spell_table +0 is 1 (the healing and protecting ones) under ui_menu_label(0, 1) -- the main page's own label, USE MAGIC -- four rows from y 0x83, the cursor kept in gp+0x19 (list_place on entry, written back after every ui_menu_chrome); ui_panel mode 2 draws it, ui_prompt(s, 0, 2, 0xff) asks, TRIANGLE opens the guide (0x80024f88), and the chosen spell goes back with 0x1000 set, which pause_menu casts (cast_spell at 0x8001a9a0) as the menu closes. tools/ui.py panel_check runs it over menu1 to list_place: 40 of 40 lists built alike"
  }
 }

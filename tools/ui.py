@@ -284,9 +284,10 @@ NO_COUNTS = (2, 3, 4, 8, 9, 0x10)
 
 def panel(f, look, e, s, mode):
     """ui_panel (0x80025468) for `s` -- title (x, y, glyphs), x, y, count,
-    rows, first, selected row, label length, names, counts -- in modes 1, 3
-    and 5: mode 3 a second name 0x54 to the right of the first ("names2", 24
-    bytes and an end), modes 1 and 5 the count "x N" at x + 0xe9."""
+    rows, first, selected row, label length, names, counts -- in modes 1, 2,
+    3, 4, 5 and 0x10: mode 3 a second name 0x54 to the right of the first
+    ("names2", 24 bytes and an end), modes 1 and 5 the count "x N" at x +
+    0xe9, modes 2 and 4 the cost behind the MP sign, 0x10 both."""
     style = record(e, LABEL_STYLE)
     m = mode & 0xFFF
     if s["title"]:
@@ -300,8 +301,9 @@ def panel(f, look, e, s, mode):
         draw_label(f, look, style, x, y, s["names"][k][:s["length"]])
         if m == 3:
             draw_label(f, look, style, x + 0x54, y, list(s["names2"][k][:0x18]) + [0xFF])
-        if m == 4 and s["costs"][k] != -1:
-            # .L8: the u32 column (+0x30), three digits behind the MP sign
+        if m in (2, 4) and s["costs"][k] != -1:
+            # .L8, for modes 2 and 4 alike: the u32 column (+0x30), three
+            # digits behind the MP sign
             x += 0xCE
             draw_number(f, look, record(e, NUMBER_STYLE), x, y,
                         number_digits(s["costs"][k], 3, 0, 3))
@@ -650,6 +652,20 @@ def magic_list(e, table, st):
     return out
 
 
+def use_magic_list(e, table, selected=0):
+    """menu_use_magic's list (0x8001c48c): the healing and protecting spells
+    0x17..0x1e whose +0 is 1, their MP beside them, under ui_menu_label(0,
+    1)'s title "USE MAGIC" -- four rows from y 0x83, no "TAKE OFF" -- the
+    selection put back where gp+0x19 left it (list_place)."""
+    names, costs, ids = spell_rows(e, table, 0x17, 0x1E)
+    lab = e.bytes(0x8007E67C + 1 * 28 + 4, 16)
+    out = {"tx": 0x1F, "ty": 0x20, "title": list(lab), "x": 0x1B, "y": 0x83,
+           "rows": 4, "length": 0x18, "count": len(ids), "names": names,
+           "costs": costs, "counts": [0xFF] * len(ids), "ids": ids}
+    place(out, selected)
+    return out
+
+
 BUTTON_THINGS = (0x65, 0x92)
 
 
@@ -725,10 +741,49 @@ def _lay_list(ram, s, at=0x801F0000):
     return at
 
 
+class _Built(Exception):
+    """menu_use_magic has built its list: the stop at its next call."""
+
+
+def game_use_magic_list(ram, table, cursor):
+    """menu_use_magic's own start (0x8001c48c up to its call of 0x80027bb4,
+    after list_place), run by tools/mipsrun.py over `ram` with the spell
+    table's records `table` and gp+0x19 = `cursor`: the list it built on
+    its stack, read back as use_magic_list's fields."""
+    import mipsrun
+    cpu = mipsrun.menu_cpu(ram)
+    cpu.ram[SPELL_TABLE & 0x1FFFFF:(SPELL_TABLE & 0x1FFFFF) + len(table)] = table
+    cpu.wr(GP + 0x19, 1, cursor)
+    got = {}
+
+    def built(c):
+        sp = c.r[29]
+        r = bytes(c.rd(sp + 0x18 + i, 1) for i in range(0x34))
+        n = r[0x1E]
+        names_at, costs_at = struct.unpack_from("<I", r, 0x24)[0], struct.unpack_from("<I", r, 0x30)[0]
+        got.update({
+            "tx": struct.unpack_from("<h", r, 0)[0], "ty": struct.unpack_from("<h", r, 2)[0],
+            "title": list(r[4:20]), "x": r[0x1C], "y": r[0x1D], "count": n,
+            "rows": r[0x1F], "first": r[0x20], "sel": r[0x21], "sel_row": r[0x22],
+            "length": r[0x23],
+            "names": [[c.rd(names_at + 24 * k + i, 1) for i in range(24)] for k in range(n)],
+            "costs": [mipsrun.s32(c.rd(costs_at + 4 * k, 4)) for k in range(n)],
+            "ids": [c.rd(sp + 0x280 + k, 1) for k in range(n)]})
+        raise _Built
+
+    cpu.hooks[0x80027BB4] = built
+    try:
+        cpu.call(0x8001C48C)
+    except _Built:
+        pass
+    return got
+
+
 def panel_check(out=sys.stdout, n=40):
-    """The MAGIC and BUTTON lists, ui_panel modes 4 and 0x10 and their
-    prompts' 0x8000, against the game's own ui_panel run by tools/mipsrun.py
-    over menu1's RAM with each list laid in: the 2D primitives alike."""
+    """The MAGIC and BUTTON lists, ui_panel modes 4 and 0x10, and the USE
+    MAGIC screen's, mode 2, with their prompts' 0x8000, against the game's
+    own ui_panel run by tools/mipsrun.py over menu1's RAM with each list laid
+    in: the 2D primitives alike."""
     import random
     import mipsrun
     path = os.path.join(ROOT, "out", "snap", "menu1.ram")
@@ -737,10 +792,34 @@ def panel_check(out=sys.stdout, n=40):
         return True
     e = exe()
     base = bytearray(open(path, "rb").read())
-    rng = random.Random(0x7A4E1)
-    ok = runs = 0
-    first = None
     t = SPELL_TABLE & 0x1FFFFF
+    tally = {}
+    first = None
+
+    def run(which, s, mode, pulse, cursor=None):
+        # with a cursor, the game's own list_place puts the selection, the
+        # first row and the bar's row before ui_panel draws -- over what the
+        # model's place laid, which then has to agree with it
+        nonlocal first
+        ram = bytearray(base)
+        at = _lay_list(ram, s)
+        calls = [] if cursor is None else [(0x80027728, at, cursor)]
+        prims, _cpu = mipsrun.frame(ram, calls + [(0x80025468, at, mode)], pulse)
+        look = Look(ram)
+        look.pulse = pulse
+        f = Frame()
+        panel(f, look, e, s, mode)
+        got = mipsrun.two_d(prims)
+        want = [(d, p) for d, p in f.order()]
+        same = got == want
+        ok, runs = tally.get(which, (0, 0))
+        tally[which] = (ok + same, runs + 1)
+        if not same and first is None:
+            k = next((j for j, (a, b) in enumerate(zip(got, want)) if a != b), min(len(got), len(want)))
+            first = (f"{which} mode {mode:#x}: {len(got)} primitives, the model {len(want)}; "
+                     f"at {k}: game {got[k] if k < len(got) else None} model {want[k] if k < len(want) else None}")
+
+    rng = random.Random(0x7A4E1)
     for i in range(n):
         table = bytearray(base[t:t + 24 * 96])
         for k in range(31):
@@ -758,28 +837,42 @@ def panel_check(out=sys.stdout, n=40):
             mode = 4 if which == "magic" else 0x10
             if rng.randrange(3) == 0:
                 mode |= 0x8000
-            ram = bytearray(base)
-            at = _lay_list(ram, s)
-            pulse = rng.randrange(0x60)
-            prims, _cpu = mipsrun.frame(ram, [(0x80025468, at, mode)], pulse)
-            look = Look(ram)
-            look.pulse = pulse
-            f = Frame()
-            panel(f, look, e, s, mode)
-            got = mipsrun.two_d(prims)
-            want = [(d, p) for d, p in f.order()]
-            runs += 1
-            same = got == want
-            ok += same
-            if not same and first is None:
-                k = next((j for j, (a, b) in enumerate(zip(got, want)) if a != b), min(len(got), len(want)))
-                first = (f"{which} mode {mode:#x}: {len(got)} primitives, the model {len(want)}; "
-                         f"at {k}: game {got[k] if k < len(got) else None} model {want[k] if k < len(want) else None}")
-    print(f"  the MAGIC and BUTTON lists, ui_panel's modes 4 and 0x10 as the game's own "
-          f"draws them over menu1: {ok} of {runs} frames primitive for primitive", file=out)
+            run(which, s, mode, rng.randrange(0x60))
+    # USE MAGIC on a generator of its own, so the lists above stay the ones
+    # they were: eight spells 0x17..0x1e, each unlocked or not -- none, some
+    # or all -- and the cursor anywhere gp+0x19 can hold it, placed by the
+    # game's own list_place
+    rng = random.Random(0x7A4E2)
+    built_ok = 0
+    first_built = None
+    for i in range(n):
+        table = bytearray(base[t:t + 24 * 96])
+        p = (0, 0.5, 1)[i % 3]
+        for k in range(0x17, 0x1F):
+            table[24 * k] = 1 if rng.random() < p else 0
+        cursor = rng.randrange(0x100) if i % 2 else rng.randrange(9)
+        s = use_magic_list(e, table, cursor)
+        g = game_use_magic_list(base, table, cursor)
+        keys = [k for k in g if k != "counts"]
+        built_ok += all(g[k] == s[k] for k in keys)
+        if first_built is None and not all(g[k] == s[k] for k in keys):
+            k = next(k for k in keys if g[k] != s[k])
+            first_built = f"use magic's list, {k}: game {g[k]} model {s[k]}"
+        mode = 2 | (0x8000 if rng.randrange(3) == 0 else 0)
+        run("use magic", s, mode, rng.randrange(0x60), cursor)
+    ok = sum(v[0] for v in tally.values())
+    runs = sum(v[1] for v in tally.values())
+    print(f"  the MAGIC, BUTTON and USE MAGIC lists, ui_panel's modes 4, 0x10 and 2 as "
+          f"the game's own draws them over menu1: {ok} of {runs} frames primitive for "
+          f"primitive (" + ", ".join(f"{w} {a} of {b}" for w, (a, b) in tally.items()) + ")",
+          file=out)
     if first:
         print("  first difference: " + first, file=out)
-    return ok == runs
+    print(f"  the USE MAGIC list as the game's own menu_use_magic builds it, up to "
+          f"list_place: {built_ok} of {n}", file=out)
+    if first_built:
+        print("  first difference: " + first_built, file=out)
+    return ok == runs and built_ok == n
 
 
 def place(s, sel):
@@ -978,6 +1071,14 @@ def export_cases(e):
                           "inventory": {str(k): v for k, v in enumerate(binv) if v},
                           "prompt": prompt, "sel": bs["sel"], "pulse": 0x2C,
                           "prims": [[d, p] for d, p in list_screen(e, look, bs, 0x10, prompt)]})
+    # the USE MAGIC screen's list, mode 2 (both of which the game's own
+    # menu_use_magic and ui_panel hold, panel_check), at a few cursors
+    for cursor, prompt in ((0, None), (2, None), (5, 0), (0xC8, 1)):
+        look.pulse = 0x1B
+        us = use_magic_list(e, table, cursor)
+        cases.append({"screen": "use_magic", "table": table.hex(), "cursor": cursor,
+                      "prompt": prompt, "sel": us["sel"], "pulse": 0x1B,
+                      "prims": [[d, p] for d, p in list_screen(e, look, us, 2, prompt)]})
     # ui_ratings_page as the game's own code draws it, run over menu1's RAM by
     # tools/mipsrun.py -- when that snapshot is here
     menu1 = os.path.join(ROOT, "out", "snap", "menu1.ram")

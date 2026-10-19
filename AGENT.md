@@ -202,10 +202,10 @@ the equipment tables, against a RAM snapshot           3264/3264, 2112/2112, 16/
                                                        player_recalc_stats 483 of
                                                        483 values over 21 snapshots
 the conversation hooks, two readings of one table      23 of 23
-the port against the game, function by function        642 of 642 placed: 355
-                                                       reproduce the game, 287 the
-                                                       port's own; 407 markers and
-                                                       818 cited addresses, every
+the port against the game, function by function        663 of 663 placed: 370
+                                                       reproduce the game, 293 the
+                                                       port's own; 424 markers and
+                                                       837 cited addresses, every
                                                        one resolving
 the object loader, against 13 snapshots                angles 4344/4352, scale and
                                                        position 4352/4352, opcode
@@ -226,8 +226,10 @@ the menus, against their snapshots' frames             16 of 16 frames primitive
                                                        too), the main page with the
                                                        status page, the equipment
                                                        screen, its list and prompt
-the MAGIC and BUTTON lists, against the game's own     80 of 80 frames
-ui_panel (modes 4 and 0x10) over menu1
+the MAGIC, BUTTON and USE MAGIC lists, against the    120 of 120 frames; USE
+game's own ui_panel (modes 4, 0x10 and 2) over menu1   MAGIC's list as the game's
+                                                       own menu_use_magic builds
+                                                       it, 40 of 40
 the spells unlocked, against every snapshot            21 of 21
 Silviera's key on a pedestal, silv1 and silv2          7 of 7
 the drops, against the snapshots                       5 of 5 lying as the fall leaves
@@ -313,7 +315,7 @@ levels 40 of 40 · angles 400 of 400
 conversations 43 of 43, and 25 of 25 steps the emulator recorded
 damage 6 of 6 · knock-back 2484 of 2484 · weapon 2336 of 2336
 fences 600 of 600 · animation 540 of 540
-equipment 16 of 16 · menus 43 of 43
+equipment 16 of 16 · menus 47 of 47
 directions 400 of 400
 routines 14458 of 14458
 saves 45 of 45 · level states 46 of 46 streams, 958 of 958 things made,

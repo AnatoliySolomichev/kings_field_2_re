@@ -719,7 +719,8 @@ keys keep off those: **F1** walks or flies, **F2** turns the distance
 darkening off and on, **G** shows the collision, **PgUp/PgDn**
 rise and sink while flying, **Shift** hurries, **Escape** frees the mouse,
 **F9** resyncs the compare, **F10** kills the nearest creature, **F11** learns
-every spell and raises the MP to 999 (to try late spells on level 0). Flying passes through
+every spell the game can give -- the 25 in `skill_unlock`'s lists -- and
+raises the MP to 999 (to try late spells on level 0). Flying passes through
 everything on purpose — this level has rooms the game never lets you into. The
 readout names the cell you are in, in the game's own numbering, so anything
 found there can be pointed at in the data.
@@ -783,7 +784,11 @@ screen's 116 2D primitives exactly as the game filed them in `inv1` and `inv2`
 port's menu is held to. `panel_check` lays the equipment screen's MAGIC and
 BUTTON lists (`magic_list`, `button_list`) into menu1's RAM and runs the
 game's own `ui_panel` over them in modes 4 and `0x10`, with and without the
-prompt's `0x8000`: 80 of 80 frames alike.
+prompt's `0x8000`: 80 of 80 frames alike; and the USE MAGIC screen's
+(`use_magic_list`) in mode 2, 40 of 40, after running the game's own
+`menu_use_magic` up to `list_place` to build the list itself
+(`game_use_magic_list`, which stops it with a hook on its next call): 40 of
+40 lists alike.
 
 ```
 python3 tools/ui.py            the use-item screen against both snapshots, both buffers

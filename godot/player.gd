@@ -551,16 +551,23 @@ func _unhandled_input(e: InputEvent) -> void:
 				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
-# F11, the port's own: every spell learned and the MP raised to the cap
-# (0x3e7) and filled -- to try what the game gives late, on level 0. The
-# spells then stand in the equipment screen's MAGIC and BUTTON lists.
-# @port check -- F11: every spell, and MP to spare
+# F11, the port's own: every spell the game can give learned and the MP
+# raised to the cap (0x3e7) and filled -- to try what the game gives late, on
+# level 0. The spells then stand in the MAGIC and BUTTON lists of the
+# equipment screen and in "use magic". "Every spell" is the 25 in
+# skill_unlock's five lists, the only thing in play that sets a spell's
+# unlocked byte: the six with no name (3, 10, 14, 0x12, 0x16, 0x18) are in
+# none, and the game never lists them.
+# @port check -- F11: every spell the game gives, and MP to spare
 func _learn_all() -> void:
 	var sp: Array = character.get("spells", KFLevels.new_spells())
 	while sp.size() < KFLevels.SPELLS:
 		sp.append(0)
-	for k in 0x1F:                    # the 31 the menus list: 0..0x16 and 0x17..0x1e
-		sp[k] = 1
+	KFLevels.load_from()
+	for lst in KFLevels.skills.get("unlock", []):
+		for k in lst:
+			if int(k) != 0xFF and int(k) < sp.size():
+				sp[int(k)] = 1
 	character["spells"] = sp
 	character["mp_max"] = KFLevels.STAT_CAP
 	mp = KFLevels.STAT_CAP
@@ -1227,6 +1234,18 @@ func _cast_buttons() -> void:
 	if KFPad.hit(KFPad.MAP) and spell_b != 0xFF:
 		cast_spell(st, spell_b, recs, calls)
 	pending_tick(st, calls)
+	_magic_put(st, calls)
+
+
+# pause_menu's end (0x8001a978): what "use magic" handed back, with 0x1000
+# set, cast as the menu goes -- after the screen behind it is put back and
+# before sub_800305d8's clear_movement_state. It waits as the pending action
+# for player_turn, as a button's cast does.
+# @orig game:0x8001a978 pause_menu+0x204  status:transcribed
+func cast_from_menu(spell: int) -> void:
+	var st := _magic_state()
+	var calls := []
+	cast_spell(st, spell, _spell_records(), calls)
 	_magic_put(st, calls)
 
 

@@ -592,7 +592,8 @@ Eating heals. Left, roughly in order:
   does in the port, where `held_item_tick` has a path of its own for it.
   The screens hold against `equip1`..`equip4`, 8 of 8 frames;
 * "status/records" is in but for its CONVERSATION line (`text_pager`,
-  `0x8001d944`); "use magic", "storage" and "system" are not;
+  `0x8001d944`); "use magic" is in but for its guide (FORMATS.md, "USE
+  MAGIC"); "storage" (`item_menu`) and "system" (`0x8001e484`) are not;
 * `pad_read_latch`'s repeat while a direction is held -- the port reads new
   presses only.
 

@@ -17,8 +17,8 @@ extends Control
 #                   chosen row's pulsing bar, the button legend
 #
 # The world stands still while it is up (KFGame.modal). Not here yet: the
-# status page drawn behind the main menu (ui_status_page), the chosen thing's
-# model turning in the "use item" screen (0x80025be8), the other five screens.
+# chosen thing's model turning in the "use item" screen (0x80025be8), the
+# guide pages (0x80024f88), "storage" and "system".
 #
 # @exe game
 
@@ -76,9 +76,11 @@ var tex := {}                       # "tpage_clut" -> [solid, semi]
 var ot := {}                        # the screen being drawn: depth -> [prim]
 var look := {"box": 0x78, "text": 0x80, "shadow": 0x30, "pulse": 0,
 	"confirm": 3, "cancel": 1, "semi": 1, "bright": 0x80}
-var state := ""                     # "", "main", "use_item", "prompt", "equip", "equip_list", "equip_prompt"
+var state := ""                     # "", "main", "use_item", "prompt", "use_magic", "use_magic_prompt", "equip", ...
 var main_sel := 0
 var list := {}                      # the use-item screen's list
+var spells := {}                    # the use-magic screen's list
+var magic_cursor := 0               # gp+0x19: where the use-magic screen's cursor was left
 var prompt_sel := 0
 var equip_sel := 0                  # the equipment screen's line
 var records_sel := 0                # status/records' line: offense/defense, conversation
@@ -359,8 +361,9 @@ static func legend(o: Dictionary, lk: Dictionary, two: bool) -> void:
 # ui_panel (0x80025468): the title, the rows, the frame, the chosen row's bar
 # and the legend. Mode 3 puts a second name 0x54 to the right of each row's
 # (the equipment screen's), modes 1 and 5 the count "x N" at x + 0xe9; the
-# legend is two buttons for modes 3, 8, 9 and 12 and with flag 0x8000.
-# @orig game:0x80025468 ui_panel  status:partial -- modes 1, 3, 4, 5 and 0x10 and the 0x8000 flag; tools/ui.py, 116 of 116 primitives of inv1 and inv2, and modes 4 and 0x10 80 of 80 frames of the game's own (panel_check); the number columns of modes 2, 8, 9, 0xa..0xf not here
+# legend is two buttons for modes 3, 8, 9 and 12 and with flag 0x8000; modes
+# 2 and 4 the cost behind the MP sign, one arm (.L8) for both.
+# @orig game:0x80025468 ui_panel  status:partial -- modes 1, 2, 3, 4, 5 and 0x10 and the 0x8000 flag; tools/ui.py, 116 of 116 primitives of inv1 and inv2, and modes 4, 0x10 and 2 120 of 120 frames of the game's own (panel_check); the number columns of modes 8, 9, 0xa..0xf not here
 static func panel(o: Dictionary, lk: Dictionary, s: Dictionary, mode: int) -> void:
 	var style: Array = rec(LABEL_STYLE)
 	var m := mode & 0xFFF
@@ -377,8 +380,9 @@ static func panel(o: Dictionary, lk: Dictionary, s: Dictionary, mode: int) -> vo
 		if m == 3:
 			draw_label(o, lk, style, x + 0x54, y,
 				(s["names2"][k] as Array).slice(0, 0x18) + [0xFF])
-		if m == 4 and int(s["costs"][k]) != -1:
-			# .L8: the u32 column (+0x30), three digits behind the MP sign
+		if (m == 2 or m == 4) and int(s["costs"][k]) != -1:
+			# .L8, for modes 2 and 4 alike: the u32 column (+0x30), three
+			# digits behind the MP sign
 			x += 0xCE
 			draw_number(o, lk, rec(NUMBER_STYLE), x, y,
 				number_digits(int(s["costs"][k]), 3, 0, 3))
@@ -578,6 +582,21 @@ static func spell_rows(table: PackedByteArray, first: int, last: int) -> Diction
 			costs.append(int(table[24 * k + 0x16]) | (int(table[24 * k + 0x17]) << 8))
 			ids.append(k)
 	return {"names": names, "costs": costs, "ids": ids}
+
+
+# menu_use_magic's list (0x8001c48c): the healing and protecting spells
+# 0x17..0x1e unlocked, their MP beside them in mode 2, under ui_menu_label(0,
+# 1)'s title "USE MAGIC" -- four rows from y 0x83, no "TAKE OFF" -- the
+# selection where gp+0x19 left it (list_place).
+# @orig game:0x8001c48c menu_use_magic  status:verified -- the list up to list_place, 40 of 40 as the game's own builds it over menu1 (tools/ui.py panel_check); the self-test this to it
+static func use_magic_list(table: PackedByteArray, cursor: int) -> Dictionary:
+	var r := spell_rows(table, 0x17, 0x1E)
+	var ids: Array = r["ids"]
+	var s := {"tx": 0x1F, "ty": 0x20, "title": data["labels"][0][1][2], "x": 0x1B,
+		"y": 0x83, "rows": 4, "length": 0x18, "count": ids.size(), "names": r["names"],
+		"costs": r["costs"], "counts": [], "ids": ids, "sel": 0, "first": 0, "sel_row": 0}
+	place(s, cursor)
+	return s
 
 
 # The MAGIC line's list (0x8001d0c4): the attacking spells 0..0x16 unlocked,
@@ -892,7 +911,7 @@ func _may_open() -> bool:
 
 # pause_menu's start (0x80027198 and its first frames): the world held, the
 # main page up.
-# @orig game:0x8001a774 pause_menu  status:partial -- the six lines, the status page behind them and the "use item" screen; the others answer nothing yet
+# @orig game:0x8001a774 pause_menu  status:partial -- the six lines, the status page behind them, "use item", "use magic", "equipment" and "status/records"; "storage" (item_menu) and "system" (0x8001e484) answer nothing yet
 func _open() -> void:
 	KFGame.modal = true
 	state = "main"
@@ -916,6 +935,7 @@ func _close() -> void:
 # @orig game:0x80024c70 ui_prompt  status:partial -- kind 0, "use" and "cancel"
 # @orig game:0x8001d784 menu_records  status:partial -- status/records' two lines; CONVERSATION (text_pager) not here
 # @orig game:0x8001d8a4 menu_ratings  status:transcribed -- the ratings page until a button is pressed
+# @orig game:0x8001c540 menu_use_magic+0xb4  status:transcribed -- its loop: the chrome, the cursor into gp+0x19, ui_prompt(s, 0, 2, 0xff) and the spell handed back; not the guide (TRIANGLE, 0x80024f88) or the sounds
 func _step(press: int) -> void:
 	var confirm := 0x40 if int(look["confirm"]) == 3 else 0x20
 	var cancel := 0x20 if int(look["confirm"]) == 3 else 0x40
@@ -931,6 +951,9 @@ func _step(press: int) -> void:
 				if main_sel == 0:
 					list = use_item_list(player.inventory.a, int(list.get("sel", 0)))
 					state = "use_item"
+				elif main_sel == 1:
+					spells = use_magic_list(_spell_table(), magic_cursor)
+					state = "use_magic"
 				elif main_sel == 2:
 					equip_sel = 0                       # ui_menu_label's 0
 					state = "equip"
@@ -964,6 +987,34 @@ func _step(press: int) -> void:
 					state = "use_item"
 			elif press & cancel:
 				state = "use_item"
+		"use_magic":
+			# menu_use_magic's loop: ui_menu_chrome on the list -- an empty one
+			# goes at any button -- the cursor back into gp+0x19 after it
+			var n := int(spells["count"])
+			if n == 0:
+				if press != 0:
+					state = "main"
+			elif press & (UP | DOWN):
+				chrome_move(spells, press)
+				magic_cursor = int(spells["sel"])
+			elif press & confirm:
+				prompt_sel = 0
+				state = "use_magic_prompt"
+			elif press & cancel:
+				state = "main"
+		"use_magic_prompt":
+			# ui_prompt(s, 0, 2, 0xff): "USE" hands the spell back to pause_menu,
+			# which closes the menu and casts it; "CANCEL" goes back to the list
+			if press & (UP | DOWN):
+				prompt_sel = 1 - prompt_sel
+				moved = true
+			elif press & confirm and prompt_sel == 0:
+				var spell := int(spells["ids"][int(spells["sel"])])
+				KFInfo.note("menu: use magic %d" % spell)
+				player.cast_from_menu(spell)
+				_close()
+			elif press & (confirm | cancel):
+				state = "use_magic"
 		"records":
 			# sub_8001d784: sub_800221e8 over page 1's two lines
 			if press & UP:
@@ -1179,6 +1230,11 @@ func _build() -> void:
 			panel(ot, look, list, 1)
 		"prompt":
 			panel(ot, look, list, 1 | 0x8000)
+			options(ot, look, prompt_sel)
+		"use_magic":
+			panel(ot, look, spells, 2)
+		"use_magic_prompt":
+			panel(ot, look, spells, 2 | 0x8000)
 			options(ot, look, prompt_sel)
 		"records":
 			menu_page(ot, look, 1, 2, records_sel)

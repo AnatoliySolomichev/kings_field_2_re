@@ -3263,6 +3263,28 @@ carried from one to the next. **Against the game's own `ui_panel`**, run by
 `tools/mipsrun.py` over menu1's RAM with random lists laid in: **80 of 80
 frames** primitive for primitive (`tools/ui.py panel_check`).
 
+**USE MAGIC** (`menu_use_magic`, `0x8001c48c`), the main page's second line,
+lists with `sub_8001c6c0` the spells **`0x17` to `0x1e`** whose record's
+`+0` is 1 -- the healing and protecting ones, which magic A never takes --
+with their MP, under `ui_menu_label(.., 0, 1)`, whose title is the main
+page's own label "USE MAGIC"; four rows from y `0x83`, and no "TAKE OFF".
+Its cursor is the byte at `gp+0x19` (`0x8009c22d`), put back by
+`list_place` on entry and written after every `ui_menu_chrome`, so the
+screen opens where it was left; `gp+0x18` is "use item"'s and `gp+0x1a` the
+list of `sub_8001dee4`'s, and nothing else writes the three. `ui_panel`
+mode 2 draws it: the cost behind the MP sign by the same arm (`.L8`) as
+mode 4, and no count. The confirm asks `ui_prompt(s, 0, 2, 0xff)` -- "USE"
+and "CANCEL", as "use item" does -- TRIANGLE with neither SELECT nor START
+opens the guide (`0x80024f88`), and the cancel, or any button on an empty
+list, goes back to the main page. "USE" hands the spell back with `0x1000`
+set; `pause_menu` puts the screen behind it back (`sub_80027310`) and calls
+`cast_spell` with it (`0x8001a9a0`), so the spell waits as the pending
+action, as a button's cast does, and the menu is gone. **Against the game's
+own code**, over menu1: the list as `menu_use_magic` builds it, run to its
+call after `list_place`, **40 of 40** with none, some or all of the eight
+unlocked and the cursor anywhere the byte reaches; drawn by `ui_panel` mode
+2, **40 of 40 frames** (`tools/ui.py panel_check`).
+
 `ui_menu_chrome`'s up and down (`0x800223a4`), which every list uses: the
 selection moves one and the bar with it, the rows shown moving only when the
 bar is at their edge; past either end it goes round, to the last (the rows
@@ -3282,9 +3304,10 @@ deeper than any 2D part (from depth 0x100 on), so it is left out.
 **In the port** (`godot/menu.gd`): the ten lines, the lists, the prompt and
 the equipping, as `tools/ui.py` draws them (8 of the 25 screens the
 self-test holds); `godot/player.gd equip_weapon`, `equip_armour`, and every
-weapon's model in hand (`tools/level3d.py build_held_gltf`). Not there: the
-MAGIC and BUTTON lines, the turning model, the guide, and a bow's own path
-through `held_item_tick` (weapons `0x1b`, `0x1c`).
+weapon's model in hand (`tools/level3d.py build_held_gltf`), the MAGIC and
+BUTTON lines and the USE MAGIC screen. Not there: the turning model, the
+guide, and a bow's own path through `held_item_tick` (weapons `0x1b`,
+`0x1c`).
 
 ### The banners
 
@@ -3644,7 +3667,10 @@ icons (below, "The menus, as they are drawn") name the five skills -- 0 fire,
 `skill_unlock_list`'s, not yet read against the bits.
 
 Six of the 31 have no name, at 3, 10, 14, 18, 22 and 24 — the end of each group,
-so the elements have room for more spells than the game ships with.
+so the elements have room for more spells than the game ships with. None of the
+six is in `skill_unlock`'s five lists, and nothing else in play sets a spell's
+unlocked byte (`game_main` zeroes the table, `init_level_state` copies it,
+`save_restore` puts it back), so the game never lists them.
 
 ### Casting: the buttons, cast_spell, and what keeps running
 
