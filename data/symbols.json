@@ -3127,5 +3127,20 @@
   "kind": "code",
   "name": "menu_quit",
   "evidence": "menu_system's fifth line, QUIT GAME: yes/no at (0xab, 0xa2) and (0xe5, 0xa2) through sub_80025b24, starting on no; any direction turns, the confirm on yes sets 0x800102f8 (overlay_arg) to 1 and answers 0, else -1; the cancel -1. menu_system turns 0 into -2 and game_main's state 2 runs OPEN.EXE again. tools/ui.py quit_check, 100 of 100 runs as the model"
+ },
+ "0x8001e710": {
+  "kind": "code",
+  "name": "menu_load",
+  "evidence": "menu_system's first line, LOAD: the music paused, 'checking' in the message box, the card probed (sub_80028034, sub_800281c4 up to four times), load_rows' list under ui_menu_label(3, 0) -- five rows from y 0x73 -- in ui_panel mode 8, ui_menu_chrome kind 0, ui_prompt(s, 6, 8) yes/no; yes shows 'loading', save_load_slot, and answers 0 (menu_system's -3: save_loaded_fixup and the level's state) or the failure's box and -1. tools/ui.py load_check holds the list's numbers and drawing"
+ },
+ "0x80028398": {
+  "kind": "code",
+  "name": "save_title_numbers",
+  "evidence": "(name, &exp, &lv, &slot): refuses a name not starting BASLUS-00255 (strncmp through the BIOS), reads the file's first 0x280 bytes, and takes the six full-width digits of the title at +0x2c and the two at +0x3e (0x81 0x40, a space, adding nothing) -- the EXP and LV the title shows -- and the slot from the name's 13th character (atoi). tools/ui.py save_numbers, 33 of 33 titles as the game's own reads them, the BIOS's calls stood in for"
+ },
+ "0x8001ea34": {
+  "kind": "code",
+  "name": "load_rows",
+  "evidence": "LOAD's rows: for each of the card's 15 directory entries save_title_numbers accepts, the name 'data' and the slot's digit (slot + 0x20), the EXP into the u32 column, the LV into the u8 one, the slot kept; the count"
  }
 }

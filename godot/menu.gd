@@ -18,7 +18,7 @@ extends Control
 #
 # The world stands still while it is up (KFGame.modal). Not here yet: the
 # chosen thing's model turning in the "use item" screen (0x80025be8), the
-# guide pages (0x80024f88), and "system"'s LOAD.
+# guide pages (0x80024f88).
 #
 # @exe game
 
@@ -96,6 +96,7 @@ var display := {}                   # OPTION 2's five values and row while it is
 var sound := {}                     # OPTION 1's three sliders and row while it is up
 var quit_sel := 1                   # QUIT GAME's answer lit
 var wait_left := 0                  # menu_system's "please wait": the boxes still to show
+var saves := {}                     # LOAD's list while it is up
 var prompt_sel := 0
 var equip_sel := 0                  # the equipment screen's line
 var records_sel := 0                # status/records' line: offense/defense, conversation
@@ -394,7 +395,7 @@ static func legend(o: Dictionary, lk: Dictionary, two: bool) -> void:
 # (the equipment screen's), modes 1 and 5 the count "x N" at x + 0xe9; the
 # legend is two buttons for modes 3, 8, 9 and 12 and with flag 0x8000; modes
 # 2 and 4 the cost behind the MP sign, one arm (.L8) for both.
-# @orig game:0x80025468 ui_panel  status:partial -- modes 1, 2, 3, 4, 5, 7 and 0x10 and the 0x8000 flag; tools/ui.py, 116 of 116 primitives of inv1 and inv2, and modes 4, 0x10, 2 and 7 160 of 160 frames of the game's own (panel_check); the number columns of modes 8, 9, 0xa..0xf not here
+# @orig game:0x80025468 ui_panel  status:partial -- modes 1, 2, 3, 4, 5, 7, 8, 9 and 0x10 and the 0x8000 flag; tools/ui.py, 116 of 116 primitives of inv1 and inv2, modes 4, 0x10, 2 and 7 160 of 160 frames of the game's own (panel_check), mode 8 40 of 40 (load_check); the number columns of modes 0xa..0xf not here
 static func panel(o: Dictionary, lk: Dictionary, s: Dictionary, mode: int) -> void:
 	var style: Array = rec(LABEL_STYLE)
 	var m := mode & 0xFFF
@@ -417,6 +418,16 @@ static func panel(o: Dictionary, lk: Dictionary, s: Dictionary, mode: int) -> vo
 			x += 0xCE
 			draw_number(o, lk, rec(NUMBER_STYLE), x, y,
 				number_digits(int(s["costs"][k]), 3, 0, 3))
+		if m == 8 or m == 9:
+			# .L9: the u32 column (+0x30) in seven digits behind its prefix at
+			# x + 0x73 unless -1, then the u8 one (+0x2c) in three at 0x5b on
+			# unless 0xff -- LOAD's EXP and LV
+			if int(s["costs"][k]) != -1:
+				x += 0x73
+				draw_number(o, lk, rec(NUMBER_STYLE), x, y, number_digits(int(s["costs"][k]), 7, 0, 4))
+			if int(s["counts"][k]) != 0xFF:
+				x += 0x5B
+				draw_number(o, lk, rec(NUMBER_STYLE), x, y, number_digits(int(s["counts"][k]), 3, 0, 5))
 		if m == 0x10:
 			# .L14: the thing's count, then a spell's cost, each moving the
 			# place on from where the last left it
@@ -1105,6 +1116,56 @@ const PLEASE_WAIT := [0x78, 0x70, [0x0F, 0x0B, 0x04, 0x00, 0x12, 0x04, 0x7F, 0x1
 	0x13, 0xFF]]
 
 
+# save_title_numbers' two numbers out of a save's first 0x280 bytes: the six
+# full-width digits of its title at +0x2c (100000s down) and the two at
+# +0x3e, each Shift-JIS 0x82 0x4f..0x58 adding its digit, a full-width space
+# (0x81 0x40) nothing -- the title's EXP and LV. The name's check against
+# BASLUS-00255 and the slot's digit are KFCard.saves'.
+# @orig game:0x80028398 save_title_numbers  status:verified -- tools/ui.py save_numbers, 33 of 33 titles as the game's own reads them, the emulator's card's three saves among them (load_check)
+static func save_numbers(head: PackedByteArray) -> Array:
+	var out := []
+	for pair in [[0x2C, 6], [0x3E, 2]]:
+		var at := int(pair[0])
+		var n := int(pair[1])
+		var v := 0
+		var k := int(pow(10, n - 1))
+		for i in n:
+			var b0 := int(head[at + 2 * i])
+			var b1 := int(head[at + 2 * i + 1])
+			if not (b0 == 0x81 and b1 == 0x40):
+				v += ((b1 if b1 < 0x80 else b1 - 0x100) - 0x4F) * k
+			k /= 10
+		out.append(v)
+	return out
+
+
+# LOAD's list: ui_menu_label(3, 0)'s, five rows from y 0x73, a row for each
+# save -- "data" and the slot's digit, the EXP behind the seven-digit column,
+# the LV behind the three-digit one, ui_panel mode 8. `saves` is KFCard.saves'
+# (by slot here; the game goes down the card's directory).
+# @orig game:0x8001ea34 load_rows  status:transcribed -- the rows; the order the directory gives them is the BIOS's
+static func load_list(saves: Array) -> Dictionary:
+	var names := []
+	var levels := []
+	var exps := []
+	var slots := []
+	for sv in saves:
+		var num := save_numbers((sv["data"] as PackedByteArray).slice(0, 0x280))
+		var slot := int(sv["slot"])
+		names.append([0x03, 0x00, 0x13, 0x00, (slot + 0x20) & 0xFF, 0xFF])
+		levels.append(int(num[1]) & 0xFF)
+		exps.append(int(num[0]))
+		slots.append(slot)
+	return {"tx": 0x1F, "ty": 0x20, "title": data["labels"][3][0][2], "x": 0x1B, "y": 0x73,
+		"rows": 5, "length": 0x18, "count": slots.size(), "names": names, "counts": levels,
+		"costs": exps, "ids": slots, "sel": 0, "first": 0, "sel_row": 0}
+
+
+# ui_prompt's kind 6: "yes" and "no"
+const YES_WORD := [0x18, 0x04, 0x12, 0xFF]
+const NO_WORD := [0x0D, 0x0E, 0xFF]
+
+
 # QUIT GAME's answers, immediates in its code
 const QUIT_YES := [0xAB, 0xA2, [0x18, 0x04, 0x12, 0xFF]]
 const QUIT_NO := [0xE5, 0xA2, [0x0D, 0x0E, 0xFF]]
@@ -1358,13 +1419,35 @@ func _may_open() -> bool:
 
 # pause_menu's start (0x80027198 and its first frames): the world held, the
 # main page up.
-# @orig game:0x8001a774 pause_menu  status:partial -- the six lines, the status page behind them, "use item", "use magic", "equipment", "status/records", "storage" and "system" (all of its five but LOAD)
+# @orig game:0x8001a774 pause_menu  status:partial -- the six lines, the status page behind them, "use item", "use magic", "equipment", "status/records", "storage" and "system" (all five)
 func _open() -> void:
 	KFGame.modal = true
 	state = "main"
 	visible = true
 	acc = 0.0
 	KFInfo.note("menu: open")
+
+
+# LOAD answered "yes": save_load_slot reads the slot, and menu_system's -3
+# has sub_800305d8 run save_loaded_fixup and the level's state -- in the port
+# the same way the title's CONTINUE goes (loadscreen.gd): the save put back,
+# its level loaded. The "loading" and "failed" boxes (sub_80020dec,
+# sub_80020e6c) are not here.
+# @orig game:0x8001e710 menu_load  status:partial -- the list, the choice, the prompt and the load; not the card's checks and their boxes, or the music's pause
+func _load(slot: int) -> void:
+	var f := KFCard.read_slot(slot)
+	if f.is_empty():
+		KFInfo.note("menu: slot %d could not be read" % slot)
+		state = "load"
+		return
+	_close()
+	KFCard.put(f)
+	KFInfo.note("menu: slot %d loaded, level %d" % [slot, KFGame.level])
+	var scene := "res://world%02d.tscn" % KFGame.level
+	if not ResourceLoader.exists(scene):
+		KFInfo.note("level %d is not built (python3 tools/level3d.py %d)" % [KFGame.level, KFGame.level])
+		return
+	get_tree().change_scene_to_file(scene)
 
 
 # QUIT GAME answered "yes" and the "please wait" shown: overlay_arg 1,
@@ -1400,7 +1483,7 @@ func _close() -> void:
 # @orig game:0x8001d8a4 menu_ratings  status:transcribed -- the ratings page until a button is pressed
 # @orig game:0x8001c540 menu_use_magic+0xb4  status:transcribed -- its loop: the chrome, the cursor into gp+0x19, ui_prompt(s, 0, 2, 0xff) and the spell handed back; not the guide (TRIANGLE, 0x80024f88) or the sounds
 # @orig game:0x8001dd94 item_menu  status:transcribed -- the storage's page: sub_800221e8 over page 2's two lines, a list for each, the cancel back to the main page
-# @orig game:0x8001e484 menu_system  status:partial -- the page: sub_800221e8 over page 3's five lines, OPTION 1, OPTION 2, BUTTON CONFIG and QUIT GAME, the cancel back to the main page; not LOAD (sub_8001e710), the music's fade during QUIT GAME's "please wait"
+# @orig game:0x8001e484 menu_system  status:partial -- the page: sub_800221e8 over page 3's five lines, LOAD, OPTION 1, OPTION 2, BUTTON CONFIG and QUIT GAME, the cancel back to the main page; not the music's fade during QUIT GAME's "please wait"
 func _step(press: int) -> void:
 	var confirm := 0x40 if int(look["confirm"]) == 3 else 0x20
 	var cancel := 0x20 if int(look["confirm"]) == 3 else 0x40
@@ -1547,6 +1630,9 @@ func _step(press: int) -> void:
 				elif system_sel == 4:
 					quit_sel = 1
 					state = "quit"
+				elif system_sel == 0:
+					saves = load_list(KFCard.saves())
+					state = "load"
 				elif system_sel == 1:
 					# menu_sound's start: the music's byte one on unless 0, the
 					# brightness's 0xc0 on
@@ -1598,6 +1684,25 @@ func _step(press: int) -> void:
 					state = "please_wait"
 				else:
 					state = "system"
+		"load":
+			# LOAD's loop: ui_menu_chrome kind 0 on the list -- an empty one goes
+			# at any button -- then ui_prompt(s, 6, 8): "yes" loads the save
+			var c := chrome_pad(saves, press, 0, confirm, cancel)
+			if int(c[1]) == -1:
+				state = "system"
+			elif int(c[0]) == 1:
+				prompt_sel = 0
+				state = "load_prompt"
+		"load_prompt":
+			var q := prompt_press(prompt_sel, press, confirm, cancel)
+			if int(q[0]) != prompt_sel:
+				moved = true
+			prompt_sel = int(q[0])
+			if q[1] != null:
+				if int(q[1]) == 0:
+					_load(int(saves["ids"][int(saves["sel"])]))
+				else:
+					state = "load"
 		"please_wait":
 			wait_left -= 1
 			if wait_left <= 0:
@@ -1830,6 +1935,14 @@ func _build() -> void:
 			quit_page(ot, look, quit_sel)
 		"please_wait":
 			message_box(ot, look, 7, [PLEASE_WAIT], 0x46, 0x57, 0xB2, 0x42, 0)
+		"load":
+			panel(ot, look, saves, 8)
+		"load_prompt":
+			panel(ot, look, saves, 8 | 0x8000)
+			var one: Array = rec("0x8007e778")
+			var two: Array = rec("0x8007e794")
+			answers(ot, look, [int(one[0]), int(one[1]), YES_WORD], [int(two[0]), int(two[1]), NO_WORD],
+				prompt_sel)
 		"storage_list":
 			if int(stash["mode"]) == 1:
 				panel(ot, look, stash, 7 | 0x8000)

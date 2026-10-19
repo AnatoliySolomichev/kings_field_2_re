@@ -595,8 +595,9 @@ Eating heals. Left, roughly in order:
   `0x8001d944`); "use magic" is in but for its guide (FORMATS.md, "USE
   MAGIC"), and "storage" but for the guide and the turning model
   (FORMATS.md, "STORAGE"); of "system" (`menu_system`) the page and BUTTON
-  CONFIG are in (FORMATS.md, "SYSTEM"), but not LOAD (`sub_8001e710`, whose
-  0 ends the menu with -3, a load), nor the music's fade in QUIT
+  CONFIG are in (FORMATS.md, "SYSTEM"), and LOAD but for its boxes
+  ("checking", "loading", the failures) and the directory's order (FORMATS.md,
+  "LOAD"); not the music's fade in QUIT
   GAME's "please wait"; QUIT GAME itself is in (FORMATS.md, "QUIT GAME"). OPTION 2 is in
   (FORMATS.md, "OPTION 2"), and OPTION 1 but for the sound it plays and
   the music's volume (the brightness reaches the menus' text, not yet the

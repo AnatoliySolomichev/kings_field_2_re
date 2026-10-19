@@ -3411,6 +3411,26 @@ steps down; LOAD's "checking the memory card" and the rest are others.
 **Against the game's own code** over menu1 (`tools/ui.py box_check`): 4 of 4
 boxes, with and without the legend and the title.
 
+**LOAD** (`menu_load`, `0x8001e710`) pauses the music, says "checking" in a
+box, probes the card, and lists the saves `load_rows` (`0x8001ea34`) finds
+down the card's directory: "data" and the slot's digit, then the save's EXP
+and LV -- not read from the save itself but **from its title**:
+`save_title_numbers` (`0x80028398`) refuses a file whose name does not start
+`BASLUS-00255`, reads its first 0x280 bytes and adds up the six full-width
+digits at `+0x2c` and the two at `+0x3e` (a full-width space adds nothing),
+the slot coming from the name's 13th character. `ui_panel` mode 8 draws the
+list -- ui_menu_label(3, 0), five rows from y 0x73 -- with the u32 column in
+seven digits behind its prefix at x + 0x73 and the u8 one in three at 0x5b
+further. The confirm asks `ui_prompt(s, 6, 8)`, "yes"/"no"; "yes" shows
+"loading", reads the slot (`save_load_slot`) and answers 0, which
+`menu_system` makes -3 -- `sub_800305d8` then runs `save_loaded_fixup` and
+the level's state. **Against the game's own code** over menu1 (`tools/ui.py
+load_check`): `save_title_numbers` on the emulator's card's three saves and
+30 titles made up, 33 of 33, the BIOS's calls stood in for (and another
+game's file refused); mode 8, 40 of 40 frames. In the port LOAD lists the
+card the port reads (by slot -- the directory's order is the BIOS's) and
+loads as the title's CONTINUE does; the boxes are not there.
+
 *Corrected in the port:* `_bob` set the bob to 0 whenever the player was
 off the ground. In `player_vertical` every path reaches `.L29`, which goes
 past the bob when `player_vstate` is not 0 and leaves it as it was; the

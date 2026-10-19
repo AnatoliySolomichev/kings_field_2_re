@@ -310,6 +310,18 @@ def panel(f, look, e, s, mode):
             x += 0xCE
             draw_number(f, look, record(e, NUMBER_STYLE), x, y,
                         number_digits(s["costs"][k], 3, 0, 3))
+        if m in (8, 9):
+            # .L9: the u32 column (+0x30) in seven digits behind its prefix at
+            # x + 0x73 unless -1, then the u8 one (+0x2c) in three at 0x5b on
+            # unless 0xff -- LOAD's EXP and LV
+            if s["costs"][k] != -1:
+                x += 0x73
+                draw_number(f, look, record(e, NUMBER_STYLE), x, y,
+                            number_digits(s["costs"][k], 7, 0, 4))
+            if s["counts"][k] != 0xFF:
+                x += 0x5B
+                draw_number(f, look, record(e, NUMBER_STYLE), x, y,
+                            number_digits(s["counts"][k], 3, 0, 5))
         if m == 0x10:
             # .L14: the thing's count, then a spell's cost, each moving the
             # place on from where the last left it
@@ -2044,6 +2056,167 @@ def box_check(out=sys.stdout):
     return ok == len(cases)
 
 
+# --- system: LOAD -------------------------------------------------------------------
+
+LOAD_PROMPT = ([0x18, 0x04, 0x12], [0x0D, 0x0E])      # ui_prompt's kind 6: "yes", "no"
+
+
+def save_numbers(head):
+    """sub_80028398's two numbers out of a save's first 0x280 bytes: the
+    six full-width digits of its title at +0x2c (100000s down) and the two
+    at +0x3e, each Shift-JIS 0x82 0x4f..0x58 adding its digit, a full-width
+    space (0x81 0x40) adding nothing -- the title's EXP and LV."""
+    out = []
+    for at, n in ((0x2C, 6), (0x3E, 2)):
+        v, k = 0, 10 ** (n - 1)
+        for i in range(n):
+            b0, b1 = head[at + 2 * i], head[at + 2 * i + 1]
+            if not (b0 == 0x81 and b1 == 0x40):
+                v += ((b1 if b1 < 0x80 else b1 - 0x100) - 0x4F) * k
+            k //= 10
+        out.append(v)
+    return out
+
+
+def load_list(e, saves):
+    """menu_sound's neighbour LOAD (0x8001e710): ui_menu_label(3, 0)'s list,
+    five rows from y 0x73, one for each save sub_8001ea34 finds in the
+    card's directory order -- "data" and the slot's digit, its EXP behind the
+    seven-digit column and its LV behind the three-digit one, ui_panel mode
+    8. `saves` is [(slot, the file's first 0x280 bytes)]."""
+    names, levels, exps, slots = [], [], [], []
+    for slot, head in saves:
+        exp, lv = save_numbers(head)
+        names.append([0x03, 0x00, 0x13, 0x00, (slot + 0x20) & 0xFF, 0xFF] + [0] * 18)
+        levels.append(lv & 0xFF)
+        exps.append(exp)
+        slots.append(slot)
+    lab = e.bytes(0x8007E67C + 252 * 3 + 4, 16)
+    out = {"tx": 0x1F, "ty": 0x20, "title": list(lab), "x": 0x1B, "y": 0x73, "rows": 5,
+           "length": 0x18, "count": len(slots), "names": names, "counts": levels,
+           "costs": exps, "ids": slots, "sel": 0, "first": 0, "sel_row": 0}
+    return out
+
+
+def game_save_numbers(base, name, head):
+    """sub_80028398 run over `base` on a file `name` whose first 0x280 bytes
+    are `head`, the BIOS's strncmp, strcat, open, read, close, memset and
+    atoi stood in for: (its answer, the six-digit number, the two-digit
+    one, the slot)."""
+    import mipsrun
+    cpu = mipsrun.menu_cpu(base)
+
+    def cstr(c, a):
+        s = bytearray()
+        while c.rd(a + len(s), 1):
+            s.append(c.rd(a + len(s), 1))
+        return bytes(s)
+
+    def put(c, a, b):
+        for i, x in enumerate(b):
+            c.wr(a + i, 1, x)
+
+    def strncmp(c):
+        a, b = cstr(c, c.r[4])[:c.r[6]], cstr(c, c.r[5])[:c.r[6]]
+        return 0 if a == b else 1
+
+    def strcat(c):
+        put(c, c.r[4] + len(cstr(c, c.r[4])), cstr(c, c.r[5]) + b"\0")
+        return c.r[4]
+
+    def read(c):
+        put(c, c.r[5], head[:c.r[6]])
+        return c.r[6]
+
+    def memset(c):
+        put(c, c.r[4], bytes([c.r[5] & 0xFF]) * c.r[6])
+        return c.r[4]
+
+    def atoi(c):
+        s = cstr(c, c.r[4])
+        return int(s) if s.isdigit() else 0
+
+    for at, fn in ((0x800796B0, strncmp), (0x80079660, strcat), (0x800795E0, lambda c: 3),
+                   (0x80079590, read), (0x80079320, lambda c: 0), (0x80079650, memset),
+                   (0x800796D0, atoi)):
+        cpu.hooks[at] = fn
+    at = 0x801F0000
+    put(cpu, at, name + b"\0")
+    v = cpu.call(0x80028398, at, at + 0x40, at + 0x44, at + 0x48)
+    return (mipsrun.s32(v), cpu.rd(at + 0x40, 4), cpu.rd(at + 0x44, 4), cpu.rd(at + 0x48, 4))
+
+
+def load_check(out=sys.stdout):
+    """LOAD against the game's own code over menu1: sub_80028398 on the
+    emulator's card's saves and on titles made up -- digits and full-width
+    spaces in both numbers -- and ui_panel mode 8 drawing the list."""
+    import random
+    import mipsrun
+    import memcard
+    path = os.path.join(ROOT, "out", "snap", "menu1.ram")
+    if not os.path.exists(path):
+        print("  no menu1 snapshot to run LOAD over", file=out)
+        return True
+    e = exe()
+    base = bytearray(open(path, "rb").read())
+    heads = [(slot, bytes(data[:0x280])) for _p, slot, data in memcard.saves()]
+    rng = random.Random(0x10AD)
+    for i in range(30):
+        h = bytearray(heads[i % len(heads)][1]) if heads else bytearray(0x280)
+        for at, n in ((0x2C, 6), (0x3E, 2)):
+            for k in range(n):
+                if rng.randrange(4) == 0:
+                    h[at + 2 * k:at + 2 * k + 2] = b"\x81\x40"
+                else:
+                    h[at + 2 * k:at + 2 * k + 2] = bytes([0x82, 0x4F + rng.randrange(10)])
+        heads.append((rng.randrange(1, 10), bytes(h)))
+    ok = 0
+    first = None
+    for slot, head in heads:
+        name = b"BASLUS-00255" + bytes([0x30 + slot])
+        g = game_save_numbers(base, name, head)
+        m = (0,) + tuple(save_numbers(head)) + (slot,)
+        ok += g == m
+        if g != m and first is None:
+            first = f"slot {slot}: game {g} model {m}"
+    g = game_save_numbers(base, b"BASLUS-00256" + b"1", heads[0][1] if heads else bytes(0x280))
+    other = g[0] == 1
+    print(f"  save_title_numbers, the game's own, on {len(heads) - 30} saves of the emulator's cards "
+          f"and 30 titles made up: {ok} of {len(heads)} read alike (another game's file "
+          f"{'refused' if other else 'NOT refused'})", file=out)
+    if first:
+        print("  first difference: " + first, file=out)
+    ok2 = n2 = 0
+    first2 = None
+    for k in range(40):
+        saves = [(rng.randrange(1, 10), heads[rng.randrange(len(heads))][1])
+                 for _ in range(rng.randrange(0, 8))]
+        s = load_list(e, saves)
+        if s["count"] > s["rows"] and rng.randrange(2):
+            place(s, rng.randrange(s["count"]))
+        mode = 8 | (0x8000 if rng.randrange(3) == 0 else 0)
+        pulse = rng.randrange(0x60)
+        ram = bytearray(base)
+        at = _lay_list(ram, s)
+        prims, _cpu = mipsrun.frame(ram, [(0x80025468, at, mode)], pulse)
+        look = Look(ram)
+        look.pulse = pulse
+        f = Frame()
+        panel(f, look, e, s, mode)
+        got = mipsrun.two_d(prims)
+        want = [(d, p) for d, p in f.order()]
+        n2 += 1
+        ok2 += got == want
+        if got != want and first2 is None:
+            j = next((i for i, (a, b) in enumerate(zip(got, want)) if a != b), min(len(got), len(want)))
+            first2 = f"list {k}: at {j}: game {got[j] if j < len(got) else None} model {want[j] if j < len(want) else None}"
+    print(f"  LOAD's list, ui_panel mode 8, as the game's own draws it over menu1: {ok2} of "
+          f"{n2} frames primitive for primitive", file=out)
+    if first2:
+        print("  first difference: " + first2, file=out)
+    return ok == len(heads) and other and ok2 == n2
+
+
 def place(s, sel):
     """sub_80027728: the index held to the list, the first row shown and the
     bar's row."""
@@ -2350,6 +2523,25 @@ def export_cases(e):
                 break
         druns.append({"start": start, "presses": presses, "left": left, "used": used,
                       "end": st})
+    # LOAD's list, mode 8 (which the game's own ui_panel holds, load_check),
+    # from made-up saves' first bytes
+    lsaves = []
+    for slot, exp, lv in ((1, 0, 1), (3, 123456, 17), (7, 99, 5)):
+        h = bytearray(0x280)
+        for at, v, n in ((0x2C, exp, 6), (0x3E, lv, 2)):
+            for k, ch in enumerate(str(v).rjust(n)):
+                h[at + 2 * k:at + 2 * k + 2] = b"\x81\x40" if ch == " " else bytes([0x82, 0x4F + int(ch)])
+        lsaves.append((slot, bytes(h)))
+    for prompt in (None, 1):
+        llook = Look()
+        llook.pulse = 0x21
+        ls = load_list(e, lsaves)
+        f = Frame()
+        panel(f, llook, e, ls, 8 | (0x8000 if prompt is not None else 0))
+        if prompt is not None:
+            options(f, llook, e, (45, 58, LOAD_PROMPT[0] + [0xFF]), (45, 84, LOAD_PROMPT[1] + [0xFF]), prompt)
+        cases.append({"screen": "load", "saves": [[s, h.hex()] for s, h in lsaves], "prompt": prompt,
+                      "sel": 0, "pulse": 0x21, "prims": [[d, p] for d, p in f.order()]})
     # the message box (which the game's own sub_8001eb3c holds, box_check)
     for title, lines, legend in ((7, [PLEASE_WAIT], 0), (6, [PLEASE_WAIT], 1)):
         blook = Look()
@@ -2605,6 +2797,7 @@ def check(out=sys.stdout, verbose=False):
     menus = sound_check(out) and menus
     menus = quit_check(out) and menus
     menus = box_check(out) and menus
+    menus = load_check(out) and menus
     e = exe()
     ok = bad = 0
     for name in ("inv1", "inv2"):

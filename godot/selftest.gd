@@ -1890,6 +1890,19 @@ func _menus() -> bool:
 				KFMenu.sound_page(o, lk, case["values"], int(case["row"]))
 			"quit":
 				KFMenu.quit_page(o, lk, int(case["sel"]))
+			"load":
+				var sv := []
+				for pair in case["saves"]:
+					sv.append({"slot": int(pair[0]), "data": (pair[1] as String).hex_decode()})
+				var sl := KFMenu.load_list(sv)
+				if case["prompt"] == null:
+					KFMenu.panel(o, lk, sl, 8)
+				else:
+					KFMenu.panel(o, lk, sl, 8 | 0x8000)
+					var one: Array = KFMenu.rec("0x8007e778")
+					var two: Array = KFMenu.rec("0x8007e794")
+					KFMenu.answers(o, lk, [int(one[0]), int(one[1]), KFMenu.YES_WORD],
+						[int(two[0]), int(two[1]), KFMenu.NO_WORD], int(case["prompt"]))
 			"box":
 				KFMenu.message_box(o, lk, int(case["title"]), case["lines"], 0x46, 0x57, 0xB2, 0x42,
 					int(case["legend"]))

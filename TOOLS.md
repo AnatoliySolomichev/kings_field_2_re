@@ -809,7 +809,10 @@ self-test holds `godot/pad.gd apply` to. `display_check` holds OPTION 2:
 does the same for OPTION 1: its page and sliders 48 of 48 frames, and
 `menu_sound` run whole, 160 of 160 runs; `quit_check` QUIT GAME's frame, 8
 of 8, and the question run whole, 100 of 100; `box_check` the message box,
-4 of 4, run on a machine of its own because it draws its own two frames.
+4 of 4, run on a machine of its own because it draws its own two frames;
+`load_check` LOAD's `save_title_numbers` on the card's saves and made-up
+titles, 33 of 33 with the BIOS's file calls stood in for in Python, and
+`ui_panel` mode 8, 40 of 40.
 
 ```
 python3 tools/ui.py            the use-item screen against both snapshots, both buffers
