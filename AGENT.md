@@ -202,10 +202,10 @@ the equipment tables, against a RAM snapshot           3264/3264, 2112/2112, 16/
                                                        player_recalc_stats 483 of
                                                        483 values over 21 snapshots
 the conversation hooks, two readings of one table      23 of 23
-the port against the game, function by function        710 of 710 placed: 405
+the port against the game, function by function        715 of 715 placed: 410
                                                        reproduce the game, 305 the
-                                                       port's own; 469 markers and
-                                                       897 cited addresses, every
+                                                       port's own; 474 markers and
+                                                       907 cited addresses, every
                                                        one resolving
 the object loader, against 13 snapshots                angles 4344/4352, scale and
                                                        position 4352/4352, opcode
@@ -289,9 +289,12 @@ actor_attack_player and actor_take_hit                 frames, 15 struck, 11 dea
                                                        wave, bortecth, meteor,
                                                        orladin, tornado, fire
                                                        wall, fire storm and
-                                                       flame 126 of 126 each
+                                                       flame 126 of 126 each;
+                                                       the six weapons' spells
+                                                       in, 126 of 126 each
 the fire ball, against the game's own effect_spawn    168 of 168 runs, 914 of
 and effect_driver (its world stood in for)             914 frames, queries, hits;
+                                                       Seath's sword's 168 of 168
                                                        with its own collide_query
                                                        210 of 210, 2512 frames,
                                                        34 hits on a creature
@@ -343,7 +346,7 @@ directions 400 of 400
 routines 14458 of 14458
 saves 45 of 45 · level states 46 of 46 streams, 958 of 958 things made,
 42 of 42 states written, 46 of 46 tables read and written again
-effects 414 of 414 runs, 10314 of 10314 frames · aims 300 of 300
+effects 558 of 558 runs, 11430 of 11430 frames · aims 300 of 300
 the run 150129 of 150129 frames
 player_take_hit 300 of 300 · the status 40 of 40 runs, 6312 of 6312 frames
 casting 1000 of 1000 · the attacking arms 240 of 240 · creature hits 400 of 400

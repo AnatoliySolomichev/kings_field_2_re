@@ -872,10 +872,13 @@ each one is also in its function's marker, as `partial` and what differs:
   `actor_take_hit`, a part passing its hit to its actor and a follower's
   push handed to its leader (the healing and protecting six are in), the
   drawing of everything with `+8 & 0xc` set -- the protecting marks and the
-  sparkles, in front of the eye -- of the weapons' magic, the effects of the
-  spells' own kinds (`effect_spawn`'s arms for `0x36..0x4c`, `0x7b` and
-  `0x7c`: both swings cast, take their MP and empty the meter, and the
-  effect is "not in the port"), and the button's thing (`use_item` from
+  sparkles, in front of the eye -- of the weapons' magic, the effects of
+  the excellector's (`0x36`, `0x37`), triple fang's (`0x46`, `0x47`),
+  dark slayer's (`0x7b`, `0x7c`), the moonlight swords' (`0x48`, `0x4b`)
+  and `0x3c` (no weapon's): both swings cast, take their MP and empty the
+  meter, and the effect is "not in the port" (ryu-ga's, capricorn's,
+  anorium's, vaculacia's, Seath's and morguline's are in) -- and the
+  button's thing (`use_item` from
   `0x8002ff28`). The equipment screen's MAGIC and BUTTON lines are in
   (light goes on the button: magic A lists the attacking spells alone); not
   their guide page or the spells' sound banks.

@@ -517,7 +517,9 @@ hit goes to. Held to the game's own over every snapshot's creatures, **1260
 of 1260**; `export` writes `hitcheck.json` in actors.gd's form.
 `tools/effects.py spell_hit_check` runs the fire ball, stone, wind cutter,
 haze, shudom, walwind, earth wave, bortecth, meteor, orladin, tornado,
-fire wall, fire storm and flame through both, against the game's own end
+fire wall, fire storm and flame through both, and the spells of ryu-ga,
+capricorn, anorium sword, vaculacia sword, Seath's sword and morguline axe
+(126 of 126 runs each), against the game's own end
 to end
 -- shudom's rings, walwind's waves and orladin's bursts through `strike_creatures`
 (`0x8004ceac`, the strike on the creatures in an area) and
@@ -575,7 +577,10 @@ carries 24 such runs with the fields, the draws and the lighting calls.
 And the fire ball (kind 0): `fire_check` stands `collide_query`, the sound and
 `actor_attack_player` in on both sides (`StandIn`) and compares what each is
 handed -- **168 of 168** runs, **914 of 914** frames, water laid under some
-paths for the splash (kind 0x70); 24 runs in `fxcheck.json`.
+paths for the splash (kind 0x70); 24 runs in `fxcheck.json`. It takes a
+kind, speed and arguments as `SPELLS_SENT` has them: Seath's sword's spell,
+which splashes on water in flight, runs here too (**168 of 168**; with no
+splash 137, a depth of 0x1f0 167).
 `fire_world_check` lets the game's own `collide_query` answer, against
 `RamWorld`'s, which now has the creatures (`spot_taken`, actor_spot_taken)
 and leaves the planes in RAM: **210 of 210** runs, 2512 frames, 34 hits on

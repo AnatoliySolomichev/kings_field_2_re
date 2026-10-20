@@ -209,7 +209,8 @@ def main(quick=False, only_check=False):
     fx_keep = ["frames of a spore", "strikes a frame after", "effect_aim, the game's",
                "effect_spawn and effect_driver, the game's",
                "the healing and protecting spells' effects", "the fire ball",
-               "end to end, the game's own collide_query"]
+               "end to end, the game's own collide_query",
+               "the game's own effect_spawn and effect_driver over the"]
     names = effect_parts()
     if names:
         for name in names:

@@ -4074,6 +4074,27 @@ magic meter full, a fire ball -- the cast offset `(-200, 200, 400)`, aimed
 as spell 0 is (`sub_8002c164`, speed `0x384`) and spawned as its kind 0 --
 with no MP and no meter spent.
 
+**What the spells are, in the effects** (`effect_spawn`, `effect_tick`;
+`tools/effects.py`, against the game's own end to end). Ryu-ga's `0x38` takes
+wind cutter's two arms, the very addresses (`0x800544b8`, `0x800574b4`):
+a wind cutter. Anorium sword's `0x3e` is the fire ball, its spawn arm
+(`0x80053e8c`) the fire ball's but for the particle, `0x3b` for 9, and its
+tick the fire ball's (`0x80056910`). Capricorn's `0x3a` (`0x800543b4`,
+`0x80057f78`): particle `0xa` at `0xc00`, flying flat (effect_move with no
+height) turning `0x258` a frame, `+0xe` flipping `0x40` each frame, gone on
+what it meets. Seath's sword's `0x42` (`0x80054940`, `0x80058a00`): model
+`0x2d` aimed along its velocity as the creatures' bolts are, radius `0x64`
+and height `0xc8`, splashing on water just under it in flight. Morguline
+axe's `0x4c` (`0x8005422c`, `0x8005758c`): model `0xf`, turning `0xc8` a
+frame on two axes and falling 5 a frame faster each frame, a still puff at
+its point every frame -- it comes down short, and none of the runs reached
+a creature. Vaculacia sword's `0x40` (`0x8005474c`, `0x8005763c`):
+particle `0x43` at `0x1400`, turning `0x1f4` a frame, and on what it meets
+sixteen puffs flung from the point, each axis `rand() * 500 >> 15` less
+`0xfa`. The rest -- `0x36`, `0x37`, `0x3c`, `0x46`, `0x47`, `0x48`,
+`0x4b`, and `0x7b`/`0x7c`, which dark slayer's `0x45`/`0x44` spawn -- are
+not read.
+
 ### Casting: the buttons, cast_spell, and what keeps running
 
 (`tools/magic.py`.) **The buttons** are `player_turn`'s (`0x8002fe1c`): the
@@ -7164,7 +7185,7 @@ Against the game's own end to end (`spell_hit_check`), sent at the
 snapshots' creatures: **126 of 126** runs, 9004 frames, all slots and
 creatures alike, 145 frames a creature struck, 76 killed, **the player struck
 148 times** -- the bursts of flames that met a wall near the cast. The port
-has it (`effects.gd`; 414 of 414 machine runs in the self-test, the export's
+has it (`effects.gd`; 558 of 558 machine runs in the self-test now, the export's
 stand-in world letting flame fly long enough to look, shoot and breathe),
 and `sight` (`player.gd`) takes the noise now.
 

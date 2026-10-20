@@ -744,6 +744,11 @@ B56A, B56C, B56E = 0x801B256A, 0x801B256C, 0x801B256E
 TILE_LOOK = 0x801AEEFC
 FIRE_BALL = 0x00
 STONE, WIND_CUTTER = 0x06, 0x0D
+# The weapons' spells (FORMATS.md "The weapons' spells") whose arms are in:
+# ryu-ga's is wind cutter's two arms, anorium sword's the fire ball's with
+# its own particle; capricorn's, vaculacia sword's, Seath's sword's and
+# morguline axe's their own
+RYU_GA, CAPRICORN, ANORIUM, VACULACIA, SEATHS, MORGULINE = 0x38, 0x3A, 0x3E, 0x40, 0x42, 0x4C
 HAZE, SHUDOM, WALWIND, RING, WAVE = 0x0B, 0x09, 0x11, 0x5E, 0x59
 EARTH_WAVE, BORTECTH, HOLD = 0x07, 0x0C, 0x65
 METEOR, BLAST = 0x5F, 0x5A
@@ -895,7 +900,9 @@ class Machine:
                METEOR: self._spawn_5f, BLAST: self._spawn_5a, ORLADIN: self._spawn_15,
                BURST: self._spawn_58, RAY: self._spawn_5b, TORNADO: self._spawn_0f,
                FIRE_WALL: self._spawn_01, FIRE_STORM: self._spawn_02,
-               FLAME: self._spawn_04}.get(kind)
+               FLAME: self._spawn_04, RYU_GA: self._spawn_0d, ANORIUM: self._spawn_3e,
+               CAPRICORN: self._spawn_3a, SEATHS: self._spawn_42,
+               MORGULINE: self._spawn_4c, VACULACIA: self._spawn_40}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_spawn's arm {kind:#x}")
         arm(s, args)
@@ -1350,6 +1357,104 @@ class Machine:
         self.w16(s + 0xE, 0x40)
         self.w16(s + 0x10, 0x32)            # sub_800532d4's sound between
         self.w8(s + 0xD, 1)
+
+    def _spawn_3e(self, s, args):           # 0x80053e8c, anorium sword's
+        """The fire ball's arm with particle 0x3b."""
+        self.particle(s, 0x3B, 0x1000, 5)
+        self.w16(s + 0xE, 0x40)
+        self.w16(s + 0x10, 0x32)            # sub_800532d4's sound between
+        self.w8(s + 0xD, 1)
+
+    def _spawn_3a(self, s, args):           # 0x800543b4, capricorn's
+        self.particle(s, 0xA, 0xC00, 5)
+        self.w16(s + 0x10, 0x32)
+        self.w8(s + 0xD, 1)
+        self.w16(s + 0xE, 0x40)             # with its sound (0x64)
+
+    def _tick_3a(self, s):                  # 0x80057f78, capricorn's
+        """+0xe flips 0x40 every frame; effect_move at radius 0xb4, no
+        height, turning 0x258 a frame; what it meets it strikes and is gone
+        (freed first when the tiles stopped it)."""
+        self.w16(s + 0xE, (self.u16(s + 0xE) + 0x40) & 0x40)
+        hit = self.move(0xB4, 0, -0x258)
+        if not hit:
+            return
+        if hit & 0xF:
+            self.w8(s, 0xFF)
+        self.attack(s, hit)
+        self.w8(s, 0xFF)
+
+    def _spawn_42(self, s, args):           # 0x80054940, Seath's sword's
+        """After its sound (0x62 when +0 & 0x40, else 0x2c): set up as model
+        0x2d, scale 0x1000 and +0x34 0x1400, the life 0x32, and the angles
+        off the velocity as _aimed has them."""
+        self.setup(s, 0x2D, 0x1000, 5)
+        vx, vz = self.s16(s + 0x38), self.s16(s + 0x3C)
+        self.w16(s + 0x34, 0x1400)
+        self.w16(s + 0x10, 0x32)
+        self.w8(s + 0x44, 0)
+        self.w8(s + 0xD, 1)
+        ln = vec_length_2d(vx, vz)
+        self.w16(s + 0x28, movement.ratan2(self.s16(s + 0x3A), ln))
+        self.w16(s + 0x2C, 0)
+        self.w16(s + 0x2A, movement.ratan2(self.s16(s + 0x3C), self.s16(s + 0x38)) - 0x400)
+        self.w16(s + 0xE, 0x40)
+
+    def _tick_42(self, s):                  # 0x80058a00, Seath's sword's
+        """effect_move at radius 0x64, height 0xc8; in flight a splash on
+        water just under it (sub_80056268), and what it meets it strikes and
+        is gone."""
+        hit = self.move(0x64, 0xC8, 0)
+        if not hit:
+            self.splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
+            return
+        self.attack(s, hit)
+        self.w8(s, 0xFF)
+
+    def _spawn_4c(self, s, args):           # 0x8005422c, morguline axe's
+        self.w8(s + 8, 1)
+        self.w8(s + 4, 0x80)
+        self.w8(s + 2, 0xF)
+        self.w8(s + 3, 0xF)
+        self.w16(s + 0x10, 0x50)
+        self.w16(s + 0xE, 0x80)             # with its sound (0x36)
+
+    def _tick_4c(self, s):                  # 0x8005758c, morguline axe's
+        """Turning 0xc8 a frame on two axes, falling by 5 a frame more, a
+        still puff at its point (0xc00, -0x100, 8, 0x1c, 0, 1, 2), then
+        effect_move at radius 0xb4, the height's top bit: what it meets it
+        strikes and is gone."""
+        self.w16(s + 0x2A, self.u16(s + 0x2A) + 0xC8)
+        self.w16(s + 0x3A, self.u16(s + 0x3A) + 5)
+        self.w16(s + 0x28, self.u16(s + 0x28) + 0xC8)
+        self.spawn(10, 0, TRAIL, self.get(s + 0x18, 16),
+                   [bytes(8), 0xC00, -0x100, 8, 0x1C, 0, 1, 2])
+        hit = self.move(0xB4, 0x80000000, 0)
+        if hit:
+            self.w8(s, 0xFF)
+            self.attack(s, hit)
+
+    def _spawn_40(self, s, args):           # 0x8005474c, vaculacia sword's
+        self.particle(s, 0x43, 0x1400, 5)
+        self.w16(s + 0x10, 0x46)
+        self.w8(s + 0x44, 0)
+        self.w8(s + 0xD, 0)
+        self.w16(s + 0xE, 0)                # with its sound (0x67)
+
+    def _tick_40(self, s):                  # 0x8005763c, vaculacia sword's
+        """effect_move at radius 0xb4, the height's top bit, turning 0x1f4 a
+        frame; what it meets it strikes and is gone in sixteen puffs flung
+        from its point, each axis rand() * 500 >> 15 less 0xfa (0x1400,
+        -0x18, 0xa, 0x26, 0, 1, 2)."""
+        hit = self.move(0xB4, 0x80000000, -0x1F4)
+        if not hit:
+            return
+        self.w8(s, 0xFF)
+        self.attack(s, hit)
+        for _ in range(16):
+            v = [((500 * self.rand()) >> 15) - 0xFA for _ in range(3)]
+            self.spawn(10, 0, TRAIL, self.get(s + 0x18, 16),
+                       [struct.pack("<4h", *v, 0), 0x1400, -0x18, 0xA, 0x26, 0, 1, 2])
 
     def _spawn_0f(self, s, args):           # 0x80054294, tornado
         """The first of a cast's two (args[2] 0) is 0xc80 across and turned
@@ -1927,7 +2032,9 @@ class Machine:
                METEOR: self._tick_5f, BLAST: self._tick_5a, ORLADIN: self._tick_15,
                BURST: self._tick_58, RAY: self._tick_5b, TORNADO: self._tick_0f,
                FIRE_WALL: self._tick_01, FIRE_STORM: self._tick_02,
-               FLAME: self._tick_04}.get(kind)
+               FLAME: self._tick_04, RYU_GA: self._tick_0d, ANORIUM: self._tick_00,
+               CAPRICORN: self._tick_3a, SEATHS: self._tick_42,
+               MORGULINE: self._tick_4c, VACULACIA: self._tick_40}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_tick's arm {kind:#x}")
         arm(s)
@@ -2767,7 +2874,13 @@ SPELLS_SENT = ((FIRE_BALL, 0x384, "the fire ball", (), 80), (STONE, 0x1F4, "ston
                (TORNADO, 0x12C, "tornado", ("view", (0, 1)), 60),
                (FIRE_WALL, 0x23A, "fire wall", ("view",), 60),
                (FIRE_STORM, 0x1F4, "fire storm", ("slot?", 2), 90),
-               (FLAME, 0xFA, "flame", ("view",), 200))
+               (FLAME, 0xFA, "flame", ("view",), 200),
+               (RYU_GA, 0x2BC, "ryu-ga's", ("view",), 80),
+               (CAPRICORN, 0x226, "capricorn's", (), 80),
+               (ANORIUM, 0x2EE, "anorium sword's", (), 80),
+               (VACULACIA, 0x1B8, "vaculacia sword's", (), 80),
+               (SEATHS, 0x384, "Seath's sword's", ("view",), 80),
+               (MORGULINE, 0x1C2, "morguline axe's", (), 80))
 """The attacking spells the checks send: the kind, the speed its arm of
 player_action gives it, its name, what follows the velocity ("view" a
 pointer to view_angles; "slot?" the creature in sight, now and then the
@@ -3049,11 +3162,15 @@ def fire_world_check(out=sys.stdout, per=10, frames=60):
     return good == runs
 
 
-def fire_check(out=sys.stdout, per=8, frames=60):
+def fire_check(out=sys.stdout, per=8, frames=60, kind=FIRE_BALL, speed=0x384,
+               name="the fire ball", more=()):
     """The fire ball (kind 0) against the game's own effect_spawn and
     effect_driver over every snapshot, collide_query, its sound and
     actor_attack_player stood in for on both sides: all 128 slots every frame,
-    every query asked and every hit handed over."""
+    every query asked and every hit handed over. The stand-in's water under
+    the path stays, which the game's collide_query rewrites, so a splash in
+    flight is checked here; another bolt by `kind` and the rest as in
+    SPELLS_SENT."""
     import random
     import memcard
     import levelstate
@@ -3077,8 +3194,9 @@ def fire_check(out=sys.stdout, per=8, frames=60):
             point = struct.pack("<4i", px + rng.randrange(-0x400, 0x400), py - 0x640,
                                 pz + rng.randrange(-0x400, 0x400), 0)
             d = movement.direction_from_angles(rng.randrange(-0x100, 0x100) & 0xFFF, yaw)
-            vel = struct.pack("<4h", *[_s16_((c * 0x384) >> 12) for c in d], 0)
-            sp = (0xA, 0x42, FIRE_BALL, point, [vel])
+            vel = struct.pack("<4h", *[_s16_((c * speed) >> 12) for c in d], 0)
+            view = bytes(ram[VIEW_ANGLES & MASK:(VIEW_ANGLES & MASK) + 8])
+            sp = (0xA, 0x42, kind, point, [vel] + [view if v == "view" else v for v in more])
             if rng.randrange(3) == 0:                       # water just under the path
                 struct.pack_into("<i", ram, SURFACE & MASK, py - 0x640 - rng.randrange(0, 0x1F4))
             cpu = _game(bytes(ram))
@@ -3129,7 +3247,7 @@ def fire_check(out=sys.stdout, per=8, frames=60):
                 runs -= 1
     for line in first:
         print(line, file=out)
-    print(f"  the fire ball, the game's own effect_spawn and effect_driver over the "
+    print(f"  {name}, the game's own effect_spawn and effect_driver over the "
           f"snapshots: {good} of {runs} runs, {fgood} of {nframes} frames with all 128 "
           f"slots, every query and every hit alike" + (f" ({skipped} splashing on water, "
                                                        f"not in the machine)" if skipped else ""),
@@ -3177,9 +3295,12 @@ def aim_check(out=sys.stdout, n=600):
 def parts():
     """The checks one at a time, by name, for tools/build.py to run side by
     side: the spores, effect_aim, the machine, the healing spells, the fire
-    ball against stand-ins and in the world, and each attacking spell sent."""
+    ball against stand-ins and in the world, Seath's sword's spell against the
+    stand-ins (its splash in flight), and each attacking spell sent."""
     out = [("spores", lambda: check(verbose=False)), ("aim", aim_check),
            ("machine", machine_check), ("magic", magic_check), ("fire", fire_check),
+           ("fire_seaths", lambda: fire_check(kind=SEATHS, speed=0x384, name="Seath's sword's",
+                                              more=("view",))),
            ("fire_world", fire_world_check)]
     for kind, speed, name, more, n in SPELLS_SENT:
         out.append((f"{kind:#x}", lambda kind=kind, speed=speed, name=name, more=more, n=n:
@@ -3199,6 +3320,7 @@ if __name__ == "__main__":
     good = machine_check() and good
     good = magic_check() and good
     good = fire_check() and good
+    good = fire_check(kind=SEATHS, speed=0x384, name="Seath's sword's", more=("view",)) and good
     good = fire_world_check() and good
     good = spell_hit_check() and good
     sys.exit(0 if good else 1)

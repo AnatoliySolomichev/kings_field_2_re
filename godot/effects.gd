@@ -64,6 +64,14 @@ const FIRE_WALL := 0x01
 const FIRE_STORM := 0x02
 const FLAME := 0x04
 const BREATH := 0x6E               # flame's: the empty arm
+# The weapons' spells whose arms are here: ryu-ga's is wind cutter's two arms,
+# anorium sword's the fire ball's with its own particle
+const RYU_GA := 0x38
+const CAPRICORN := 0x3A
+const ANORIUM := 0x3E
+const VACULACIA := 0x40
+const SEATHS := 0x42
+const MORGULINE := 0x4C
 const BANK_KEY := 0x20000          # KFAnim's key for model_table[index] of the resident bank
 const EMPTY := [0x08, 0x0A, 0x0E, 0x18, 0x1D, 0x2B, 0x39, 0x3B, 0x3D, 0x3F, 0x41, 0x43, 0x49,
 	0x4A, 0x4D, 0x4E, 0x4F, 0x54, 0x57, 0x60, 0x61, 0x62, 0x63, 0x68, 0x69, 0x6A, 0x6B, 0x6D,
@@ -216,7 +224,7 @@ func alloc() -> int:
 # effect_spawn(a0, a1, kind, point, ...): `point` the 16 bytes a3 points at
 # (or empty), `args` the stack arguments from the fifth on -- a pointer as the
 # bytes it points at. The slot's offset, or -1 when none is free.
-# @orig game:0x80053c84 effect_spawn  status:partial -- the common setting up and the arms of 34 kinds: 0 (fire ball), 1 (fire wall), 2 (fire storm), 4 (flame), 6 (stone), 7 and 0x16 (earth wave), 9 (shudom), 0xb (haze), 0xc (bortecth), 0xd (wind cutter), 0xf (tornado), 0x11 (walwind), 0x15 (orladin), 0x17, 0x19, 0x1a, 0x1b, 0x1c, 0x1e (the healing and protecting), 0x1f, 0x22, 0x23, 0x24, 0x26 (the creatures'), 0x58, 0x59, 0x5a, 0x5b, 0x5e, 0x5f, 0x65 (the spells' children), 0x6f (puff) and 0x70 (splash); tools/effects.py's, which the game's own holds (machine_check, magic_check, spell_hit_check) and the self-test holds this to. 35 kinds have the empty arm, which frees the slot, as here; the other 61 arms are not here
+# @orig game:0x80053c84 effect_spawn  status:partial -- the common setting up and the arms of 40 kinds: 0 (fire ball), 1 (fire wall), 2 (fire storm), 4 (flame), 6 (stone), 7 and 0x16 (earth wave), 9 (shudom), 0xb (haze), 0xc (bortecth), 0xd (wind cutter), 0xf (tornado), 0x11 (walwind), 0x15 (orladin), 0x17, 0x19, 0x1a, 0x1b, 0x1c, 0x1e (the healing and protecting), 0x1f, 0x22, 0x23, 0x24, 0x26 (the creatures'), 0x58, 0x59, 0x5a, 0x5b, 0x5e, 0x5f, 0x65 (the spells' children), 0x6f (puff), 0x70 (splash), and 0x38, 0x3a, 0x3e, 0x40, 0x42 and 0x4c (the weapons' spells); tools/effects.py's, which the game's own holds (machine_check, magic_check, fire_check, spell_hit_check) and the self-test holds this to. 35 kinds have the empty arm, which frees the slot, as here; the other 55 arms are not here
 func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array) -> int:
 	var s := alloc()
 	if s < 0:
@@ -300,7 +308,7 @@ func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array) -> 
 			w8(s + 3, 0xF)
 			w8(s + 0x44, 0)
 			w16(s + 0x10, 0x46)             # and its sound (0x32), not here
-		WIND_CUTTER:                        # 0x800544b8
+		WIND_CUTTER, RYU_GA:                # 0x800544b8
 			setup(s, 0xD, 0x1400, 5)        # after its sound (0x2b)
 			w16(s + 0x10, 0x2D)
 			w8(s + 0x44, 0)
@@ -477,11 +485,31 @@ func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array) -> 
 			w16(s + 0x46, int(args[2]))     # how fast
 			w16(s + 0xE, 0)
 			w16(s + 0x48, int(args[3]))     # the strike's scale; and its sound (0x23), not here
-		FIRE_BALL:                          # 0x80053e98
-			particle(s, 9, 0x1000, 5)
+		FIRE_BALL, ANORIUM:                 # 0x80053e98, anorium's 0x80053e8c
+			particle(s, 9 if kind == FIRE_BALL else 0x3B, 0x1000, 5)
 			w16(s + 0xE, 0x40)
 			w16(s + 0x10, 0x32)             # sub_800532d4's sound between, not here
 			w8(s + 0xD, 1)
+		CAPRICORN:                          # 0x800543b4
+			particle(s, 0xA, 0xC00, 5)
+			w16(s + 0x10, 0x32)
+			w8(s + 0xD, 1)
+			w16(s + 0xE, 0x40)              # with its sound (0x64), not here
+		SEATHS:                             # 0x80054940
+			_spawn_seaths(s)
+		MORGULINE:                          # 0x8005422c
+			w8(s + 8, 1)
+			w8(s + 4, 0x80)
+			w8(s + 2, 0xF)
+			w8(s + 3, 0xF)
+			w16(s + 0x10, 0x50)
+			w16(s + 0xE, 0x80)              # with its sound (0x36), not here
+		VACULACIA:                          # 0x8005474c
+			particle(s, 0x43, 0x1400, 5)
+			w16(s + 0x10, 0x46)
+			w8(s + 0x44, 0)
+			w8(s + 0xD, 0)
+			w16(s + 0xE, 0)                 # with its sound (0x67), not here
 		0x1A:                               # 0x8005585c, fire resist's mark
 			var i := int(args[1]) if args.size() > 1 and args[1] != null else 0
 			orbit(s, 0x18, i << 11, 14 * i - 7)
@@ -537,6 +565,25 @@ func _flat(s: int, model: int, scale: int) -> void:
 	w16(s + 0x3A, 0)
 	w16(s + 0x10, 0x96)
 	w16(s + 0x44, 0)
+
+
+# Seath's sword's spell (0x80054940): after its sound (0x62 with +0 & 0x40,
+# else 0x2c, not here) set up as model 0x2d, scale 0x1000 and +0x34 0x1400, a
+# life of 0x32, and the angles off the velocity as _aimed has them.
+# @orig game:0x80054940 effect_spawn+0xcbc  status:verified -- tools/effects.py spell_hit_check and fire_check, 126 of 126 and 168 of 168 runs of the game's own; the self-test this to it
+func _spawn_seaths(s: int) -> void:
+	setup(s, 0x2D, 0x1000, 5)
+	var vx := s16(s + 0x38)
+	var vz := s16(s + 0x3C)
+	w16(s + 0x34, 0x1400)
+	w16(s + 0x10, 0x32)
+	w8(s + 0x44, 0)
+	w8(s + 0xD, 1)
+	var ln := coll.isqrt(s32v((vx >> 3) * (vx >> 3) + (vz >> 3) * (vz >> 3)) & 0xFFFFFFFF) << 3
+	w16(s + 0x28, coll.ratan2(s16(s + 0x3A), ln))
+	w16(s + 0x2C, 0)
+	w16(s + 0x2A, coll.ratan2(s16(s + 0x3C), s16(s + 0x38)) - 0x400)
+	w16(s + 0xE, 0x40)
 
 
 # What 0x1f's and 0x22's arms share (0x80054cf4, 0x80054d68): +8 1, +4 0x80,
@@ -632,7 +679,7 @@ func driver() -> void:
 
 
 # effect_tick's switch on the kind (0x80056908), with the arms the port has.
-# @orig game:0x800568bc effect_tick  status:partial -- the switch, and the arms of the same 34 kinds as effect_spawn's; the other 61 do nothing here
+# @orig game:0x800568bc effect_tick  status:partial -- the switch, and the arms of the same 40 kinds as effect_spawn's; the other 55 do nothing here
 func tick(s: int) -> void:
 	match u8(s + 1):
 		0x1F:
@@ -645,13 +692,21 @@ func tick(s: int) -> void:
 			_tick_spore(s)
 		TRAIL:
 			_tick_puff(s)
-		FIRE_BALL:
+		FIRE_BALL, ANORIUM:
 			_tick_fire(s)
+		CAPRICORN:
+			_tick_capricorn(s)
+		SEATHS:
+			_tick_seaths(s)
+		MORGULINE:
+			_tick_morguline(s)
+		VACULACIA:
+			_tick_vaculacia(s)
 		SPLASH:
 			_tick_splash(s)
 		STONE:
 			_tick_stone(s)
-		WIND_CUTTER:
+		WIND_CUTTER, RYU_GA:
 			_tick_wind(s)
 		HAZE:
 			_tick_haze(s)
@@ -785,6 +840,71 @@ func _tick_wind(s: int) -> void:
 		w8(s + 0x44, 0)
 	_splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
 	w16(s + 0x2A, u16(s + 0x2A) + 0x2BC)
+
+
+# Capricorn's spell (0x80057f78): +0xe flips 0x40 every frame; effect_move at
+# radius 0xb4, no height, turning 0x258 a frame; what it meets it strikes and
+# is gone (freed first when the tiles stopped it).
+# @orig game:0x80057f78 effect_tick+0x16bc  status:verified -- tools/effects.py spell_hit_check, 126 of 126 runs of the game's own end to end; the self-test this to it
+func _tick_capricorn(s: int) -> void:
+	w16(s + 0xE, (u16(s + 0xE) + 0x40) & 0x40)
+	var hit := move(0xB4, 0, -0x258)
+	if hit == 0:
+		return
+	if hit & 0xF:
+		w8(s, 0xFF)
+	_attack(s, hit)
+	w8(s, 0xFF)
+
+
+# Seath's sword's spell (0x80058a00): effect_move at radius 0x64, height 0xc8;
+# in flight a splash on water just under it, and what it meets it strikes and
+# is gone.
+# @orig game:0x80058a00 effect_tick+0x2144  status:verified -- tools/effects.py spell_hit_check and fire_check (the splash, the world stood in for), 126 of 126 and 168 of 168 runs of the game's own; the self-test this to it
+func _tick_seaths(s: int) -> void:
+	var hit := move(0x64, 0xC8, 0)
+	if hit == 0:
+		_splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
+		return
+	_attack(s, hit)
+	w8(s, 0xFF)
+
+
+# Morguline axe's spell (0x8005758c): turning 0xc8 a frame on two axes,
+# falling 5 a frame faster, a still puff at its point (0xc00, -0x100, 8,
+# 0x1c, 0, 1, 2), then effect_move at radius 0xb4, the height's top bit: what
+# it meets it strikes and is gone.
+# @orig game:0x8005758c effect_tick+0xcd0  status:verified -- tools/effects.py spell_hit_check, 126 of 126 runs of the game's own end to end (none reached a creature); the self-test this to it
+func _tick_morguline(s: int) -> void:
+	w16(s + 0x2A, u16(s + 0x2A) + 0xC8)
+	w16(s + 0x3A, u16(s + 0x3A) + 5)
+	w16(s + 0x28, u16(s + 0x28) + 0xC8)
+	var v := PackedByteArray()
+	v.resize(8)
+	spawn(10, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [v, 0xC00, -0x100, 8, 0x1C, 0, 1, 2])
+	var hit := move(0xB4, 0x80000000, 0)
+	if hit != 0:
+		w8(s, 0xFF)
+		_attack(s, hit)
+
+
+# Vaculacia sword's spell (0x8005763c): effect_move at radius 0xb4, the
+# height's top bit, turning 0x1f4 a frame; what it meets it strikes and is
+# gone in sixteen puffs flung from its point, each axis rand() * 500 >> 15
+# less 0xfa (0x1400, -0x18, 0xa, 0x26, 0, 1, 2).
+# @orig game:0x8005763c effect_tick+0xd80  status:verified -- tools/effects.py spell_hit_check, 126 of 126 runs of the game's own end to end; the self-test this to it
+func _tick_vaculacia(s: int) -> void:
+	var hit := move(0xB4, 0x80000000, -0x1F4)
+	if hit == 0:
+		return
+	w8(s, 0xFF)
+	_attack(s, hit)
+	for k in 16:
+		var v := PackedByteArray()
+		v.resize(8)
+		for i in 3:
+			v.encode_s16(2 * i, ((500 * int(world.rand())) >> 15) - 0xFA)
+		spawn(10, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [v, 0x1400, -0x18, 0xA, 0x26, 0, 1, 2])
 
 
 # Haze (0x80058164): each thing it meets it strikes once (+0x44 the latch,
