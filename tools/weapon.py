@@ -159,23 +159,32 @@ def refill(w, rec, stat, attack_held=False, ring=0xFF):
 
 
 def start(w, rec, magic=FULL):
-    """0x8002c040 with phase 0: the swing begins."""
+    """0x8002c040 with phase 0: the swing begins. Begun on both meters full
+    (0x801b25b3), it carries the record's +5 shots of its spell
+    (0x801b25b2)."""
     if w["clock"] != -1:
         return False
     w.update(phase=0, clock=0, hit=u16(rec, 0x1E), sound=u16(rec, 0x2C),
              strength=w["meter"], charged=(w["meter"] == FULL == magic),
              meter=0)
+    if w["charged"]:
+        w["shots"] = rec[5]
     return True
 
 
-def swing(w, rec):
-    """One frame of a phase-0 swing. Returns the events: 'sound', and
-    ('hit', strength, pushes) when the blow falls this frame."""
+def swing(w, rec, action_held=False, may=0):
+    """One frame of a phase-0 swing. Returns the events: ('shot', spell,
+    commit, n) when the weapon's spell is cast (magic_window), 'sound', and
+    ('hit', strength, pushes) when the blow falls this frame; at the end,
+    the clock -1 and the shots gone (.L41)."""
     if w["clock"] == -1:
         return []
     rate, end, last = u16(rec, 0x1C), u16(rec, 0x1E), u16(rec, 0x2C)
     ev = []
     w["clock"] = s16(w["clock"] + rate)
+    shot = magic_window(w, rec, action_held, may)
+    if shot:
+        ev.append(("shot",) + shot)
     c = w["clock"]
     if w["sound"] <= c < w["sound"] + rate:
         if rec[0] != 0xFF:
@@ -189,6 +198,7 @@ def swing(w, rec):
             ev.append(("hit", w["strength"] >> 2, False))
     if w["clock"] >= 0x1000:
         w["clock"] = -1
+        w["shots"] = 0
     return ev
 
 
@@ -386,7 +396,8 @@ def export(out_dir):
             ev = swing(w, r)
             frames.append([w["clock"], w["meter"], w["pause"],
                            1 if "sound" in ev else 0,
-                           next((e[1] for e in ev if isinstance(e, tuple)), -1)])
+                           next((e[1] for e in ev
+                                 if isinstance(e, tuple) and e[0] == "hit"), -1)])
             if w["clock"] == -1:
                 break
         for _ in range(40):
@@ -416,6 +427,58 @@ def export(out_dir):
                 v = knock(dmg, wt, pt, (100700, -12800, 59300), 1625)
                 knocks.append([dmg, wt, *pt, *(v if v else (0, 0, 0)),
                                0 if v is None else 1])
+    magic = []
+    for i, r in enumerate(recs[:34]):
+        if u16(r, 0x1C) == 0 or r[3] == 0xFF:
+            continue
+        # ACTION held before the window opens loses the shots, so the last
+        # two hold it from the window's first frame, every or every other
+        lo = -(-u16(r, 0x20) // u16(r, 0x1C)) - 1
+        for pat in range(5):
+            for may in (0, 1):
+                for mag in (FULL, FULL - 1):
+                    w = {"clock": -1, "meter": FULL, "pause": 0}
+                    start(w, r, mag)
+                    frames = []
+                    for f in range(40):
+                        held = (True, f % 2 == 0, f < 6, f >= lo,
+                                f >= lo and (f - lo) % 2 == 0)[pat]
+                        ev = swing(w, r, held, may)
+                        shot = next((e[1:] for e in ev
+                                     if isinstance(e, tuple) and e[0] == "shot"), None)
+                        frames.append([int(held), w["clock"], w.get("shots", 0),
+                                       *((shot[0], int(shot[1]), shot[2])
+                                         if shot else (-1, 0, 0))])
+                        if w["clock"] == -1:
+                            break
+                    magic.append([i, may, mag, frames])
+    import random
+    rng = random.Random(0xCF0)
+    # magic_window alone, on clocks at the window's edges and shots left
+    windows = []
+    for i, r in enumerate(recs[:34]):
+        if r[3] == 0xFF:
+            continue
+        lo, hi = u16(r, 0x20), u16(r, 0x22)
+        for c in (lo - 1, lo, lo + 1, hi - 1, hi, hi + 1, rng.randrange(0x1000)):
+            for _ in range(3):
+                w = {"phase": rng.choice((0, 0, 0, 1)), "clock": c,
+                     "charged": rng.randrange(4) != 0, "shots": rng.randrange(r[5] + 2)}
+                held, may = rng.randrange(4) != 0, rng.randrange(4) != 0
+                case = [i, w["phase"], c, int(w["charged"]), w["shots"], int(held), int(may)]
+                shot = magic_window(w, r, held, may)
+                windows.append(case + [w["shots"], *((shot[0], int(shot[1]), shot[2])
+                                                     if shot else (-1, 0, 0))])
+    mays = []
+    for _ in range(300):
+        wi = rng.choice(list(range(34)) + [0xFF])
+        rec = recs[wi] if wi < len(recs) else bytes(68)
+        which = rng.randrange(2)
+        unlocked = [rng.randrange(2) for _ in range(0x60)]
+        stat = rng.choice((0, 0x31, 0x32, 0x63))
+        skills = [rng.choice((0x31, 0x32, 0x50)) for _ in range(5)]
+        mays.append([wi, which, stat, skills, unlocked,
+                     may_cast(wi, rec, which, lambda k: unlocked[k], stat, skills)])
     path = os.path.join(out_dir, "weapon.json")
     with open(path, "w") as fh:
         json.dump({"_note": "FDAT 97 block 1, the 68-byte weapon records, and "
@@ -423,8 +486,232 @@ def export(out_dir):
                    "records": [list(r) for r in recs],
                    "guard": {"0": level_guard(0)},
                    "swings": swings, "probes": probes, "damages": damages,
-                   "knocks": knocks}, fh, separators=(",", ":"))
+                   "knocks": knocks, "magic": magic, "windows": windows,
+                   "mays": mays}, fh,
+                  separators=(",", ":"))
     return path
+
+
+# --- the weapons' own magic --------------------------------------------------------
+
+SHOTS, CHARGED, PHASE = 0x801B25B2, 0x801B25B3, 0x801B25AE
+SPELL_TABLE = 0x801B77EC
+
+
+def may_cast(weapon, rec, which, unlocked, stat, skills):
+    """weapon_may_cast(which): may the weapon in hand cast its spell -- +3 for
+    which 0, the swing's, +4 for which 1, the second swing's. The spell, if
+    the record names one, must be unlocked (its spell_table +0); then
+    excellector (2) and weapons 0xd..0x11 may, and every other only with
+    the effective stat (0x801b2524) and the least of the five working skills
+    both 50 or more. `unlocked(spell)` is that +0."""
+    if weapon != 0xFF:
+        sp = rec[3 + which]
+        if sp != 0xFF and unlocked(sp) == 0:
+            return 0
+    if weapon == 2 or 0xD <= weapon < 0x12:
+        return 1
+    least = 0x3E7
+    for v in skills:
+        if v < least:
+            least = v
+    return 1 if stat >= 0x32 and least >= 0x32 else 0
+
+
+def spell_begin(st, spell, commit, n, cost):
+    """0x8002d130 (spell, commit, n): with the MP for its cost, the spell's
+    record becomes the one cast (casting_spell); on the commit the magic
+    meter and its pause go to 0 and the MP pays the cost; the eye's offset
+    for the spell -- 0x42's turned by n << 9 (cos, sin >> 3, 0x258 out),
+    0x47's 300 n - 300 across, every other (200, 200, 400) -- and then
+    player_action, at once. False with too little MP."""
+    import movement
+    if st["mp"] < cost:
+        return False
+    st["casting"] = spell
+    if commit:
+        st["meter"] = 0
+        st["magic_pause"] = 0
+        st["mp"] = (st["mp"] - cost) & 0xFFFF
+    if spell == 0x42:
+        a = (n << 9) & 0xFFFFFFFF
+        st["off_x"] = s16(movement.game_cos(a) >> 3)
+        st["off_y"] = s16(movement.game_sin(a) >> 3)
+        st["off_z"] = 0x258
+    elif spell == 0x47:
+        st["off_x"], st["off_y"], st["off_z"] = 0, s16(300 * n - 300), 0x190
+    else:
+        st["off_x"], st["off_y"], st["off_z"] = 0xC8, 0xC8, 0x190
+    return True
+
+
+def magic_window(w, rec, action_held, may):
+    """held_item_tick's phase-0 stretch (0x8002d81c): after the clock moves,
+    with the record's spell +3, the swing begun on both meters full, the
+    weapon allowed (may_cast(0)) and ACTION held, a frame inside the window
+    +0x20..+0x22 spends a shot -- spell_begin(+3, the first shot, the shots
+    left) -- and a frame outside it loses them all. (spell, commit, n) for
+    the shot, or None."""
+    if w.get("phase", 0) != 0 or rec[3] == 0xFF or not w.get("charged") or not may \
+            or not action_held:
+        return None
+    c = w["clock"]
+    if c < u16(rec, 0x20) or u16(rec, 0x22) < c:
+        w["shots"] = 0
+        return None
+    if w["shots"] == 0:
+        return None
+    shot = (rec[3], w["shots"] == rec[5], w["shots"])
+    w["shots"] = (w["shots"] - 1) & 0xFF
+    return shot
+
+
+def magic_check(out=sys.stdout, n=200):
+    """The weapons' magic against the game's own code over a snapshot:
+    swing_start (both phases) on random meters; weapon_may_cast on random
+    weapons, unlocked spells, stats and skills; spell_begin on random MP,
+    spells, commits and shots, player_action stood in for; and
+    held_item_tick's phase-0 frame on random clocks, shots and buttons, the
+    blow and the sound out of reach, spell_begin stood in for."""
+    import glob
+    import random
+    import mipsrun
+    snaps = sorted(glob.glob(os.path.join(ROOT, "out", "snap", "a1.ram")))
+    if not snaps:
+        print("  no snapshot to run the weapons' magic over", file=out)
+        return True
+    base = bytearray(open(snaps[0], "rb").read())
+    table = records()
+    rng = random.Random(0x3A61C)
+    tally = {}
+    first = []
+
+    def note(name, same, detail):
+        a, b = tally.get(name, (0, 0))
+        tally[name] = (a + same, b + 1)
+        if not same and not first:
+            first.append(f"{name}: {detail}")
+
+    magic_weapons = [i for i in range(0x22) if table[i][3] != 0xFF or table[i][4] != 0xFF]
+    for i in range(n):
+        # swing_start
+        weapon = rng.choice(magic_weapons + [0, 3])
+        rec = table[weapon]
+        phase = rng.randrange(2)
+        meter = rng.choice((FULL, FULL, 4999, 0, rng.randrange(FULL)))
+        magic = rng.choice((FULL, FULL, 4999, rng.randrange(FULL)))
+        cpu = mipsrun.CPU(base)
+        cpu.wr(0x801B25AF, 1, weapon)
+        cpu.wr(0x801B2594, 4, 0x801D37A4 + 68 * weapon)
+        cpu.wr(0x801B25A4, 2, 0xFFFF)
+        cpu.wr(0x801B2568, 2, 0)
+        cpu.wr(0x801B2502, 2, meter)
+        cpu.wr(0x801B2506, 2, magic)
+        cpu.call(0x8002C040, phase)
+        g = (cpu.rd(0x801B25A4, 2), cpu.rd(0x801B25A6, 2), cpu.rd(0x801B25A8, 2),
+             cpu.rd(0x801B2504, 2), cpu.rd(0x801B2502, 2), cpu.rd(CHARGED, 1),
+             cpu.rd(SHOTS, 1) if meter == FULL == magic else None, cpu.rd(PHASE, 1))
+        m = (0, u16(rec, 0x26 if phase else 0x1E), u16(rec, 0x2E if phase else 0x2C), meter, 0,
+             1 if meter == FULL == magic else 0, rec[5] if meter == FULL == magic else None, phase)
+        note("swing_start", g == m, f"weapon {weapon:#x} phase {phase}: game {g} model {m}")
+        # weapon_may_cast
+        weapon = rng.choice(magic_weapons + [0xFF, 1])
+        rec = table[weapon] if weapon != 0xFF else bytes(68)
+        which = rng.randrange(2)
+        cpu = mipsrun.CPU(base)
+        cpu.wr(0x801B25AF, 1, weapon)
+        cpu.wr(0x801B2594, 4, 0x801D37A4 + 68 * (weapon if weapon != 0xFF else 0))
+        unl = {}
+        for sp in (rec[3], rec[4]):
+            if sp != 0xFF:
+                unl[sp] = rng.randrange(2)
+                cpu.wr(SPELL_TABLE + 24 * sp, 1, unl[sp])
+        stat = rng.choice((0x31, 0x32, 0x40, rng.randrange(120)))
+        skills = [rng.choice((0x31, 0x32, 60, rng.randrange(120))) for _ in range(5)]
+        cpu.wr(0x801B2524, 2, stat)
+        for k, v in enumerate(skills):
+            cpu.wr(0x801B2526 + 2 * k, 2, v)
+        g = cpu.call(0x8002CFE0, which) & 0xFF
+        if weapon == 0xFF:
+            rec = table[0]
+        m = may_cast(weapon, rec if weapon != 0xFF else bytes(68), which,
+                     lambda sp: unl.get(sp, 0), stat, skills)
+        note("weapon_may_cast", g == m, f"weapon {weapon:#x} which {which}: game {g} model {m}")
+        # spell_begin
+        spell = rng.choice((0x36, 0x37, 0x38, 0x42, 0x43, 0x47, 0x48, 0x4C, 0x0D, 0x00))
+        cost = u16(bytes(base[(SPELL_TABLE & 0x1FFFFF) + 24 * spell:]), 0x16)
+        mp = rng.choice((0, cost, cost - 1, cost + 1, 999)) & 0xFFFF
+        commit = rng.randrange(2)
+        shots = rng.randrange(1, 6)
+        cpu = mipsrun.CPU(base)
+        cpu.wr(0x801B2500, 2, mp)
+        cpu.wr(0x801B2506, 2, 4321)
+        cpu.wr(0x801B24F4, 2, 7)
+        cpu.wr(0x801B2590, 4, 0)
+        called = []
+        cpu.hooks[0x8002C30C] = lambda c: called.append(1)
+        cpu.hooks[0x8001576C] = lambda c: 0
+        cpu.call(0x8002D130, spell, commit, shots)
+        g = (cpu.rd(0x801B2500, 2), cpu.rd(0x801B2506, 2), cpu.rd(0x801B24F4, 2),
+             cpu.rd(0x801B2590, 4), mipsrun.s32(cpu.rd(0x801B2630, 2) << 16) >> 16,
+             mipsrun.s32(cpu.rd(0x801B2632, 2) << 16) >> 16, cpu.rd(0x801B2634, 2), len(called))
+        st = {"mp": mp, "meter": 4321, "magic_pause": 7, "casting": None,
+              "off_x": None, "off_y": None, "off_z": None}
+        did = spell_begin(st, spell, commit, shots, cost)
+        m = (st["mp"], st["meter"], st["magic_pause"],
+             SPELL_TABLE + 24 * spell if did else 0,
+             st["off_x"] if did else g[4], st["off_y"] if did else g[5],
+             st["off_z"] if did else g[6], 1 if did else 0)
+        note("spell_begin", g == m, f"spell {spell:#x} mp {mp} cost {cost} commit {commit} n {shots}: "
+                                     f"game {g} model {m}")
+        # held_item_tick's phase-0 window
+        weapon = rng.choice([w_ for w_ in magic_weapons if table[w_][3] != 0xFF])
+        rec = table[weapon]
+        lo, hi = u16(rec, 0x20), u16(rec, 0x22)
+        clock0 = rng.choice((lo - u16(rec, 0x1C), hi - u16(rec, 0x1C), lo - 2 * u16(rec, 0x1C),
+                             hi, rng.randrange(0, 0xF00))) & 0xFFFF
+        if clock0 & 0x8000:
+            clock0 = 0
+        w = {"phase": 0, "clock": clock0, "charged": rng.choice((1, 1, 0)),
+             "shots": rng.choice((0, 1, rec[5], rng.randrange(rec[5] + 1)))}
+        action = rng.choice((True, True, False))
+        unlocked = rng.choice((1, 1, 0))
+        stat, skills = rng.choice((0x60, 0x20)), [rng.choice((0x60, 0x20))] * 5
+        cpu = mipsrun.CPU(base)
+        cpu.wr(0x801B25AF, 1, weapon)
+        cpu.wr(0x801B2594, 4, 0x801D37A4 + 68 * weapon)
+        cpu.wr(0x801B25A4, 2, w["clock"])
+        cpu.wr(0x801B25A6, 2, 0x1388)
+        cpu.wr(0x801B25A8, 2, 0x1388)
+        cpu.wr(PHASE, 1, 0)
+        cpu.wr(CHARGED, 1, w["charged"])
+        cpu.wr(SHOTS, 1, w["shots"])
+        cpu.wr(SPELL_TABLE + 24 * rec[3], 1, unlocked)
+        cpu.wr(0x801B2524, 2, stat)
+        for k, v in enumerate(skills):
+            cpu.wr(0x801B2526 + 2 * k, 2, v)
+        bind_action = cpu.rd(0x80081874, 2)
+        cpu.wr(0x801B265C, 2, bind_action if action else 0)
+        begun = []
+        cpu.hooks[0x8002D130] = lambda c: begun.append((c.r[4] & 0xFF, c.r[5], c.r[6] & 0xFF))
+        cpu.hooks[0x8001576C] = lambda c: 0
+        try:
+            cpu.call(0x8002D2A0, 0, 0, 0)
+        except mipsrun.Stop as ex:
+            note("the window", False, f"stopped: {ex}")
+            continue
+        g = (begun[0] if begun else None, cpu.rd(SHOTS, 1))
+        may = may_cast(weapon, rec, 0, lambda sp: unlocked, stat, skills)
+        mw = dict(w, hit=NEVER, sound=NEVER)
+        ev = swing(mw, rec, action, may)
+        shot = next((e[1:] for e in ev if e[0] == "shot"), None)
+        m = ((shot[0], 1 if shot[1] else 0, shot[2]) if shot else None, mw["shots"])
+        note("the window", g == m, f"weapon {weapon:#x} clock {clock0:#x} {w}: game {g} model {m}")
+    line = ", ".join(f"{k} {a} of {b}" for k, (a, b) in tally.items())
+    print(f"  the weapons' magic against the game's own code over a1: {line}", file=out)
+    if first:
+        print("  first difference: " + first[0], file=out)
+    return all(a == b for a, b in tally.values())
 
 
 def check(out=sys.stdout):
@@ -632,7 +919,7 @@ def table(out=sys.stdout):
 if __name__ == "__main__":
     a = sys.argv[1:]
     if a and a[0] == "--check":
-        sys.exit(0 if (check() and check_log()) else 1)
+        sys.exit(0 if (check() and check_log() and magic_check()) else 1)
     if a and a[0] == "--log":
         sys.exit(0 if check_log(verbose=True) else 1)
     if len(a) == 2:

@@ -3193,9 +3193,44 @@
   "name": "ui_guide",
   "evidence": "(list, kind, id): TRIANGLE's description in every list -- ITEM.T entry 0x186 + id for a thing (0x21c + id while the wise fruits' count is under 0x80081780[id]), 0x2b2 + id for a spell (kind 1), 0x186 + id buying (kind 2); read off the CD into VRAM (960, 256) and drawn twice from tpage 0x1f, CLUT 0x7806, in a frame under the list's title, with the turning model and return, until the cancel. tools/ui.py guide_check, 12 of 12"
  },
+ "0x8002cfe0": {
+  "name": "weapon_may_cast",
+  "kind": "code",
+  "evidence": "(which): 1 when the weapon in hand may cast its spell, record +3 for which 0 (the charged swing's, held_item_tick 0x8002d850) and +4 for which 1 (the combination's, player_turn 0x80030340): the spell's unlocked byte, then weapon 2 or 0xd..0x11, else the effective stat and the least working skill both 50 or more. tools/weapon.py may_cast, 200 of 200 as the game's own"
+ },
  "0x80081780": {
   "kind": "data",
   "name": "guide_require",
   "evidence": "150 bytes: the wise fruits' count (0x801b2530) each thing's full description in the guide wants, else ui_guide shows the short one (ITEM.T 0x21c + id); the level 1 sage (0x80021aac) sets a thing's to 4; the save carries it"
+ },
+ "0x8009c3cc": {
+  "name": "combo_buttons",
+  "kind": "data",
+  "evidence": "gp+0x1b8: player_turn writes bind_use, bind_attack, bind_action and 0xffff here first thing every frame (0x8002fe50); the combination that starts a phase-1 swing walks it through combo_next"
+ },
+ "0x801b258c": {
+  "name": "combo_next",
+  "kind": "data",
+  "evidence": "the combination's pointer into combo_buttons: back to its start when combo_time is 0 (0x800302c4), moved on by a right press (0x800303c4)"
+ },
+ "0x801b25aa": {
+  "name": "combo_time",
+  "kind": "data",
+  "evidence": "frames left for the combination's next press: 20 after a right one (0x800303e8), 0 after a wrong one, down a frame in player_turn; while it is not 0 the attack button starts no swing and the action button casts no magic A"
+ },
+ "0x801b25ae": {
+  "name": "swing_phase",
+  "kind": "data",
+  "evidence": "swing_start's argument: 0 the ordinary swing, 1 the combination's (times from +0x26 and +0x2e); held_item_tick's charged-swing stretch runs in phase 0 only (0x8002d824)"
+ },
+ "0x801b25b2": {
+  "name": "weapon_shots",
+  "kind": "data",
+  "evidence": "the charged swing's shots of its spell: record +5 from swing_start, one less a frame in the window (0x8002d8e8), 0 outside it and at the swing's end; player_turn casts no magic A while it is not 0"
+ },
+ "0x801b25b3": {
+  "name": "swing_charged",
+  "kind": "data",
+  "evidence": "set by swing_start when the weapon meter and the magic meter are both 5000; held_item_tick casts the weapon's spell only then"
  }
 }

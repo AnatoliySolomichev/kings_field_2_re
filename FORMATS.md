@@ -3951,20 +3951,89 @@ two groups again on every weapon put in hand while the flag is set
 *Seath's sword* `0x42`/`0x43`, *dark slayer* `0x45`/`0x44`, *triple fang*
 `0x46`/`0x47` and the two *moonlight swords* `0x48`/`0x49` and `0x4a`/`0x4b`.
 `0x3c` is unlocked with the first group and no weapon names it (weapon 10, the
-*groundal blade*, names none). `sub_8002cfe0` asks of the weapon in hand whether
+*groundal blade*, names none). `weapon_may_cast` asks of the weapon in hand whether
 its spell's byte is set. None of these records is in the menus' lists, which
-stop at `0x1e`, and none has a name. In the port the weapons' magic is not yet
-(BACKLOG.md).
+stop at `0x1e`, and none has a name. How a weapon casts them is below.
 
 *Corrected:* this paragraph said "nothing else in play sets a spell's unlocked
 byte", from a look at four of the sixteen routines that touch the table; it
 holds for the 31 the menus list, and not for the weapons' records.
 
+### The weapons' spells: the charged swing, and the combination
+
+(`tools/weapon.py`, `magic_check`.) A weapon casts its spells two ways, both
+with no MENU and no magic button: a **charged swing** casts the record's `+3`,
+and a **combination** of three buttons starts the second kind of swing
+(phase 1), whose spell is `+4`.
+
+**The charged swing.** `swing_start` (`0x8002c040`) with phase 0 sets
+`0x801b25b3` when the weapon's meter and the magic meter are both full (5000),
+and then `0x801b25b2` to the record's `+5`, the shots. Every frame of the
+swing, after the clock moves (`held_item_tick`, `0x8002d81c`): in phase 0,
+with a spell at `+3`, `0x801b25b3` set, `weapon_may_cast(0)` allowing it and the
+action button **held** (this frame's word, not its edge), a clock inside the
+record's window `+0x20..+0x22` (both ends in) spends a shot --
+`spell_begin(+3, shots == +5, shots)`, then a shot less -- and a clock
+**outside** it sets the shots to 0. So the button held before the window
+opens loses them all: the spell comes out only if the action button is pressed
+once the window is open, and then every frame it stays held casts one more,
+until the shots or the window run out. The swing's end (`.L41`) zeroes the
+shots as well. Of the eleven weapons with a spell, the window and shots are:
+
+```
+weapon                spell  shots  rate  window
+ 2 excellector         0x36   1     380   3300..3900
+ 8 ryu-ga              0x38   5     300   2000..4000
+ 9 capricorn           0x3a   3     300   2000..3800
+11 anorium sword       0x3e   3     350   1290..3100
+12 vaculacia sword     0x40   3     250   3300..3900
+13 Seath's sword       0x42   8     350   1150..3950
+14 dark slayer         0x45   1     350   3100..3800
+15 triple fang         0x46   1     350   1660..4010
+16 moonlight sword     0x48   1     600   3200..3800
+17 moonlight sword     0x4a   1     450   3000..3500
+23 morguline axe       0x4c   3     150   1000..3000
+```
+
+(items 0, 1 and 2 are all named *excellector*; the third is the one with
+spells. The clock moves by the rate each frame from 0.)
+
+**`weapon_may_cast(which)`** (`0x8002cfe0`): may the weapon in hand cast -- `+3`
+for which 0, `+4` for which 1. If the record names a spell there, its unlocked
+byte (spell_table `+0`) must be set; then the excellector (2) and weapons
+`0xd..0x11` may, and every other only with the effective stat (`0x801b2524`)
+and the least of the five working skills (`0x801b2526`) both 50 or more.
+
+**`spell_begin(spell, commit, n)`** (`0x8002d130`): short of the spell's MP
+(`+0x16`) nothing at all. Otherwise `casting_spell` is the spell's record; on
+the commit -- the swing's first shot -- the magic meter and its pause go to 0
+and the MP pays, once for all the shots; the eye's offset for the spell:
+`0x42`'s turned by `n << 9` (`cos >> 3`, `sin >> 3`, `0x258` out), `0x47`'s
+`300 n - 300` across and `0x190` out, every other `(200, 200, 400)`; and then
+`player_action(spell)` at once, not through the pending action.
+
+**The combination.** `player_turn` (`0x8002fe1c`) writes, first thing every
+frame, the table at `gp+0x1b8` (`0x8009c3cc`): `bind_use`, `bind_attack`,
+`bind_action`, `0xffff` -- the action scheme's own three buttons, in that
+order. `0x801b258c` points into it and `0x801b25aa` is the time left for the
+next press: while it is not 0 it counts down a frame, and at 0 the pointer goes
+back to the table's start (`0x800302c4`). On a new press of any of the three
+(`0x800302d4`), with the record's `+0x24` not 0, `weapon_may_cast(1)` allowing
+it and a spell at `+4`: if the press holds the pointed button -- at the
+table's start only with both meters full -- the pointer moves on, and either
+the next is `0xffff` and the swing begins with phase 1 (`swing_start(1)`,
+whose times are `+0x26` and `+0x2e` where phase 0's are `+0x1e` and `+0x2c`),
+or `0x801b25aa` is 20, twenty frames for the next press. Any other press, or
+the weapon not allowed, sets it to 0. While it runs, the attack button starts
+no ordinary swing (`0x80030414`) and the action button casts no magic A. With
+the starting scheme that is CROSS, SQUARE, TRIANGLE.
+
 ### Casting: the buttons, cast_spell, and what keeps running
 
 (`tools/magic.py`.) **The buttons** are `player_turn`'s (`0x8002fe1c`): the
 action button's edge casts magic A (`0x801b25ab`) unless the weapon's own
-magic is firing (`0x801b25b2`) or `0x801b25aa` is set; `bind_map`'s edge
+magic is firing (`0x801b25b2`) or a combination is under way (`0x801b25aa`,
+above); `bind_map`'s edge
 casts the button's spell (`0x801b25ac`), or uses its thing (`0x801b25ad`), or
 announces `0xa` when there is none left.
 

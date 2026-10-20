@@ -455,7 +455,7 @@ func _take_recalc(r: Dictionary) -> void:
 # equip_weapon (0x8002bdc0), from the equipment screen: the weapon in the
 # slot, its meter emptied and the swing's pause 0xa, its clock -1, and the
 # stats again. The model it installs held.gd finds by the id.
-# @orig game:0x8002bdc0 equip_weapon  status:partial -- the slot, the meter, the pause, the clock and the stats; not the sound it plays, or the spells two story flags (0x801ba9af, 0x801ba9b5) unlock with it
+# @orig game:0x8002bdc0 equip_weapon  status:partial -- the slot, the meter, the pause, the clock, the swords' spells story flags 39 and 45 unlock, and the stats; not the sound it plays
 func equip_weapon(id: int) -> void:
 	weapon_id = id
 	wstate["pause"] = 0xA
@@ -463,6 +463,16 @@ func equip_weapon(id: int) -> void:
 	wstate["strength"] = 0
 	wstate["clock"] = -1
 	weapon_meter = 0
+	# 0x8002be9c: with story flag 39 the swords' spells of the first group,
+	# with flag 45 the second's, unlocked (levels 6's and 8's lessons)
+	var sp: Array = character.get("spells", [])
+	if sp.size() >= 0x4D and KFTalk.flags.size() > 45:
+		if int(KFTalk.flags[39]) != 0:
+			for k in [0x38, 0x3A, 0x3C, 0x3E, 0x40, 0x4C]:
+				sp[k] = 1
+		if int(KFTalk.flags[45]) != 0:
+			for k in [0x36, 0x37, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B]:
+				sp[k] = 1
 	recalc_stats()
 	KFInfo.note("player: weapon %d in hand" % id)
 
@@ -1214,6 +1224,35 @@ func _attack(action: int) -> void:
 	cast_off = [int(st["off_x"]), int(st["off_y"]), int(st["off_z"])]
 
 
+# spell_begin (spell, commit, n): with the MP for its cost, the spell is the
+# one cast; on the commit -- a weapon's first shot -- the magic meter and its
+# pause go to 0 and the MP pays; the eye's offset for the spell (0x42's turned
+# by n << 9, 0x47's 300 n - 300 across, every other 200, 200, 400) and
+# player_action at once.
+# @orig game:0x8002d130 spell_begin  status:verified -- tools/weapon.py spell_begin, 200 of 200 as the game's own, player_action stood in for (magic_check); not the sound 0x36's commit plays
+func spell_begin(spell: int, commit: bool, n: int) -> void:
+	var rec: PackedByteArray = _spell_records().get(spell, PackedByteArray())
+	if rec.size() < 24:
+		return
+	var cost := int(rec[0x16]) | (int(rec[0x17]) << 8)
+	if mp < cost:
+		return
+	casting = spell
+	if commit:
+		magic_meter = 0
+		magic_pause = 0
+		mp = (mp - cost) & 0xFFFF
+	if spell == 0x42:
+		var a := (n << 9) & 0xFFFFFFFF
+		cast_off = [coll._s16(coll.game_cos(a) >> 3), coll._s16(coll.game_sin(a) >> 3), 0x258]
+	elif spell == 0x47:
+		cast_off = [0, coll._s16(300 * n - 300), 0x190]
+	else:
+		cast_off = [0xC8, 0xC8, 0x190]
+	KFInfo.note("player: the weapon's spell 0x%x%s" % [spell, ", the MP paid" if commit else ""])
+	_attack(spell)
+
+
 # @port helper -- spell_table's records, as the effects hold them (fxrecords.json)
 func _spell_records() -> Dictionary:
 	var fx := get_node_or_null("../Effects")
@@ -1223,15 +1262,16 @@ func _spell_records() -> Dictionary:
 
 
 # player_turn's buttons (0x8002fe1c): the action button's edge casts magic A
-# unless the weapon's own magic is firing (0x801b25b2) or 0x801b25aa is set,
-# neither of which the port has yet; the square button's (bind_map) the
+# unless the weapon's own magic is firing (0x801b25b2, its shots left) or a
+# combination is under way (0x801b25aa), which the port has not; the square
+# button's (bind_map) the
 # button's spell, or uses its thing (0x8002ff28). Then the pending action.
 # @orig game:0x8002fe1c player_turn  status:partial -- the casting buttons and the pending action; the button's thing is use_item's, not here
 func _cast_buttons() -> void:
 	var st := _magic_state()
 	var calls := []
 	var recs := _spell_records()
-	if KFPad.hit(KFPad.ACTION):
+	if KFPad.hit(KFPad.ACTION) and int(wstate.get("shots", 0)) == 0:
 		cast_spell(st, spell_a, recs, calls)
 	if KFPad.hit(KFPad.MAP) and spell_b != 0xFF:
 		cast_spell(st, spell_b, recs, calls)
@@ -1476,7 +1516,7 @@ func _frame(dir: Vector3) -> void:
 	# emulator, the swing is the game's (ghost.gd)
 	if rest and attack_latch and int(wstate["pause"]) == 0 and weapon_id < KFWeapon.records.size() \
 			and not KFGame.follow:
-		KFWeapon.start(wstate, KFWeapon.records[weapon_id])
+		KFWeapon.start(wstate, KFWeapon.records[weapon_id], magic_meter)
 	attack_latch = false
 	var cap := SPEED_MAX_RUN if Input.is_key_pressed(KEY_SHIFT) else speed_cap
 	# The controller's own order, off its call list: player_turn (the button
@@ -1670,7 +1710,10 @@ func _weapon() -> void:
 	if int(wstate["clock"]) == -1:
 		KFWeapon.refill(wstate, rec, stat, KFPad.held(KFPad.ATTACK))
 	else:
-		var ev := KFWeapon.swing(wstate, rec)
+		var may := KFWeapon.may_cast(weapon_id, rec, 0, character.get("spells", []), stat, working)
+		var ev := KFWeapon.swing(wstate, rec, KFPad.held(KFPad.ACTION), may)
+		if not (ev["shot"] as Array).is_empty():
+			spell_begin(int(ev["shot"][0]), bool(ev["shot"][1]), int(ev["shot"][2]))
 		if int(ev["hit"]) >= 0:
 			_blow(rec, int(ev["hit"]), bool(ev["push"]))
 	weapon_meter = int(wstate["meter"])

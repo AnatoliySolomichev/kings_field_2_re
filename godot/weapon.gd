@@ -82,30 +82,78 @@ static func refill(w: Dictionary, rec: PackedByteArray, stat: int, held: bool) -
 
 
 # 0x8002c040 with phase 0: the clock at 0, the times off the record, the meter
-# kept as the strength and emptied.
-# @orig game:0x8002c040 swing_start  status:transcribed -- phase 0; the special phase 1 is not here
-static func start(w: Dictionary, rec: PackedByteArray) -> bool:
+# kept as the strength and emptied; begun on both meters full (0x801b25b3),
+# the swing carries the record's +5 shots of its spell (0x801b25b2).
+# @orig game:0x8002c040 swing_start  status:partial -- verified for both phases: tools/weapon.py start, 200 of 200 as the game's own (magic_check); the port starts phase 0 only, as player_turn's combination (0x800302c4..0x800303f8) is not here
+static func start(w: Dictionary, rec: PackedByteArray, magic := FULL) -> bool:
 	if int(w["clock"]) != -1:
 		return false
 	w["clock"] = 0
 	w["hit"] = u16(rec, 0x1E)
 	w["sound"] = u16(rec, 0x2C)
 	w["strength"] = int(w["meter"])
+	w["charged"] = int(w["meter"]) == FULL and magic == FULL
+	if bool(w["charged"]):
+		w["shots"] = int(rec[5])
 	w["meter"] = 0
 	return true
 
 
+# weapon_may_cast(which): may the weapon in hand cast its spell -- +3 for which
+# 0, the swing's, +4 for which 1. The spell, if the record names one, must be
+# unlocked; then excellector (2) and weapons 0xd..0x11 may, and every other
+# only with the effective stat and the least of the five working skills
+# both 50 or more.
+# @orig game:0x8002cfe0 weapon_may_cast  status:verified -- tools/weapon.py may_cast, 200 of 200 as the game's own (magic_check)
+static func may_cast(weapon: int, rec: PackedByteArray, which: int, unlocked: Array, stat: int,
+		skills: Array) -> int:
+	if weapon != 0xFF:
+		var sp := int(rec[3 + which])
+		if sp != 0xFF and (sp >= unlocked.size() or int(unlocked[sp]) == 0):
+			return 0
+	if weapon == 2 or (weapon >= 0xD and weapon < 0x12):
+		return 1
+	var least := 0x3E7
+	for v in skills:
+		if int(v) < least:
+			least = int(v)
+	return 1 if stat >= 0x32 and least >= 0x32 else 0
+
+
+# held_item_tick's phase-0 stretch: after the clock moves, with the record's
+# spell +3, the swing begun on both meters full, the weapon allowed and
+# ACTION held, a frame inside the window +0x20..+0x22 spends a shot and a
+# frame outside it loses them all. [spell, commit, n] for the shot, or [].
+# @orig game:0x8002d81c held_item_tick+0x57c  status:verified -- tools/weapon.py magic_window, 200 of 200 frames of the game's own held_item_tick (magic_check)
+static func magic_window(w: Dictionary, rec: PackedByteArray, action_held: bool, may: int) -> Array:
+	if int(w.get("phase", 0)) != 0 or int(rec[3]) == 0xFF or not bool(w.get("charged", false)) \
+			or may == 0 or not action_held:
+		return []
+	var c := int(w["clock"])
+	if c < u16(rec, 0x20) or u16(rec, 0x22) < c:
+		w["shots"] = 0
+		return []
+	var shots := int(w.get("shots", 0))
+	if shots == 0:
+		return []
+	w["shots"] = (shots - 1) & 0xFF
+	return [int(rec[3]), shots == int(rec[5]), shots]
+
+
 # One frame of a phase-0 swing (held_item_tick 0x8002d7bc). Returns
-# {sound: bool, hit: strength or -1, push: whether the blow pushes}.
+# {sound: bool, hit: strength or -1, push: whether the blow pushes, shot:
+# the weapon's spell cast, [spell, commit, n] or []}; at the end the clock -1
+# and the shots gone (.L41).
 # @orig game:0x8002d7bc held_item_tick+0x51c  status:transcribed -- the melee swing, phase 0; not the bows, the spells or phase 1
-static func swing(w: Dictionary, rec: PackedByteArray) -> Dictionary:
-	var ev := {"sound": false, "hit": -1, "push": false}
+static func swing(w: Dictionary, rec: PackedByteArray, action_held := false, may := 0) -> Dictionary:
+	var ev := {"sound": false, "hit": -1, "push": false, "shot": []}
 	if int(w["clock"]) == -1:
 		return ev
 	var rate := u16(rec, 0x1C)
 	var end := u16(rec, 0x1E)
 	var last := u16(rec, 0x2C)
 	w["clock"] = s16(int(w["clock"]) + rate)
+	ev["shot"] = magic_window(w, rec, action_held, may)
 	var c: int = w["clock"]
 	var t: int = w["sound"]
 	if t <= c and c < t + rate:
@@ -123,6 +171,7 @@ static func swing(w: Dictionary, rec: PackedByteArray) -> Dictionary:
 			ev["hit"] = int(w["strength"]) >> 2
 	if int(w["clock"]) >= 0x1000:
 		w["clock"] = -1
+		w["shots"] = 0
 	return ev
 
 

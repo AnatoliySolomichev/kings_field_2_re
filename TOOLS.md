@@ -594,7 +594,12 @@ python3 tools/weapon.py --log       the bp25 recording, frame by frame
 `actor_take_hit` makes (`((sum * strength / 5000) + 0x80) >> 4`), the flinch,
 the death and the push, and the USE button's drain. Checked: **69 of 69**
 awake creatures carry their kind's HP; against `emu/bp25.lua` **817 of 817**
-weapon frames and **11 of 11** blows (`--log` for the detail).
+weapon frames and **11 of 11** blows (`--log` for the detail). The weapons'
+own spells (`magic_check`, in the check) run the game's own code over `a1`:
+`swing_start` of both phases, `weapon_may_cast`, `spell_begin` and
+`held_item_tick`'s charged-swing window, **200 of 200** each, on random
+meters, weapons, unlocked bytes, stats, skills, MP, clocks, shots and buttons;
+a window one frame off gives 194 of 200.
 
 **`player.py`** — the player's stat block, from a snapshot or from the emulator.
 

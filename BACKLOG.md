@@ -853,7 +853,11 @@ each one is also in its function's marker, as `partial` and what differs:
   0x5a, and its lead's tile test), orladin (its bursts, 0x58, and rays,
   0x5b), tornado, fire wall, fire storm (homing: `effect_home`,
   `effect_steer`) and flame (its head's vertex, its fire balls, its two
-  bursts), with `effect_strike`'s creature half (`0x8004ceac`). Not yet:
+  bursts), with `effect_strike`'s creature half (`0x8004ceac`); and the
+  weapons' charged swing -- the window, the shots, `weapon_may_cast` and
+  `spell_begin`, held to the game's own (`tools/weapon.py`, `magic_check`),
+  and the story flags 39 and 45 unlocking their spells in `equip_weapon`.
+  Not yet:
   the other attacking kinds' effects (lightning's 0x71 -- long, it follows
   the ground with collide_surface -- flash, freeze and thedek), each of
   which spends its MP and spawns
@@ -864,10 +868,13 @@ each one is also in its function's marker, as `partial` and what differs:
   `actor_take_hit`, a part passing its hit to its actor and a follower's
   push handed to its leader (the healing and protecting six are in), the
   drawing of everything with `+8 & 0xc` set -- the protecting marks and the
-  sparkles, in front of the eye -- the weapons' magic (`0x36`..`0x4c`, `spell_begin`,
-  `held_item_tick`'s `0x801b25b2`, `sub_8002cfe0`; which weapon has which and
-  what unlocks them is read, FORMATS.md "The unlocked byte has other
-  writers"), and the button's thing (`use_item` from
+  sparkles, in front of the eye -- of the weapons' magic, the combination
+  and the swing it starts (`player_turn` `0x800302c4..0x800303f8`, phase 1 of
+  `held_item_tick`, the spell at the record's `+4`; FORMATS.md "The weapons'
+  spells") and the effects of the spells' own kinds (`effect_spawn`'s arms
+  for `0x36..0x4c`, `0x7b` and `0x7c`: the charged swing casts, takes its MP
+  and empties the meter, and the effect is "not in the port"), and the
+  button's thing (`use_item` from
   `0x8002ff28`). The equipment screen's MAGIC and BUTTON lines are in
   (light goes on the button: magic A lists the attacking spells alone); not
   their guide page or the spells' sound banks.
