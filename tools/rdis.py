@@ -409,6 +409,15 @@ class Walk:
                 if merged != old:
                     state[s] = merged
                     work.append(s)
+        # What those passes recorded came partly from a state that had not
+        # settled: the first time round a loop its registers still hold what
+        # they held on the way in, so a load through a pointer the loop
+        # advances was taken for a load from one address -- CD_cw's byte copy
+        # read "[0x800a4224]" eight times over. The references and the call
+        # arguments are taken again, once a block, from the settled state.
+        fn.refs, fn.argsat = [], {}
+        for b in fn.blocks:
+            self._run_block(fn, b, dict(state.get(b) or {}))
         self._dedupe(fn)
 
     def _delay_value(self, di, regs):

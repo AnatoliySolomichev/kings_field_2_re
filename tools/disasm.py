@@ -20,13 +20,16 @@ finding who touches the player position means pairing those two.
 """
 import ctypes
 import glob
+import os
 import struct
 import sys
 
 CS_ARCH_MIPS = 2
 CS_MODE_MIPS32 = 1 << 2
-LIB = "emu/squashfs-root/usr/lib/libcapstone.so.4"
-EXE = "extract/GAME.EXE"
+# From the repository, not the working directory (see overlay.py's FDAT).
+ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+LIB = os.path.join(ROOT, "emu", "squashfs-root", "usr", "lib", "libcapstone.so.4")
+EXE = os.path.join(ROOT, "extract", "GAME.EXE")
 HDR = 0x800
 
 

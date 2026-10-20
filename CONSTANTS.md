@@ -6,7 +6,7 @@ the evidence live in `data/constants.json`, and everything else here is
 counted out of the code.
 
 556 distinct numbers over 12253 sites, and
-296 distinct displacements off a register over 15234 sites.
+304 distinct displacements off a register over 16360 sites.
 
 A number's *role* is read off the instruction and its neighbours:
 
@@ -64,7 +64,7 @@ In `game:object_interpreter`, `open:sub_80029504`, `game:object_give`, `game:sub
 The grid is 80 by 80 and grid_mark bounds both axes by it.
 
 32 sites: 22 loaded, 8 bound, 1 compared with, 1 argument.
-In `game:effect_spawn`, `game:sub_80024f88`, `game:sub_8001b88c`, `game:apply_damage`, `game:held_item_tick`, `game:player_vertical`, `game:grid_mark`, `game:sub_800345f4`, `game:draw_terrain`, `game:stamp_rect`, `open:open_main`, `open:title_menu` and 7 more.
+In `game:effect_spawn`, `game:ui_guide`, `game:sub_8001b88c`, `game:apply_damage`, `game:held_item_tick`, `game:player_vertical`, `game:grid_mark`, `game:sub_800345f4`, `game:draw_terrain`, `game:stamp_rect`, `open:open_main`, `open:title_menu` and 7 more.
 
 `python3 tools/consts.py 0x50` for every site.
 
@@ -94,7 +94,7 @@ In `open:sub_80028f70`, `open:sub_8002607c`, `game:sound_play_3d`, `game:str_pla
 Inside 0x80 of the surface the player is *placed* on it rather than eased towards it, and 0x80 is also the largest single step towards it. tools/movement.py reproduces 48 of 48 of the game's height stores with it.
 
 277 sites: 102 loaded, 45 bound, 41 mask, 32 divisor, 28 multiplier, 26 argument, 3 compared with.
-In `game:effect_spawn`, `game:object_interpreter`, `game:effect_tick`, `game:actor_tick`, `game:player_recalc_stats`, `game:sub_8001ec84`, `game:load_object_placement`, `game:sound_play_3d`, `game:tile_collision`, `game:object_interact`, `open:sub_8002607c`, `game:apply_control_scheme` and 104 more.
+In `game:effect_spawn`, `game:object_interpreter`, `game:effect_tick`, `game:actor_tick`, `game:player_recalc_stats`, `game:menu_sound`, `game:load_object_placement`, `game:sound_play_3d`, `game:tile_collision`, `game:object_interact`, `open:sub_8002607c`, `game:apply_control_scheme` and 104 more.
 
 `python3 tools/consts.py 0x80` for every site.
 
@@ -114,7 +114,7 @@ In `game:effect_tick`, `game:actor_take_hit`, `game:actor_attack_player`, `game:
 199 creature slots: the teardown at level load passes over exactly that many entries of the 0x88 table.
 
 9 sites: 9 loaded.
-In `game:sub_800246bc`, `game:world_shift`, `game:level_load`, `game:render_walk`, `game:sub_80046cb0`, `game:actors_retire_marked`, `game:sub_8004d3c4`, `game:actor_table_build`.
+In `game:ui_display_values`, `game:world_shift`, `game:level_load`, `game:render_walk`, `game:sub_80046cb0`, `game:actors_retire_marked`, `game:sub_8004d3c4`, `game:actor_table_build`.
 
 `python3 tools/consts.py 0xc7` for every site.
 
@@ -278,44 +278,44 @@ routines is the object record's stride showing up as a field.
 
 | offset | loads | stores | routines |
 | --- | --- | --- | --- |
-| `+0x0` | 2090 | 1232 | 523 |
-| `+0x4` | 807 | 346 | 288 |
-| `+0x8` | 394 | 283 | 212 |
-| `+0xc` | 326 | 234 | 152 |
-| `+0x10` | 284 | 222 | 143 |
-| `+0x2` | 312 | 189 | 160 |
-| `+0x6` | 279 | 155 | 139 |
+| `+0x0` | 2375 | 1419 | 566 |
+| `+0x4` | 881 | 388 | 306 |
+| `+0x8` | 441 | 303 | 222 |
+| `+0xc` | 366 | 250 | 159 |
+| `+0x2` | 330 | 194 | 170 |
+| `+0x10` | 291 | 223 | 146 |
+| `+0x6` | 288 | 158 | 145 |
+| `+0x14` | 213 | 124 | 105 |
 | `+0x18` | 206 | 127 | 115 |
-| `+0x14` | 207 | 124 | 104 |
-| `+0xe` | 118 | 171 | 91 |
-| `+0x3` | 148 | 138 | 85 |
+| `+0x3` | 176 | 147 | 90 |
+| `+0xe` | 123 | 171 | 94 |
 | `+0x1c` | 178 | 105 | 88 |
-| `+0x30` | 140 | 100 | 45 |
-| `+0x12` | 144 | 85 | 79 |
-| `+0x38` | 139 | 81 | 41 |
-| `+0x7` | 99 | 105 | 69 |
-| `+0x2c` | 107 | 86 | 63 |
-| `+0x34` | 118 | 74 | 45 |
-| `+0x28` | 80 | 102 | 47 |
-| `+0x20` | 88 | 86 | 68 |
-| `+0x16` | 92 | 79 | 62 |
+| `+0x30` | 143 | 100 | 46 |
+| `+0x12` | 148 | 85 | 81 |
+| `+0x7` | 118 | 112 | 73 |
+| `+0x38` | 141 | 81 | 42 |
+| `+0x2c` | 109 | 86 | 65 |
+| `+0x34` | 120 | 74 | 46 |
+| `+0x28` | 82 | 102 | 48 |
+| `+0x20` | 94 | 86 | 71 |
+| `+0x16` | 94 | 79 | 62 |
+| `+0xa` | 87 | 78 | 82 |
 | `+0x44` | 81 | 83 | 31 |
-| `+0xa` | 80 | 76 | 74 |
-| `+0x32` | 79 | 67 | 16 |
-| `+0xf` | 70 | 74 | 34 |
-| `+0x1` | 100 | 37 | 61 |
+| `+0xf` | 83 | 79 | 35 |
+| `+0x1` | 109 | 39 | 68 |
+| `+0x32` | 80 | 67 | 16 |
 | `+0xa8` | 127 | 4 | 9 |
 | `+0x3c` | 95 | 31 | 40 |
-| `+0x1e` | 102 | 20 | 34 |
+| `+0x1e` | 104 | 22 | 34 |
 | `+0x3a` | 89 | 29 | 20 |
 | `+0x160` | 112 | 1 | 17 |
-| `+0xd` | 42 | 64 | 34 |
+| `+0xd` | 45 | 64 | 37 |
+| `+0xb` | 41 | 63 | 38 |
 | `+0x24` | 36 | 68 | 49 |
+| `+0x5` | 34 | 66 | 62 |
 | `+0x70` | 31 | 65 | 11 |
 | `+0x48` | 47 | 45 | 28 |
-| `+0x5` | 25 | 63 | 56 |
 | `+0x90` | 46 | 40 | 16 |
+| `+0x9` | 34 | 50 | 23 |
 | `+0x26` | 49 | 35 | 24 |
-| `+0xb` | 25 | 56 | 36 |
-| `+0x9` | 31 | 50 | 21 |
 

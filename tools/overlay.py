@@ -51,15 +51,20 @@ The header `u32` is the **level number plus five** for every level that has an
 overlay. What it is an index into is not settled.
 """
 import collections
+import os
 import struct
 import sys
 
-sys.path.insert(0, "tools")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import disasm                                                        # noqa: E402
 import syms                                                          # noqa: E402
 from tarc import TArc                                                # noqa: E402
 
-FDAT = "extract/CD/COM/FDAT.T"
+# From the repository, not the working directory: run from anywhere else,
+# rdis.overlay_seeds() found no overlays and the walk of GAME.EXE lost the
+# two routines only the levels' own code calls.
+ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+FDAT = os.path.join(ROOT, "extract", "CD", "COM", "FDAT.T")
 BASE = 0x801E8308
 PRIMITIVES = {
     0x8005D7BC: "has_item",

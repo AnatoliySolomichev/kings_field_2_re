@@ -292,7 +292,7 @@ reading a row would be reading whatever follows the table.
   0x8004a2e0  opcode 0xeb   -- 16 objects in the game
       182 instructions in 35 blocks
       calls player_in_rect, sub_80046c00, actors_retire_marked, sub_80019538, level_load, object_trigger, res_wait
-      reads level_change_busy, reads current_level_block, writes player_state, points at player_pitch, points at view_angles, reads player_pitch
+      reads level_change_busy, reads current_level_block, writes spawn_anywhere, writes player_state, points at player_pitch, points at view_angles
 ```
 
 ## And the creatures, which are the same machine again
@@ -330,7 +330,7 @@ and it is the same one twice.
   0x800505a4  opcode 0x03
       371 instructions in 87 blocks
       calls grid_mark, vec_rotate, actor_vertex_point, collide_query, actor_switch_op, actor_move_vertical, actor_brake, actor_retire and 9 more
-      reads actor_leader, reads level_hooks
+      reads level_hooks, reads actor_leader
 
   0x800514f8  opcode 0x04
       190 instructions in 34 blocks
@@ -340,17 +340,17 @@ and it is the same one twice.
   0x80050b20  opcode 0x05
       275 instructions in 62 blocks
       calls grid_mark, vec_rotate, actor_vertex_point, collide_query, actor_switch_op, actor_move_vertical, actor_finish, actor_clock and 6 more
-      reads actor_leader, reads player_pos
+      reads player_pos, reads actor_leader
 
   0x8005205c  opcode 0x06
       313 instructions in 59 blocks
       calls grid_mark, vec_rotate, actor_vertex_point, collide_query, actor_switch_op, actor_move_vertical, actor_walk_to, actor_start_anim and 6 more
-      reads actor_leader, points at collision_layers, reads collision_layers, writes collision_layers, reads player_pos
+      reads player_pos, points at collision_layers, reads collision_layers, writes collision_layers, reads actor_leader
 
   0x80050e70  opcode 0x09
       273 instructions in 56 blocks
       calls grid_mark, vec_rotate, actor_vertex_point, collide_query, actor_switch_op, actor_move_vertical, actor_brake, actor_start_anim and 7 more
-      reads actor_leader, reads player_pos, reads player_y
+      reads player_pos, reads player_y, reads actor_leader
 
   0x80051054  opcode 0x0a
       287 instructions in 53 blocks
@@ -360,7 +360,7 @@ and it is the same one twice.
   0x800517f8  opcode 0x0b
       305 instructions in 59 blocks
       calls grid_mark, vec_rotate, actor_vertex_point, collide_query, actor_switch_op, actor_move_vertical, sub_8004c184, sub_8004e31c and 10 more
-      reads actor_leader, reads player_pos, reads player_y
+      reads player_pos, reads player_y, reads actor_leader
 
   0x80050978  opcodes 0x0c, 0x10
       261 instructions in 53 blocks
@@ -370,7 +370,7 @@ and it is the same one twice.
   0x80050cf4  opcodes 0x0d, 0x11
       245 instructions in 48 blocks
       calls grid_mark, vec_rotate, actor_vertex_point, collide_query, actor_switch_op, actor_move_vertical, sub_8004db08, sub_8004c184 and 4 more
-      reads actor_leader, reads player_pos, reads player_y
+      reads player_pos, reads player_y, reads actor_leader
 
   0x80051b78  opcode 0x0e
       227 instructions in 49 blocks
@@ -385,12 +385,12 @@ and it is the same one twice.
   0x80051a74  opcode 0x12
       220 instructions in 36 blocks
       calls grid_mark, vec_rotate, actor_vertex_point, collide_query, actor_switch_op, actor_move_vertical, actor_finish, sub_8004c184 and 6 more
-      reads actor_leader, reads player_pos, reads player_y
+      reads player_pos, reads player_y, reads actor_leader
 
   0x80051d1c  opcode 0x13
       205 instructions in 43 blocks
       calls grid_mark, vec_rotate, actor_vertex_point, collide_query, actor_switch_op, actor_move_vertical, actor_brake, actor_finish and 2 more
-      reads actor_leader, reads swing_clock
+      reads swing_clock, reads actor_leader
 
   0x80051dd8  opcode 0x14
       192 instructions in 35 blocks
@@ -400,7 +400,7 @@ and it is the same one twice.
   0x80051ea8  opcode 0x15
       278 instructions in 51 blocks
       calls grid_mark, vec_rotate, actor_vertex_point, collide_query, actor_switch_op, actor_move_vertical, sub_8004db08, actor_start_anim and 5 more
-      reads actor_leader, reads player_pos, points at collision_layers, reads collision_layers, writes collision_layers
+      reads player_pos, points at collision_layers, reads collision_layers, writes collision_layers, reads actor_leader
 
   0x80051e80  opcode 0x16
       173 instructions in 33 blocks
@@ -415,7 +415,7 @@ and it is the same one twice.
   0x800516d4  opcode 0x18
       228 instructions in 40 blocks
       calls grid_mark, vec_rotate, actor_vertex_point, collide_query, actor_switch_op, actor_move_vertical, actor_finish, actor_start_anim and 5 more
-      reads actor_leader, reads player_pos
+      reads player_pos, reads actor_leader
 
   0x800523f0  opcode 0x19
       286 instructions in 53 blocks
@@ -425,7 +425,7 @@ and it is the same one twice.
   0x800522f8  opcode 0x1a
       220 instructions in 38 blocks
       calls grid_mark, vec_rotate, actor_vertex_point, collide_query, actor_switch_op, actor_move_vertical, actor_finish, actor_start_anim
-      reads actor_leader, points at object_table
+      points at object_table, reads actor_leader
 
   0x80052620  opcode 0x1b
       258 instructions in 54 blocks
@@ -445,7 +445,7 @@ and it is the same one twice.
   0x80052934  opcode 0x1e
       240 instructions in 37 blocks
       calls grid_mark, vec_rotate, actor_vertex_point, collide_query, actor_switch_op, actor_move_vertical, actor_start_anim, sub_8004e31c and 2 more
-      reads actor_leader, reads collision_layers
+      reads collision_layers, reads actor_leader
 
   0x80052aac  opcode 0x1f
       225 instructions in 47 blocks
@@ -455,7 +455,7 @@ and it is the same one twice.
   0x80051274  opcode 0x84
       311 instructions in 49 blocks
       calls grid_mark, vec_rotate, actor_vertex_point, collide_query, actor_switch_op, actor_move_vertical, actor_start_anim, actor_clock and 4 more
-      reads actor_leader, points at player_pos, reads player_pos, reads player_y
+      points at player_pos, reads player_pos, reads player_y, reads actor_leader
 
   0x80052be8  opcode 0xf0
       150 instructions in 25 blocks
