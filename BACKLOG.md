@@ -555,8 +555,8 @@ every frame (`0x80031180`) and then changes it four ways only: **the run** --
 USE held two frames, up to 336 (FORMATS "The run: USE held"; 150 129 of
 150 129 logged frames, in the port as `frame_caps`) -- the slowing
 (`turn_slow_timer`), the paralysis (`0x801b2568`) and a halving while
-`0x801b25b4` is set, the one of the four the port leaves out: only
-`equip_weapon` is seen clearing it and what sets it is not read. A faster walk
+`0x801b25b4` is set -- Seath's sword's guard, set by `held_item_tick`
+(FORMATS.md "The weapons' spells"), in the port now too. A faster walk
 "as the character levels" would be the run, then.
 
 ## 5a'. The menu -- begun
@@ -812,10 +812,11 @@ each one is also in its function's marker, as `partial` and what differs:
   off a save, though nothing in the port starts or counts them down yet --
   the spells that do are not read. The routine itself is whole (`equip.gd
   recalc`, 299 of 299 values).
-* **What a hit leaves is whole; two of its inputs are not.** `0x801b25b4`,
-  which lets no hit through and halves both of the walk's caps, is cleared by
-  `equip_weapon` and set by something not read yet (the summary had it as a
-  weapon's guard; unconfirmed). `0x801b256c`, the other way out, is the
+* **What a hit leaves is whole; one of its inputs is not.** `0x801b25b4`,
+  which lets no hit through and halves both of the walk's caps, is Seath's
+  sword's guard: `held_item_tick` sets it when the combination's swing meets
+  its blow with the action button held, clears it on every blow, and
+  `equip_weapon` clears it (in the port, `guard`). `0x801b256c`, the other way out, is the
   refusal spell's timer. The lighting's background colour moves now (the
   vertex colour's alpha carries the class's; FORMATS, "What a hit leaves
   behind") -- untested by eye: the port's shaders compile only in a window.
@@ -855,8 +856,11 @@ each one is also in its function's marker, as `partial` and what differs:
   `effect_steer`) and flame (its head's vertex, its fire balls, its two
   bursts), with `effect_strike`'s creature half (`0x8004ceac`); and the
   weapons' charged swing -- the window, the shots, `weapon_may_cast` and
-  `spell_begin`, held to the game's own (`tools/weapon.py`, `magic_check`),
-  and the story flags 39 and 45 unlocking their spells in `equip_weapon`.
+  `spell_begin` -- the combination and the second swing it starts, with
+  Seath's sword's guard and the flame rod's fire ball, all held to the
+  game's own (`tools/weapon.py`, `magic_check`), and the story flags 39 and
+  45 unlocking their spells in `equip_weapon`. The bows' swing (weapons
+  `0x1b`, `0x1c`) is still not read.
   Not yet:
   the other attacking kinds' effects (lightning's 0x71 -- long, it follows
   the ground with collide_surface -- flash, freeze and thedek), each of
@@ -868,13 +872,10 @@ each one is also in its function's marker, as `partial` and what differs:
   `actor_take_hit`, a part passing its hit to its actor and a follower's
   push handed to its leader (the healing and protecting six are in), the
   drawing of everything with `+8 & 0xc` set -- the protecting marks and the
-  sparkles, in front of the eye -- of the weapons' magic, the combination
-  and the swing it starts (`player_turn` `0x800302c4..0x800303f8`, phase 1 of
-  `held_item_tick`, the spell at the record's `+4`; FORMATS.md "The weapons'
-  spells") and the effects of the spells' own kinds (`effect_spawn`'s arms
-  for `0x36..0x4c`, `0x7b` and `0x7c`: the charged swing casts, takes its MP
-  and empties the meter, and the effect is "not in the port"), and the
-  button's thing (`use_item` from
+  sparkles, in front of the eye -- of the weapons' magic, the effects of the
+  spells' own kinds (`effect_spawn`'s arms for `0x36..0x4c`, `0x7b` and
+  `0x7c`: both swings cast, take their MP and empty the meter, and the
+  effect is "not in the port"), and the button's thing (`use_item` from
   `0x8002ff28`). The equipment screen's MAGIC and BUTTON lines are in
   (light goes on the button: magic A lists the attacking spells alone); not
   their guide page or the spells' sound banks.

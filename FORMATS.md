@@ -4026,7 +4026,53 @@ whose times are `+0x26` and `+0x2e` where phase 0's are `+0x1e` and `+0x2c`),
 or `0x801b25aa` is 20, twenty frames for the next press. Any other press, or
 the weapon not allowed, sets it to 0. While it runs, the attack button starts
 no ordinary swing (`0x80030414`) and the action button casts no magic A. With
-the starting scheme that is CROSS, SQUARE, TRIANGLE.
+the starting scheme that is CROSS, SQUARE, TRIANGLE. Once the pointer stands on
+the `0xffff`, any of the three moves it past the table, onto a half that reads 0
+(nothing writes `gp+0x1c0`), and the next press sets the time to 0. The
+combination's swing starts with no regard to the pause after a blow; only
+`swing_start`'s own tests stop it -- a swing running, no weapon, or the
+paralysis (`0x801b2568`).
+
+**The second swing.** A frame of a swing reads its times by the phase
+(`held_item_tick` `0x8002d7e4`, `.L21`):
+
+```
+                     phase 0   phase 1
+the clock's rate     +0x1c     +0x24
+the first blow       +0x1e     +0x26    (swing_start)
+the last blow        +0x1e     +0x28
+between blows        --        +0x2a
+the first sound      +0x2c     +0x2e    (swing_start)
+the last sound       +0x2c     +0x30
+between sounds       --        +0x32
+```
+
+On a blow's frame (the clock from the blow's time to one rate past it),
+`0x801b25b4` is cleared, and in phase 1: **Seath's sword** (13) with the
+action button held sets it again and puts the clock back by the rate, so the
+blow waits, the guard up -- `player_take_hit` lets nothing through while it is
+set and `player_controller` halves both caps of the walk (`0x800313b4`);
+every other blow casts `+4`, `spell_begin(+4, clock >= the last blow,
+(clock - +0x26) / +0x2a)`, paid on the last only, not gated by
+`weapon_may_cast` (the combination was). Then the blow: the last at the full
+strength, a push, the pause 10 and the meter 0; one before it at a quarter, the
+next blow's time on by `+0x2a`. The six weapons with a second spell:
+
+```
+weapon               spell  rate  blows                       sounds
+ 2 excellector        0x37   200   1200, last 3800, every 2600  1000
+13 Seath's sword      0x43   200   1850 only                    0
+14 dark slayer        0x44   200   3900 only                    3400
+15 triple fang        0x47   200   2000, last 3000, every 500   3100
+16 moonlight sword    0x49   300   3800 only                    3100
+17 moonlight sword    0x4b   250   3500 only                    3100
+```
+
+Weapons 7..12 have the phase-1 times and no second spell, so the combination
+never starts them. **The flame rod** (`0x21`): on any of its blows with the
+magic meter full, a fire ball -- the cast offset `(-200, 200, 400)`, aimed
+as spell 0 is (`sub_8002c164`, speed `0x384`) and spawned as its kind 0 --
+with no MP and no meter spent.
 
 ### Casting: the buttons, cast_spell, and what keeps running
 

@@ -469,7 +469,8 @@ func _knock() -> bool:
 # The player's weapon, weapon.gd against tools/weapon.py: every weapon's swing
 # and the refill after it frame by frame, the probe's step, the damage to a
 # creature and the push it gets; the swords' spells, charged swings frame by
-# frame under four ways of holding ACTION, and may_cast.
+# frame under four ways of holding ACTION, and may_cast; the second swing and
+# the flame rod frame by frame, and runs of the combination's presses.
 func _weapon() -> bool:
 	if not KFWeapon.load_from():
 		print("weapon: no cases to check against")
@@ -561,6 +562,39 @@ func _weapon() -> bool:
 			bad += 1
 			if first == "":
 				first = "magic_window %s: godot %s" % [str(wn.slice(0, 7)), str(got)]
+	for sw2 in d.get("swings2", []):
+		var rec: PackedByteArray = KFWeapon.records[int(sw2[0])]
+		var w := {"clock": -1, "meter": 5000, "pause": 0}
+		KFWeapon.start(w, rec, int(sw2[2]), int(sw2[1]))
+		for fr in sw2[3]:
+			n += 1
+			var ev := KFWeapon.swing(w, rec, int(fr[0]) != 0, 0, int(sw2[0]), int(sw2[2]))
+			var shot: Array = ev["shot"]
+			var got := [int(fr[0]), int(w["clock"]), int(w["hit"]), int(w["sound"]), int(w["pause"]),
+				int(w["meter"]), int(w.get("guard", 0))]
+			got.append_array([int(shot[0]), 1 if shot[1] else 0, int(shot[2])] if not shot.is_empty() else [-1, 0, 0])
+			got.append_array([int(ev["hit"]), 1 if ev["push"] else 0, 1 if ev["fire"] else 0, 1 if ev["sound"] else 0])
+			var want := []
+			for v in fr:
+				want.append(int(v))
+			if got != want:
+				bad += 1
+				if first == "":
+					first = "weapon %d's phase %d swing: godot %s, python %s" % [int(sw2[0]), int(sw2[1]), str(got), str(want)]
+				break
+	for cb in d.get("combos", []):
+		var rec: PackedByteArray = KFWeapon.records[int(cb[0])]
+		var c := {"time": 0, "next": 0}
+		for fr in cb[1]:
+			n += 1
+			var got := KFWeapon.combo(c, rec, int(fr[0]), int(fr[1]) != 0, [0x40, 0x80, 0x10], int(fr[2]),
+				int(fr[3]) != 0, int(fr[4]))
+			if [int(c["time"]), int(c["next"]), got] != [int(fr[5]), int(fr[6]), int(fr[7])]:
+				bad += 1
+				if first == "":
+					first = "weapon %d's combination: godot %s, python %s" % [int(cb[0]),
+						str([c["time"], c["next"], got]), str(fr.slice(5))]
+				break
 	for m in d.get("mays", []):
 		n += 1
 		var wi := int(m[0])
@@ -570,9 +604,10 @@ func _weapon() -> bool:
 			bad += 1
 			if first == "":
 				first = "may_cast %s: godot %d" % [str(m.slice(0, 4)), got]
-	print("weapon: %d of %d cases match tools/weapon.py (%d swings, %d probes, %d damages, %d pushes, %d charged swings, %d windows, %d may_casts)" % [
+	print("weapon: %d of %d cases match tools/weapon.py (%d swings, %d probes, %d damages, %d pushes, %d charged swings, %d windows, %d may_casts, %d second swings, %d combinations)" % [
 		n - bad, n, d["swings"].size(), d["probes"].size(), d["damages"].size(), d["knocks"].size(),
-		d.get("magic", []).size(), d.get("windows", []).size(), d.get("mays", []).size()])
+		d.get("magic", []).size(), d.get("windows", []).size(), d.get("mays", []).size(),
+		d.get("swings2", []).size(), d.get("combos", []).size()])
 	if bad > 0:
 		print("  first difference: " + first)
 	return bad == 0

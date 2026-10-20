@@ -202,10 +202,10 @@ the equipment tables, against a RAM snapshot           3264/3264, 2112/2112, 16/
                                                        player_recalc_stats 483 of
                                                        483 values over 21 snapshots
 the conversation hooks, two readings of one table      23 of 23
-the port against the game, function by function        708 of 708 placed: 404
-                                                       reproduce the game, 304 the
-                                                       port's own; 468 markers and
-                                                       886 cited addresses, every
+the port against the game, function by function        710 of 710 placed: 405
+                                                       reproduce the game, 305 the
+                                                       port's own; 469 markers and
+                                                       897 cited addresses, every
                                                        one resolving
 the object loader, against 13 snapshots                angles 4344/4352, scale and
                                                        position 4352/4352, opcode
@@ -305,9 +305,10 @@ the knock-back, against the bp16 recording             171 of 171 frames, 7 of 7
 the creatures' HP, against 13 snapshots                69 of 69
 the player's weapon, against the bp25 recording        817 of 817 frames,
                                                        11 of 11 blows
-the weapons' own spells, against the game's own        200 of 200 of each
-swing_start, weapon_may_cast, spell_begin and
-held_item_tick's window
+the weapons' own spells, against the game's own        200 of 200 of each;
+swing_start, weapon_may_cast, spell_begin and          400 of 400 frames of
+held_item_tick's window; player_turn's combination     each
+and held_item_tick's second swing
 the creatures' fences, against the bp16 act= log       5006 of 5006 positions
 the creatures' animation, against the actor caches     11 of 11
 the level's record, against the game's own writer     84 of 84 streams, 71 718
@@ -333,7 +334,7 @@ movement 690 of 690 · steps 750 of 750 · creature steps 384 of 384
 creature runs 480 of 480 twice
 levels 40 of 40 · angles 400 of 400
 conversations 43 of 43, and 25 of 25 steps the emulator recorded
-damage 6 of 6 · knock-back 2484 of 2484 · weapon 5847 of 5847
+damage 6 of 6 · knock-back 2484 of 2484 · weapon 10165 of 10165
 fences 600 of 600 · animation 540 of 540
 equipment 16 of 16 · menus 88 of 88, 256 of 256 storage, shop, inn,
 BUTTON CONFIG, OPTION and QUIT runs, heals and panel colours, 28 of 28 control schemes as the game's

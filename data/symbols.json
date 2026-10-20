@@ -3208,6 +3208,11 @@
   "kind": "data",
   "evidence": "gp+0x1b8: player_turn writes bind_use, bind_attack, bind_action and 0xffff here first thing every frame (0x8002fe50); the combination that starts a phase-1 swing walks it through combo_next"
  },
+ "0x801b2568": {
+  "name": "paralysis_time",
+  "kind": "data",
+  "evidence": "the paralysis's frames: player_controller makes both caps 0 and halves the speeds while it runs (frame_caps), and swing_start starts no swing (0x8002c070)"
+ },
  "0x801b258c": {
   "name": "combo_next",
   "kind": "data",
@@ -3232,5 +3237,10 @@
   "name": "swing_charged",
   "kind": "data",
   "evidence": "set by swing_start when the weapon meter and the magic meter are both 5000; held_item_tick casts the weapon's spell only then"
+ },
+ "0x801b25b4": {
+  "name": "weapon_guard",
+  "kind": "data",
+  "evidence": "Seath's sword's guard: held_item_tick clears it on every blow's frame and, in the combination's swing with the action button held, sets it and holds the clock back (0x8002da6c); player_take_hit lets no hit through while it is set (0x8002ab2c), player_controller halves both walk caps (0x800313b8), equip_weapon clears it"
  }
 }

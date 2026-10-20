@@ -158,13 +158,15 @@ def refill(w, rec, stat, attack_held=False, ring=0xFF):
         w["meter"] = FULL
 
 
-def start(w, rec, magic=FULL):
-    """0x8002c040 with phase 0: the swing begins. Begun on both meters full
-    (0x801b25b3), it carries the record's +5 shots of its spell
-    (0x801b25b2)."""
+def start(w, rec, magic=FULL, phase=0):
+    """0x8002c040 (phase): the swing begins -- phase 0 the ordinary swing,
+    its hit and sound times +0x1e and +0x2c; phase 1 the combination's,
+    +0x26 and +0x2e. Begun on both meters full (0x801b25b3), it carries the
+    record's +5 shots of its spell (0x801b25b2)."""
     if w["clock"] != -1:
         return False
-    w.update(phase=0, clock=0, hit=u16(rec, 0x1E), sound=u16(rec, 0x2C),
+    w.update(phase=phase, clock=0, hit=u16(rec, 0x26 if phase else 0x1E),
+             sound=u16(rec, 0x2E if phase else 0x2C),
              strength=w["meter"], charged=(w["meter"] == FULL == magic),
              meter=0)
     if w["charged"]:
@@ -172,14 +174,31 @@ def start(w, rec, magic=FULL):
     return True
 
 
-def swing(w, rec, action_held=False, may=0):
-    """One frame of a phase-0 swing. Returns the events: ('shot', spell,
-    commit, n) when the weapon's spell is cast (magic_window), 'sound', and
-    ('hit', strength, pushes) when the blow falls this frame; at the end,
-    the clock -1 and the shots gone (.L41)."""
+# The swing's times by phase (held_item_tick 0x8002d7e4, .L21): the rate the
+# clock moves, the last blow's time, the time between blows, the last sound's
+# time and the time between sounds -- phase 0 has a single blow and sound
+FIELDS = ((0x1C, 0x1E, None, 0x2C, None), (0x24, 0x28, 0x2A, 0x30, 0x32))
+FLAME_ROD = 0x21
+SEATHS_SWORD = 0xD
+
+
+def swing(w, rec, action_held=False, may=0, weapon=-1, magic=0):
+    """One frame of a swing (held_item_tick from 0x8002d7bc). Returns the
+    events: ('shot', spell, commit, n) when the weapon's spell is cast --
+    phase 0's charged window (magic_window), or phase 1's every blow, +4,
+    paid on the last; 'sound'; 'fire' when the flame rod (0x21) strikes on
+    a full magic meter, a fire ball from (-200, 200, 400); 'guard' when
+    Seath's sword in phase 1 meets its blow with the action button held --
+    0x801b25b4 set and the clock held back, the blow waiting; and ('hit',
+    strength, pushes) when the blow falls. At the end, the clock -1 and the
+    shots gone (.L41)."""
     if w["clock"] == -1:
         return []
-    rate, end, last = u16(rec, 0x1C), u16(rec, 0x1E), u16(rec, 0x2C)
+    phase = w.get("phase", 0)
+    f = FIELDS[1 if phase else 0]
+    rate, end, last = u16(rec, f[0]), u16(rec, f[1]), u16(rec, f[3])
+    step = u16(rec, f[2]) if f[2] else 0
+    sstep = u16(rec, f[4]) if f[4] else 0
     ev = []
     w["clock"] = s16(w["clock"] + rate)
     shot = magic_window(w, rec, action_held, may)
@@ -189,17 +208,64 @@ def swing(w, rec, action_held=False, may=0):
     if w["sound"] <= c < w["sound"] + rate:
         if rec[0] != 0xFF:
             ev.append("sound")
-        w["sound"] = w["sound"] if w["sound"] < last else NEVER
+        w["sound"] = s16(w["sound"] + sstep) if w["sound"] < last else NEVER
     if w["hit"] <= c < w["hit"] + rate:
+        if weapon == FLAME_ROD and magic == FULL:
+            ev.append("fire")
+        w["guard"] = 0
+        if phase == 1:
+            if weapon == SEATHS_SWORD and action_held:
+                w["guard"] = 1
+                w["clock"] = s16(c - rate)
+                ev.append("guard")
+                return ev
+            ev.append(("shot", rec[4], c >= end, trunc(c - u16(rec, 0x26), step)))
         if c >= end:
             w["hit"], w["pause"], w["meter"] = NEVER, PAUSE, 0
             ev.append(("hit", w["strength"], True))
         else:
+            w["hit"] = s16(w["hit"] + step)
             ev.append(("hit", w["strength"] >> 2, False))
     if w["clock"] >= 0x1000:
         w["clock"] = -1
         w["shots"] = 0
     return ev
+
+
+COMBO_END = 0xFFFF
+COMBO_TIME = 20             # 0x800303d8
+
+
+def turn_combo(c, rec, press, attack_edge, binds, may, full, swing_pause):
+    """player_turn's tail (0x80030298 on), once the USE stretch has let the
+    frame through: the combination and the swing it starts. `c` holds
+    0x801b25aa as "time" and the pointer 0x801b258c as "next", an index
+    into the table player_turn writes at gp+0x1b8 -- bind_use, bind_attack,
+    bind_action, 0xffff (the halves after it read 0: nothing writes them).
+    `press` is the button word on a frame that newly presses one of the
+    three, else 0; `binds` the three; `may` weapon_may_cast(1); `full` both
+    meters 5000. 1 starts the combination's swing, 0 the ordinary one (the
+    attack button's edge, no pause, no combination under way), None
+    neither."""
+    use, attack, action = binds
+    table = [use, attack, action, COMBO_END]
+    if c["time"]:
+        c["time"] = (c["time"] - 1) & 0xFF
+    else:
+        c["next"] = 0
+    if press and u16(rec, 0x24):
+        k = c["next"]
+        if may and rec[4] != 0xFF and press & (table[k] if k < 4 else 0) \
+                and (k != 0 or full):
+            c["next"] = k + 1
+            if k + 1 < 4 and table[k + 1] == COMBO_END:
+                return 1
+            c["time"] = COMBO_TIME
+        else:
+            c["time"] = 0
+    if swing_pause or c["time"]:
+        return None
+    return 0 if attack_edge else None
 
 
 def rot_z(a):
@@ -469,6 +535,48 @@ def export(out_dir):
                 shot = magic_window(w, r, held, may)
                 windows.append(case + [w["shots"], *((shot[0], int(shot[1]), shot[2])
                                                      if shot else (-1, 0, 0))])
+    # the second swing and the flame rod, frame by frame
+    swings2 = []
+    for i in (2, 13, 14, 15, 16, 17, FLAME_ROD):
+        r = recs[i]
+        phase = 0 if i == FLAME_ROD else 1
+        for pat in range(4):
+            for mag in (FULL, FULL - 1):
+                w = {"clock": -1, "meter": FULL, "pause": 0}
+                start(w, r, mag, phase)
+                frames = []
+                for f in range(60):
+                    held = (False, True, f < 12, f % 3 == 0)[pat]
+                    ev = swing(w, r, held, 0, i, mag)
+                    shot = next((e[1:] for e in ev
+                                 if isinstance(e, tuple) and e[0] == "shot"), None)
+                    hit = next((e[1:] for e in ev
+                                if isinstance(e, tuple) and e[0] == "hit"), None)
+                    frames.append([int(held), w["clock"], w["hit"], w["sound"], w["pause"],
+                                   w["meter"], w.get("guard", 0),
+                                   *((shot[0], int(shot[1]), shot[2]) if shot else (-1, 0, 0)),
+                                   *((hit[0], int(hit[1])) if hit else (-1, 0)),
+                                   int("fire" in ev), int("sound" in ev)])
+                    if w["clock"] == -1:
+                        break
+                swings2.append([i, phase, mag, frames])
+    # the combination: runs of presses, frame by frame
+    combos = []
+    binds = (0x40, 0x80, 0x10)
+    for _ in range(200):
+        i = rng.choice((2, 13, 14, 15, 16, 17, 7, 0))
+        c = {"time": 0, "next": 0}
+        frames = []
+        for f in range(16):
+            press = rng.choice((0, 0, 0x40, 0x80, 0x10, 0xC0)) if rng.randrange(3) else \
+                (binds + (0x80,))[min(c["next"], 3)]
+            edge = bool(press & 0x80) and rng.randrange(2) == 1
+            may, full, pause = rng.randrange(5) != 0, rng.randrange(4) != 0, \
+                rng.choice((0, 0, 0, 1))
+            got = turn_combo(c, recs[i], press, edge, binds, may, full, pause)
+            frames.append([press, int(edge), int(may), int(full), pause,
+                           c["time"], c["next"], -1 if got is None else got])
+        combos.append([i, frames])
     mays = []
     for _ in range(300):
         wi = rng.choice(list(range(34)) + [0xFF])
@@ -487,7 +595,7 @@ def export(out_dir):
                    "guard": {"0": level_guard(0)},
                    "swings": swings, "probes": probes, "damages": damages,
                    "knocks": knocks, "magic": magic, "windows": windows,
-                   "mays": mays}, fh,
+                   "mays": mays, "swings2": swings2, "combos": combos}, fh,
                   separators=(",", ":"))
     return path
 
@@ -707,11 +815,159 @@ def magic_check(out=sys.stdout, n=200):
         shot = next((e[1:] for e in ev if e[0] == "shot"), None)
         m = ((shot[0], 1 if shot[1] else 0, shot[2]) if shot else None, mw["shots"])
         note("the window", g == m, f"weapon {weapon:#x} clock {clock0:#x} {w}: game {g} model {m}")
+    combo_runs(base, table, rng, note, n)
+    swing_runs(base, table, rng, note, n)
     line = ", ".join(f"{k} {a} of {b}" for k, (a, b) in tally.items())
     print(f"  the weapons' magic against the game's own code over a1: {line}", file=out)
     if first:
         print("  first difference: " + first[0], file=out)
     return all(a == b for a, b in tally.values())
+
+
+def _weapon_cpu(base, weapon):
+    import mipsrun
+    cpu = mipsrun.CPU(base)
+    cpu.wr(0x801B25AF, 1, weapon)
+    cpu.wr(0x801B2594, 4, 0x801D37A4 + 68 * weapon)
+    return cpu
+
+
+def combo_runs(base, table, rng, note, n):
+    """player_turn, the game's own, a frame at a time on random buttons,
+    combination times and pointers, weapons, meters and unlocked spells:
+    cast_spell and swing_start stood in for, what the tail leaves --
+    0x801b25aa, the pointer, which swing begins -- against turn_combo, and
+    whether magic A was cast."""
+    mask_words = (0, 0x40, 0x80, 0x10, 0xC0, 0x50, 0x90)
+    for _ in range(n * 2):
+        weapon = rng.choice((2, 13, 14, 15, 16, 17, 7, 9, 0))
+        rec = table[weapon]
+        cpu = _weapon_cpu(base, weapon)
+        use, attack, action = (cpu.rd(0x80081876, 2), cpu.rd(0x80081870, 2),
+                               cpu.rd(0x80081874, 2))
+        now, prev = rng.choice(mask_words), rng.choice(mask_words + (0, 0))
+        time = rng.choice((0, 0, 1, 2, 20))
+        k = rng.choice((0, 0, 1, 2, 2, 3, 4))
+        if rng.randrange(2):                # the right button, newly pressed
+            now, prev = (use, attack, action, attack, 0)[k], 0
+            time = time or (1 if k else 0)
+        full = rng.randrange(3) != 0
+        wm, mm = (FULL, FULL) if full else rng.choice(((FULL, 4999), (4999, FULL), (0, FULL)))
+        pause = rng.choice((0, 0, 0, 1))
+        unlocked = rng.choice((1, 1, 0))
+        stat, skills = 0x60, [0x60] * 5
+        cpu.wr(0x801B265C, 2, now)
+        cpu.wr(0x801B265E, 2, prev)
+        cpu.wr(0x801B25AA, 1, time)
+        cpu.wr(0x801B258C, 4, 0x8009C3CC + 2 * k)
+        cpu.wr(0x801B2502, 2, wm)
+        cpu.wr(0x801B2506, 2, mm)
+        cpu.wr(0x801B24F4, 1, 5)            # the magic meter's pause: no refill
+        cpu.wr(0x801B24F3, 1, pause)
+        cpu.wr(0x801B25B2, 1, 0)
+        cpu.wr(0x801B25E9, 1, 0xFF)         # no action pending
+        cpu.wr(0x801B25D8, 1, 0xFF)
+        cpu.wr(0x801B25A4, 2, 0xFFFF)
+        if rec[4] != 0xFF:
+            cpu.wr(SPELL_TABLE + 24 * rec[4], 1, unlocked)
+        cpu.wr(0x801B2524, 2, stat)
+        for j, v in enumerate(skills):
+            cpu.wr(0x801B2526 + 2 * j, 2, v)
+        started, cast = [], []
+        cpu.hooks[0x8002C040] = lambda c: started.append(c.r[4])
+        cpu.hooks[0x8002DEEC] = lambda c: cast.append(c.r[4] & 0xFF)
+        cpu.hooks[0x8001576C] = lambda c: 0
+        cpu.call(0x8002FE1C)
+        g = (cpu.rd(0x801B25AA, 1), (cpu.rd(0x801B258C, 4) - 0x8009C3CC) // 2,
+             started[0] if started else None, len(cast))
+        c = {"time": time, "next": k}
+        mask = use | attack | action
+        cast_a = bool(now & action and not prev & action) and time == 0
+        if now & use and prev & use:
+            got = None                      # the USE stretch, and back
+        else:
+            press = now if now & mask and not prev & mask else 0
+            got = turn_combo(c, rec, press, bool(now & attack and not prev & attack),
+                             (use, attack, action),
+                             may_cast(weapon, rec, 1, lambda sp: unlocked, stat, skills),
+                             wm == FULL == mm, pause)
+        m = (c["time"], c["next"], got, int(cast_a))
+        note("player_turn's combination", g == m,
+             f"weapon {weapon} now {now:#x} prev {prev:#x} time {time} next {k} "
+             f"meters {wm},{mm} pause {pause}: game {g} model {m}")
+
+
+def swing_runs(base, table, rng, note, n):
+    """held_item_tick, the game's own, a frame of a swing: phase 1 of the
+    six weapons with a second spell, and phase 0 of the flame rod, on random
+    clocks round the blows and sounds, buttons and meters; spell_begin,
+    effect_spawn, the aim and actor_take_hit stood in for, the blow's
+    strength read where the probe begins (0x8002dbd8). Against swing."""
+    import mipsrun
+    for _ in range(n * 2):
+        weapon = rng.choice((2, 13, 14, 15, 16, 17, FLAME_ROD, FLAME_ROD))
+        rec = table[weapon]
+        phase = 0 if weapon == FLAME_ROD else 1
+        f = FIELDS[phase]
+        rate = u16(rec, f[0])
+        hit0 = u16(rec, 0x26 if phase else 0x1E)
+        step = u16(rec, f[2]) if f[2] else 0
+        hit = rng.choice((hit0, hit0 + step, hit0 + 2 * step, NEVER, hit0))
+        clock = s16(hit - rng.choice((rate, rate, 1, 0, rate + 1, 3 * rate)))
+        if clock < 0:
+            clock = 0
+        sound = rng.choice((u16(rec, 0x2E if phase else 0x2C), NEVER, clock + rate))
+        action = rng.randrange(2) == 1
+        magic = rng.choice((FULL, FULL, 4999))
+        strength = rng.choice((FULL, 3000, 17))
+        w = {"phase": phase, "clock": clock, "hit": hit, "sound": s16(sound),
+             "charged": 0, "shots": 0, "pause": 0, "meter": 0, "strength": strength,
+             "guard": 0}
+        cpu = _weapon_cpu(base, weapon)
+        cpu.wr(0x801B25AE, 1, phase)
+        cpu.wr(0x801B25A4, 2, clock)
+        cpu.wr(0x801B25A6, 2, hit)
+        cpu.wr(0x801B25A8, 2, w["sound"])
+        cpu.wr(0x801B25B3, 1, 0)
+        cpu.wr(0x801B25B2, 1, 0)
+        cpu.wr(0x801B25B4, 1, 0)
+        cpu.wr(0x801B2504, 2, strength)
+        cpu.wr(0x801B2502, 2, 1234)
+        cpu.wr(0x801B24F3, 1, 0)
+        cpu.wr(0x801B2506, 2, magic)
+        bind_action = cpu.rd(0x80081874, 2)
+        cpu.wr(0x801B265C, 2, bind_action if action else 0)
+        begun, spawned, blows = [], [], []
+        cpu.hooks[0x8002D130] = lambda c: begun.append((c.r[4] & 0xFF, c.r[5], c.r[6]))
+        cpu.hooks[0x80053C84] = lambda c: spawned.append((c.r[4], c.r[5], c.r[6]))
+        cpu.hooks[0x8002C164] = lambda c: 0
+        cpu.hooks[0x8004C668] = lambda c: 0
+        cpu.hooks[0x8001576C] = lambda c: 0
+        cpu.watch[0x8002DBD8] = lambda c: blows.append(
+            (c.rd(c.r[29] + 0xB8, 4), int(c.rd(c.r[29] + 0xA8, 4) != 0)))
+        try:
+            cpu.call(0x8002D2A0, 0, 0, 0)
+        except mipsrun.Stop as ex:
+            note("held_item_tick's swing", False, f"stopped: {ex}")
+            continue
+        g = (mipsrun.s32(cpu.rd(0x801B25A4, 2) << 16) >> 16,
+             mipsrun.s32(cpu.rd(0x801B25A6, 2) << 16) >> 16,
+             mipsrun.s32(cpu.rd(0x801B25A8, 2) << 16) >> 16,
+             cpu.rd(0x801B24F3, 1), cpu.rd(0x801B2502, 2), cpu.rd(0x801B25B4, 1),
+             begun[0] if begun else None, int(bool(spawned)),
+             (cpu.rd(0x801B2630, 2), cpu.rd(0x801B2632, 2), cpu.rd(0x801B2634, 2))
+             if spawned else None, blows[0] if blows else None)
+        w["meter"] = 1234
+        ev = swing(w, rec, action, 0, weapon, magic)
+        shot = next((e[1:] for e in ev if isinstance(e, tuple) and e[0] == "shot"), None)
+        hitev = next((e[1:] for e in ev if isinstance(e, tuple) and e[0] == "hit"), None)
+        m = (w["clock"], w["hit"], w["sound"], w["pause"], w["meter"], w["guard"],
+             (shot[0], int(shot[1]), shot[2] & 0xFFFFFFFF) if shot else None,
+             int("fire" in ev), (0xFF38, 0xC8, 0x190) if "fire" in ev else None,
+             (hitev[0], int(hitev[1])) if hitev else None)
+        note("held_item_tick's swing", g == m,
+             f"weapon {weapon:#x} phase {phase} clock {clock} hit {hit} sound {sound} "
+             f"action {action} magic {magic}: game {g} model {m}")
 
 
 def check(out=sys.stdout):

@@ -218,6 +218,12 @@ var weapon_id := 0
 var wstate := {"clock": -1, "meter": 5000, "pause": 0, "hit": 5000,
 	"sound": 5000, "strength": 0}
 var attack_latch := false
+# The combination (player_turn 0x80030298): 0x801b25aa, the frames left for
+# the next press, as time, and the pointer 0x801b258c as next; and, like the
+# attack latch, the button word of a rendered frame that newly pressed USE,
+# ATTACK or ACTION, kept until a tick takes it.
+var combo := {"time": 0, "next": 0}
+var combo_latch := 0
 var character := {}
 var strong_hits := 0
 # Dying (player state 0x11): the frames counted at 0x801b261e, and the fade
@@ -463,6 +469,7 @@ func equip_weapon(id: int) -> void:
 	wstate["strength"] = 0
 	wstate["clock"] = -1
 	weapon_meter = 0
+	guard = 0                         # 0x8002bf74
 	# 0x8002be9c: with story flag 39 the swords' spells of the first group,
 	# with flag 45 the second's, unlocked (levels 6's and 8's lessons)
 	var sp: Array = character.get("spells", [])
@@ -599,6 +606,10 @@ func _process(dt: float) -> void:
 		return
 	if KFPad.hit(KFPad.ATTACK):
 		attack_latch = true
+	var three := _combo_buttons()
+	if (KFPad.now & (three[0] | three[1] | three[2])) != 0 \
+			and (KFPad.prev & (three[0] | three[1] | three[2])) == 0:
+		combo_latch = KFPad.now
 	var dir := Vector3.ZERO
 	if KFPad.held(KFPad.FORWARD): dir -= transform.basis.z
 	if KFPad.held(KFPad.BACK): dir += transform.basis.z
@@ -1253,6 +1264,13 @@ func spell_begin(spell: int, commit: bool, n: int) -> void:
 	_attack(spell)
 
 
+# @port helper -- the three buttons player_turn writes into the combination's table (gp+0x1b8): bind_use, bind_attack, bind_action
+func _combo_buttons() -> Array:
+	if KFPad.binding.is_empty():
+		KFPad.apply()
+	return [KFPad.binding[KFPad.USE], KFPad.binding[KFPad.ATTACK], KFPad.binding[KFPad.ACTION]]
+
+
 # @port helper -- spell_table's records, as the effects hold them (fxrecords.json)
 func _spell_records() -> Dictionary:
 	var fx := get_node_or_null("../Effects")
@@ -1263,15 +1281,14 @@ func _spell_records() -> Dictionary:
 
 # player_turn's buttons (0x8002fe1c): the action button's edge casts magic A
 # unless the weapon's own magic is firing (0x801b25b2, its shots left) or a
-# combination is under way (0x801b25aa), which the port has not; the square
-# button's (bind_map) the
+# combination is under way (0x801b25aa); the square button's (bind_map) the
 # button's spell, or uses its thing (0x8002ff28). Then the pending action.
 # @orig game:0x8002fe1c player_turn  status:partial -- the casting buttons and the pending action; the button's thing is use_item's, not here
 func _cast_buttons() -> void:
 	var st := _magic_state()
 	var calls := []
 	var recs := _spell_records()
-	if KFPad.hit(KFPad.ACTION) and int(wstate.get("shots", 0)) == 0:
+	if KFPad.hit(KFPad.ACTION) and int(wstate.get("shots", 0)) == 0 and int(combo["time"]) == 0:
 		cast_spell(st, spell_a, recs, calls)
 	if KFPad.hit(KFPad.MAP) and spell_b != 0xFF:
 		cast_spell(st, spell_b, recs, calls)
@@ -1493,6 +1510,7 @@ func _frame(dir: Vector3) -> void:
 			_knock_end()
 		_view()
 		attack_latch = false
+		combo_latch = 0
 		_weapon()
 		return
 	var held := KFPad.held(KFPad.FORWARD) or KFPad.held(KFPad.BACK)
@@ -1507,17 +1525,30 @@ func _frame(dir: Vector3) -> void:
 		if (int(caps["paralysis"]) & 3) == 3:
 			_tint(tints_now, 1, [0x3C, 0x1E, 0], 0xC00, true)
 			_tints(tints_now)
+	# 0x800313b4: Seath's sword's guard (0x801b25b4) halves both caps
+	if guard != 0:
+		speed_cap >>= 1
+		turn_cap >>= 1
 	_cast_buttons()
 	var rest := _use()
-	# player_turn (0x80030424): a swing begins on the attack button's edge
-	# when the pause after the last blow is over (0x8002c040) -- never while
-	# USE is held, when player_turn has returned already.
-	# sub_8002c040 starts nothing with no weapon in hand; following the
-	# emulator, the swing is the game's (ghost.gd)
-	if rest and attack_latch and int(wstate["pause"]) == 0 and weapon_id < KFWeapon.records.size() \
-			and not KFGame.follow:
-		KFWeapon.start(wstate, KFWeapon.records[weapon_id], magic_meter)
+	# player_turn's tail (0x80030298): the combination, then a swing on the
+	# attack button's edge when the pause after the last blow is over and no
+	# combination is under way -- never while USE is held, when player_turn
+	# has returned already. swing_start starts nothing with no weapon in hand
+	# or while paralysed (0x801b2568); following the emulator, the swing is
+	# the game's (ghost.gd)
+	if rest and weapon_id < KFWeapon.records.size() and not KFGame.follow:
+		var rec: PackedByteArray = KFWeapon.records[weapon_id]
+		var full := int(wstate["meter"]) == KFWeapon.FULL and magic_meter == KFWeapon.FULL
+		var may := KFWeapon.may_cast(weapon_id, rec, 1, character.get("spells", []), stat, working)
+		var ph := KFWeapon.combo(combo, rec, combo_latch, attack_latch, _combo_buttons(), may, full,
+			int(wstate["pause"]))
+		if ph >= 0 and int(caps["paralysis"]) == 0:
+			KFWeapon.start(wstate, rec, magic_meter, ph)
+			if ph == 1:
+				KFInfo.note("player: the combination -- the weapon's second swing")
 	attack_latch = false
+	combo_latch = 0
 	var cap := SPEED_MAX_RUN if Input.is_key_pressed(KEY_SHIFT) else speed_cap
 	# The controller's own order, off its call list: player_turn (the button
 	# edges), player_look (the turn and the pitch), player_walk (the speeds),
@@ -1571,7 +1602,7 @@ func _frame(dir: Vector3) -> void:
 # grows the speed by mod / 0x1000 and the turn by mod / 0x2000 of themselves;
 # and the paralysis (0x801b2568) makes both 0, counts down and halves the two
 # speeds. [speed cap, turn cap, paralysed].
-# @orig game:0x800311b4 player_controller+0x1e8  status:verified -- the run: tools/replay.py, 150129 of 150129 frames of bp16's speed caps, and the self-test this to it; the slowing and the paralysis transcribed (the paralysis's flash is _frame's); not the halving while 0x801b25b4 is set
+# @orig game:0x800311b4 player_controller+0x1e8  status:verified -- the run: tools/replay.py, 150129 of 150129 frames of bp16's speed caps, and the self-test this to it; the slowing and the paralysis transcribed (the paralysis's flash and the guard's halving, 0x800313b4, are _frame's)
 static func frame_caps(c: Dictionary, walking: bool) -> Array:
 	var speed := 0xC8
 	var turn := TURN_MAX_MOVING if walking else TURN_MAX_STILL
@@ -1711,7 +1742,15 @@ func _weapon() -> void:
 		KFWeapon.refill(wstate, rec, stat, KFPad.held(KFPad.ATTACK))
 	else:
 		var may := KFWeapon.may_cast(weapon_id, rec, 0, character.get("spells", []), stat, working)
-		var ev := KFWeapon.swing(wstate, rec, KFPad.held(KFPad.ACTION), may)
+		var ev := KFWeapon.swing(wstate, rec, KFPad.held(KFPad.ACTION), may, weapon_id, magic_meter)
+		if wstate.has("guard"):       # the blow's frame sets or clears 0x801b25b4
+			guard = int(wstate["guard"])
+			wstate.erase("guard")
+		if bool(ev["fire"]):
+			# 0x8002d9bc: the flame rod's fire ball, aimed as spell 0 is from
+			# (-200, 200, 400), paid for by nothing
+			cast_off = [-0xC8, 0xC8, 0x190]
+			_attack(0)
 		if not (ev["shot"] as Array).is_empty():
 			spell_begin(int(ev["shot"][0]), bool(ev["shot"][1]), int(ev["shot"][2]))
 		if int(ev["hit"]) >= 0:

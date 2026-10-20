@@ -599,7 +599,14 @@ own spells (`magic_check`, in the check) run the game's own code over `a1`:
 `swing_start` of both phases, `weapon_may_cast`, `spell_begin` and
 `held_item_tick`'s charged-swing window, **200 of 200** each, on random
 meters, weapons, unlocked bytes, stats, skills, MP, clocks, shots and buttons;
-a window one frame off gives 194 of 200.
+a window one frame off gives 194 of 200. And `player_turn` whole, a frame at a
+time, for the combination (**400 of 400**: the time, the pointer, which swing
+begins, magic A), and `held_item_tick` for the second swing, Seath's guard and
+the flame rod (**400 of 400**: the clock, the times, the pause, the meter, the
+guard, the spell begun, the fire ball and the blow's strength); a time of 19
+instead of 20, a guard that keeps the clock, a blow time that does not move
+on, a commit on `>` and a fire ball at any meter give 351, 385, 379, 377 and
+383.
 
 **`player.py`** — the player's stat block, from a snapshot or from the emulator.
 

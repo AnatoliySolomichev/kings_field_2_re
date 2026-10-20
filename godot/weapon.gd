@@ -81,16 +81,18 @@ static func refill(w: Dictionary, rec: PackedByteArray, stat: int, held: bool) -
 	w["meter"] = mini((int(w["meter"]) + 2 * gain(stat, rec[1])) & 0xFFFF, FULL)
 
 
-# 0x8002c040 with phase 0: the clock at 0, the times off the record, the meter
+# swing_start (phase): the clock at 0, the hit and sound times off the record
+# (+0x1e and +0x2c, or the combination's phase 1 +0x26 and +0x2e), the meter
 # kept as the strength and emptied; begun on both meters full (0x801b25b3),
 # the swing carries the record's +5 shots of its spell (0x801b25b2).
-# @orig game:0x8002c040 swing_start  status:partial -- verified for both phases: tools/weapon.py start, 200 of 200 as the game's own (magic_check); the port starts phase 0 only, as player_turn's combination (0x800302c4..0x800303f8) is not here
-static func start(w: Dictionary, rec: PackedByteArray, magic := FULL) -> bool:
+# @orig game:0x8002c040 swing_start  status:verified -- tools/weapon.py start, 200 of 200 as the game's own, both phases (magic_check); not 0x801b2568, which stops it and the port has not
+static func start(w: Dictionary, rec: PackedByteArray, magic := FULL, phase := 0) -> bool:
 	if int(w["clock"]) != -1:
 		return false
+	w["phase"] = phase
 	w["clock"] = 0
-	w["hit"] = u16(rec, 0x1E)
-	w["sound"] = u16(rec, 0x2C)
+	w["hit"] = u16(rec, 0x26 if phase != 0 else 0x1E)
+	w["sound"] = u16(rec, 0x2E if phase != 0 else 0x2C)
 	w["strength"] = int(w["meter"])
 	w["charged"] = int(w["meter"]) == FULL and magic == FULL
 	if bool(w["charged"]):
@@ -140,27 +142,52 @@ static func magic_window(w: Dictionary, rec: PackedByteArray, action_held: bool,
 	return [int(rec[3]), shots == int(rec[5]), shots]
 
 
-# One frame of a phase-0 swing (held_item_tick 0x8002d7bc). Returns
-# {sound: bool, hit: strength or -1, push: whether the blow pushes, shot:
-# the weapon's spell cast, [spell, commit, n] or []}; at the end the clock -1
-# and the shots gone (.L41).
-# @orig game:0x8002d7bc held_item_tick+0x51c  status:transcribed -- the melee swing, phase 0; not the bows, the spells or phase 1
-static func swing(w: Dictionary, rec: PackedByteArray, action_held := false, may := 0) -> Dictionary:
-	var ev := {"sound": false, "hit": -1, "push": false, "shot": []}
+# The swing's times by phase (held_item_tick 0x8002d7e4, .L21): the rate,
+# the last blow's time, the time between blows, the last sound's time and the
+# time between sounds; phase 0 has one blow and one sound (-1: none)
+const FIELDS := [[0x1C, 0x1E, -1, 0x2C, -1], [0x24, 0x28, 0x2A, 0x30, 0x32]]
+const FLAME_ROD := 0x21
+const SEATHS_SWORD := 0xD
+
+
+# One frame of a swing (held_item_tick 0x8002d7bc). Returns {sound: bool,
+# hit: strength or -1, push: whether the blow pushes, shot: the weapon's
+# spell cast, [spell, commit, n] or [] -- phase 0's charged window, or phase
+# 1's every blow, +4, paid on the last -- fire: the flame rod's fire ball on a
+# full magic meter}. Seath's sword in phase 1 meets its blow with ACTION held
+# as a guard: w.guard (0x801b25b4) set, the clock held back, the blow waiting.
+# At the end the clock -1 and the shots gone (.L41).
+# @orig game:0x8002d7bc held_item_tick+0x51c  status:verified -- tools/weapon.py swing, both phases, the guard and the flame rod: 400 of 400 frames of the game's own (magic_check), the bp25 recording 817 of 817; not the bows
+static func swing(w: Dictionary, rec: PackedByteArray, action_held := false, may := 0,
+		weapon := -1, magic := 0) -> Dictionary:
+	var ev := {"sound": false, "hit": -1, "push": false, "shot": [], "fire": false, "guard": false}
 	if int(w["clock"]) == -1:
 		return ev
-	var rate := u16(rec, 0x1C)
-	var end := u16(rec, 0x1E)
-	var last := u16(rec, 0x2C)
+	var phase := int(w.get("phase", 0))
+	var f: Array = FIELDS[1 if phase != 0 else 0]
+	var rate := u16(rec, f[0])
+	var end := u16(rec, f[1])
+	var last := u16(rec, f[3])
+	var step := u16(rec, f[2]) if int(f[2]) >= 0 else 0
+	var sstep := u16(rec, f[4]) if int(f[4]) >= 0 else 0
 	w["clock"] = s16(int(w["clock"]) + rate)
 	ev["shot"] = magic_window(w, rec, action_held, may)
 	var c: int = w["clock"]
 	var t: int = w["sound"]
 	if t <= c and c < t + rate:
 		ev["sound"] = rec[0] != 0xFF
-		w["sound"] = t if t < last else NEVER
+		w["sound"] = s16(t + sstep) if t < last else NEVER
 	var h: int = w["hit"]
 	if h <= c and c < h + rate:
+		ev["fire"] = weapon == FLAME_ROD and magic == FULL
+		w["guard"] = 0
+		if phase == 1:
+			if weapon == SEATHS_SWORD and action_held:
+				w["guard"] = 1
+				w["clock"] = s16(c - rate)
+				ev["guard"] = true
+				return ev
+			ev["shot"] = [int(rec[4]), c >= end, (c - u16(rec, 0x26)) / step if step != 0 else 0]
 		if c >= end:
 			w["hit"] = NEVER
 			w["pause"] = PAUSE
@@ -168,11 +195,43 @@ static func swing(w: Dictionary, rec: PackedByteArray, action_held := false, may
 			ev["hit"] = int(w["strength"])
 			ev["push"] = true
 		else:
+			w["hit"] = s16(h + step)
 			ev["hit"] = int(w["strength"]) >> 2
 	if int(w["clock"]) >= 0x1000:
 		w["clock"] = -1
 		w["shots"] = 0
 	return ev
+
+
+# player_turn's tail (0x80030298 on), once the USE stretch has let the frame
+# through: the combination and the swing it starts. `c` holds 0x801b25aa as
+# time and the pointer 0x801b258c as next, an index into the table player_turn
+# writes at gp+0x1b8: the use, attack and action buttons and 0xffff (the
+# halves after it read 0). `press` is the button word on a frame that newly
+# presses one of the three, else 0. 1 starts the combination's swing, 0 the
+# ordinary one (the attack button's edge, no pause, no combination under way),
+# -1 neither.
+# @orig game:0x80030298 player_turn+0x47c  status:verified -- tools/weapon.py turn_combo, 400 of 400 frames of the game's own player_turn (magic_check)
+static func combo(c: Dictionary, rec: PackedByteArray, press: int, attack_edge: bool, binds: Array,
+		may: int, full: bool, swing_pause: int) -> int:
+	var table := [int(binds[0]), int(binds[1]), int(binds[2]), 0xFFFF]
+	if int(c["time"]) != 0:
+		c["time"] = (int(c["time"]) - 1) & 0xFF
+	else:
+		c["next"] = 0
+	if press != 0 and u16(rec, 0x24) != 0:
+		var k := int(c["next"])
+		var want: int = table[k] if k < 4 else 0
+		if may != 0 and int(rec[4]) != 0xFF and (press & want) != 0 and (k != 0 or full):
+			c["next"] = k + 1
+			if k + 1 < 4 and int(table[k + 1]) == 0xFFFF:
+				return 1
+			c["time"] = 20
+		else:
+			c["time"] = 0
+	if swing_pause != 0 or int(c["time"]) != 0:
+		return -1
+	return 0 if attack_edge else -1
 
 
 # @port helper -- a 3x3 product through the GTE's >> 12, for vec_rotate
