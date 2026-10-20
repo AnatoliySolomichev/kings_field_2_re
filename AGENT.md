@@ -369,6 +369,12 @@ other running the whole overlay through the walker's switch resolver.
 
 Stop and ask when you reach these. Do not simulate them.
 
+**[PLAYTEST.md](PLAYTEST.md) is the list of what is waiting for a person** --
+what to look at in the port and which emulator session to record, with the
+cells and the buttons. Whenever a finding wants a recording or a look, add it
+there (in Russian: it is written for the player-tester) as well as to BACKLOG.md,
+and take it out once its number is in "What is standing".
+
 * **Anything needing a controller.** Breakpoint scripts can be loaded into a
   running emulator with `dofile(...)` from its Lua console, but nobody can press
   a button from here. Say exactly where to walk and what to do, in cell
