@@ -585,6 +585,15 @@ def export(out_dir):
                   aps.append([c, *struct.unpack("<4i", v)])
                   return v
               w.surface_ceiling, w.spot_taken, w.actor_point = sc, st, ap
+              aqs = []
+              for name_ in ("actor_op", "actor_xz", "actor_size", "actor_target"):
+                  def aq(*a, ask=getattr(w, name_), name_=name_, aqs=aqs):
+                      v = ask(*a)
+                      vals = ([v] if isinstance(v, int) else list(struct.unpack("<4i", v))
+                              if isinstance(v, (bytes, bytearray)) else list(v))
+                      aqs.append([name_, a[0], *vals])
+                      return v
+                  setattr(w, name_, aq)
               drawn = []
               lcg = levelstate.Lcg()
 
@@ -603,7 +612,7 @@ def export(out_dir):
                   frames = []
                   for _f in range(nframes_):
                       del log[:], w.hits[:], drawn[:], w.hurts[:], w.strikes[:], w.released[:]
-                      del cws[:], sfs[:], sis[:], ams[:], scs[:], sts[:], aps[:]
+                      del cws[:], sfs[:], sis[:], ams[:], scs[:], sts[:], aps[:], aqs[:], w.held[:]
                       mach.driver()
                       frames.append({"q": [list(x) for x in log], "rand": list(drawn),
                                      "cw": [list(x) for x in cws], "sf": [list(x) for x in sfs],
@@ -612,6 +621,8 @@ def export(out_dir):
                                      "sc": [list(x) for x in scs],
                                      "st": [list(x) for x in sts],
                                      "ap": [list(x) for x in aps],
+                                     "aq": [list(x) for x in aqs],
+                                     "held": list(w.held),
                                      "hits": [[h[0], h[1], h[2], h[3], h[4],
                                                None if h[5] is None else [_s32(v) for v in h[5]]]
                                               for h in w.hits],
@@ -627,7 +638,8 @@ def export(out_dir):
                             "spawn_rand": spawn_rand, "spawn_ask": spawn_ask,
                             "fields": dict({"px": px, "py": py, "pz": pz, "s18": s18, "vy": vy,
                                             "pw": struct.unpack_from("<i", m, (PLAYER_POS + 12) & MASK)[0],
-                                            "cs": struct.unpack_from("<i", m, 0x801E6474 & MASK)[0]},
+                                            "cs": struct.unpack_from("<i", m, 0x801E6474 & MASK)[0],
+                                            "tn": struct.unpack_from("<I", base, TRAIL_NEXT & MASK)[0]},
                                            **{f"w{k}": working[k] for k in range(5)}),
                             "spawns": [[a0, a1, kd, pt.hex(),
                                         [{"b": v.hex()} if isinstance(v, bytes) else v for v in args]]
@@ -783,6 +795,9 @@ MARK, MARK2, PILLAR, PILLAR2, MOON_BURST = 0x78, 0x7A, 0x5C, 0x5D, 0x48
 SLAYER2, SLAYER, SPHERE2, SPHERE, SPARK = 0x7C, 0x7B, 0x44, 0x45, 0x03
 LIGHTNING = 0x71                    # and the creatures' 0x7d and 0x81; bolts 0x72, 0x7e, 0x80;
                                     # their spheres 0x13, 0x29, 0x2d
+FREEZE, THEDEK = 0x10, 0x05          # their trail's segments 0x74 and 0x67, thedek's blades 0x6c
+SEGMENT, SEGMENT2, BLADE = 0x74, 0x67, 0x6C
+TRAILS, TRAIL_NEXT = 0x801E7594, 0x8009C338   # four trails of 24 entries of 24; gp+0x124 the next
 HAZE, SHUDOM, WALWIND, RING, WAVE = 0x0B, 0x09, 0x11, 0x5E, 0x59
 EARTH_WAVE, BORTECTH, HOLD = 0x07, 0x0C, 0x65
 METEOR, BLAST = 0x5F, 0x5A
@@ -807,6 +822,7 @@ WORKING = 0x801B2526             # the five working skills
 SURFACE = 0x801E647C             # surface_plane_18, the water's top
 COLLIDE_QUERY, ATTACK_HIT, SOUND_AT = 0x80033F38, 0x800533E8, 0x80015688
 ACTORS, ACTOR_STRIDE, ACTOR_N = 0x80185DA8, 0x88, 200
+ENTITIES, ENTITY_STRIDE = 0x8018C7E8, 120     # entity_table: a creature's kind
 ACTOR_SKIP, CURRENT_ACTOR, COLLIDE_ACTOR = 0x8018FAA8, 0x8018FAB4, 0x801E648C
 PLAYER_FIELDS = (HP, POISON, CURSE_LV, CURSE_T, DARK_LV, DARK_T, SLOW, PARALYSIS)
 LAYER_OFFSET = 0x801E646E        # collision_layer_offset, select_cell_layer's answer
@@ -958,7 +974,9 @@ class Machine:
                SPHERE: self._spawn_44, SLAYER2: self._spawn_7c, SLAYER: self._spawn_7b,
                LIGHTNING: self._spawn_71, 0x7D: self._spawn_71, 0x81: self._spawn_71,
                0x72: self._spawn_72, 0x7E: self._spawn_72, 0x80: self._spawn_72,
-               0x13: self._spawn_13, 0x29: self._spawn_13, 0x2D: self._spawn_13}.get(kind)
+               0x13: self._spawn_13, 0x29: self._spawn_13, 0x2D: self._spawn_13,
+               FREEZE: self._spawn_10, THEDEK: self._spawn_10, SEGMENT: self._spawn_74,
+               SEGMENT2: self._spawn_74, BLADE: self._spawn_6c}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_spawn's arm {kind:#x}")
         arm(s, args)
@@ -2152,6 +2170,287 @@ class Machine:
                    [self.get(TICK_SP + 0x168, 8), 0x2000, -0x80, 0xF, 0xC, 0xA, 1, 1], direct=True)
         self.w16(s + 0x2A, self.u16(s + 0x2A) + 0x40)
 
+    def _spawn_10(self, s, args):           # 0x80054f5c (freeze, 0x10), 0x8005506c (thedek, 5)
+        """Not drawn itself (+8 0, model 0); the angles args[1] points at;
+        a trail: the next of the four buffers of 24 at 0x801e7594 (gp+0x124
+        counting them round), its address in +0x44 and every entry the point
+        and the angles; +0x48 the head, +0x49 0; a life of 0x96. Freeze +9 5
+        and +0xe 0x40, thedek +9 4 and +0xe 0."""
+        kind = self.u8(s + 1)
+        self.w8(s + 4, 0x80)
+        self.w8(s + 9, 5 if kind == FREEZE else 4)
+        for o in (0x34, 0x32, 0x30):
+            self.w16(s + o, 0x1000)
+        self.w8(s + 0xC, 0x34)
+        self.w8(s + 8, 0)
+        self.w8(s + 2, 0)
+        self.w8(s + 3, 0)
+        self.w16(s + 0x12, 0x800)
+        self.put(s + 0x28, args[1][:8])
+        idx = self.u32(TRAIL_NEXT)
+        buf = _s32(TRAILS + 576 * idx)
+        self.w32(s + 0x44, buf)
+        self.w32(TRAIL_NEXT, (idx + 1) & 3)
+        for j in range(24):
+            self.put(buf + 24 * j, self.get(s + 0x18, 16))
+            self.put(buf + 24 * j + 16, self.get(s + 0x28, 8))
+        self.w16(s + 0x10, 0x96)
+        self.w8(s + 0x48, 0)
+        self.w8(s + 0x49, 0)
+        self.w16(s + 0xE, 0x40 if kind == FREEZE else 0)   # and its sound, 0x97 or 0x91
+
+    def _tick_10(self, s):                  # 0x8005a64c (freeze), 0x8005ab20 (thedek)
+        """+7: 0 eight segments (freeze's 0x74, thedek's 0x67) handed its
+        place in the slots (+0x44) and their place in the line (+0x45, model
+        0x10 for the first, 0x12 for the last), and on: 1 homing (effect_seek:
+        0xfa at most, pulled 0x19 -- 0x64 within 0x400 -- turning 0x20, radius
+        0xc8, cones 0x800), each frame a new head on its trail, rising and
+        falling with +0x49; with under three frames left, or meeting anything
+        but a creature, it ends (+7 3). Meeting a creature it hands it to
+        actor_attack_player as 0x10010 -- held -- and, the creature flinching
+        or dying (+0xe 2 or 3), takes it (+7 2): model 0x13 drawn round it,
+        held every frame (+0x28 bit 0x800), set on its middle and circling it
+        -- 0x186a0 over its radius a frame, at 6400/4096 of the radius --
+        growing to its size over 16 frames, thedek with eight blades (0x6c)
+        about it and a puff off it a frame; at +0x49 0x3c it lets go (+7 4).
+        3: the trail wound back a frame at a time, then gone and the creature
+        let go. 4: freeze 24 puffs, thedek two, the creature let go, gone."""
+        kind = self.u8(s + 1)
+        ph = self.u8(s + 7)
+        seg = SEGMENT if kind == FREEZE else SEGMENT2
+        if ph == 0:
+            c = 0
+            for i in range(8):
+                c = self.spawn(0xA, 0, seg, self.get(s + 0x18, 16),
+                               [self.get(s + 0x38, 8), self.get(s + 0x28, 8), i], direct=True)
+                if i == 0:
+                    self.w8(c + 3, 0x10)
+                self.w8(c + 0x45, i)
+                self.w8(c + 0x44, self.u8(INDEX))
+            self.w8(c + 3, 0x12)
+            self.w8(s + 7, 1)
+            ph = 1
+        if ph == 1:
+            if self.s16(s + 0x10) < 3:
+                self._trail_end(s)
+                return
+            r = self.seek(0xFA, 0x19, 0x20, 0xC8, 0, 0x400, 0x64, 0x800)
+            if r != -1:
+                self._trail_head(s)
+                return
+            self.w16(s + 0x10, -1)
+            if self.w.collide_mask != 0x10:
+                self._trail_end(s)
+                return
+            self.hand(s, 0x10010, 0x1388, None)
+            t = self.w.collide_actor & 0xFF
+            self.w8(s + 0x4A, t)
+            if (self.w.actor_op(t) - 2) & 0xFFFFFFFF >= 2:
+                self._trail_end(s)
+                return
+            x, z = self.w.actor_xz(t)
+            self.w8(s + 8, 1)
+            self.w8(s + 3, 0x13)
+            self.w8(s + 7, 2)
+            self.w8(s + 0x49, 0)
+            self.w16(s + 0x2C, 0)
+            self.w16(s + 0x28, 0)
+            self.w16(s + 0x2E, -movement.vec_angle(_s32(self.s32(s + 0x18) - x),
+                                                   _s32(self.s32(s + 0x20) - z)))
+            if kind == THEDEK:
+                for i in range(8):
+                    self.spawn(0xA, 0, BLADE, self.w.actor_point(t), [None, i << 9], direct=True)
+            ph = 2
+        if ph == 2:
+            self._circle(s, kind)
+        elif ph == 3:
+            self._trail_step(s)
+            if self.u8(s + 0x49) == 0:
+                self.w.release(self.u8(s + 0x4A))
+                self.w8(s, 0xFF)
+            else:
+                self.w8(s + 0x49, self.u8(s + 0x49) - 1)
+        elif ph == 4:
+            if kind == FREEZE:
+                for n in range(0x17, -1, -1):
+                    vx = _div7fff(600 * self.rand()) - 0x12C          # sound 0x27 at n & 7 == 0
+                    vy = _div7fff(-300 * self.rand())
+                    vz = _div7fff(600 * self.rand()) - 0x12C
+                    struct.pack_into("<3h", self.m, (TICK_SP + 0x1C8) & MASK, vx, vy, vz)
+                    self.spawn(0xA, 0, TRAIL, self.get(s + 0x18, 16),
+                               [self.get(TICK_SP + 0x1C8, 8), 0x5DC, -0x80, 9, 0x30, 0, 1, 0],
+                               direct=True)
+            else:
+                for _n in range(2):
+                    vx = _div7fff(200 * self.rand()) - 0x64
+                    vy = -_div7fff(200 * self.rand()) - 0xC8
+                    vz = _div7fff(200 * self.rand()) - 0x64
+                    struct.pack_into("<3h", self.m, (TICK_SP + 0x1C8) & MASK, vx, vy, vz)
+                    self.spawn(0xA, 0, TRAIL, self.get(s + 0x18, 16),
+                               [self.get(TICK_SP + 0x1C8, 8), 0x1000, 0, 5, 0x1C, 0xA, 1, 1],
+                               direct=True)
+            self.w.release(self.u8(s + 0x4A))
+            self.w8(s, 0xFF)
+
+    def _trail_end(self, s):                # 0x8005abc8
+        self.w8(s + 7, 3)
+        self.w16(s + 0x10, -1)
+        self.w8(s + 0x49, 0x18)
+
+    def _trail_step(self, s):
+        """+0x48, the trail's head, one on, round at 24."""
+        h = (self.u8(s + 0x48) + 1) & 0xFF
+        self.w8(s + 0x48, 0 if h >= 0x18 else h)
+
+    def _trail_head(self, s):               # 0x8005ad10
+        """A new head: the point, its height by sin(+0x49 << 4) / 8, the
+        angles with the pitch by cos(+0x49 << 4) / 16; +0x49 on by 8."""
+        self._trail_step(s)
+        e = self.u32(s + 0x44) + 24 * self.u8(s + 0x48)
+        a = self.u8(s + 0x49) << 4
+        self.w8(s + 0x49, self.u8(s + 0x49) + 8)
+        self.w32(e, self.s32(s + 0x18))
+        self.w32(e + 8, self.s32(s + 0x20))
+        self.w32(e + 4, self.s32(s + 0x1C) + (movement.game_sin(a) >> 3))
+        self.w16(e + 0x12, self.u16(s + 0x2A))
+        self.w16(e + 0x14, self.u16(s + 0x2C))
+        self.w16(e + 0x10, self.u16(s + 0x28) + (movement.game_cos(a) >> 4))
+
+    def _circle(self, s, kind):             # 0x8005a7e8 (freeze), 0x8005adb8 (thedek)
+        import ai
+        t = self.u8(s + 0x4A)
+        self.w.hold(t)
+        if kind == THEDEK:
+            vx = _div7fff(100 * self.rand()) - 0x32
+            vy = -_div7fff(160 * self.rand()) - 0xC8
+            vz = _div7fff(100 * self.rand()) - 0x32
+            struct.pack_into("<3h", self.m, (TICK_SP + 0x1C8) & MASK, vx, vy, vz)
+            self.spawn(0xA, 0, TRAIL, self.w.actor_point(t),
+                       [self.get(TICK_SP + 0x1C8, 8), 0x1000, 0x200, 6, 0x1C, 2, 1, 2], direct=True)
+        self._trail_step(s)
+        radius, height = self.w.actor_size(t)
+        self.put(s + 0x18, self.w.actor_target(t, TICK_SP + (0x1B8 if kind == FREEZE else 0x1E8)))
+        self.w32(s + 0x1C, self.s32(s + 0x1C) - (height >> 1))
+        n = self.u8(s + 0x49)
+        if n >= 0x3C:
+            self.w8(s + 7, 4)
+            return
+        if n < 0x11:
+            v = ai.lerp(0, radius, n << 9)
+            self.w16(s + 0x34, v)
+            self.w16(s + 0x30, v)
+            self.w16(s + 0x32, ai.lerp(0, height, 350 * n))
+        step = 0x186A0 // radius            # a radius of 0 breaks (the div's trap)
+        r = (6400 * radius) >> 12
+        a = self.s16(s + 0x2E)
+        self.w8(s + 0x49, n + 1)
+        e = self.u32(s + 0x44) + 24 * self.u8(s + 0x48)
+        self.w16(s + 0x2E, a + step)
+        self.w32(e, ((movement.game_sin(a) * r) >> 12) + self.s32(s + 0x18))
+        self.w32(e + 8, _s32((movement.game_cos(a) * r) >> 12) + self.s32(s + 0x20))
+        self.w32(e + 4, (movement.game_sin(a << 1) >> 4) + self.s32(s + 0x1C))
+        self.w16(e + 0x12, -a - 0x400)
+        self.w16(e + 0x14, 0)
+        self.w16(e + 0x10, movement.game_cos(a << 1) >> 4)
+
+    def _spawn_74(self, s, args):           # 0x8005516c (freeze's, 0x74), 0x800551e0 (thedek's, 0x67)
+        """A segment of the trail: model 0x11, the angles args[1] points at;
+        freeze's +9 5, +0xe 0x40 and no life; thedek's +9 4, +0xe 0x80 and
+        0xc8 frames."""
+        kind = self.u8(s + 1)
+        self.w8(s + 8, 1)
+        self.w8(s + 4, 0x80)
+        self.w8(s + 9, 5 if kind == SEGMENT else 4)
+        self.w8(s + 2, 0x11)
+        self.w8(s + 3, 0x11)
+        self.w8(s + 0xC, 0x34)
+        self.w16(s + 0x12, 0x800)
+        for o in (0x34, 0x32, 0x30):
+            self.w16(s + o, 0x1000)
+        self.put(s + 0x28, args[1][:8])
+        if kind == SEGMENT:
+            self.w16(s + 0xE, 0x40)
+        else:
+            self.w16(s + 0x10, 0xC8)
+            self.w16(s + 0xE, 0x80)
+
+    def _tick_74(self, s):                  # 0x8005b234 (0x74), 0x8005b2c8 (0x67)
+        """Where its head was 3 x its place in the line frames ago, on the
+        trail of the slot +0x44 names; thedek's puffs off it once its life is
+        under 0xbc. Once the head ends (+7 3 or more) it lives 3 x its place
+        frames more (+7 1); gone when the head lets go (+7 4)."""
+        kind = self.u8(s + 1)
+        head = SLOTS + STRIDE * self.u8(s + 0x44)
+        if kind == SEGMENT2 and self.s16(s + 0x10) < 0xBC:
+            vx = ((100 * self.rand()) >> 15) - 0x32
+            vz = ((100 * self.rand()) >> 15) - 0x32
+            struct.pack_into("<3h", self.m, (TICK_SP + 0x1F8) & MASK, vx, -0x78, vz)
+            self.spawn(0xA, 0, TRAIL, self.get(s + 0x18, 16),
+                       [self.get(TICK_SP + 0x1F8, 8), 0x1000, -0x100, 4, 0x16, 0, 2, 5],
+                       direct=True)
+        if self.u8(s + 7) == 0 and self.u8(head + 7) >= 3:
+            self.w8(s + 7, 1)
+            self.w16(s + 0x10, 3 * self.u8(s + 0x45))
+        if self.u8(head + 7) == 4:
+            self.w8(s, 0xFF)
+            return
+        i = self.u8(head + 0x48) - 3 * self.u8(s + 0x45)
+        if i < 0:
+            i += 0x18
+        e = self.u32(head + 0x44) + 24 * i
+        self.put(s + 0x18, self.get(e, 16))
+        self.put(s + 0x28, self.get(e + 16, 8))
+
+    def _spawn_6c(self, s, args):           # 0x80054044, a thedek blade
+        """Model 0x38, 0xfa0 across and 0x100 high, still, its yaw args[1];
+        0x32 frames."""
+        self.w8(s + 8, 1)
+        self.w8(s + 9, 5)
+        self.w8(s + 2, 0x38)
+        self.w8(s + 3, 0x38)
+        self.w8(s + 0xC, 0x34)
+        self.w16(s + 0x12, 0x1000)
+        self.w8(s + 4, 0)
+        self.w16(s + 0x30, 0xFA0)
+        self.w16(s + 0x32, 0x100)
+        self.w16(s + 0x34, 0xFA0)
+        self.w16(s + 0x28, 0)
+        self.w16(s + 0x2C, 0)
+        self.w16(s + 0x44, 0)
+        self.w16(s + 0x10, 0x32)
+        self.w16(s + 0xE, 0)
+        for o in (0x38, 0x3A, 0x3C):
+            self.w16(s + o, 0)
+        self.w16(s + 0x2A, args[1])
+
+    def _tick_6c(self, s):                  # 0x8005a280, a thedek blade
+        """effect_move at 0xb4 with no velocity, a creature met struck --
+        but its +0 is 0, which asks nothing; turning 0xc8 a frame, rising
+        0x100 a frame past 0x1068 (+0x44 0), standing 0x1e frames (1),
+        sinking 0x100 and narrowing 0x80 a frame, gone under 0x78 (2)."""
+        hit = self.move(0xB4, 0, 0)
+        if hit and hit & 0x10:
+            self.attack(s, hit)
+        n = self.s16(s + 0x44)
+        if n == 0:
+            self.w16(s + 0x32, self.u16(s + 0x32) + 0x100)
+            self.w16(s + 0x2A, self.u16(s + 0x2A) + 0xC8)
+            if self.s16(s + 0x32) >= 0x1069:
+                self.w16(s + 0x46, 0)
+                self.w16(s + 0x44, self.u16(s + 0x44) + 1)
+        elif n == 1:
+            self.w16(s + 0x46, self.u16(s + 0x46) + 1)
+            self.w16(s + 0x2A, self.u16(s + 0x2A) + 0xC8)
+            if self.s16(s + 0x46) >= 0x1F:
+                self.w16(s + 0x44, self.u16(s + 0x44) + 1)
+        elif n == 2:
+            self.w16(s + 0x32, self.u16(s + 0x32) - 0x100)
+            self.w16(s + 0x34, self.u16(s + 0x34) - 0x80)
+            self.w16(s + 0x30, self.u16(s + 0x30) - 0x80)
+            self.w16(s + 0x2A, self.u16(s + 0x2A) + 0xC8)
+            if self.s16(s + 0x32) < 0x78:
+                self.w8(s, 0xFF)
+
     def _spawn_0f(self, s, args):           # 0x80054294, tornado
         """The first of a cast's two (args[2] 0) is 0xc80 across and turned
         nothing, the second 2000 wider and turned half; the view's angles in
@@ -2742,7 +3041,8 @@ class Machine:
                SLAYER: self._tick_7b, LIGHTNING: self._tick_71, 0x7D: self._tick_71,
                0x81: self._tick_71, 0x72: self._tick_72, 0x7E: self._tick_72,
                0x80: self._tick_72, 0x13: self._tick_13, 0x29: self._tick_13,
-               0x2D: self._tick_13}.get(kind)
+               0x2D: self._tick_13, FREEZE: self._tick_10, THEDEK: self._tick_10,
+               SEGMENT: self._tick_74, SEGMENT2: self._tick_74, BLADE: self._tick_6c}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_tick's arm {kind:#x}")
         arm(s)
@@ -3243,6 +3543,21 @@ class RamWorld:
         """Creature t's place, the 16 bytes from its +0x2c."""
         return _actor_point(self.m, t)
 
+    def actor_op(self, t):
+        return _actor_op(self.m, t)
+
+    def actor_xz(self, t):
+        return _actor_xz(self.m, t)
+
+    def actor_size(self, t):
+        return _actor_size(self.m, t)
+
+    def actor_target(self, t, at):
+        return _actor_target(self.m, t, at)
+
+    def hold(self, c):
+        _hold(self.m, c)
+
     def player_point(self):
         """player_pos, its 16 bytes (the fourth word 0x801b25fc, which only
         save_restore writes)."""
@@ -3255,6 +3570,53 @@ class RamWorld:
         _mask, cur = movement.query(self.lvl, x, y, z, r, h, ymid=y - 0x500, extra=extra)
         self._planes(cur, extra)
         return cur, extra[0x801E6478]
+
+
+def _actor_byte(m, t, o):
+    return m[(ACTORS + ACTOR_STRIDE * t + o) & MASK]
+
+
+def _actor_op(m, t):
+    """A creature's behaviour opcode, +0xe."""
+    return _actor_byte(m, t, 0xE)
+
+
+def _actor_xz(m, t):
+    return struct.unpack_from("<i", m, (ACTORS + ACTOR_STRIDE * t + 0x2C) & MASK)[0], \
+        struct.unpack_from("<i", m, (ACTORS + ACTOR_STRIDE * t + 0x34) & MASK)[0]
+
+
+def _actor_size(m, t):
+    """A creature's radius +0x1c and height +0x1e."""
+    return struct.unpack_from("<2H", m, (ACTORS + ACTOR_STRIDE * t + 0x1C) & MASK)
+
+
+def _actor_target(m, t, at):
+    """sub_8004eee0 (creature t, out at `at`): by its +0x28 & 3, 0 the 16
+    bytes of its place (+0x2c); 1 its place plus its kind's mark (entity
+    +0xc..+0x10); 2 that mark turned by its angles (+0x40, vec_rotate) plus
+    its place -- written at `at`, whose fourth word is the caller's; 3 the
+    16 bytes at address 2, where its answer points."""
+    import weapon
+    a = (ACTORS + ACTOR_STRIDE * t) & MASK
+    mode = struct.unpack_from("<I", m, a + 0x28)[0] & 3
+    if mode == 0:
+        return bytes(m[a + 0x2C:a + 0x3C])
+    if mode == 3:
+        return bytes(m[2:18])
+    e = (ENTITIES + ENTITY_STRIDE * m[a + 2]) & MASK
+    mark = struct.unpack_from("<3h", m, e + 0xC)
+    if mode == 2:
+        mark = weapon.vec_rotate(struct.unpack_from("<3h", m, a + 0x40), mark)
+    place = struct.unpack_from("<3i", m, a + 0x2C)
+    struct.pack_into("<3i", m, at & MASK, *[_s32(mark[i] + place[i]) for i in range(3)])
+    return bytes(m[at & MASK:(at & MASK) + 16])
+
+
+def _hold(m, c):
+    """An effect holding creature c: its +0x28 bit 0x800 (0x8005a810)."""
+    a = (ACTORS + ACTOR_STRIDE * c + 0x28) & MASK
+    struct.pack_into("<I", m, a, struct.unpack_from("<I", m, a)[0] | 0x800)
 
 
 def _actor_point(m, t):
@@ -3562,6 +3924,7 @@ class StandIn:
         self.hurts = []
         self.strikes = []
         self.released = []
+        self.held = []
         self.collide_actor = -1
         self.collide_mask = 0
         self.m = m
@@ -3614,6 +3977,21 @@ class StandIn:
     def player_point(self):
         return _player_point(self.m)
 
+    def actor_op(self, t):
+        return _actor_op(self.m, t)
+
+    def actor_xz(self, t):
+        return _actor_xz(self.m, t)
+
+    def actor_size(self, t):
+        return _actor_size(self.m, t)
+
+    def actor_target(self, t, at):
+        return _actor_target(self.m, t, at)
+
+    def hold(self, c):
+        self.held.append(c)
+
     def attack_hit(self, code, flags, kind, strength, stat, pct, back):
         self.hits.append([code, flags, strength, stat, pct,
                           None if back is None else [v & 0xFFFFFFFF for v in back]])
@@ -3659,7 +4037,9 @@ SPELLS_SENT = ((FIRE_BALL, 0x384, "the fire ball", (), 80), (STONE, 0x1F4, "ston
                (LIGHTNING, 0x258, "lightning", (6,), 120),
                (LIGHTNING, 0x258, "lightning, anywhere", (2, "anywhere"), 120),
                (0x7D, 0x258, "0x7d", (6,), 120),
-               (0x81, 0x258, "0x81", (6,), 120))
+               (0x81, 0x258, "0x81", (6,), 120),
+               (FREEZE, 0xFA, "freeze", ("view",), 160),
+               (THEDEK, 0xFA, "thedek", ("view",), 160))
 """The attacking spells the checks send: the kind, the speed its arm of
 player_action gives it, its name, what follows the velocity ("view" a
 pointer to view_angles; "slot?" the creature in sight, now and then the

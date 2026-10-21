@@ -93,6 +93,12 @@ const SPHERE2 := 0x44
 const SPHERE := 0x45
 const SPARK := 0x03
 const LIGHTNING := 0x71            # the creatures' 0x7d and 0x81; bolts 0x72, 0x7e, 0x80; spheres 0x13, 0x29, 0x2d
+const FREEZE := 0x10
+const THEDEK := 0x05
+const SEGMENT := 0x74              # freeze's trail
+const SEGMENT2 := 0x67             # thedek's
+const BLADE := 0x6C                # thedek's blades
+const TRAILS := 0x801E7594         # four trails of 24 entries of 24 bytes
 const BANK_KEY := 0x20000          # KFAnim's key for model_table[index] of the resident bank
 const EMPTY := [0x08, 0x0A, 0x0E, 0x18, 0x1D, 0x2B, 0x39, 0x3B, 0x3D, 0x3F, 0x41, 0x43, 0x49,
 	0x4A, 0x4D, 0x4E, 0x4F, 0x54, 0x57, 0x60, 0x61, 0x62, 0x63, 0x68, 0x69, 0x6A, 0x6B, 0x6D,
@@ -120,6 +126,8 @@ var collide_mask := 0               # 0x801e6488: what the last query answered
 var tick_frame := PackedByteArray()  # effect_tick's stack frame (0x2b8): what one arm leaves the next
 var surface18 := 100000             # 0x801e647c: the water the last query found
 var collision_surface := 100000     # 0x801e6474: the nearest surface the last tile query found
+var trails := PackedByteArray()     # 0x801e7594: freeze's and thedek's four trails
+var trail_next := 0                 # gp+0x124: the next of them
 var acc := 0.0
 var player: Node3D
 var coll: KFCollision
@@ -162,6 +170,9 @@ func clear() -> void:
 		m[k * STRIDE] = 0xFF
 	tick_frame.resize(0x2B8)
 	tick_frame.fill(0)
+	trails.resize(4 * 576)
+	trails.fill(0)
+	trail_next = 0
 
 
 # @port engine -- runs effect_driver at the game's 15 frames a second
@@ -190,6 +201,11 @@ func u16(o: int) -> int:
 # @port helper -- a signed halfword of the slots
 func s16(o: int) -> int:
 	return m.decode_s16(o)
+
+
+# @port helper -- an unsigned word of the slots
+func u32(o: int) -> int:
+	return m.decode_u32(o)
 
 
 # @port helper -- a signed word of the slots
@@ -679,6 +695,29 @@ func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array,
 		SLAYER:                             # 0x80055718: not drawn
 			w8(s + 8, 0)
 			w16(s + 0x10, 0x14)             # with its sound (0x65), not here
+		FREEZE, THEDEK:                     # 0x80054f5c, 0x8005506c
+			_spawn_freeze(s, kind, args)
+		SEGMENT, SEGMENT2:                  # 0x8005516c, 0x800551e0
+			_spawn_segment(s, kind, args)
+		BLADE:                              # 0x80054044, a thedek blade
+			w8(s + 8, 1)
+			w8(s + 9, 5)
+			w8(s + 2, 0x38)
+			w8(s + 3, 0x38)
+			w8(s + 0xC, 0x34)
+			w16(s + 0x12, 0x1000)
+			w8(s + 4, 0)
+			w16(s + 0x30, 0xFA0)
+			w16(s + 0x32, 0x100)
+			w16(s + 0x34, 0xFA0)
+			w16(s + 0x28, 0)
+			w16(s + 0x2C, 0)
+			w16(s + 0x44, 0)
+			w16(s + 0x10, 0x32)
+			w16(s + 0xE, 0)
+			for o in [0x38, 0x3A, 0x3C]:
+				w16(s + o, 0)
+			w16(s + 0x2A, int(args[1]))     # its place round the creature
 		LIGHTNING, 0x7D, 0x81:              # 0x80055290, 0x80055258, 0x80055274
 			particle(s, 0xA, 0x800 if kind == LIGHTNING else 0x1000, 5)
 			w16(s + 0xE, 0x40 if kind == LIGHTNING else (0 if kind == 0x7D else 0xC0))
@@ -951,6 +990,12 @@ func tick(s: int) -> void:
 			_tick_bolt_of(s)
 		0x13, 0x29, 0x2D:
 			_tick_bolt_sphere(s)
+		FREEZE, THEDEK:
+			_tick_freeze(s)
+		SEGMENT, SEGMENT2:
+			_tick_segment(s)
+		BLADE:
+			_tick_blade(s)
 
 
 # The fire ball (0x80056910): in flight (+7 0) effect_move at radius 0xb4 and
@@ -1645,6 +1690,292 @@ func _tick_bolt_sphere(s: int) -> void:
 	spawn(0xA, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [tick_frame.slice(0x168, 0x170), 0x2000,
 		-0x80, 0xF, 0xC, 0xA, 1, 1], true)
 	w16(s + 0x2A, u16(s + 0x2A) + 0x40)
+
+
+# --- freeze and thedek ------------------------------------------------------
+
+# The trails freeze and thedek draw (0x801e7594): four buffers of 24 entries
+# of 24 bytes -- a point and angles -- taken round by gp+0x124.
+# @port helper -- a byte offset into trails for the address a slot keeps at +0x44
+func _trail(addr: int) -> int:
+	return (addr & 0xFFFFFFFF) - TRAILS
+
+
+# Freeze's and thedek's arm (0x80054f5c; thedek's 0x8005506c): not drawn
+# itself; the angles args[1] points at; the next of the four trails, its
+# address at +0x44 and every entry the point and the angles; +0x48 its head,
+# +0x49 0; a life of 0x96. Freeze +9 5 and +0xe 0x40, thedek +9 4 and 0.
+# @orig game:0x80054f5c effect_spawn+0x12d8  status:verified -- freeze's; thedek's (0x8005506c) the same but +9 and +0xe; tools/effects.py spell_hit_check against the game's own; the self-test this to it
+func _spawn_freeze(s: int, kind: int, args: Array) -> void:
+	w8(s + 4, 0x80)
+	w8(s + 9, 5 if kind == FREEZE else 4)
+	for o in [0x34, 0x32, 0x30]:
+		w16(s + o, 0x1000)
+	w8(s + 0xC, 0x34)
+	w8(s + 8, 0)
+	w8(s + 2, 0)
+	w8(s + 3, 0)
+	w16(s + 0x12, 0x800)
+	put(s + 0x28, (args[1] as PackedByteArray).slice(0, 8))
+	var addr := TRAILS + 576 * trail_next
+	w32(s + 0x44, addr)
+	trail_next = (trail_next + 1) & 3
+	var o := _trail(addr)
+	for j in 24:
+		for i in 16:
+			trails[o + 24 * j + i] = m[s + 0x18 + i]
+		for i in 8:
+			trails[o + 24 * j + 16 + i] = m[s + 0x28 + i]
+	w16(s + 0x10, 0x96)
+	w8(s + 0x48, 0)
+	w8(s + 0x49, 0)
+	w16(s + 0xE, 0x40 if kind == FREEZE else 0)    # and its sound (0x97, 0x91), not here
+
+
+# Freeze (0x8005a64c) and thedek (0x8005ab20), by +7. 0: eight segments
+# (0x74; 0x67) along its trail, and on. 1: homing (effect_seek: 0xfa at most,
+# pulled 0x19 -- 0x64 within 0x400 -- turning 0x20, radius 0xc8, cones 0x800),
+# a new head on its trail each frame; with under three frames left, or
+# meeting anything but a creature, it ends (+7 3). Meeting a creature it hands
+# it to actor_attack_player as 0x10010 -- held -- and, the creature flinching
+# or dying (+0xe 2 or 3), takes it (+7 2): drawn round it as model 0x13, held
+# every frame, set on its middle and circling it, growing to its size; thedek
+# with eight blades (0x6c) about it and a puff off it a frame; at +0x49 0x3c
+# it lets go (+7 4). 3: the trail wound back, then gone and the creature let
+# go. 4: freeze 24 puffs, thedek two, the creature let go, gone.
+# @orig game:0x8005a64c effect_tick+0x3d90  status:verified -- freeze's; thedek's (0x8005ab20) the same but its blades and puffs; tools/effects.py spell_hit_check against the game's own end to end; the self-test this to it; the sounds not here
+func _tick_freeze(s: int) -> void:
+	var kind := u8(s + 1)
+	var ph := u8(s + 7)
+	var seg := SEGMENT if kind == FREEZE else SEGMENT2
+	if ph == 0:
+		var c := -1
+		for i in 8:
+			c = spawn(0xA, 0, seg, m.slice(s + 0x18, s + 0x28), [m.slice(s + 0x38, s + 0x40),
+				m.slice(s + 0x28, s + 0x30), i], true)
+			if c >= 0:
+				if i == 0:
+					w8(c + 3, 0x10)
+				w8(c + 0x45, i)
+				w8(c + 0x44, s / STRIDE)
+		if c >= 0:
+			w8(c + 3, 0x12)
+		w8(s + 7, 1)
+		ph = 1
+	if ph == 1:
+		if s16(s + 0x10) < 3:
+			_trail_end(s)
+			return
+		var r := seek(0xFA, 0x19, 0x20, 0xC8, 0, 0x400, 0x64, 0x800)
+		if r != -1:
+			_trail_head(s)
+			return
+		w16(s + 0x10, -1)
+		if int(world.collide_mask) != 0x10:
+			_trail_end(s)
+			return
+		_hand(s, 0x10010, 0x1388, null)
+		var t := int(world.collide_actor) & 0xFF
+		w8(s + 0x4A, t)
+		if ((int(world.actor_op(t)) - 2) & 0xFFFFFFFF) >= 2:
+			_trail_end(s)
+			return
+		var xz: Array = world.actor_xz(t)
+		w8(s + 8, 1)
+		w8(s + 3, 0x13)
+		w8(s + 7, 2)
+		w8(s + 0x49, 0)
+		w16(s + 0x2C, 0)
+		w16(s + 0x28, 0)
+		w16(s + 0x2E, -coll.vec_angle(s32v(s32(s + 0x18) - int(xz[0])),
+			s32v(s32(s + 0x20) - int(xz[1]))))
+		if kind == THEDEK:
+			for i in 8:
+				spawn(0xA, 0, BLADE, world.actor_point(t), [null, i << 9], true)
+		ph = 2
+	if ph == 2:
+		_circle(s, kind)
+	elif ph == 3:
+		_trail_step(s)
+		if u8(s + 0x49) == 0:
+			world.release(u8(s + 0x4A))
+			w8(s, 0xFF)
+		else:
+			w8(s + 0x49, u8(s + 0x49) - 1)
+	elif ph == 4:
+		if kind == FREEZE:
+			for _n in 24:
+				tick_frame.encode_s16(0x1C8, _div7fff(600 * int(world.rand())) - 0x12C)
+				tick_frame.encode_s16(0x1CA, _div7fff(-300 * int(world.rand())))
+				tick_frame.encode_s16(0x1CC, _div7fff(600 * int(world.rand())) - 0x12C)
+				spawn(0xA, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [tick_frame.slice(0x1C8, 0x1D0),
+					0x5DC, -0x80, 9, 0x30, 0, 1, 0], true)   # a sound (0x27) every eighth, not here
+		else:
+			for _n in 2:
+				tick_frame.encode_s16(0x1C8, _div7fff(200 * int(world.rand())) - 0x64)
+				tick_frame.encode_s16(0x1CA, -_div7fff(200 * int(world.rand())) - 0xC8)
+				tick_frame.encode_s16(0x1CC, _div7fff(200 * int(world.rand())) - 0x64)
+				spawn(0xA, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [tick_frame.slice(0x1C8, 0x1D0),
+					0x1000, 0, 5, 0x1C, 0xA, 1, 1], true)
+		world.release(u8(s + 0x4A))
+		w8(s, 0xFF)
+
+
+# The end of the homing (0x8005abc8): +7 3, no life, +0x49 the trail's 24.
+# @orig game:0x8005abc8 effect_tick+0x430c  status:verified -- through freeze and thedek
+func _trail_end(s: int) -> void:
+	w8(s + 7, 3)
+	w16(s + 0x10, -1)
+	w8(s + 0x49, 0x18)
+
+
+# @port helper -- +0x48, the trail's head, one on, round at 24
+func _trail_step(s: int) -> void:
+	var h := (u8(s + 0x48) + 1) & 0xFF
+	w8(s + 0x48, 0 if h >= 0x18 else h)
+
+
+# A new head on the trail (0x8005ad10): the point, its height by
+# sin(+0x49 << 4) / 8, the angles with the pitch by cos(+0x49 << 4) / 16;
+# +0x49 on by 8.
+# @orig game:0x8005ad10 effect_tick+0x4454  status:verified -- through freeze and thedek
+func _trail_head(s: int) -> void:
+	_trail_step(s)
+	var e := _trail(u32(s + 0x44)) + 24 * u8(s + 0x48)
+	var a := u8(s + 0x49) << 4
+	w8(s + 0x49, u8(s + 0x49) + 8)
+	trails.encode_s32(e, s32(s + 0x18))
+	trails.encode_s32(e + 8, s32(s + 0x20))
+	trails.encode_s32(e + 4, s32v(s32(s + 0x1C) + (coll.game_sin(a) >> 3)))
+	trails.encode_u16(e + 0x12, u16(s + 0x2A))
+	trails.encode_u16(e + 0x14, u16(s + 0x2C))
+	trails.encode_u16(e + 0x10, (u16(s + 0x28) + (coll.game_cos(a) >> 4)) & 0xFFFF)
+
+
+# Holding a creature (0x8005a7e8; thedek's 0x8005adb8): it held (+0x28 bit
+# 0x800); thedek a puff off it; the point on its middle (sub_8004eee0); for
+# 16 frames growing to its radius across and its height; circling it,
+# 0x186a0 over the radius a frame at 6400/4096 of it, each frame's place the
+# trail's new head, bobbing by sin(2a) / 16; at 0x3c frames +7 4.
+# @orig game:0x8005a7e8 effect_tick+0x3f2c  status:verified -- freeze's; thedek's (0x8005adb8) with its puff; through spell_hit_check
+func _circle(s: int, kind: int) -> void:
+	var t := u8(s + 0x4A)
+	world.hold(t)
+	if kind == THEDEK:
+		tick_frame.encode_s16(0x1C8, _div7fff(100 * int(world.rand())) - 0x32)
+		tick_frame.encode_s16(0x1CA, -_div7fff(160 * int(world.rand())) - 0xC8)
+		tick_frame.encode_s16(0x1CC, _div7fff(100 * int(world.rand())) - 0x32)
+		spawn(0xA, 0, TRAIL, world.actor_point(t), [tick_frame.slice(0x1C8, 0x1D0), 0x1000,
+			0x200, 6, 0x1C, 2, 1, 2], true)
+	_trail_step(s)
+	var size: Array = world.actor_size(t)
+	var radius := int(size[0])
+	var height := int(size[1])
+	put(s + 0x18, world.actor_target(t, 0x1B8 if kind == FREEZE else 0x1E8))
+	w32(s + 0x1C, s32(s + 0x1C) - (height >> 1))
+	var n := u8(s + 0x49)
+	if n >= 0x3C:
+		w8(s + 7, 4)
+		return
+	if n < 0x11:
+		var v := KFCreatureAI.lerp_fixed(0, radius, n << 9)
+		w16(s + 0x34, v)
+		w16(s + 0x30, v)
+		w16(s + 0x32, KFCreatureAI.lerp_fixed(0, height, 350 * n))
+	var step := _trunc(0x186A0, radius) if radius != 0 else 0
+	var r := (6400 * radius) >> 12
+	var a := s16(s + 0x2E)
+	w8(s + 0x49, n + 1)
+	var e := _trail(u32(s + 0x44)) + 24 * u8(s + 0x48)
+	w16(s + 0x2E, a + step)
+	trails.encode_s32(e, s32v(((coll.game_sin(a) * r) >> 12) + s32(s + 0x18)))
+	trails.encode_s32(e + 8, s32v(((coll.game_cos(a) * r) >> 12) + s32(s + 0x20)))
+	trails.encode_s32(e + 4, s32v((coll.game_sin(a << 1) >> 4) + s32(s + 0x1C)))
+	trails.encode_u16(e + 0x12, (-a - 0x400) & 0xFFFF)
+	trails.encode_u16(e + 0x14, 0)
+	trails.encode_u16(e + 0x10, (coll.game_cos(a << 1) >> 4) & 0xFFFF)
+
+
+# A trail's segment (0x8005516c, freeze's 0x74; 0x800551e0, thedek's 0x67):
+# model 0x11, the angles args[1] points at; freeze's +9 5, +0xe 0x40 and no
+# life; thedek's +9 4, +0xe 0x80 and 0xc8 frames.
+# @orig game:0x8005516c effect_spawn+0x14e8  status:verified -- 0x74's; 0x67's (0x800551e0) the same but +9, +0xe and the life; through spell_hit_check
+func _spawn_segment(s: int, kind: int, args: Array) -> void:
+	w8(s + 8, 1)
+	w8(s + 4, 0x80)
+	w8(s + 9, 5 if kind == SEGMENT else 4)
+	w8(s + 2, 0x11)
+	w8(s + 3, 0x11)
+	w8(s + 0xC, 0x34)
+	w16(s + 0x12, 0x800)
+	for o in [0x34, 0x32, 0x30]:
+		w16(s + o, 0x1000)
+	put(s + 0x28, (args[1] as PackedByteArray).slice(0, 8))
+	if kind == SEGMENT:
+		w16(s + 0xE, 0x40)
+	else:
+		w16(s + 0x10, 0xC8)
+		w16(s + 0xE, 0x80)
+
+
+# A trail's segment (0x8005b234, 0x74; 0x8005b2c8, 0x67): where its head was
+# 3 x its place in the line frames ago, on the trail of the slot +0x44 names;
+# thedek's puffs off it once its life is under 0xbc. Once the head ends (+7 3
+# or more) it lives 3 x its place frames more; gone when the head lets go.
+# @orig game:0x8005b234 effect_tick+0x4978  status:verified -- 0x74's; 0x67's (0x8005b2c8) with its puffs; through spell_hit_check
+func _tick_segment(s: int) -> void:
+	var kind := u8(s + 1)
+	var head := STRIDE * u8(s + 0x44)
+	if kind == SEGMENT2 and s16(s + 0x10) < 0xBC:
+		tick_frame.encode_s16(0x1F8, ((100 * int(world.rand())) >> 15) - 0x32)
+		tick_frame.encode_s16(0x1FC, ((100 * int(world.rand())) >> 15) - 0x32)
+		tick_frame.encode_s16(0x1FA, -0x78)
+		spawn(0xA, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [tick_frame.slice(0x1F8, 0x200), 0x1000,
+			-0x100, 4, 0x16, 0, 2, 5], true)
+	if u8(s + 7) == 0 and u8(head + 7) >= 3:
+		w8(s + 7, 1)
+		w16(s + 0x10, 3 * u8(s + 0x45))
+	if u8(head + 7) == 4:
+		w8(s, 0xFF)
+		return
+	var i := u8(head + 0x48) - 3 * u8(s + 0x45)
+	if i < 0:
+		i += 0x18
+	var e := _trail(u32(head + 0x44)) + 24 * i
+	for k in 16:
+		m[s + 0x18 + k] = trails[e + k]
+	for k in 8:
+		m[s + 0x28 + k] = trails[e + 16 + k]
+
+
+# A thedek blade (0x8005a280): effect_move at 0xb4 with no velocity, a
+# creature met struck -- but its +0 is 0, which asks nothing; turning 0xc8 a
+# frame, rising 0x100 a frame past 0x1068 (+0x44 0), standing 0x1e frames (1),
+# sinking 0x100 and narrowing 0x80 a frame, gone under 0x78 (2).
+# @orig game:0x8005a280 effect_tick+0x39c4  status:verified -- through thedek, tools/effects.py spell_hit_check
+func _tick_blade(s: int) -> void:
+	var hit := move(0xB4, 0, 0)
+	if hit & 0x10:
+		_attack(s, hit)
+	var n := s16(s + 0x44)
+	if n == 0:
+		w16(s + 0x32, u16(s + 0x32) + 0x100)
+		w16(s + 0x2A, u16(s + 0x2A) + 0xC8)
+		if s16(s + 0x32) >= 0x1069:
+			w16(s + 0x46, 0)
+			w16(s + 0x44, u16(s + 0x44) + 1)
+	elif n == 1:
+		w16(s + 0x46, u16(s + 0x46) + 1)
+		w16(s + 0x2A, u16(s + 0x2A) + 0xC8)
+		if s16(s + 0x46) >= 0x1F:
+			w16(s + 0x44, u16(s + 0x44) + 1)
+	elif n == 2:
+		w16(s + 0x32, u16(s + 0x32) - 0x100)
+		w16(s + 0x34, u16(s + 0x34) - 0x80)
+		w16(s + 0x30, u16(s + 0x30) - 0x80)
+		w16(s + 0x2A, u16(s + 0x2A) + 0xC8)
+		if s16(s + 0x32) < 0x78:
+			w8(s, 0xFF)
 
 
 # Haze (0x80058164): each thing it meets it strikes once (+0x44 the latch,
@@ -2423,6 +2754,76 @@ func actor_point(t: int) -> PackedByteArray:
 	b.encode_s32(4, int(list[t]["py"]))
 	b.encode_s32(8, int(list[t]["pz"]))
 	return b
+
+
+# A creature's behaviour opcode (+0xe), as freeze asks after its hit.
+# @port helper -- an actor's op from actors.gd
+func actor_op(t: int) -> int:
+	var a = _actor(t)
+	return int(a.get("op", 0)) if a != null else 0
+
+
+# @port helper -- an actor's x and z from actors.gd
+func actor_xz(t: int) -> Array:
+	var a = _actor(t)
+	return [int(a["px"]), int(a["pz"])] if a != null else [0, 0]
+
+
+# @port helper -- an actor's radius (+0x1c) and height (+0x1e) from actors.gd
+func actor_size(t: int) -> Array:
+	var a = _actor(t)
+	return [int(a["radius"]), int(a["height"])] if a != null else [0, 0]
+
+
+# sub_8004eee0 (creature t, out at tick_frame `off`): by its +0x28 & 3, 0
+# its place; 1 its place plus its kind's mark (entity +0xc..+0x10); 2 that
+# mark turned by its angles plus its place -- written at `off`, whose fourth
+# word is the frame's; 3 the 16 bytes at address 2, here nothing.
+# @orig game:0x8004eee0 sub_8004eee0  status:partial -- 0 and 1 as the game's; 2 turned by the yaw alone (the port keeps no pitch or roll for a creature); 3 answers zeros; through freeze and thedek, tools/effects.py spell_hit_check (every snapshot's creature is a 0)
+func actor_target(t: int, off: int) -> PackedByteArray:
+	var b := PackedByteArray()
+	b.resize(16)
+	var a = _actor(t)
+	if a == null:
+		return b
+	var mode := int(a.get("eflags", 0)) & 3
+	if mode == 0:
+		b.encode_s32(0, int(a["px"]))
+		b.encode_s32(4, int(a["py"]))
+		b.encode_s32(8, int(a["pz"]))
+		return b
+	if mode == 3:
+		return b
+	var an := get_node_or_null("../Actors")
+	var kd: Dictionary = an.get("kinds").get(int(a["kind"]), {}) if an else {}
+	var mark: Array = kd.get("mark", [0, 0, 0])
+	var v := [int(mark[0]), int(mark[1]), int(mark[2])]
+	if mode == 2:
+		var r := KFWeapon.vec_rotate(coll, 0, int(a["ry"]) & 0xFFF, 0, v)
+		v = [int(r[0]), int(r[1]), int(r[2])]
+	tick_frame.encode_s32(off, s32v(v[0] + int(a["px"])))
+	tick_frame.encode_s32(off + 4, s32v(v[1] + int(a["py"])))
+	tick_frame.encode_s32(off + 8, s32v(v[2] + int(a["pz"])))
+	return tick_frame.slice(off, off + 16)
+
+
+# An effect holding creature c (+0x28 bit 0x800, 0x8005a810).
+# @port helper -- the hold handed to actors.gd
+func hold(c: int) -> void:
+	var an := get_node_or_null("../Actors")
+	if an and an.has_method("hold"):
+		an.call("hold", c)
+
+
+# @port helper -- the creature in slot t, actors.gd's, or null
+func _actor(t: int):
+	var an := get_node_or_null("../Actors")
+	if an == null or an.get("actors") == null:
+		return null
+	var list: Array = an.get("actors")
+	if t < 0 or t >= list.size():
+		return null
+	return list[t]
 
 
 # player_pos as an arm copies it, 16 bytes; the fourth word (0x801b25fc,

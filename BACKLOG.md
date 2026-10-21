@@ -844,7 +844,7 @@ each one is also in its function's marker, as `partial` and what differs:
   `kind_behaviour_with_op` twice. Each copy is marked, and the self-test would
   show one drifting; folding them into one is a refactor nobody has needed yet.
 
-* **Casting is in; most of what it casts is not.** `player.gd` has the
+* **Casting is in, and what it casts.** `player.gd` has the
   buttons, `cast_spell`, the pending action, `skill_practice`, the USE
   stretch, the timers and the attacking arms (the aim, the creature in
   sight, the spawns), all held to the game's own code, and the effects of
@@ -855,7 +855,8 @@ each one is also in its function's marker, as `partial` and what differs:
   0x5b), tornado, fire wall, fire storm (homing: `effect_home`,
   `effect_steer`) and flame (its head's vertex, its fire balls, its two
   bursts), flash (homing: `effect_seek`), lightning (its bolts and their
-  spheres, and the earth wave it leaves), with `effect_strike`'s creature
+  spheres, and the earth wave it leaves), freeze and thedek (their trails,
+  the hold, thedek's blades) -- every attacking spell -- with `effect_strike`'s creature
   half (`0x8004ceac`); and the weapons' charged swing -- the window, the
   shots, `weapon_may_cast` and
   `spell_begin` -- the combination and the second swing it starts, with
@@ -864,10 +865,9 @@ each one is also in its function's marker, as `partial` and what differs:
   45 unlocking their spells in `equip_weapon`. The bows' swing (weapons
   `0x1b`, `0x1c`) is still not read.
   Not yet:
-  the other attacking kinds' effects -- freeze and thedek, 0x10 and 0x05,
-  each a five-arm machine of its own drawing a trail through four buffers
-  of 24 at 0x801e7594 (gp+0x124 the next) -- each of which spends its MP
-  and spawns nothing that stays (lightning is in: FORMATS.md, "Lightning"); tornado's and fire wall's strike points, stack
+  `sub_8004eee0`'s arms for a creature whose `+0x28 & 3` is not 0 (freeze
+  and thedek take hold by it; none in the snapshots, so the port turns
+  kind 2's mark by the yaw alone); tornado's and fire wall's strike points, stack
   leftovers the first reader of a frame takes from the rest of the game's
   frame (FORMATS.md, "Tornado", "Fire wall"), and flash's second burst,
   whose life is one (FORMATS.md, "The weapons' spells") -- the port keeps

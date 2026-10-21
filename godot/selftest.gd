@@ -766,6 +766,7 @@ func _effects() -> bool:
 		rp.rands = (run.get("spawn_rand", []) as Array).map(func(x): return int(x))
 		rp.cws = _ints(run.get("spawn_ask", {}).get("cw", []))
 		rp.sfs = _ints(run.get("spawn_ask", {}).get("sf", []))
+		fx.trail_next = int(run["fields"].get("tn", 0))
 		for sp in run["spawns"]:
 			var args := []
 			for v in sp[4]:
@@ -795,12 +796,15 @@ func _effects() -> bool:
 			rp.scs = _ints(f.get("sc", []))
 			rp.sts = _ints(f.get("st", []))
 			rp.aps = _ints(f.get("ap", []))
+			rp.aqs = f.get("aq", []).duplicate(true)
+			rp.held = []
 			rp.rands = (f.get("rand", []) as Array).map(func(x): return int(x))
 			fx.driver()
 			var same: bool = rp.bad == "" and rp.i == (f["q"] as Array).size() \
 				and rp.cws.is_empty() and rp.sfs.is_empty() and rp.sis.is_empty() \
 				and rp.ams.is_empty() and rp.scs.is_empty() and rp.sts.is_empty() \
-				and rp.aps.is_empty() \
+				and rp.aps.is_empty() and rp.aqs.is_empty() \
+				and str(rp.held) == str(_ints(f.get("held", []))) \
 				and rp.rands.is_empty() and str(rp.hits) == str(_ints(f["hits"])) \
 				and str(rp.hurts) == str(_ints(f.get("hurts", []))) \
 				and str(rp.strikes) == str(_ints(f.get("strikes", []))) \
@@ -816,6 +820,7 @@ func _effects() -> bool:
 							["sf", not rp.sfs.is_empty()], ["si", not rp.sis.is_empty()],
 							["am", not rp.ams.is_empty()], ["sc", not rp.scs.is_empty()],
 							["st", not rp.sts.is_empty()], ["ap", not rp.aps.is_empty()],
+							["aq", not rp.aqs.is_empty()], ["held", str(rp.held) != str(_ints(f.get("held", [])))],
 							["rand", not rp.rands.is_empty()],
 							["slots", fx.m.hex_encode().md5_text() != str(f["md5"])]]:
 						if q[1]:
@@ -980,6 +985,41 @@ class FxReplay:
 		for i in 4:
 			b.encode_s32(4 * i, int(c[1 + i]))
 		return b
+
+	var aqs: Array = []
+	var held: Array = []
+
+	func _aq(what: String, t: int) -> Array:
+		if aqs.is_empty():
+			if bad == "":
+				bad = "an extra %s %d" % [what, t]
+			return [0, 0, 0, 0]
+		var c: Array = aqs.pop_front()
+		if (str(c[0]) != what or int(c[1]) != t) and bad == "":
+			bad = "%s %d, python %s %d" % [what, t, str(c[0]), int(c[1])]
+		return c.slice(2)
+
+	func actor_op(t: int) -> int:
+		return int(_aq("actor_op", t)[0])
+
+	func actor_xz(t: int) -> Array:
+		var c := _aq("actor_xz", t)
+		return [int(c[0]), int(c[1])]
+
+	func actor_size(t: int) -> Array:
+		var c := _aq("actor_size", t)
+		return [int(c[0]), int(c[1])]
+
+	func actor_target(t: int, _off: int) -> PackedByteArray:
+		var c := _aq("actor_target", t)
+		var b := PackedByteArray()
+		b.resize(16)
+		for i in 4:
+			b.encode_s32(4 * i, int(c[i]))
+		return b
+
+	func hold(c: int) -> void:
+		held.append(c)
 
 	func player_point() -> PackedByteArray:
 		var b := PackedByteArray()

@@ -612,6 +612,15 @@ func release(k: int) -> void:
 		a["eflags"] = int(a.get("eflags", 0)) & ~0x800
 
 
+# A hold taken (freeze's and thedek's, 0x8005a810): the creature's +0x28 bit
+# 0x800.
+# @port helper -- the effect's write on a creature, by its slot
+func hold(k: int) -> void:
+	var a = actors[k] if k >= 0 and k < actors.size() else null
+	if a != null:
+		a["eflags"] = int(a.get("eflags", 0)) | 0x800
+
+
 # kind_behaviour_with_op for the creature in a slot, as a spell's aim asks
 # it (0x8002c274): its kind's first behaviour with the opcode, or null.
 # @port helper -- _with_op by a creature's slot

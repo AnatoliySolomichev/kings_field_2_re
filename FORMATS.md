@@ -7324,6 +7324,62 @@ anywhere into the walls, and the creatures' two kinds the same way: 126 of
 no lightning in the snapshots' places fell over water. In the port
 (`effects.gd`), the self-test holding it to the Python.
 
+### Freeze and thedek
+
+Two arms each (`0x80054f5c`/`0x8005a64c` freeze, kind `0x10`;
+`0x8005506c`/`0x8005ab20` thedek, kind 5), one machine: `player_action` sends
+either at `0xfa` with the view's angles, and the slot itself is not drawn --
+**a trail** is. `effect_spawn` takes the next of four buffers of 24 entries
+of 24 bytes at `0x801e7594` (`gp+0x124` counts them round), keeps its address
+at `+0x44` and fills every entry with the point and the angles; `+0x48` is
+the trail's head and `+0x49` a count. In `+7`:
+
+```
+0             eight segments (freeze's 0x74, thedek's 0x67: model 0x11, the
+              first drawn as 0x10, the last as 0x12), each handed the slot's
+              number (+0x44) and its place in the line (+0x45); then on.
+1             homing -- effect_seek, 0xfa at most, pulled 0x19 a frame (0x64
+              within 0x400), turning 0x20, radius 0xc8, cones 0x800 -- and a
+              new head on the trail every frame: the point, its height by
+              sin(+0x49 << 4) / 8, its pitch by cos / 16, +0x49 on by 8. With
+              under three frames left, or meeting anything but a creature,
+              it ends (+7 3, +0x49 24). Meeting a creature: actor_attack_player
+              with 0x10010 -- the 0x10000 holds it -- and if the creature
+              then flinches or dies (+0xe 2 or 3) it is taken (+7 2): model
+              0x13, drawn; thedek also lays eight blades (0x6c) on it.
+2             the creature held (+0x28 bit 0x800) every frame; the point its
+              middle (sub_8004eee0, the kind's mark when +0x28 & 3 says so);
+              for 16 frames growing to its radius across and its height;
+              circling it -- 0x186a0 / the radius a frame, at 6400/4096 of the
+              radius -- each frame's place the trail's new head, bobbing by
+              sin(2a) / 16; thedek a puff off it each frame. At 0x3c frames +7 4.
+3             the trail's head wound on, +0x49 down to 0; then gone, the
+              creature let go.
+4             freeze 24 puffs (a sound every eighth), thedek two; the creature
+              let go; gone.
+a segment     where the head was 3 x its place frames ago -- position and
+              angles off the trail; thedek's (life 0xc8) a puff once its life
+              is under 0xbc. Once the head ends (+7 3 or 4) it lives 3 x its
+              place frames more; gone when the head reaches 4.
+a blade (0x6c) model 0x38, still, its yaw 0x200 x its place, turning 0xc8 a
+              frame: rising 0x100 a frame to 0x1068, standing 0x1e frames,
+              sinking. Its +0 is 0, so its effect_move asks nothing and it
+              strikes nothing.
+```
+
+`sub_8004eee0` (actor, out) is where an effect takes hold of a creature: by
+`+0x28 & 3`, 0 its place (`+0x2c`, the 16 bytes); 1 its place plus the
+kind's mark (entity `+0xc..+0x10`); 2 that mark turned by its angles
+(`+0x40`, `vec_rotate`) plus its place; 3 the address 2, which nothing
+should ask. The out buffer's fourth word is the caller's frame's.
+
+Against the game's own end to end (`spell_hit_check`), sent at the
+snapshots' creatures: 126 of 126 runs each, 12 of 42 a creature taken and
+circled to the end. Every snapshot's creature has `+0x28 & 3` of 0, so
+`sub_8004eee0`'s other arms have not been run; nor has the trails' round of
+four (each run casts one). In the port (`effects.gd`), the self-test holding
+it to the Python, and `actors.gd` taking the hold.
+
 ### The player's death
 
 `apply_damage` that leaves no HP calls `player_throw` (`0x80030a6c`) with the

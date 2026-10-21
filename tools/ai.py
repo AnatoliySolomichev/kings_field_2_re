@@ -831,7 +831,10 @@ def kind_of(lv, k, blob=None):
             "gold": u16f(e, 0x30),
             # +0x32: the scale actor_copy_kind puts at +0x48..+0x4c, which
             # render_walk hands draw_model_plain's ScaleMatrix
-            "scale": u16f(e, 0x32)}
+            "scale": u16f(e, 0x32),
+            # +0xc..+0x10: the mark sub_8004eee0 takes hold of a creature
+            # by when its +0x28 & 3 is 1 (added to its place) or 2 (turned)
+            "mark": [s16f(e, 0xC), s16f(e, 0xE), s16f(e, 0x10)]}
 
 
 def new_actor(x, y, z, yaw, kind, flags=0):

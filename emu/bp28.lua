@@ -9,8 +9,8 @@
 --     swing's window opens -- the charged swing's spell;
 --   * with both meters full, press CROSS, SQUARE, TRIANGLE in turn (the
 --     default scheme), each within twenty frames -- the second swing's;
---   * cast flash and lightning bolt (the magic menu) at a creature and at a
---     wall, and lightning once off a ledge, over a drop.
+--   * cast flash, lightning bolt, freeze and thedek (the magic menu) at a
+--     creature and at a wall, and lightning once off a ledge, over a drop.
 -- Once each is enough. tools/effects.py is what this is for: the machine is
 -- held to the game's own code already, and this holds it to the game in play.
 --

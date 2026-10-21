@@ -517,8 +517,8 @@ hit goes to. Held to the game's own over every snapshot's creatures, **1260
 of 1260**; `export` writes `hitcheck.json` in actors.gd's form.
 `tools/effects.py spell_hit_check` runs the fire ball, stone, wind cutter,
 haze, shudom, walwind, earth wave, bortecth, meteor, orladin, tornado,
-fire wall, fire storm, flame, flash and lightning (and the creatures' two
-lightnings, 0x7d and 0x81) through both, and every weapon's
+fire wall, fire storm, flame, flash, lightning (and the creatures' two
+lightnings, 0x7d and 0x81), freeze and thedek through both, and every weapon's
 spell -- ryu-ga's, capricorn's, anorium sword's, vaculacia sword's, Seath's
 sword's, morguline axe's, both of the excellector's, triple fang's, the two
 moonlight swords', dark slayer's (sent at the creatures, from a creature
