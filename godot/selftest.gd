@@ -792,11 +792,15 @@ func _effects() -> bool:
 			rp.sfs = _ints(f.get("sf", []))
 			rp.sis = _ints(f.get("si", []))
 			rp.ams = _ints(f.get("am", []))
+			rp.scs = _ints(f.get("sc", []))
+			rp.sts = _ints(f.get("st", []))
+			rp.aps = _ints(f.get("ap", []))
 			rp.rands = (f.get("rand", []) as Array).map(func(x): return int(x))
 			fx.driver()
 			var same: bool = rp.bad == "" and rp.i == (f["q"] as Array).size() \
 				and rp.cws.is_empty() and rp.sfs.is_empty() and rp.sis.is_empty() \
-				and rp.ams.is_empty() \
+				and rp.ams.is_empty() and rp.scs.is_empty() and rp.sts.is_empty() \
+				and rp.aps.is_empty() \
 				and rp.rands.is_empty() and str(rp.hits) == str(_ints(f["hits"])) \
 				and str(rp.hurts) == str(_ints(f.get("hurts", []))) \
 				and str(rp.strikes) == str(_ints(f.get("strikes", []))) \
@@ -807,10 +811,19 @@ func _effects() -> bool:
 			elif ok:
 				ok = false
 				if first == "":
+					var left := []
+					for q in [["q", rp.i < (f["q"] as Array).size()], ["cw", not rp.cws.is_empty()],
+							["sf", not rp.sfs.is_empty()], ["si", not rp.sis.is_empty()],
+							["am", not rp.ams.is_empty()], ["sc", not rp.scs.is_empty()],
+							["st", not rp.sts.is_empty()], ["ap", not rp.aps.is_empty()],
+							["rand", not rp.rands.is_empty()],
+							["slots", fx.m.hex_encode().md5_text() != str(f["md5"])]]:
+						if q[1]:
+							left.append(q[0])
 					first = "%s, frame %d: %s" % [run["label"], frames, rp.bad if rp.bad != "" else
-						"hits %s, python %s; strikes %s, python %s; hurts %s, python %s" % [
-							str(rp.hits), str(f["hits"]), str(rp.strikes), str(f.get("strikes")),
-							str(rp.hurts), str(f.get("hurts"))]]
+						"%s; hits %s, python %s; strikes %s, python %s; hurts %s, python %s" % [
+							str(left), str(rp.hits), str(f["hits"]), str(rp.strikes),
+							str(f.get("strikes")), str(rp.hurts), str(f.get("hurts"))]]
 		if ok:
 			good += 1
 	fx.free()
@@ -934,6 +947,46 @@ class FxReplay:
 
 	func surface(x: int, y: int, z: int, r: int, h: int) -> int:
 		return _asked(sfs, "surface", [x, y, z, r, h])
+
+	var scs: Array = []
+	var sts: Array = []
+	var aps: Array = []
+
+	func surface_ceiling(x: int, y: int, z: int, r: int, h: int) -> Array:
+		if scs.is_empty():
+			if bad == "":
+				bad = "an extra surface_ceiling %s" % str([x, y, z, r, h])
+			return [0, 0]
+		var c: Array = scs.pop_front()
+		var asked := [x, y, z, r, h]
+		for k in 5:
+			if int(c[k]) != int(asked[k]) and bad == "":
+				bad = "surface_ceiling %s, python %s" % [str(asked), str(c.slice(0, 5))]
+		return [int(c[5]), int(c[6])]
+
+	func spot_taken(x: int, y: int, z: int, r: int, own: int) -> int:
+		return _asked(sts, "spot_taken", [x, y, z, r, own])
+
+	func actor_point(t: int) -> PackedByteArray:
+		var b := PackedByteArray()
+		b.resize(16)
+		if aps.is_empty():
+			if bad == "":
+				bad = "an extra actor_point %d" % t
+			return b
+		var c: Array = aps.pop_front()
+		if int(c[0]) != t and bad == "":
+			bad = "actor_point %d, python %d" % [t, int(c[0])]
+		for i in 4:
+			b.encode_s32(4 * i, int(c[1 + i]))
+		return b
+
+	func player_point() -> PackedByteArray:
+		var b := PackedByteArray()
+		b.resize(16)
+		for i in 4:
+			b.encode_s32(4 * i, field(["px", "py", "pz", "pw"][i]))
+		return b
 
 	func hurt_player(p: Vector3i, a1: int, radius: int, mode: int, edge: int, attacks: Array,
 			effect: int, more: Array, scale: int, pct: int) -> void:

@@ -4091,9 +4091,94 @@ its point every frame -- it comes down short, and none of the runs reached
 a creature. Vaculacia sword's `0x40` (`0x8005474c`, `0x8005763c`):
 particle `0x43` at `0x1400`, turning `0x1f4` a frame, and on what it meets
 sixteen puffs flung from the point, each axis `rand() * 500 >> 15` less
-`0xfa`. The rest -- `0x36`, `0x37`, `0x3c`, `0x46`, `0x47`, `0x48`,
-`0x4b`, and `0x7b`/`0x7c`, which dark slayer's `0x45`/`0x44` spawn -- are
-not read.
+`0xfa`.
+
+The rest, read and held to the game's own the same way (`spell_hit_check`,
+126 of 126 runs each; the arms are in `godot/effects.gd`):
+
+* **The excellector's two**, `0x36` and `0x37`, share one tick
+  (`0x80057aa8`, with `0x31`). The charged swing's are four at once,
+  `player_action` handing each its place in the cast (3 down to 0) and 800
+  more of the cast offset's depth: model `0x3d`, `0x1800` across and `0xc00`
+  high, `0x400` more for each place (`0x80054538`). The second swing's is
+  model `0x39` at `0x1b58`, aimed along its velocity (`0x800545c4`). Both fly
+  through what they meet -- only the tiles end them -- striking each thing
+  once (`+0x44` the latch, cleared on a clear frame) in seven puffs, each
+  axis `rand() * 240 >> 15` less `0x78`.
+* **`0x3c`** (no weapon names it, the first group unlocks it): model `0x1e`,
+  `0x64` across and `0x800` high, starting `0xc8` above the point at `0x1e`
+  a frame upwards and falling 5 a frame faster (`0x80057ba8`); where it lands
+  it spreads `0x100` a frame and is gone past `0x1000`. **It strikes
+  nothing.**
+* **Triple fang's first**, `0x46` (`0x8005773c`): model `0x3f`, rolling
+  `0x190` a frame. At a life of `0x2d`, fifteen frames out, the cast's one
+  splits: two more where it is, the velocity turned an eighth either way --
+  `((2vx - vz) >> 1, vy, (vx + 2vz) >> 1)` and `((2vx + vz) >> 1, vy, (2vz -
+  vx) >> 1)` -- that split no further (`+0x46` 1). What one meets it strikes
+  and **becomes** orladin's burst (`+1` 0x58, `0x28` frames from nothing),
+  with a second burst beside it whose `+0` is 3: that one strikes the player
+  too.
+* **Flash** (`0x14`) is **triple fang's second** (`0x47`), the same two arms
+  (`0x80055424`, `0x80059ba8`; `0x12` shares them, with three frames' grace,
+  `+0xe` `0x140` and a plain burst). `player_action` hands it the view, the
+  cast offset turned by `0x64` a cast, and five numbers: `0x258`, `0x3c`,
+  `0x80`, `0x8c`, `0xa0`. A phase in `+7` counts the frames: under `0x64` it
+  homes -- **`effect_seek`** (`0x80055db0`): `sub_8004d3c4` along its own
+  angles (`0x5dc0`, cones `0x800`) finds a creature, the angles turn towards
+  its middle by `+0x48` each, and `effect_steer` pulls it along them by
+  `+0x46` (`+0x4a` within `0x1770`), at most `+0x44` a frame, radius `0xa0`
+  -- with a splash on water under it and a still puff behind. Meeting
+  something, or at `0x64`, it bursts: model `0x15`, `+7` `0x6e`, `+0 | 3` --
+  **the player struck too** -- growing `0x46` a frame from nothing to
+  `0x31f`, striking a shell twice its size (`effect_grow` `0x2000`, `0xc00`,
+  `0x8000`). It also spawns **a second one of its kind** where it is, `+0 |
+  3`, `+7` `0x65` so that it bursts two frames on, handed its angles and only
+  two words: the arm reads the other five -- `+0x44..+0x4a` and **the life**
+  -- from `effect_tick`'s stack, whatever the last call to hand that many
+  left there. In flight the last such call is its own puff, whose seventh
+  word is 1, so the second one lives one frame and is freed before it
+  bursts: in the 42 times the check made one, every one did. Only something
+  else's call in between -- in the game, any of the code that runs between
+  two passes of `effect_driver` -- could make it burst. The port keeps the
+  words the effects leave (`out_words`), not the rest of the game's.
+* **The second moonlight sword's second**, `0x4b` (`0x80056c7c`): model
+  `0x44` at `0x1400`, aimed along its velocity, rolling `0xc8` a frame, a
+  spark (kind 3: particle `0x45`, `0x4b0` taller a frame, flickering) on
+  every third frame of its life. What it meets -- a creature or an object
+  struck, the tiles not -- it ends in three bursts of `0x58` (`+0 3`, 0,
+  `0x40` and `0x80` across).
+* **The moonlight swords' marks**: `0x48` sends `0x78` and `0x49`/`0x4a` send
+  `0x7a` (model `0x3a`, `0x1800` by `0xa00` by `0xc00`), each with four
+  pillars (`0x5c`, `0x5d`) from the offsets at `0x800818e4`, handed the
+  mark's slot. The first flies straight (`0x8005857c`, `effect_move` `0xb4`,
+  `0x168` high); the second homes (`0x800584a4`, `effect_seek` at most
+  `0x258`, pulled `0x28` -- `0x104` within `0x1000` -- turning `0x24`) and
+  takes its last step back. Either, meeting something or with a frame left,
+  ends in three bursts (`0x48`: model `0x15`, waiting 0, 1 and 2 frames, then
+  growing `0x46` a frame to `0x1f8`, a shell 3.5 times its size), `+0 | 3`.
+  A **pillar** (`0x80058624`) slides across the ground under its mark by its
+  own velocity, stands on the floor below the mark's height
+  (`collide_surface`) as tall as half the room there (`surface - ceiling`,
+  `0x4000` at most), and strikes what stands in it (`collide_query` `0x30`,
+  radius `0xa`, its height); once the mark's slot is free it shrinks to
+  nothing in eight frames (`fixed_madd`, `0x200` a frame) and goes.
+* **Dark slayer's two** are `0x7b` (sent by its spell `0x45`) and `0x7c` (by
+  `0x44`). `0x7b` (`0x80058790`) is not drawn and lives `0x14` frames: on by
+  its velocity, the tiles asked half a step back and where it is
+  (`collide_wrapper_actor`, 5 by `0xa`) -- either met frees it -- and every
+  frame regardless a sphere `0x45` where it is (model `0x15`, growing `0x46`
+  a frame to `0x1a4`, a shell four times it), handed its own `+0`: once it is
+  freed that is `0xff`, and the sphere's slot is born free. `0x7c`
+  (`0x80058898`): model `0x20`, `0x15e` by `0x2000` by `0x15e`, `0x960` under
+  the point, turning `0x190` a frame, on through anything for `0x32` frames.
+  Every frame it looks down a column `0x2710` high, centred on its point: the
+  first creature standing in it (`actor_spot_taken`, `0x64`) gets a sphere
+  `0x44` where it stands, growing to `0x4ec`; with none, **the player** alone
+  in it (`collide_query` `0xb0` answering exactly `0x80`) gets one at the
+  feet, with the effect's own `+0` -- `0x42`, which strikes creatures, not
+  the player.
+
+What is left of the weapons' spells is the sounds, which no arm here plays.
 
 ### Casting: the buttons, cast_spell, and what keeps running
 

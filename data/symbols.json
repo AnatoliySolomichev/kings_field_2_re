@@ -10,6 +10,11 @@
   "kind": "code",
   "evidence": "GAME.EXE header"
  },
+ "0x80055db0": {
+  "name": "effect_seek",
+  "kind": "code",
+  "evidence": "(most, accel, turn, radius, height, near, near_accel, cone): a player's effect (+0 & 0x40) asks sub_8004d3c4 along its own angles (0x5dc0, the cones, no noise) for a creature and turns its pitch and yaw towards that creature's middle by `turn` each (angle_approach); any other effect asks sub_8002b80c after the player. Then effect_steer along direction_from_angles of its angles -- `accel`, or `near_accel` once the distance is `near` or less -- at most `most`; its answer. Flash's and triple fang's second's homing (0x80059c60, the four numbers out of the slot's +0x44..+0x4a) and the second moonlight sword's mark (0x800584d0); held to the game's own by tools/effects.py spell_hit_check"
+ },
  "0x8009c800": {
   "name": "text_end",
   "kind": "data",

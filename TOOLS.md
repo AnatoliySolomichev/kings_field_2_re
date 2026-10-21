@@ -517,9 +517,12 @@ hit goes to. Held to the game's own over every snapshot's creatures, **1260
 of 1260**; `export` writes `hitcheck.json` in actors.gd's form.
 `tools/effects.py spell_hit_check` runs the fire ball, stone, wind cutter,
 haze, shudom, walwind, earth wave, bortecth, meteor, orladin, tornado,
-fire wall, fire storm and flame through both, and the spells of ryu-ga,
-capricorn, anorium sword, vaculacia sword, Seath's sword and morguline axe
-(126 of 126 runs each), against the game's own end
+fire wall, fire storm, flame and flash through both, and every weapon's
+spell -- ryu-ga's, capricorn's, anorium sword's, vaculacia sword's, Seath's
+sword's, morguline axe's, both of the excellector's, triple fang's, the two
+moonlight swords', dark slayer's (sent at the creatures, from a creature
+back at the player, and anywhere into the walls) and `0x3c` -- 126 of 126
+runs each, against the game's own end
 to end
 -- shudom's rings, walwind's waves and orladin's bursts through `strike_creatures`
 (`0x8004ceac`, the strike on the creatures in an area) and
@@ -585,6 +588,15 @@ splash 137, a depth of 0x1f0 167).
 `RamWorld`'s, which now has the creatures (`spot_taken`, actor_spot_taken)
 and leaves the planes in RAM: **210 of 210** runs, 2512 frames, 34 hits on
 a creature.
+
+An arm of `effect_tick` hands its calls their arguments on its own frame, and
+one of `effect_spawn`'s arms -- flash's second burst -- reads five more than
+it is handed; so the machine lays the words each call `effect_tick` makes
+itself into its frame (`out_words`, `spawn(..., direct=True)`), and the check
+compares what the arm takes. `emu/bp28.lua` records the weapons' spells and
+flash in play -- every live slot a frame, the creatures, `effect_spawn` with
+its eight stack words and `effect_tick`'s outgoing ones -- for the check
+against what was played that nothing has run yet (PLAYTEST.md).
 
 **`weapon.py`** — the player's weapon: the swing, what it reaches, what a hit
 does to a creature.

@@ -72,6 +72,26 @@ const ANORIUM := 0x3E
 const VACULACIA := 0x40
 const SEATHS := 0x42
 const MORGULINE := 0x4C
+# and the rest: the excellector's two (one tick), 0x3c (no weapon's), triple
+# fang's two (the second flash's arms), 0x4b (the second moonlight sword's
+# second), the moonlight swords' marks with their pillars and bursts, dark
+# slayer's two with their spheres, and 0x4b's sparks
+const EXCEL1 := 0x36
+const EXCEL2 := 0x37
+const FALLER := 0x3C
+const FANG := 0x46
+const FLASH := 0x47                # and 0x14, flash itself, and 0x12
+const MOON := 0x4B
+const MARK := 0x78
+const MARK2 := 0x7A
+const PILLAR := 0x5C
+const PILLAR2 := 0x5D
+const MOON_BURST := 0x48
+const SLAYER2 := 0x7C
+const SLAYER := 0x7B
+const SPHERE2 := 0x44
+const SPHERE := 0x45
+const SPARK := 0x03
 const BANK_KEY := 0x20000          # KFAnim's key for model_table[index] of the resident bank
 const EMPTY := [0x08, 0x0A, 0x0E, 0x18, 0x1D, 0x2B, 0x39, 0x3B, 0x3D, 0x3F, 0x41, 0x43, 0x49,
 	0x4A, 0x4D, 0x4E, 0x4F, 0x54, 0x57, 0x60, 0x61, 0x62, 0x63, 0x68, 0x69, 0x6A, 0x6B, 0x6D,
@@ -212,6 +232,17 @@ static func div5(x: int) -> int:
 
 # --- making one -----------------------------------------------------------
 
+# The stack arguments a call effect_tick makes leaves in its frame from
+# sp+0x10: the next call that hands fewer and reads more takes them -- flash's
+# second burst (0x80059c90) takes five. A pointer is laid as 0: no reader
+# takes one. In the game the rest of its frame -- the code that runs between
+# two passes of effect_driver -- can write there too; here only the effects do.
+# @port helper -- the outgoing words of effect_tick's frame, kept in tick_frame
+func out_words(words: Array) -> void:
+	for i in words.size():
+		tick_frame.encode_u32(0x10 + 4 * i, int(words[i]) & 0xFFFFFFFF)
+
+
 # effect_alloc (0x80053b64): the first slot from the top whose +0 is 0xff.
 # @orig game:0x80053b64 effect_alloc  status:verified -- through effect_spawn, 189 of 189 runs of the game's own (tools/effects.py)
 func alloc() -> int:
@@ -224,8 +255,16 @@ func alloc() -> int:
 # effect_spawn(a0, a1, kind, point, ...): `point` the 16 bytes a3 points at
 # (or empty), `args` the stack arguments from the fifth on -- a pointer as the
 # bytes it points at. The slot's offset, or -1 when none is free.
-# @orig game:0x80053c84 effect_spawn  status:partial -- the common setting up and the arms of 40 kinds: 0 (fire ball), 1 (fire wall), 2 (fire storm), 4 (flame), 6 (stone), 7 and 0x16 (earth wave), 9 (shudom), 0xb (haze), 0xc (bortecth), 0xd (wind cutter), 0xf (tornado), 0x11 (walwind), 0x15 (orladin), 0x17, 0x19, 0x1a, 0x1b, 0x1c, 0x1e (the healing and protecting), 0x1f, 0x22, 0x23, 0x24, 0x26 (the creatures'), 0x58, 0x59, 0x5a, 0x5b, 0x5e, 0x5f, 0x65 (the spells' children), 0x6f (puff), 0x70 (splash), and 0x38, 0x3a, 0x3e, 0x40, 0x42 and 0x4c (the weapons' spells); tools/effects.py's, which the game's own holds (machine_check, magic_check, fire_check, spell_hit_check) and the self-test holds this to. 35 kinds have the empty arm, which frees the slot, as here; the other 55 arms are not here
-func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array) -> int:
+# `direct`: called by effect_tick itself, which leaves the stack words in its
+# frame (out_words).
+# @orig game:0x80053c84 effect_spawn  status:partial -- the common setting up and the arms of 58 kinds: 0 (fire ball), 1 (fire wall), 2 (fire storm), 3 (a spark), 4 (flame), 6 (stone), 7 and 0x16 (earth wave), 9 (shudom), 0xb (haze), 0xc (bortecth), 0xd (wind cutter), 0xf (tornado), 0x11 (walwind), 0x12 and 0x14 (flash), 0x15 (orladin), 0x17, 0x19, 0x1a, 0x1b, 0x1c, 0x1e (the healing and protecting), 0x1f, 0x22, 0x23, 0x24, 0x26 (the creatures'), 0x44, 0x45, 0x48, 0x58, 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f, 0x65 (the spells' children), 0x6f (puff), 0x70 (splash), and 0x36, 0x37, 0x38, 0x3a, 0x3c, 0x3e, 0x40, 0x42, 0x46, 0x47, 0x4b, 0x4c, 0x78, 0x7a, 0x7b and 0x7c (the weapons' spells); tools/effects.py's, which the game's own holds (machine_check, magic_check, fire_check, spell_hit_check) and the self-test holds this to. 35 kinds have the empty arm, which frees the slot, as here; the other 37 arms are not here
+func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array,
+		direct := false) -> int:
+	if direct:
+		var words := []
+		for v in args:
+			words.append(int(v) if typeof(v) == TYPE_INT else 0)
+		out_words(words)
 	var s := alloc()
 	if s < 0:
 		return -1
@@ -532,6 +571,112 @@ func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array) -> 
 			w8(s + 8, 0)
 			w16(s + 0x10, 0x10)
 			w16(s + 0xE, 0x40)
+		EXCEL1:                             # 0x80054538, its size by its place in the cast
+			setup(s, 0x3D, 0x1000, 5)
+			var n := int(args[1])
+			w16(s + 0x30, (n << 10) + 0x1800)
+			w16(s + 0x34, (n << 10) + 0x1800)
+			w16(s + 0x10, 0x28)
+			w8(s + 0x44, 0)
+			w8(s + 0xD, 0)
+			w16(s + 0x32, (n << 10) + 0xC00)
+			put(s + 0x28, _view())
+			w16(s + 0xE, 0x40)
+		EXCEL2:                             # 0x800545c4
+			setup(s, 0x39, 0x1B58, 5)
+			w16(s + 0x10, 0x30)
+			w8(s + 0x44, 0)
+			w8(s + 0xD, 0)
+			w16(s + 0xE, 0x40)
+			_face(s)
+			w16(s + 0x2C, 0)                # with its sound (0x63), not here
+		FALLER:                             # 0x8005477c
+			setup(s, 0x1E, 0x64, 0)
+			w16(s + 0x32, 0x800)
+			w16(s + 0x30, 0x64)
+			w16(s + 0x34, 0x64)
+			w16(s + 0x10, 0x2D)
+			put(s + 0x28, _view())
+			w16(s + 0x3A, -0x1E)
+			w16(s + 0x28, 0)
+			w16(s + 0x2C, 0)
+			w8(s + 0xB, 5)
+			w16(s + 0xE, 0)
+			w16(s + 0x44, 0)
+			w32(s + 0x1C, s32(s + 0x1C) - 0xC8)
+		FANG:                               # 0x80054690
+			setup(s, 0x3F, 0x800, 5)
+			w16(s + 0x34, 0xC00)
+			w16(s + 0x10, 0x3C)
+			w8(s + 0xD, 1)
+			w8(s + 0xB, 3)
+			put(s + 0x28, _view())
+			w16(s + 0x44, 0)
+			w16(s + 0xE, 0x100)
+			w16(s + 0x46, int(args[1]))     # with its sound (0x2d), not here
+		FLASH, 0x14, 0x12:                  # 0x80055424; 0x12 at 0x80055414
+			_spawn_flash(s, kind, args)
+		MOON:                               # 0x80054188
+			setup(s, 0x44, 0x1400, 5)
+			put(s + 0x28, _view())
+			w8(s + 0xD, 1)
+			w16(s + 0x10, 0x64)
+			w8(s + 0xB, 5)
+			w8(s + 0x44, 0)
+			w16(s + 0xE, 0)                 # with its sound (0x66), not here
+		SPARK:                              # 0x8005415c
+			particle(s, 0x45, 0x1000, 5)
+			w16(s + 0x10, 0xC)
+			w16(s + 0x32, 0)
+			w16(s + 0xE, 0x40)
+		MARK, MARK2:                        # 0x80055524
+			w8(s + 8, 1)
+			w8(s + 4, 0x80)
+			w8(s + 9, 5)
+			w8(s + 2, 0x3A)
+			w8(s + 3, 0x3A)
+			w8(s + 0xC, 0x34)
+			w16(s + 0x12, 0x1000)
+			w16(s + 0x10, 0x2D)
+			put(s + 0x28, (args[1] as PackedByteArray).slice(0, 8))
+			w16(s + 0x30, 0x1800)
+			w16(s + 0x32, 0xA00)
+			w16(s + 0x34, 0xC00)
+			w16(s + 0xE, 0)                 # with its sound (0x66), not here
+		PILLAR, PILLAR2:                    # 0x800555b4, 0x800555e8
+			particle(s, 0xB, 0x1800, 5)
+			w16(s + 0x32, 0)
+			w8(s + 0x44, 0)
+			w16(s + 0x3A, 0)
+			w16(s + 0xE, 0x40 if kind == PILLAR else 0)
+			w8(s + 0x45, int(args[1]))      # the mark's slot
+		MOON_BURST:                         # 0x800554d0
+			_from_nothing(s, 0x40)
+			w8(s + 0x44, int(args[1]))      # the frames it waits
+		SPHERE2, SPHERE:                    # 0x80055618
+			_from_nothing(s, 0xC0)
+			w16(s + 0x44, int(args[1]))     # how large it grows
+		SLAYER2:                            # 0x8005566c
+			w8(s + 8, 1)
+			w8(s + 4, 0x80)
+			w8(s + 9, 5)
+			w8(s + 2, 0x20)
+			w8(s + 3, 0x20)
+			w8(s + 0xC, 0x34)
+			w16(s + 0x12, 0x1000)
+			w16(s + 0x10, 0x32)
+			put(s + 0x28, _view())
+			w16(s + 0x32, 0x2000)
+			w16(s + 0x30, 0x15E)
+			w16(s + 0x34, 0x15E)
+			w16(s + 0x28, 0)
+			w16(s + 0x2C, 0)
+			w16(s + 0x3A, 0)
+			w16(s + 0xE, 0x40)
+			w32(s + 0x1C, s32(s + 0x1C) + 0x960)   # with its sound (0x65), not here
+		SLAYER:                             # 0x80055718: not drawn
+			w8(s + 8, 0)
+			w16(s + 0x10, 0x14)             # with its sound (0x65), not here
 		TRAIL:                              # 0x80055738
 			particle(s, int(args[4]), int(args[1]), int(args[6]) | 4)
 			w16(s + 0x44, int(args[2]))
@@ -679,7 +824,7 @@ func driver() -> void:
 
 
 # effect_tick's switch on the kind (0x80056908), with the arms the port has.
-# @orig game:0x800568bc effect_tick  status:partial -- the switch, and the arms of the same 40 kinds as effect_spawn's; the other 55 do nothing here
+# @orig game:0x800568bc effect_tick  status:partial -- the switch, and the arms of the same 58 kinds as effect_spawn's, and 0x31's (the excellector's); the other 36 do nothing here
 func tick(s: int) -> void:
 	match u8(s + 1):
 		0x1F:
@@ -754,6 +899,32 @@ func tick(s: int) -> void:
 			_tick_antidote(s)
 		0x1E:
 			_tick_blessings(s)
+		EXCEL1, EXCEL2, 0x31:
+			_tick_excellector(s)
+		FALLER:
+			_tick_faller(s)
+		FANG:
+			_tick_fang(s)
+		FLASH, 0x14, 0x12:
+			_tick_flash(s)
+		MOON:
+			_tick_moon(s)
+		SPARK:
+			_tick_spark(s)
+		MARK:
+			_tick_mark(s)
+		MARK2:
+			_tick_mark2(s)
+		PILLAR, PILLAR2:
+			_tick_pillar(s)
+		MOON_BURST:
+			_tick_moon_burst(s)
+		SPHERE2, SPHERE:
+			_tick_sphere(s)
+		SLAYER2:
+			_tick_slayer2(s)
+		SLAYER:
+			_tick_slayer(s)
 
 
 # The fire ball (0x80056910): in flight (+7 0) effect_move at radius 0xb4 and
@@ -881,7 +1052,7 @@ func _tick_morguline(s: int) -> void:
 	w16(s + 0x28, u16(s + 0x28) + 0xC8)
 	var v := PackedByteArray()
 	v.resize(8)
-	spawn(10, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [v, 0xC00, -0x100, 8, 0x1C, 0, 1, 2])
+	spawn(10, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [v, 0xC00, -0x100, 8, 0x1C, 0, 1, 2], true)
 	var hit := move(0xB4, 0x80000000, 0)
 	if hit != 0:
 		w8(s, 0xFF)
@@ -904,7 +1075,414 @@ func _tick_vaculacia(s: int) -> void:
 		v.resize(8)
 		for i in 3:
 			v.encode_s16(2 * i, ((500 * int(world.rand())) >> 15) - 0xFA)
-		spawn(10, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [v, 0x1400, -0x18, 0xA, 0x26, 0, 1, 2])
+		spawn(10, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [v, 0x1400, -0x18, 0xA, 0x26, 0, 1, 2], true)
+
+
+# --- the weapons' other spells ----------------------------------------------
+
+# The view's angles as an arm copies them (view_angles, 8 bytes): the pitch,
+# the yaw, the roll 0.
+# @port helper -- view_angles from the world's fields
+func _view() -> PackedByteArray:
+	var b := PackedByteArray()
+	b.resize(8)
+	b.encode_s16(0, int(world.field("vp")))
+	b.encode_s16(2, int(world.field("vy")))
+	return b
+
+
+# +0x28 the pitch and +0x2a the yaw of the velocity, the yaw a quarter back --
+# ratan2(vy, vec_length_2d(vx, vz)), ratan2(vz, vx) - 0x400.
+# @port helper -- the aim along the velocity, as _aimed and _spawn_seaths have it, for the arms below
+func _face(s: int) -> void:
+	var vx := s16(s + 0x38)
+	var vz := s16(s + 0x3C)
+	var ln := coll.isqrt(s32v((vx >> 3) * (vx >> 3) + (vz >> 3) * (vz >> 3)) & 0xFFFFFFFF) << 3
+	w16(s + 0x28, coll.ratan2(s16(s + 0x3A), ln))
+	w16(s + 0x2A, coll.ratan2(vz, vx) - 0x400)
+
+
+# What the arms of 0x48 and 0x44/0x45 share (0x800554d0, 0x80055618): model
+# 0x15 from nothing, mode 0x34; +0xe `e`.
+# @orig game:0x800554d0 effect_spawn+0x184c  status:verified -- 0x48's arm; 0x44's and 0x45's (0x80055618) the same but +0xe 0xc0 and +0x44 a halfword; tools/effects.py spell_hit_check, the moonlight swords' and dark slayer's against the game's own; the self-test this to it
+func _from_nothing(s: int, e: int) -> void:
+	w8(s + 8, 1)
+	w8(s + 4, 0x80)
+	w8(s + 9, 5)
+	w8(s + 2, 0x15)
+	w8(s + 3, 0x15)
+	w8(s + 0xC, 0x34)
+	w16(s + 0x12, 0x1000)
+	for o in [0x34, 0x32, 0x30]:
+		w16(s + o, 0)
+	w16(s + 0xE, e)
+
+
+# Flash's arm (0x80055424; 0x12's at 0x80055414): model 0x23, mode 0x39, the
+# angles args[1] points at; the homing's four numbers out of args[2..5] -- the
+# most, the pull, the turn, the pull up close -- and the life out of args[6].
+# 0x12 has three frames' grace and +0xe 0x140.
+# @orig game:0x80055414 effect_spawn+0x1790  status:verified -- 0x12's head, then the arm of 0x14 and 0x47 (0x80055424); tools/effects.py spell_hit_check, flash's and triple fang's second against the game's own; the self-test this to it
+func _spawn_flash(s: int, kind: int, args: Array) -> void:
+	if kind == 0x12:
+		w8(s + 0xB, 3)
+		w16(s + 0xE, 0x140)
+	else:
+		w16(s + 0xE, 0x100)
+	w8(s + 8, 1)
+	w8(s + 9, 5)
+	w8(s + 4, 0x80)
+	w8(s + 2, 0x23)
+	w8(s + 3, 0x23)
+	w8(s + 0xC, 0x39)
+	w16(s + 0x12, 0x1000)
+	put(s + 0x28, (args[1] as PackedByteArray).slice(0, 8))
+	for o in [0x34, 0x32, 0x30]:
+		w16(s + o, 0x1000)
+	var at := [0x44, 0x46, 0x48, 0x4A, 0x10]
+	for i in 5:
+		w16(s + int(at[i]), int(args[2 + i]) if args.size() > 2 + i else 0)
+
+
+# Both of the excellector's spells (0x80057aa8, and 0x31): effect_move at
+# radius 0xb4, the height's top bit; the tiles end it. Each thing it meets it
+# strikes once (+0x44 the latch, cleared on a clear frame), in seven puffs
+# flung from its point, each axis rand() * 240 >> 15 less 0x78 (0x1400, 0, 7,
+# 0xc, 0, 1, 1). A splash a frame on water just under it.
+# @orig game:0x80057aa8 effect_tick+0x11ec  status:verified -- tools/effects.py spell_hit_check, the excellector's two against the game's own end to end; the self-test this to it
+func _tick_excellector(s: int) -> void:
+	var hit := move(0xB4, 0x80000000, 0)
+	if hit == 0:
+		w8(s + 0x44, 0)
+	else:
+		if hit & 0xF:
+			w8(s, 0xFF)
+		if u8(s + 0x44) == 0:
+			w8(s + 0x44, 1)
+			_attack(s, hit)
+			for _k in 7:
+				for i in 3:
+					tick_frame.encode_s16(0xA0 + 2 * i, ((240 * int(world.rand())) >> 15) - 0x78)
+				spawn(0xA, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [tick_frame.slice(0xA0, 0xA8),
+					0x1400, 0, 7, 0xC, 0, 1, 1], true)
+	_splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
+
+
+# 0x3c, no weapon's (0x80057ba8): falling 5 a frame faster until effect_move
+# (0xb4, the height's top bit) meets something; then spreading 0x100 a frame
+# across, gone past 0x1000. It strikes nothing.
+# @orig game:0x80057ba8 effect_tick+0x12ec  status:verified -- tools/effects.py spell_hit_check against the game's own end to end; the self-test this to it
+func _tick_faller(s: int) -> void:
+	var n := s16(s + 0x44)
+	if n == 0:
+		if move(0xB4, 0x80000000, 0) != 0:
+			w16(s + 0x44, u16(s + 0x44) + 1)
+		w16(s + 0x3A, u16(s + 0x3A) + 5)
+	elif n == 1:
+		w16(s + 0x30, u16(s + 0x30) + 0x100)
+		w16(s + 0x34, u16(s + 0x34) + 0x100)
+		if s16(s + 0x30) >= 0x1001:
+			w8(s, 0xFF)
+
+
+# Triple fang's first (0x8005773c): rolling 0x190 a frame, aimed along its
+# velocity. At a life of 0x2d -- fifteen frames out -- the cast's (+0x46 0)
+# splits: two more (+0x46 1) at its point, the velocity turned an eighth either
+# way. Then effect_move (0xb4, the height's top bit): what it meets it strikes,
+# and it becomes a burst (0x58, 0x28 frames from nothing) with another beside
+# it (+0 3, 0x80 across, the player struck too); else a puff behind it.
+# @orig game:0x8005773c effect_tick+0xe80  status:verified -- tools/effects.py spell_hit_check against the game's own end to end, the splits and the bursts among it; the self-test this to it
+func _tick_fang(s: int) -> void:
+	w16(s + 0x2C, u16(s + 0x2C) + 0x190)
+	_face(s)
+	if s16(s + 0x10) == 0x2D and s16(s + 0x46) == 0:
+		var vx := s16(s + 0x38)
+		var vy := s16(s + 0x3A)
+		var vz := s16(s + 0x3C)
+		for xz in [[(vx - vz + vx) >> 1, (vx + vz + vz) >> 1], [(vz + vx + vx) >> 1, (vz - vx + vz) >> 1]]:
+			tick_frame.encode_s16(0xD8, s16v(int(xz[0])))
+			tick_frame.encode_s16(0xDA, vy)
+			tick_frame.encode_s16(0xDC, s16v(int(xz[1])))
+			spawn(0xA, 0x43, FANG, m.slice(s + 0x18, s + 0x28), [tick_frame.slice(0xD8, 0xE0), 1], true)
+	var hit := move(0xB4, 0x80000000, 0)
+	if hit != 0:
+		_attack(s, hit)
+		w8(s + 1, BURST)
+		w8(s + 8, 1)
+		w8(s + 9, 5)
+		w8(s + 2, 0x15)
+		w8(s + 3, 0x15)
+		w8(s + 0xC, 0x34)
+		w16(s + 0x12, 0x1000)
+		w16(s + 0x10, 0x28)
+		w8(s + 4, 0)
+		for o in [0x30, 0x32, 0x34, 0x28, 0x2A, 0x2C]:
+			w16(s + o, 0)
+		w16(s + 0xE, 0x40)                  # and the sound (0x28), not here
+		spawn(0xA, 3, BURST, m.slice(s + 0x18, s + 0x28), [null, 0x80, 1], true)
+		return
+	for i in 3:
+		tick_frame.encode_s16(0xD8 + 2 * i, ((20 * int(world.rand())) >> 15) - 0xA)
+	spawn(0xA, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [tick_frame.slice(0xD8, 0xE0), 0x1000,
+		-0x280, 5, 0xC, 0, 1, 0], true)
+
+
+# Flash, triple fang's second and 0x12 (0x80059ba8), by +7. Under 0x64 it
+# homes (seek), counting up -- in flight a splash on water under it, rolling
+# 0x80 a frame and a still puff behind it. Meeting something, or at 0x64,
+# another of its kind where it is -- +0 | 3, handed its angles and the stack's
+# last five words for the rest, +7 0x65, so it would burst two frames on --
+# and it bursts: model 0x15, +7 0x6e, +0 | 3 (the player struck too), growing
+# from nothing 0x46 a frame. The second one's life is the stack's word at
+# sp+0x28, which the puff in flight leaves 1: it is freed before it bursts.
+# @orig game:0x80059ba8 effect_tick+0x32ec  status:partial -- tools/effects.py spell_hit_check against the game's own end to end, flash and triple fang's second; the second one's numbers are effect_tick's stack leftovers, which here only the effects write (out_words); the sounds not here
+func _tick_flash(s: int) -> void:
+	var kind := u8(s + 1)
+	var ph := u8(s + 7)
+	if ph == 0x65:
+		w8(s + 7, 0x66)
+		return
+	if ph == 0x6E:
+		_flash_grow(s, kind)
+		return
+	if ph != 0x66:
+		if ph != 0x64:
+			if ph == 0:
+				out_words([0x7148, 0])      # its sound's (0x2c) two words
+			w8(s + 7, ph + 1)
+			var r := seek(s16(s + 0x44), s16(s + 0x46), s16(s + 0x48), 0xA0, 0, 0x1770,
+				s16(s + 0x4A), 0x800)
+			if r != -1:
+				_splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
+				w16(s + 0x2C, u16(s + 0x2C) + 0x80)
+				for i in 3:
+					tick_frame.encode_s16(0x170 + 2 * i, 0)
+				spawn(0xA, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [tick_frame.slice(0x170, 0x178),
+					0xE10, -0x80, 3, 0x25, 0, 1, 0 if kind == 0x12 else 1], true)
+				return
+		var args := [null, m.slice(s + 0x28, s + 0x30)]
+		for i in 5:
+			args.append(tick_frame.decode_u32(0x18 + 4 * i))
+		var c := spawn(0xA, u8(s) | 3, kind, m.slice(s + 0x18, s + 0x28), args, true)
+		if c >= 0:
+			w8(c + 7, 0x65)                 # the game's writes address 7 when no slot was free
+	w8(s + 3, 0x15)
+	w8(s + 7, 0x6E)
+	for o in [0x34, 0x32, 0x30]:
+		w16(s + o, 0)
+	w16(s + 0xE, 0x40)
+	w8(s, u8(s) | 3)                        # and the sound (0x28), not here
+	_flash_grow(s, kind)
+
+
+# Flash's burst (0x80059be0): 0x12 drawn plain (+0xe 0); effect_grow(0x2000,
+# 0x31f, 0x46, 0xc00, 0x8000), then the mark's tail, a turn of 0x40.
+# @orig game:0x80059be0 effect_tick+0x3324  status:verified -- through flash, the same runs
+func _flash_grow(s: int, kind: int) -> void:
+	if kind == 0x12:
+		w16(s + 0xE, 0)
+	out_words([0x8000])
+	grow(0x2000, 0x31F, 0x46, 0xC00, 0x8000)
+	w16(s + 0x2A, u16(s + 0x2A) + 0x40)
+
+
+# effect_seek: a player's effect (+0 & 0x40) turns its angles towards the
+# creature sub_8004d3c4 finds along them (0x5dc0, the cones, no noise) -- its
+# middle -- by `turn` each (angle_approach), and is steered along them
+# (effect_steer: `accel`, `near_accel` once the creature is within `near`; at
+# most `most`). -1 when the move met something.
+# @orig game:0x80055db0 effect_seek  status:partial -- the player's effects', through flash and the second moonlight sword's, tools/effects.py spell_hit_check against the game's own; the others' (sub_8002b80c, the player in sight) not read: they seek nothing here
+func seek(most: int, accel: int, turn: int, radius: int, height: int, near: int,
+		near_accel: int, cone: int) -> int:
+	var s := current
+	out_words([height, near, near_accel, cone])
+	var dist := -1
+	if u8(s) & 0x40:
+		var p := [s32(s + 0x18), s32(s + 0x1C), s32(s + 0x20)]
+		var r: Array = world.sight(p, s16(s + 0x2A), s16(s + 0x28), 0x5DC0, cone, cone, 0)
+		dist = int(r[1])
+		if int(r[0]) != -1:
+			var t: Array = world.actor_mid(int(r[0]))
+			var ang := vec_to_angles(s32v(int(t[0]) - int(p[0])), s32v(int(t[1]) - int(p[1])),
+				s32v(int(t[2]) - int(p[2])))
+			turn = s16v(turn)
+			w16(s + 0x28, LOOT.approach_angle(s16(s + 0x28), s16v(int(ang[0])), turn))
+			w16(s + 0x2A, LOOT.approach_angle(s16(s + 0x2A), s16v(int(ang[1])), turn))
+	var d := coll.direction_from_angles(s16(s + 0x28), s16(s + 0x2A))
+	if dist >= 0 and not near < dist:
+		accel = near_accel
+	return steer(accel, most, radius, height, [s16v(d[0]), s16v(d[1]), s16v(d[2])])
+
+
+# The second moonlight sword's second (0x80056c7c): aimed along its velocity,
+# rolling 0xc8 a frame; effect_move at 0xb4, no height. Meeting something: a
+# creature or an object (no tile bit) struck; gone in three bursts (0x58, +0
+# 3, 0, 0x40 and 0x80 across). Every frame a splash on water under it, and on
+# every third of its life a spark (3) where it is.
+# @orig game:0x80056c7c effect_tick+0x3c0  status:verified -- tools/effects.py spell_hit_check against the game's own end to end; the self-test this to it
+func _tick_moon(s: int) -> void:
+	_face(s)
+	w16(s + 0x2C, u16(s + 0x2C) + 0xC8)
+	var hit := move(0xB4, 0, 0)
+	if hit != 0:
+		if hit & 0xF == 0:
+			_attack(s, hit)
+		w8(s, 0xFF)                         # and the sound (0x27), not here
+		for size in [0, 0x40, 0x80]:
+			spawn(0xA, 3, BURST, m.slice(s + 0x18, s + 0x28), [null, size, 2], true)
+	_splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
+	for i in 3:
+		tick_frame.encode_s16(0x68 + 2 * i, 0)
+	var life := s16(s + 0x10)
+	if (life - 3 * (life / 3)) & 0xFFFF == 0:
+		spawn(0xA, 0, SPARK, m.slice(s + 0x18, s + 0x28), [tick_frame.slice(0x68, 0x70)], true)
+
+
+# A spark (0x8005699c): 0x4b0 taller a frame, flickering -- +4 0x80 or 0x81
+# and +0xe 0 or 0x40 by its life's last bit (the remainder's sign kept).
+# @orig game:0x8005699c effect_tick+0xe0  status:verified -- through the second moonlight sword's second, tools/effects.py spell_hit_check
+func _tick_spark(s: int) -> void:
+	w16(s + 0x32, u16(s + 0x32) + 0x4B0)
+	var life := s16(s + 0x10)
+	w8(s + 4, (u8(s + 0x10) & 1) - 0x80)
+	w16(s + 0xE, (life - 2 * (life / 2)) << 6)
+
+
+# A moonlight sword's end: three bursts (0x48) where it is, +0 | 3, a frame
+# apart; gone.
+# @orig game:0x800585a8 effect_tick+0x1cec  status:verified -- the first sword's, the second's (0x80058500) the same after the move taken back; through spell_hit_check
+func _moon_burst(s: int) -> void:
+	for i in 3:
+		spawn(0xA, u8(s) | 3, MOON_BURST, m.slice(s + 0x18, s + 0x28), [null, i], true)
+	w8(s, 0xFF)                             # with the sound (0x27), not here
+
+
+# The first moonlight sword's mark (0x8005857c): effect_move at 0xb4, 0x168
+# high; meeting something, or with a frame left, three bursts; else a splash
+# on water under it.
+# @orig game:0x8005857c effect_tick+0x1cc0  status:verified -- tools/effects.py spell_hit_check against the game's own end to end, its pillars among it; the self-test this to it
+func _tick_mark(s: int) -> void:
+	if move(0xB4, 0x168, 0) != 0 or s16(s + 0x10) < 2:
+		_moon_burst(s)
+		return
+	_splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
+
+
+# The second moonlight sword's mark (0x800584a4): homing (seek: 0x258 at most,
+# pulled 0x28 -- 0x104 within 0x1000 -- turning 0x24, radius 0xb4, 0x168 high,
+# cones 0x800); meeting something, or with a frame left, the move taken back
+# and three bursts; else a splash on water under it.
+# @orig game:0x800584a4 effect_tick+0x1be8  status:verified -- tools/effects.py spell_hit_check against the game's own end to end; the self-test this to it
+func _tick_mark2(s: int) -> void:
+	var r := seek(0x258, 0x28, 0x24, 0xB4, 0x168, 0x1000, 0x104, 0x800)
+	if r == -1 or s16(s + 0x10) < 2:
+		undo(s)
+		_moon_burst(s)
+		return
+	_splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
+
+
+# A mark's pillar (0x80058624, 0x5c and 0x5d): following on the ground under
+# its mark, across by its velocity. While the mark lives (+0x44 0) it strikes
+# what stands in it (no tiles: radius 0xa, its height), stands on the floor
+# under the mark's height (collide_surface) and is half as high as the room
+# there, 0x4000 at most; once the mark is gone (+0x44 1) it shrinks from that
+# height to nothing in eight frames (fixed_madd, 0x200 a frame), then goes.
+# @orig game:0x80058624 effect_tick+0x1d68  status:verified -- tools/effects.py spell_hit_check against the game's own end to end, both phases; the self-test this to it
+func _tick_pillar(s: int) -> void:
+	w32(s + 0x18, s32(s + 0x18) + s16(s + 0x38))
+	w32(s + 0x20, s32(s + 0x20) + s16(s + 0x3C))
+	var k := u8(s + 0x45)
+	var parent := STRIDE * (k - 0x100 if k >= 0x80 else k)
+	var ph := u8(s + 0x44)
+	if ph == 0:
+		var x := s32(s + 0x18)
+		var z := s32(s + 0x20)
+		out_words([s16(s + 0x32), 0x30])
+		var mask: int = world.collide_query(x, s32(s + 0x1C), z, 0xA, s16(s + 0x32), 0x30)
+		_attack(s, mask)
+		out_words([0])
+		var sc: Array = world.surface_ceiling(x, s32(parent + 0x1C) if parent >= 0 else 0, z, 0, 0)
+		w32(s + 0x1C, int(sc[0]))
+		var d := s32v(int(sc[0]) - int(sc[1]))
+		w16(s + 0x32, 0x4000 if 0x7FFF < d else d >> 1)
+		if parent < 0 or u8(parent) == 0xFF:
+			w8(s + 0x44, 1)
+			w16(s + 0x46, 0)
+			w16(s + 0x36, u16(s + 0x32))
+	elif ph == 1:
+		w16(s + 0x32, KFCreatureAI.lerp_fixed(s16(s + 0x36), 0, s16(s + 0x46)))
+		w16(s + 0x46, u16(s + 0x46) + 0x200)
+		if s16(s + 0x46) >= 0x1000:
+			w8(s, 0xFF)
+
+
+# A mark's burst (0x80058464): waiting +0x44 frames, then growing 0x46 a frame
+# to 0x1f8, striking a shell 3.5 times it (effect_grow 0x3800, 0x800, 0x8000).
+# @orig game:0x80058464 effect_tick+0x1ba8  status:verified -- through the moonlight swords, tools/effects.py spell_hit_check
+func _tick_moon_burst(s: int) -> void:
+	var n := u8(s + 0x44)
+	if n != 0:
+		w8(s + 0x44, n - 1)
+		return
+	out_words([0x8000])
+	grow(0x3800, 0x1F8, 0x46, 0x800, 0x8000)
+
+
+# Dark slayer's spheres (0x8005876c, 0x44 and 0x45): growing 0x46 a frame to
+# +0x44, striking a shell four times it (effect_grow 0x4000, 0x800, 0x8000).
+# @orig game:0x8005876c effect_tick+0x1eb0  status:verified -- through dark slayer's two, tools/effects.py spell_hit_check
+func _tick_sphere(s: int) -> void:
+	out_words([0x8000])
+	grow(0x4000, s16(s + 0x44), 0x46, 0x800, 0x8000)
+
+
+# Dark slayer's second (0x80058898): turning 0x190 a frame, on by its velocity
+# through anything. A column 0x2710 high about its point, 0x1388 under it: the
+# first creature standing in it (actor_spot_taken, 0x64) gets a sphere (0x44,
+# growing to 0x4ec) where it stands; with none, the player alone in it
+# (collide_query 0xb0 answering 0x80) gets one at the feet. Every frame it
+# does. A splash on water within 0x2710 under the column's foot.
+# @orig game:0x80058898 effect_tick+0x1fdc  status:verified -- tools/effects.py spell_hit_check against the game's own end to end, at the creatures and back at the player; the self-test this to it
+func _tick_slayer2(s: int) -> void:
+	w16(s + 0x2A, u16(s + 0x2A) + 0x190)
+	for i in 3:
+		w32(s + 0x18 + 4 * i, s32(s + 0x18 + 4 * i) + s16(s + 0x38 + 2 * i))
+	var x := s32(s + 0x18)
+	var y := s32v(s32(s + 0x1C) + 0x1388)
+	var z := s32(s + 0x20)
+	out_words([0x2710])
+	var a: int = world.spot_taken(x, y, z, 0x64, 0x2710)
+	if a != -1:                             # the sound (0x27), not here
+		spawn(0xA, u8(s), SPHERE2, world.actor_point(a), [null, 0x4EC], true)
+	else:
+		out_words([0x2710, 0xB0])
+		world.collide_query(x, y, z, 0x64, 0x2710, 0xB0)
+		if int(world.collide_mask) == 0x80:     # the sound (0x27), not here
+			spawn(u8(s + 6), u8(s), SPHERE2, world.player_point(), [null, 0x4EC], true)
+	_splash_one_at([x, y, z], 0x2000, 0x7FFF, 0x2710)
+
+
+# Dark slayer's first (0x80058790): not drawn; on by its velocity, the tiles
+# asked half a step back and where it is (collide_wrapper_actor, 5, 0xa) --
+# either met, it is freed -- and a sphere (0x45, growing to 0x1a4) where it
+# is every frame regardless, +0 its own (0xff once freed, so the sphere's slot
+# stays free).
+# @orig game:0x80058790 effect_tick+0x1ed4  status:verified -- tools/effects.py spell_hit_check against the game's own end to end; the self-test this to it
+func _tick_slayer(s: int) -> void:
+	var half := []
+	for i in 3:
+		half.append(s32v(s32(s + 0x18 + 4 * i) + (s16(s + 0x38 + 2 * i) >> 1)))
+	for i in 3:
+		w32(s + 0x18 + 4 * i, s32(s + 0x18 + 4 * i) + s16(s + 0x38 + 2 * i))
+	out_words([0xA])
+	if world.collide_wrapper(int(half[0]), int(half[1]), int(half[2]), 5, 0xA) != 0:
+		w8(s, 0xFF)
+	elif world.collide_wrapper(s32(s + 0x18), s32(s + 0x1C), s32(s + 0x20), 5, 0xA) != 0:
+		w8(s, 0xFF)
+	var f := u8(s)
+	spawn(0xA if f & 0x40 else u8(s + 6), f, SPHERE, m.slice(s + 0x18, s + 0x28), [null, 0x1A4],
+		true)
 
 
 # Haze (0x80058164): each thing it meets it strikes once (+0x44 the latch,
@@ -932,7 +1510,7 @@ func _tick_shudom(s: int) -> void:
 		w8(s, 0xFF)
 	var n := s16(s + 0x44)
 	if n >= 0xB and n % 6 == 0:
-		spawn(0xA, 0x42, RING, m.slice(s + 0x18, s + 0x28), [null, s16(s + 0x46)])
+		spawn(0xA, 0x42, RING, m.slice(s + 0x18, s + 0x28), [null, s16(s + 0x46)], true)
 	_spin(s)
 
 
@@ -951,7 +1529,7 @@ func _tick_walwind(s: int) -> void:
 		var v := PackedByteArray()
 		v.resize(8)
 		v.encode_s16(2, 0x54)
-		spawn(0xA, 0x42, WAVE, m.slice(s + 0x18, s + 0x28), [v])
+		spawn(0xA, 0x42, WAVE, m.slice(s + 0x18, s + 0x28), [v], true)
 	_spin(s)
 
 
@@ -1053,7 +1631,7 @@ func _tick_bortecth(s: int) -> void:
 		if mask == 0x10:
 			_hand(s, 0x10010, 0x1388, null)
 		w16(s + 0x44, u16(s + 0x44) + 1)
-		spawn(0xA, 0, HOLD, m.slice(s + 0x18, s + 0x28), [null, int(world.collide_actor)])
+		spawn(0xA, 0, HOLD, m.slice(s + 0x18, s + 0x28), [null, int(world.collide_actor)], true)
 		w16(s + 0x48, 0)
 		w16(s + 0x4A, 0)
 	w16(s + 0x2A, u16(s + 0x2A) + 0x1A4)
@@ -1079,7 +1657,7 @@ func _tick_hold(s: int) -> void:
 		v.encode_s16(0, _div7fff(int(world.rand()) << 9) - 0x100)
 		v.encode_s16(2, _div7fff(-(int(world.rand()) << 8)))
 		v.encode_s16(4, _div7fff(int(world.rand()) << 9) - 0x100)
-		spawn(0xA, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [v, 0x1000, -0x80, 5, 0xC, 0, 1, 0])
+		spawn(0xA, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [v, 0x1000, -0x80, 5, 0xC, 0, 1, 0], true)
 	w16(s + 0x44, u16(s + 0x44) + 1)
 	w16(s + 0x2A, u16(s + 0x2A) - 0x190)
 
@@ -1137,7 +1715,7 @@ func _tick_meteor(s: int) -> void:
 				for i in 3:
 					v.encode_s16(2 * i, s16v((s16(s + 0x38 + 2 * i) >> 3) * (k + 1)))
 				spawn(0xA, 0, TRAIL, m.slice(s + 0x18, s + 0x28),
-					[v, scale, -0x80, 5, 0x1C, 0, 1, 2])
+					[v, scale, -0x80, 5, 0x1C, 0, 1, 2], true)
 				scale -= 0x15E
 			return
 		w32(s + 0x1C, surf)
@@ -1146,7 +1724,7 @@ func _tick_meteor(s: int) -> void:
 	var v0 := PackedByteArray()
 	v0.resize(8)
 	v0.encode_s16(2, -0x20)
-	spawn(0xA, u8(s), BLAST, point, [v0, 0x640, 0x64, 0x800])
+	spawn(0xA, u8(s), BLAST, point, [v0, 0x640, 0x64, 0x800], true)
 	for _k in 4:
 		var pt := m.slice(s + 0x18, s + 0x28)
 		pt.encode_s32(0, s32v(pt.decode_s32(0) - 0x1F4 + ((int(world.rand()) * 1000) >> 15)))
@@ -1154,7 +1732,7 @@ func _tick_meteor(s: int) -> void:
 		var v := PackedByteArray()
 		v.resize(8)
 		v.encode_s16(2, -0x168)
-		spawn(0xA, 0, TRAIL, pt, [v, 0x4000, -0x80, 5, 0x1D, 0, 1, 2])
+		spawn(0xA, 0, TRAIL, pt, [v, 0x4000, -0x80, 5, 0x1D, 0, 1, 2], true)
 	w8(s, 0xFF)
 
 
@@ -1202,7 +1780,7 @@ func _tick_tornado(s: int) -> void:
 	tick_frame.encode_s16(0x52, s16v(_div7fff(-(int(world.rand()) << 8))))
 	tick_frame.encode_s16(0x54, s16v(_div7fff(int(world.rand()) << 9) - 0x100))
 	spawn(0xA, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [tick_frame.slice(0x50, 0x58), 0x270F,
-		-0x80, 5, 0x16, 0, 1, 1])
+		-0x80, 5, 0x16, 0, 1, 1], true)
 	w16(s + 0x2A, u16(s + 0x2A) + 0x15E)
 	_splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
 
@@ -1256,7 +1834,7 @@ func _tick_fire_wall(s: int) -> void:
 	tick_frame.encode_s16(0x172, s16v(-((100 * int(world.rand())) >> 15) - 0x64))
 	tick_frame.encode_s16(0x174, 0)
 	spawn(0xA, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [tick_frame.slice(0x170, 0x178), 0x1000, 0,
-		8, 0x1C, 2, 1, 2])
+		8, 0x1C, 2, 1, 2], true)
 
 
 # Fire storm (0x80059db8): at a creature (+0x44 its slot) it homes on its
@@ -1283,6 +1861,7 @@ func _tick_fire_storm(s: int) -> void:
 			near = 0xBB8
 		else:
 			target = world.actor_mid(t)
+		out_words([0, 0xA, 0x80000000])
 		met = home(target, most, 0x3C, near, 0, 0xA, 0x80000000) == -1
 	if met:
 		_attack(s, int(world.collide_mask))
@@ -1291,7 +1870,7 @@ func _tick_fire_storm(s: int) -> void:
 			tick_frame.encode_s16(0x174, ((400 * int(world.rand())) >> 15) - 0xC8)
 			tick_frame.encode_s16(0x172, ((400 * int(world.rand())) >> 15) - 0xC8)
 			spawn(0xA, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [tick_frame.slice(0x170, 0x178),
-				0x1D4C, -0x2EE, 8, 0x16, 0xA, 1, 2])
+				0x1D4C, -0x2EE, 8, 0x16, 0xA, 1, 2], true)
 		_splash(s + 0x18, 5, 0x400, 0x2000, 0x4000, 0x1000)
 		w8(s, 0xFF)
 		return
@@ -1299,7 +1878,7 @@ func _tick_fire_storm(s: int) -> void:
 		for at in [0x170, 0x172, 0x174]:
 			tick_frame.encode_s16(at, ((60 * int(world.rand())) >> 15) - 0x1E)
 		spawn(0xA, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [tick_frame.slice(0x170, 0x178),
-			0x1000, -0x100, 0xD, 0x1C, 0xA, 1, 2])
+			0x1000, -0x100, 0xD, 0x1C, 0xA, 1, 2], true)
 
 
 # effect_home: from the point to the target, vec_length_3d; -2 when not past
@@ -1394,7 +1973,7 @@ func _tick_flame(s: int) -> void:
 		if hit != 0 or s16(s + 0x10) < 2:
 			_splash(s + 0x18, 8, 0x190, 0x2000, 0x8000, 0x400)
 			var c := spawn(0xA, u8(s) | 3, FLAME, m.slice(s + 0x18, s + 0x28),
-				[null, m.slice(s + 0x28, s + 0x30)])
+				[null, m.slice(s + 0x28, s + 0x30)], true)
 			if c >= 0:
 				w8(c + 7, 2)                # and its sound (0x27), not here
 			_flame_burst(s)
@@ -1411,7 +1990,7 @@ func _tick_flame(s: int) -> void:
 			for i in 3:
 				tick_frame.encode_s16(0x1B8 + 2 * i, int(v[i]))
 			spawn(0xA, u8(s), FIRE_BALL, tick_frame.slice(0x1D0, 0x1E0),
-				[tick_frame.slice(0x1B8, 0x1C0)])
+				[tick_frame.slice(0x1B8, 0x1C0)], true)
 			w8(s + 0x45, u8(s + 0x45) - 1)
 		elif int(world.rand()) < 0x800:
 			var k := _look(s, 0x61A8)
@@ -1456,6 +2035,7 @@ func _flame_grow(s: int) -> void:
 # 0x200; the distance left at effect_tick's sp+0x1e0. The slot, or -1.
 # @port helper -- flame's look for a creature, through the world
 func _look(s: int, reach: int) -> int:
+	out_words([0x320, 0x320, 0x801FBE00, 0x200])     # the last: effect_tick's sp+0x1e0, as the check runs it
 	var r: Array = world.sight([s32(s + 0x18), s32(s + 0x1C), s32(s + 0x20)], s16(s + 0x2A),
 		s16(s + 0x28), reach, 0x320, 0x320, 0x200)
 	tick_frame.encode_s32(0x1E0, int(r[1]))
@@ -1540,7 +2120,7 @@ func _tick_orladin(s: int) -> void:
 	v.resize(8)
 	for i in 3:
 		v.encode_s16(2 * i, ((int(world.rand()) << 5) >> 15) - 0x10)
-	spawn(0xA, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [v, 0x1A90, -0x3E8, 4, 0x25, 0, 1, 1])
+	spawn(0xA, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [v, 0x1A90, -0x3E8, 4, 0x25, 0, 1, 1], true)
 	var hit := move(0xB4, 0, 0)
 	if hit == 0:
 		return
@@ -1549,8 +2129,8 @@ func _tick_orladin(s: int) -> void:
 	if hit & 0x10 == 0:
 		return
 	var point := m.slice(s + 0x18, s + 0x28)
-	spawn(0xA, 0x43, BURST, point, [null, 0, 1])
-	spawn(0xA, 0x43, BURST, point, [null, 0x80, 1])     # and its sound (0x25), not here
+	spawn(0xA, 0x43, BURST, point, [null, 0, 1], true)
+	spawn(0xA, 0x43, BURST, point, [null, 0x80, 1], true)     # and its sound (0x25), not here
 	var x := s32(s + 0x18)
 	var y := s32v(s32(s + 0x1C) + 0x4B0)
 	var z := s32(s + 0x20)
@@ -1564,7 +2144,7 @@ func _tick_orladin(s: int) -> void:
 		vr.resize(8)
 		vr.encode_s16(0, s16v((45 * coll.game_sin(a)) >> 9))
 		vr.encode_s16(4, s16v((45 * coll.game_cos(a)) >> 9))
-		spawn(0xA, 0, RAY, pt, [vr])
+		spawn(0xA, 0, RAY, pt, [vr], true)
 
 
 # Orladin's burst (0x80059b84, kind 0x58): growing 0x80 a frame from its
@@ -1631,16 +2211,66 @@ func collide_wrapper(x: int, y: int, z: int, r: int, h: int) -> int:
 # layer from a flat y - 0x500 (collision.gd surface).
 # @port helper -- collision.gd surface at the radius and height an effect asks with
 func surface(x: int, y: int, z: int, r: int, h: int) -> int:
+	return int(surface_ceiling(x, y, z, r, h)[0])
+
+
+# collide_surface, and the ceiling tile_collision leaves beside the surface
+# (collision_ceiling, 0x801e6478), as a mark's pillar reads them; the water's
+# plane it finds kept, as tile_collision keeps it (0x801e647c).
+# @port helper -- collision.gd query from a flat y - 0x500, [surface, ceiling]
+func surface_ceiling(x: int, y: int, z: int, r: int, h: int) -> Array:
 	if coll == null:
-		return 100000
+		return [100000, -40000]
 	var keep_r := coll.radius
 	var keep_b := coll.body
 	coll.radius = r
 	coll.body = h
-	var f := coll.surface(x, y, z)
+	coll.surfaces.clear()
+	var q := coll.query(x, y, z, y - 0x500)
 	coll.radius = keep_r
 	coll.body = keep_b
-	return f
+	surface18 = int(coll.surfaces.get(0x18, 100000))
+	return [int(q["floor"]), int(q["ceil"])]
+
+
+# actor_spot_taken for an effect, from actors.gd.
+# @port helper -- the creature standing in a column, the world's answer to dark slayer's second
+func spot_taken(x: int, y: int, z: int, r: int, own: int) -> int:
+	var an := get_node_or_null("../Actors")
+	if an == null or not an.has_method("spot_taken"):
+		return -1
+	return int(an.call("spot_taken", x, y, z, r, own))
+
+
+# Creature t's place as an arm copies it, the 16 bytes from its +0x2c (+0x38
+# is 0 on every awake creature of the snapshots).
+# @port helper -- an actor's place from actors.gd, 16 bytes
+func actor_point(t: int) -> PackedByteArray:
+	var b := PackedByteArray()
+	b.resize(16)
+	var an := get_node_or_null("../Actors")
+	if an == null or an.get("actors") == null:
+		return b
+	var list: Array = an.get("actors")
+	if t < 0 or t >= list.size() or list[t] == null:
+		return b
+	b.encode_s32(0, int(list[t]["px"]))
+	b.encode_s32(4, int(list[t]["py"]))
+	b.encode_s32(8, int(list[t]["pz"]))
+	return b
+
+
+# player_pos as an arm copies it, 16 bytes; the fourth word (0x801b25fc,
+# which only save_restore writes) the field "pw".
+# @port helper -- the player's place, 16 bytes
+func player_point() -> PackedByteArray:
+	var b := PackedByteArray()
+	b.resize(16)
+	b.encode_s32(0, int(world.field("px")))
+	b.encode_s32(4, int(world.field("py")))
+	b.encode_s32(8, int(world.field("pz")))
+	b.encode_s32(12, int(world.field("pw")))
+	return b
 
 
 # x / 0x7fff as the compiler builds it, toward 0.
@@ -1658,19 +2288,24 @@ func release(c: int) -> void:
 		an.call("release", c)
 
 
+# @port helper -- _splash_one_at at a point in the slots
+func _splash_one(point: int, size: int, bob: int, depth: int) -> void:
+	_splash_one_at([s32(point), s32(point + 4), s32(point + 8)], size, bob, depth)
+
+
 # sub_80056268: one splash on the surface the last query found, when the
 # point is within `depth` under it.
-# @orig game:0x80056268 sub_80056268  status:verified -- through stone and wind cutter
-func _splash_one(point: int, size: int, bob: int, depth: int) -> void:
-	var y := s32(point + 4)
+# @orig game:0x80056268 sub_80056268  status:verified -- through stone and wind cutter, and dark slayer's second at its column's foot
+func _splash_one_at(p: Array, size: int, bob: int, depth: int) -> void:
+	var y := int(p[1])
 	var surf := int(world.field("s18"))
 	if y < surf or surf + depth < y:
 		return
 	var pt := PackedByteArray()
 	pt.resize(16)
-	pt.encode_s32(0, s32(point))
+	pt.encode_s32(0, int(p[0]))
 	pt.encode_s32(4, surf)
-	pt.encode_s32(8, s32(point + 8))
+	pt.encode_s32(8, int(p[2]))
 	var vel := PackedByteArray()
 	vel.resize(8)
 	spawn(0xA, 0, SPLASH, pt, [vel, size, bob])
@@ -1830,7 +2465,7 @@ func _sparkle(b: int, e: int) -> void:
 	pt.encode_s32(8, 0x400)
 	var vel := PackedByteArray()
 	vel.resize(8)
-	var t := spawn(0xA, 0, TRAIL, pt, [vel, 0x2BC, -0x1E, 0xA, 0x26, -0xA, b, e])
+	var t := spawn(0xA, 0, TRAIL, pt, [vel, 0x2BC, -0x1E, 0xA, 0x26, -0xA, b, e], true)
 	if t >= 0:
 		w8(t + 0xA, 1)
 		w8(t + 8, 0xE)
@@ -1877,6 +2512,8 @@ func field(name: String) -> int:
 		"py": return int(player.get("gy"))
 		"pz": return int(player.get("gz"))
 		"s18": return surface18
+		"vp": return int(player.call("view_pitch_now")) if player.has_method("view_pitch_now") else 0
+		"pw": return 0                  # 0x801b25fc: not kept by the port
 		"vy": return (int(player.get("facing")) + int(player.get("tilt")[1])) & 0xFFFF
 		"w0", "w1", "w2", "w3", "w4":
 			return int(player.get("working")[int(name.substr(1))])
@@ -1969,7 +2606,7 @@ func _puff(s: int, b: int, e: int) -> void:
 	v.resize(8)
 	for i in 3:
 		v.encode_s16(2 * i, div5(2 * s16(s + 0x38 + 2 * i)))
-	spawn(10, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [v] + TRAIL_ARGS.slice(0, 5) + [b, e])
+	spawn(10, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [v] + TRAIL_ARGS.slice(0, 5) + [b, e], true)
 
 
 # A spore (0x80056de8): it swells for +0x44 frames, rises and then sinks,

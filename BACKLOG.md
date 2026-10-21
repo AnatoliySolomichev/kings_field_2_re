@@ -854,8 +854,9 @@ each one is also in its function's marker, as `partial` and what differs:
   0x5a, and its lead's tile test), orladin (its bursts, 0x58, and rays,
   0x5b), tornado, fire wall, fire storm (homing: `effect_home`,
   `effect_steer`) and flame (its head's vertex, its fire balls, its two
-  bursts), with `effect_strike`'s creature half (`0x8004ceac`); and the
-  weapons' charged swing -- the window, the shots, `weapon_may_cast` and
+  bursts), flash (homing: `effect_seek`), with `effect_strike`'s creature
+  half (`0x8004ceac`); and the weapons' charged swing -- the window, the
+  shots, `weapon_may_cast` and
   `spell_begin` -- the combination and the second swing it starts, with
   Seath's sword's guard and the flame rod's fire ball, all held to the
   game's own (`tools/weapon.py`, `magic_check`), and the story flags 39 and
@@ -863,22 +864,24 @@ each one is also in its function's marker, as `partial` and what differs:
   `0x1b`, `0x1c`) is still not read.
   Not yet:
   the other attacking kinds' effects (lightning's 0x71 -- long, it follows
-  the ground with collide_surface -- flash, freeze and thedek), each of
-  which spends its MP and spawns
+  the ground with collide_surface -- freeze and thedek, 0x10 and 0x05, each
+  a five-arm machine of its own), each of which spends its MP and spawns
   nothing that stays; tornado's and fire wall's strike points, stack
   leftovers the first reader of a frame takes from the rest of the game's
-  frame (FORMATS.md, "Tornado", "Fire wall"); creatures a model's vertex
+  frame (FORMATS.md, "Tornado", "Fire wall"), and flash's second burst,
+  whose life is one (FORMATS.md, "The weapons' spells") -- the port keeps
+  the words the effects leave, not what the rest of the game's frame writes
+  there; `effect_seek`'s other half, `sub_8002b80c` (an effect not the
+  player's looking for the player), not read; creatures a model's vertex
   places (flag 0x400000) in `actor_spot_taken`; in the port's
   `actor_take_hit`, a part passing its hit to its actor and a follower's
   push handed to its leader (the healing and protecting six are in), the
   drawing of everything with `+8 & 0xc` set -- the protecting marks and the
-  sparkles, in front of the eye -- of the weapons' magic, the effects of
-  the excellector's (`0x36`, `0x37`), triple fang's (`0x46`, `0x47`),
-  dark slayer's (`0x7b`, `0x7c`), the moonlight swords' (`0x48`, `0x4b`)
-  and `0x3c` (no weapon's): both swings cast, take their MP and empty the
-  meter, and the effect is "not in the port" (ryu-ga's, capricorn's,
-  anorium's, vaculacia's, Seath's and morguline's are in) -- and the
-  button's thing (`use_item` from
+  sparkles, in front of the eye -- of the weapons' magic, the sounds (every
+  spell's effects are in now, the excellector's, triple fang's, dark
+  slayer's, the moonlight swords' and `0x3c` the last; nothing has checked
+  them in play: `emu/bp28.lua`, PLAYTEST.md) -- and the button's thing
+  (`use_item` from
   `0x8002ff28`). The equipment screen's MAGIC and BUTTON lines are in
   (light goes on the button: magic A lists the attacking spells alone); not
   their guide page or the spells' sound banks.
