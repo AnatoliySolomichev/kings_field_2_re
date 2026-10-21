@@ -592,11 +592,18 @@ a creature.
 
 `volley_check` runs `actor_animation_effects` itself over every snapshot's
 creatures -- every arm from an `0x8002` entry at the player -- against
-`volley_point` and `volley_fire`: 2709 of 2709 volleys alike (three a snapshot), every slot and
+`volley_point` and `volley_fire`: 2772 of 2772 volleys alike (three a snapshot), every slot and
 creature, and it names the arms and kinds the machine has not. For the lob
 (0x50, 0x53) it draws the player's last step at `0x801b2600` at random from
 a stream of its own, so the lead is tried and the other arms draw as they
-did; the export does the same and hands the step over as `pvx`..`pvz`. The `foe-`
+did; the export does the same and hands the step over as `pvx`..`pvz`. The
+charge (0x55) goes from a plain entry instead -- a vertex, and the pointer
+`actor_tick` would hand, at `SCRATCH_LIST` with the list's word at its +4
+(`charge_setup`) -- and its `foe-` part (tag `charge`) puts the creature in
+its volley and moves its clock 0xb4 a frame on both sides (`charge_tick`),
+so the ball is held, grows and is thrown. Its world answers one more
+question, `charger` (the creature's state, vertex, clock and angles),
+recorded for the self-test like the rest. The `foe-`
 parts of `spell_hit_check` send the kinds only creatures throw, each from a
 creature near the player through the game's own `actor_animation_effects`
 and the machine's `volley_fire`, and fly them end to end.

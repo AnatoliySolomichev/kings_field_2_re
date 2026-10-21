@@ -15,6 +15,16 @@
   "kind": "code",
   "evidence": "(slot, anim, clock, vertex, &out): vertex `vertex` of model_table[slot]'s first object as model_animate poses it for that animation and clock (anim 0x80 and up its base), an SVECTOR to out; zeros with no model. actor_vertex_point's for a creature, sub_80053a0c's for flame's head, and held_item_tick's for the arrow on a bow's string (slot 0x20, the swing's phase and clock, the record's +0x3a and +0x42) -- held to the game's own through tools/weapon.py bow_runs and tools/effects.py spell_hit_check"
  },
+ "0x8018fac0": {
+  "name": "current_actor_index",
+  "kind": "data",
+  "evidence": "actor_tick_driver (0x80052e5c) sets it 0 and adds 1 after each of the 200 slots: the index of the creature ticking, as current_actor (0x8018fab4) is its address. actor_animation_effects' arm 0x55 hands it to its fire ball (+0x44), whose tick finds its creature by it; actor_spot_taken and actor_tick read it to skip themselves"
+ },
+ "0x800562f0": {
+  "name": "effect_puff",
+  "kind": "code",
+  "evidence": "(effect, vertex, mode, size, rise, life, model, more...): one puff (kind 0x6f, effect_spawn(10, 0, ...)) where the effect is -- off the head model's vertex unless -1 (0x80053a0c) -- its velocity by mode: -1 a vertex's, -2 random within the words after, -3 still, else 0x1e back along the effect's angles plus its velocity times mode >> 12. Kind 0x55's held frames (mode -0x2bc, life 3) and thrown ones (0x100, life 2); held to the game's own through tools/effects.py foe-0x55"
+ },
  "0x80055db0": {
   "name": "effect_seek",
   "kind": "code",

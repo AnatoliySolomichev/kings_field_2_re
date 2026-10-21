@@ -722,10 +722,19 @@ func _burrowed(a: Dictionary, kind: Dictionary, raw: Array, player: Vector3i,
 			clock(a, int(raw[0x1B]))
 
 
+# @port helper -- a halfword of a volley's list, 0 past the record's end
+static func _word(raw: Array, k: int) -> int:
+	return u16f(raw, 0x1A + 2 * k) if 0x1A + 2 * k + 1 < raw.size() else 0
+
+
 # The list at a volley record's +0x1a from +0x72 (0x80052484): the entries to
 # fire -- a vertex of the creature's model each, for level 0's records; 0x8000
 # goes back to the start, 0x8001 n sets how many, 0x8003 n skips n, and the
-# three-argument 0x8002 and 0x8004 are passed on as [code, a, b, c].
+# three-argument 0x8002 and 0x8004 are passed on as [code, a, b, c]. Each
+# carries last the word further down the list that the arms 0x55 and 0x76
+# read through the pointer actor_animation_effects is handed: a plain
+# entry's at the entry + the entries left less one, two on; an 0x8002's two
+# after its three (0x8004's is the stack's, 0 here).
 # @orig game:0x80052484 actor_tick+0x23dc  status:transcribed -- a label inside actor_tick; tools/effects.py volley
 static func volley(raw: Array, a: Dictionary) -> Array:
 	var fired := []
@@ -744,11 +753,12 @@ static func volley(raw: Array, a: Dictionary) -> Array:
 		elif e == 0x8003:
 			i += 1 + u16f(raw, 0x1A + 2 * i)
 		elif e == 0x8002 or e == 0x8004:
-			fired.append([e, s16f(raw, 0x1A + 2 * i), s16f(raw, 0x1C + 2 * i), s16f(raw, 0x1E + 2 * i)])
+			fired.append([e, s16f(raw, 0x1A + 2 * i), s16f(raw, 0x1C + 2 * i), s16f(raw, 0x1E + 2 * i),
+				_word(raw, i + 5) if e == 0x8002 else 0])
 			i += 3
 			left -= 1
 		else:
-			fired.append([e])
+			fired.append([e, _word(raw, i + left + 1)])
 			left -= 1
 	a["n72"] = i
 	return fired

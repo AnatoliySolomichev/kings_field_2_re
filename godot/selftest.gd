@@ -810,7 +810,9 @@ func _effects() -> bool:
 			var vs: Array = run["volley"]
 			var vp: Array = vs[2]
 			fx.volley_fire(int(vs[0]), int(vs[1]), Vector3i(int(vp[0]), int(vp[1]), int(vp[2])),
-				(vs[3] as Array).map(func(x): return int(x)))
+				(vs[3] as Array).map(func(x): return int(x)), 0,
+				int(vs[4]) if vs.size() > 4 else -1, int(vs[5]) if vs.size() > 5 else -1,
+				int(vs[6]) if vs.size() > 6 else 0)
 		for sp in run["spawns"]:
 			var args := []
 			for v in sp[4]:
@@ -888,13 +890,14 @@ func _effects() -> bool:
 		rp.rands = (v.get("rand", []) as Array).map(func(x): return int(x))
 		var pt: Array = v["point"]
 		var ang: Array = (v["angles"] as Array).map(func(x): return int(x))
-		fx.volley_fire(int(v["arm"]), int(v["pct"]), Vector3i(int(pt[0]), int(pt[1]), int(pt[2])), ang)
+		fx.volley_fire(int(v["arm"]), int(v["pct"]), Vector3i(int(pt[0]), int(pt[1]), int(pt[2])), ang,
+			0, int(v.get("who", -1)))
 		if rp.bad == "" and rp.rands.is_empty() and fx.m.hex_encode().md5_text() == str(v["md5"]):
 			vok += 1
 		elif first == "":
 			first = "%s: the slots differ %s" % [v["label"], rp.bad]
 	fx.free()
-	print("effects: %d of %d runs, %d of %d frames of the effect machine as tools/effects.py's (whose machine the game's own effect_spawn and effect_driver hold: 189 of 189 runs, the healing spells' 126 of 126, the fire ball's 168 of 168); %d of %d aims as its effect_aim (600 of 600 the game's); %d of %d volleys as its volley_fire (2709 of 2709 the game's)" % [
+	print("effects: %d of %d runs, %d of %d frames of the effect machine as tools/effects.py's (whose machine the game's own effect_spawn and effect_driver hold: 189 of 189 runs, the healing spells' 126 of 126, the fire ball's 168 of 168); %d of %d aims as its effect_aim (600 of 600 the game's); %d of %d volleys as its volley_fire (2772 of 2772 the game's)" % [
 		good, runs, fgood, frames, aok, aims, vok, vols])
 	if first != "":
 		print("  first difference: " + first)
@@ -1071,6 +1074,9 @@ class FxReplay:
 	func actor_size(t: int) -> Array:
 		var c := _aq("actor_size", t)
 		return [int(c[0]), int(c[1])]
+
+	func charger(t: int, _vertex: int) -> Array:
+		return _aq("charger", t)
 
 	func actor_target(t: int, _off: int) -> PackedByteArray:
 		var c := _aq("actor_target", t)

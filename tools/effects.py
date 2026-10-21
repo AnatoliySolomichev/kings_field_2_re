@@ -234,7 +234,17 @@ def volley(raw, n72):
     """The list at a volley record's +0x1a, as the fire at 0x80052484 walks
     it from +0x72: [(the entries fired)], the new +0x72. 0x8000 goes back to
     the start, 0x8001 n sets how many to fire, 0x8003 n skips n; 0x8002 and
-    0x8004 carry three arguments -- not in level 0's records."""
+    0x8004 carry three arguments -- not in level 0's records.
+
+    Each entry fired carries a word further down the list, which the arms
+    0x55 and 0x76 read: actor_animation_effects is handed a pointer, `a3`
+    for a plain entry (the list's halfword at the entry + the entries left
+    to fire, less one -- its +4 two on) and sp+0x18 for an 0x8002 (the
+    halfword after its three, its +4 two on); 0x8004's sp+0x18 is the
+    stack's, None here. A 0x8003 n skips the words so kept."""
+    def word(k):
+        o = 0x1A + 2 * k
+        return struct.unpack_from("<H", raw, o)[0] if o + 2 <= len(raw) else 0
     fired, left, i = [], 1, n72
     while left:
         e = struct.unpack_from("<H", raw, 0x1A + 2 * i)[0]
@@ -247,11 +257,12 @@ def volley(raw, n72):
         elif e == 0x8003:
             i += 1 + struct.unpack_from("<H", raw, 0x1A + 2 * i)[0]
         elif e in (0x8002, 0x8004):
-            fired.append((e, struct.unpack_from("<3h", raw, 0x1A + 2 * i)))
+            fired.append((e, struct.unpack_from("<3h", raw, 0x1A + 2 * i),
+                          word(i + 5) if e == 0x8002 else None))
             i += 3
             left -= 1
         else:
-            fired.append((None, e))
+            fired.append((None, e, word(i + left + 1)))
             left -= 1
     return fired, i
 
@@ -587,7 +598,7 @@ def export(out_dir):
                   return v
               w.surface_ceiling, w.spot_taken, w.actor_point = sc, st, ap
               aqs = []
-              for name_ in ("actor_op", "actor_xz", "actor_size", "actor_target"):
+              for name_ in ("actor_op", "actor_xz", "actor_size", "actor_target", "charger"):
                   def aq(*a, ask=getattr(w, name_), name_=name_, aqs=aqs):
                       v = ask(*a)
                       vals = ([v] if isinstance(v, int) else list(struct.unpack("<4i", v))
@@ -612,8 +623,9 @@ def export(out_dir):
                       if not awake_:
                           continue
                       a_ = ACTORS + ACTOR_STRIDE * frng.choice(awake_)
-                      if kind_ in LOBS:
+                      if kind_ in LEADS:
                           struct.pack_into("<3h", m, PLAYER_VEL & MASK, *[lrng.randrange(-0x60, 0x61) for _ in range(3)])
+                      charge = charge_setup(m, a_, lrng) if "charge" in more_ else None
                       sps = []
 
                       def recsp(a0, a1, kd, pt, args, direct=False, sps=sps, sp_=mach.spawn):
@@ -622,10 +634,15 @@ def export(out_dir):
                       mach.spawn = recsp
                       vpt = volley_point(m, a_, frng.randrange(-0x200, 0x200),
                                          frng.randrange(-0xA00, -0x200), frng.randrange(-0x300, 0x300))
-                      volley_fire(mach, a_, kind_, 0x30, vpt)
+                      who, vx_, word = -1, -1, 0
+                      if charge:                  # a plain entry: the vertex, the list's word
+                          who, (vx_, word) = (a_ - ACTORS) // ACTOR_STRIDE, charge
+                          vpt = entry_point(m, a_, vx_)
+                      volley_fire(mach, a_, kind_, 0x30, vpt, vertex=vx_, word=word)
                       del mach.spawn
                       volley_spec = [kind_, 0x30, vpt,
-                                     list(struct.unpack_from("<3h", m, (a_ + 0x40) & MASK))]
+                                     list(struct.unpack_from("<3h", m, (a_ + 0x40) & MASK)),
+                                     who, vx_, word]
                   else:
                       sps = _spawns(a1_, kind_, point, args_)
                       for sp in sps:
@@ -636,6 +653,8 @@ def export(out_dir):
                   for _f in range(nframes_):
                       del log[:], w.hits[:], drawn[:], w.hurts[:], w.strikes[:], w.released[:]
                       del cws[:], sfs[:], sis[:], ams[:], scs[:], sts[:], aps[:], aqs[:], w.held[:]
+                      if volley_spec and volley_spec[4] >= 0:
+                          charge_tick(m, ACTORS + ACTOR_STRIDE * volley_spec[4])
                       mach.driver()
                       frames.append({"q": [list(x) for x in log], "rand": list(drawn),
                                      "cw": [list(x) for x in cws], "sf": [list(x) for x in sfs],
@@ -701,6 +720,7 @@ def export(out_dir):
                 v = vl()
                 vdrawn.append(v)
                 return v
+            struct.pack_into("<i", m, CURRENT_INDEX & MASK, (a - ACTORS) // ACTOR_STRIDE)
             mach = Machine(m, StandIn(7, m), vrnd)
             try:
                 volley_fire(mach, a, arm, pct, point)
@@ -708,7 +728,7 @@ def export(out_dir):
                 continue
             px, py, pz = struct.unpack_from("<3i", m, PLAYER_POS & MASK)
             volleys.append({"label": f"{os.path.basename(path)[:-4]} arm {arm:#x}", "arm": arm,
-                            "pct": pct, "point": point,
+                            "pct": pct, "point": point, "who": (a - ACTORS) // ACTOR_STRIDE,
                             "angles": list(struct.unpack_from("<3h", m, (a + 0x40) & MASK)),
                             "fields": dict({"px": px, "py": py, "pz": pz, "vy": vy},
                                            **dict(zip(("pvx", "pvy", "pvz"),
@@ -846,6 +866,8 @@ SPELL_TABLE, RECORD = 0x801B77EC, 24
 PLAYER_POS, PLAYER_STATE = 0x801B25F0, 0x801B25E5
 PLAYER_VEL = 0x801B2600             # three s16 the lob leads the player by
 LOBS = (0x50, 0x53)                 # actor_animation_effects' arms that lead it
+LEADS = LOBS + (0x55,)              # and those whose effects lead it (0x55 when thrown)
+CHARGE_STEP = 0xB4                  # a creature's clock a frame in the checks: level 17's caster's
 HP, HP_MAX, POISON = 0x801B24FC, 0x801B24FA, 0x801B255C
 CURSE_LV, CURSE_T, DARK_LV, DARK_T = 0x801B255E, 0x801B2560, 0x801B2562, 0x801B2564
 SLOW, PARALYSIS = 0x801B2566, 0x801B2568
@@ -889,6 +911,9 @@ TICK_SP, TICK_FRAME = 0x801FBC20, 0x2B8  # effect_tick's sp, as the check's driv
 STRIKE_POINT = 0x801FF0D0           # the machine's stand-in for an arm's point on its stack
 VIEW_ANGLES = 0x801B2608
 SCRATCH_POINT = 0x801FF0C0          # where the check lays a hit's point back
+SCRATCH_LIST = 0x801FF0E0           # and a volley list's words, for a plain entry's pointer
+CURRENT_INDEX = 0x8018FAC0          # actor_tick_driver's loop: the creature ticking
+MODEL_TABLE = 0x801A92B0            # model_table: a creature's at its +1 + 0x80
 SPLASH = 0x70
 VBLANK, SPLASH_SOUND = 0x801C12E8, 0x8009C214 + 0x1DC   # vblank_count, gp + 0x1dc
 WORKING = 0x801B2526             # the five working skills
@@ -1057,7 +1082,7 @@ class Machine:
                0x30: self._spawn_30, 0x35: self._spawn_30, 0x31: self._spawn_31,
                0x33: self._spawn_33, 0x64: self._spawn_64, 0x2E: self._spawn_2e,
                0x50: self._spawn_51, 0x51: self._spawn_51, 0x53: self._spawn_51,
-               0x52: self._spawn_51}.get(kind)
+               0x52: self._spawn_51, 0x55: self._spawn_55}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_spawn's arm {kind:#x}")
         arm(s, args)
@@ -2847,6 +2872,74 @@ class Machine:
         self.w16(s + 0x2C, 0)
         self.w16(s + 0x46, 0)
 
+    def _spawn_55(self, s, args):           # 0x80055ac4
+        """A fire ball a creature charges: particle 9 at 0x400, still, +7 9
+        (held); +0x44 the creature (actor_tick_driver's index), +0x46 the
+        vertex it sits on, +0x48 the creature's clock it is thrown at."""
+        self.particle(s, 9, 0x400, 5)
+        for o in (0x3C, 0x3A, 0x38):
+            self.w16(s + o, 0)
+        self.w8(s + 7, 9)
+        self.w16(s + 0x44, args[1])
+        self.w16(s + 0x46, args[2])
+        self.w16(s + 0xE, 0x40)
+        self.w16(s + 0x48, args[3])
+
+    def _puffs(self, s, k, size, life, model):     # effect_puff (0x800562f0) with a1 -1
+        """A puff where the effect is: 0x1e back along its angles, plus its
+        velocity times k (>> 12); effect_spawn(10, 0, 0x6f, ...) of `model`
+        at `size`, rising 0x12c, a life of `life`, mode 1. Its point's fourth
+        word and its velocity's fourth halfword are effect_puff's stack."""
+        d = movement.direction_from_angles(self.s16(s + 0x28), self.s16(s + 0x2A))
+        v = [_s16_(-((c * 0x1E) >> 12)) for c in d]
+        v = [_s16_(v[i] + ((self.s16(s + 0x38 + 2 * i) * k) >> 12)) for i in range(3)]
+        self.spawn(0xA, 0, TRAIL, self.get(s + 0x18, 12) + bytes(4),
+                   [struct.pack("<4h", *v, 0), size, -0x12C, life, model, 0, 1, 0])
+
+    def _tick_55(self, s):                  # 0x800572d0
+        """Held (+7 9): gone unless its creature (+0x44) is awake and in its
+        volley (op 0x19); else on the creature's vertex +0x46 off where
+        sub_8004eee0 puts it, growing 0x180 a frame to 0x1800, its velocity
+        the step it took, puffing back along it (-0x2bc, life 3); once the
+        creature's clock reaches +0x48, thrown -- effect_aim at the player
+        at 0x28a, five passes leading by the player's step -- and +7 0, a
+        life of 0x32. Thrown, a puff (0x100, life 2) and the fire ball's
+        tick."""
+        if self.u8(s + 7) != 9:
+            self.out_words([-0x12C, 2, 9, 0])
+            self._puffs(s, 0x100, self.s16(s + 0x30), 2, 9)
+            self._tick_00(s)
+            return
+        t = self.s16(s + 0x44)
+        c = self.w.charger(t, self.s16(s + 0x46))
+        if not c:
+            self.w8(s, 0xFF)
+            return
+        rel, clock, angles = c[0:3], c[3], c[4:6]
+        place = struct.unpack("<3i", self.w.actor_target(t, TICK_SP + 0xC8)[:12])
+        old = [self.u16(s + 0x18 + 4 * i) for i in range(3)]
+        for i in range(3):
+            self.w32(s + 0x18 + 4 * i, rel[i] + place[i])
+        g = _s16_(self.u16(s + 0x30) + 0x180)
+        self.w16(s + 0x30, 0x1800 if g > 0x1800 else g)
+        self.w16(s + 0x34, self.u16(s + 0x30))
+        self.w16(s + 0x32, self.u16(s + 0x30))
+        for i in range(3):
+            self.w16(s + 0x38 + 2 * i, self.u16(s + 0x18 + 4 * i) - old[i])
+        self.out_words([-0x12C, 3, 9, 0])
+        self._puffs(s, -0x2BC, self.s16(s + 0x30), 3, 9)
+        if clock < self.u16(s + 0x48):
+            return
+        self.out_words([0, -1, 0x400, 5])               # 0x800532d4's sound, then effect_aim
+        player = struct.unpack_from("<3i", self.m, PLAYER_POS & MASK)
+        step = struct.unpack_from("<3h", self.m, PLAYER_VEL & MASK)
+        v, _yaw = aim(angles, player, 0x28A, [self.s32(s + 0x18 + 4 * i) for i in range(3)],
+                      -1, 0x400, 5, step)
+        for i in range(3):
+            self.w16(s + 0x38 + 2 * i, v[i])
+        self.w8(s + 7, 0)
+        self.w16(s + 0x10, 0x32)
+
     def _arrow_hit(self, s, hit, y0):
         """What an arrow does after its asks: on to its new place, a splash on
         water under it; meeting something, that struck (0x20000 its bit) and
@@ -3510,7 +3603,8 @@ class Machine:
                0x2A: self._tick_2a, 0x2C: self._tick_2c, 0x2F: self._tick_2f,
                0x30: self._tick_30, 0x35: self._tick_30, 0x33: self._tick_06,
                0x64: self._tick_64, 0x2E: self._tick_2e, 0x50: self._tick_51,
-               0x51: self._tick_51, 0x53: self._tick_51, 0x52: self._tick_52}.get(kind)
+               0x51: self._tick_51, 0x53: self._tick_51, 0x52: self._tick_52,
+               0x55: self._tick_55}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_tick's arm {kind:#x}")
         arm(s)
@@ -3839,29 +3933,38 @@ def angle_lerp(a, b, t):
     return (a + ((d * t) >> 12)) & 0xFFF
 
 
-def aim(actor_angles, target, speed, point, pitch=-1, spread=0x400):
-    """effect_aim with one pass (no lead): the velocity [x, y, z] and the
-    yaw. `actor_angles` the creature's +0x40 and +0x42, `target` the player's
-    x y z, `point` where the effect starts."""
-    ang = vec_to_angles(target[0] - point[0], target[1] - (point[1] + 0x640),
-                        target[2] - point[2])
-    d = (ang[1] - actor_angles[1]) & 0xFFF
-    if d >= 0x800:
-        d = 0x1000 - d
-    t = movement.trunc(d << 12, _s16_(spread))
-    if t > 0x1000:
-        t = 0x1000
-    ang[1] = _s16_(angle_lerp(ang[1], actor_angles[1], t))
-    if pitch == -1:
-        d = (ang[0] - actor_angles[0]) & 0xFFF
+def aim(actor_angles, target, speed, point, pitch=-1, spread=0x400, passes=1, step=(0, 0, 0)):
+    """effect_aim: the velocity [x, y, z] and the yaw. `actor_angles` the
+    creature's +0x40 and +0x42, `target` the player's x y z, `point` where
+    the effect starts. With more than one pass, each but the last moves the
+    target to the player's place plus `step` (0x801b2600) times the
+    distance from the point over the speed (vec_madd_s16), and aims again."""
+    t3 = list(target[:3])
+    while True:
+        ang = vec_to_angles(t3[0] - point[0], t3[1] - (point[1] + 0x640), t3[2] - point[2])
+        d = (ang[1] - actor_angles[1]) & 0xFFF
         if d >= 0x800:
             d = 0x1000 - d
-        ang[0] = _s16_(angle_lerp(ang[0], actor_angles[0], d))
-    else:
-        ang[0] = _s16_(pitch)
-    v = movement.direction_from_angles(ang[0], ang[1])
-    sp = _s16_(speed)
-    return [_s16_((c * sp) >> 12) for c in v], ang[1]
+        t = movement.trunc(d << 12, _s16_(spread))
+        if t > 0x1000:
+            t = 0x1000
+        ang[1] = _s16_(angle_lerp(ang[1], actor_angles[1], t))
+        if pitch == -1:
+            d = (ang[0] - actor_angles[0]) & 0xFFF
+            if d >= 0x800:
+                d = 0x1000 - d
+            ang[0] = _s16_(angle_lerp(ang[0], actor_angles[0], d))
+        else:
+            ang[0] = _s16_(pitch)
+        v = movement.direction_from_angles(ang[0], ang[1])
+        sp = _s16_(speed)
+        vel = [_s16_((c * sp) >> 12) for c in v]
+        passes -= 1
+        if passes == 0:
+            return vel, ang[1]
+        k = movement.trunc(vec_length_3d(_s32(point[0] - t3[0]), _s32(point[1] - t3[1]),
+                                         _s32(point[2] - t3[2])), speed)
+        t3 = [_s32(target[i] + step[i] * k) for i in range(3)]
 
 
 # --- what a creature's volley throws -------------------------------------------
@@ -3907,6 +4010,88 @@ def volley_point(m, actor, ox, oy, oz):
     return [_s32(struct.unpack_from("<i", m, a + 0x2C + 4 * i)[0] + w[i]) for i in range(3)]
 
 
+_MODELS = {}
+
+
+def model_vertex(md, raw_anim, clock, vertex):
+    """model_vertex (0x8004352c) over a tools/anim.py Model: the first
+    object's vertex as model_animate poses it, or for an animation of 0x80
+    and up (or a model with none) object anim & 0x7f's own -- its table
+    through the TMD's object list, 28 bytes an object."""
+    import anim
+    if raw_anim < 0x80 and md.nanim:
+        vs = anim.vertices(md, raw_anim, clock)
+        if not 0 <= vertex < len(vs):
+            raise NotImplementedError("a vertex outside the model")
+        return vs[vertex]
+    k = raw_anim & 0x7F if raw_anim >= 0x80 else 0
+    t = md.tmd
+    top = struct.unpack_from("<I", md.raw, t + 12 + 28 * k)[0]
+    n = struct.unpack_from("<I", md.raw, t + 16 + 28 * k)[0]
+    if not 0 <= vertex < n:
+        raise NotImplementedError("a vertex outside the model")
+    return struct.unpack_from("<3h", md.raw, t + 12 + top + 8 * vertex)
+
+
+def actor_vertex(m, a, vertex):
+    """actor_vertex_point (0x8004ede0) over RAM, creature at `a`: vertex
+    `vertex` of its model -- model_table[+1 + 0x80], MO.T's +1 -- for its
+    animation +0xc and clock +0x18, each axis by its scale +0x48..+0x4c;
+    with no model (0, -height / 2, -radius) unscaled; turned by vec_rotate
+    with its angles +0x40, the yaw + 0x800. Off its place."""
+    import anim
+    import weapon
+    a &= MASK
+    mdl = m[a + 1]
+    if struct.unpack_from("<I", m, (MODEL_TABLE & MASK) + 4 * (mdl + 0x80))[0] == 0:
+        h, r = struct.unpack_from("<2H", m, a + 0x1C)[::-1]
+        v = (0, _s16_((-h) >> 1), _s16_(-r))
+    else:
+        if mdl not in _MODELS:
+            _MODELS[mdl] = anim.load(mdl)
+        v = model_vertex(_MODELS[mdl], m[a + 0xC], struct.unpack_from("<H", m, a + 0x18)[0], vertex)
+        sc = struct.unpack_from("<3h", m, a + 0x48)
+        v = tuple(_s16_((v[i] * sc[i]) >> 12) for i in range(3))
+    ang = struct.unpack_from("<3H", m, a + 0x40)
+    return weapon.vec_rotate((_s16_(ang[0]), _s16_(ang[1] + 0x800), _s16_(ang[2])), v)
+
+
+def charge_setup(m, actor, rng):
+    """For kind 0x55 sent from a creature in the checks: the creature put in
+    its volley (+0xe 0x19) at a random clock, actor_tick_driver's index at
+    it, a vertex of its model, and the clock it is thrown at a little on --
+    [vertex, word]. The list's word is laid at SCRATCH_LIST + 4, where the
+    pointer handed to actor_animation_effects reaches."""
+    a = actor & MASK
+    m[a + 0xE] = 0x19
+    clock = rng.randrange(0, 0x800)
+    struct.pack_into("<H", m, a + 0x18, clock)
+    struct.pack_into("<i", m, CURRENT_INDEX & MASK, (actor - ACTORS) // ACTOR_STRIDE)
+    n = 1
+    if struct.unpack_from("<I", m, (MODEL_TABLE & MASK) + 4 * (m[a + 1] + 0x80))[0]:
+        import anim
+        if m[a + 1] not in _MODELS:
+            _MODELS[m[a + 1]] = anim.load(m[a + 1])
+        n = _MODELS[m[a + 1]].nvert
+    word = (clock + rng.randrange(0, 0x900)) & 0xFFFF
+    struct.pack_into("<HHH", m, SCRATCH_LIST & MASK, 0, 0, word)
+    return rng.randrange(n), word
+
+
+def charge_tick(m, actor):
+    """The creature's clock on by CHARGE_STEP, as actor_tick moves it."""
+    a = (actor + 0x18) & MASK
+    struct.pack_into("<H", m, a, (struct.unpack_from("<H", m, a)[0] + CHARGE_STEP) & 0xFFFF)
+
+
+def entry_point(m, actor, vertex):
+    """actor_animation_effects' point for a plain entry (a2 the vertex):
+    actor_vertex_point off the creature's place."""
+    a = actor & MASK
+    w = actor_vertex(m, actor, vertex)
+    return [_s32(struct.unpack_from("<i", m, a + 0x2C + 4 * i)[0] + w[i]) for i in range(3)]
+
+
 def lob_solve(flag, d, h, g, v):
     """sub_80017210 (flag, d, h, g, v, &t, &angle): how to throw at speed v,
     under a fall of g a frame, onto a point d away and h above: the two
@@ -3939,9 +4124,11 @@ def lob_solve(flag, d, h, g, v):
     return 0, q, movement.vec_angle(y, x)
 
 
-def volley_fire(mach, actor, arm, pct, point, w4=0):
+def volley_fire(mach, actor, arm, pct, point, w4=0, vertex=-1, word=0):
     """actor_animation_effects' arms (0x8004f5b8 on) over the machine, from
-    `point` (x y z; its fourth word `w4`, the routine's frame's): each aims
+    `point` (x y z; its fourth word `w4`, the routine's frame's); `vertex`
+    the routine's a2 and `word` the list's word its pointer reaches (volley):
+    each aims
     at the player's eye (effect_aim, one pass, the spread 0x400) and spawns.
     The routine's sp+0x70 is kept as mach.volley_left: each aim's velocity
     lands there, and earth wave's arm hands on what it holds without setting
@@ -4007,6 +4194,9 @@ def volley_fire(mach, actor, arm, pct, point, w4=0):
         s = spawn(0x83, 0x28, [mach.volley_left])
         if s:
             mach.w8(s + 0xB, 3)
+    elif arm == 0x55:                               # 0x8004fb38: a fire ball held at the vertex
+        spawn(0x83, arm, [None, struct.unpack_from("<i", m, CURRENT_INDEX & MASK)[0],
+                          vertex, word & 0xFFFF])
     elif arm in LOBS:                               # 0x8004fe48: lobbed at where the player goes
         target = list(player)
         lob_t, lob_a = 0, 0                         # the frame's words 0x98, 0x9c: stale stack in the game
@@ -4198,6 +4388,9 @@ class RamWorld:
     def actor_target(self, t, at):
         return _actor_target(self.m, t, at)
 
+    def charger(self, t, vertex):
+        return _charger(self.m, t, vertex)
+
     def hold(self, c):
         _hold(self.m, c)
 
@@ -4254,6 +4447,19 @@ def _actor_target(m, t, at):
     place = struct.unpack_from("<3i", m, a + 0x2C)
     struct.pack_into("<3i", m, at & MASK, *[_s32(mark[i] + place[i]) for i in range(3)])
     return bytes(m[at & MASK:(at & MASK) + 16])
+
+
+def _charger(m, t, vertex):
+    """What kind 0x55 asks of the creature holding it (0x800572d0): nothing
+    unless it is awake (+9 1) and in its volley (+0xe 0x19); else its
+    vertex's point off it (actor_vertex_point), its clock +0x18 and its
+    angles +0x40, +0x42 -- [x, y, z, clock, pitch, yaw]."""
+    a = ACTORS + ACTOR_STRIDE * t
+    if _actor_byte(m, t, 9) != 1 or _actor_byte(m, t, 0xE) != 0x19:
+        return []
+    rel = actor_vertex(m, a, vertex)
+    clock = struct.unpack_from("<H", m, (a + 0x18) & MASK)[0]
+    return [*rel, clock, *struct.unpack_from("<2h", m, (a + 0x40) & MASK)]
 
 
 def _hold(m, c):
@@ -4632,6 +4838,9 @@ class StandIn:
     def actor_target(self, t, at):
         return _actor_target(self.m, t, at)
 
+    def charger(self, t, vertex):
+        return _charger(self.m, t, vertex)
+
     def hold(self, c):
         self.held.append(c)
 
@@ -4697,7 +4906,8 @@ KIDS = {MARK: PILLAR, MARK2: PILLAR2}
 
 FOES_SENT = tuple((arm, 0, f"a creature's {arm:#x}", ("foe",), 60)
                   for arm in (0x20, 0x21, 0x25, 0x27, 0x28, 0x2A, 0x2C, 0x2E, 0x2F, 0x30, 0x31,
-                              0x32, 0x33, 0x34, 0x35, 0x56, 0x66, 0x50, 0x53))
+                              0x32, 0x33, 0x34, 0x35, 0x56, 0x66, 0x50, 0x53)) + \
+    ((0x55, 0, "a creature's 0x55", ("foe", "charge"), 60),)
 """The creatures' own kinds sent end to end: each arm thrown by a snapshot's
 creature through the game's own actor_animation_effects and the machine's
 volley_fire, at the player, and flown."""
@@ -4815,10 +5025,13 @@ def fire_hit_check(out=sys.stdout, per=10, frames=60, kind=None, speed=0x384, na
             if rng.randrange(4) == 0:                       # water just under the path
                 struct.pack_into("<i", ram, SURFACE & MASK, py - 0x640 - rng.randrange(0, 0x1F4))
             foe = None
+            charge = None
             if "foe" in more:                               # thrown by the creature, as it throws
-                if kind in LOBS:
+                if kind in LEADS:
                     struct.pack_into("<3h", ram, PLAYER_VEL & MASK, *[lead.randrange(-0x60, 0x61) for _ in range(3)])
                 struct.pack_into("<I", ram, CURRENT_ACTOR & MASK, a)
+                if "charge" in more:                        # held in its volley, its clock moving
+                    charge = charge_setup(ram, a, lead)
                 frame_ = mipsrun_stack() - 0x100 - 0xC0
                 for off, n_ in ((0x3C, 4), (0x70, 8), (0x78, 8), (0x98, 8)):
                     ram[(frame_ + off) & MASK:(frame_ + off + n_) & MASK] = bytes(n_)
@@ -4867,7 +5080,11 @@ def fire_hit_check(out=sys.stdout, per=10, frames=60, kind=None, speed=0x384, na
             w.hurt_player = hurt_player
             mach = Machine(m, w, mlcg)
             try:
-                if foe:
+                if charge:
+                    _call(cpu, AAE, [kind, 0x30, charge[0], SCRATCH_LIST], [0, 0, 0])
+                    volley_fire(mach, a, kind, 0x30, entry_point(m, a, charge[0]),
+                                vertex=charge[0], word=charge[1])
+                elif foe:
                     ox, oy, oz = foe
                     _call(cpu, AAE, [kind, 0x30, 0xFFFFFFFF, ox & 0xFFFFFFFF],
                           [oy & 0xFFFFFFFF, oz & 0xFFFFFFFF, 0])
@@ -4881,6 +5098,9 @@ def fire_hit_check(out=sys.stdout, per=10, frames=60, kind=None, speed=0x384, na
                 ok = True
                 for f in range(frames):
                     del g_calls[:], m_calls[:]
+                    if charge:
+                        charge_tick(cpu.ram, a)
+                        charge_tick(m, a)
                     before = bytes(cpu.ram[oa:oa + ACTOR_STRIDE * ACTOR_N])
                     _call(cpu, DRIVER, [])
                     mach.driver()
@@ -5143,10 +5363,11 @@ def volley_check(out=sys.stdout, per=3):
         for _ in range(per):
             for arm in VOLLEY_ARMS:
                 ram = bytearray(base)
-                if arm in LOBS:
+                if arm in LEADS:
                     struct.pack_into("<3h", ram, PLAYER_VEL & MASK, *[lead.randrange(-0x60, 0x61) for _ in range(3)])
                 a = ACTORS + ACTOR_STRIDE * rng.choice(awake)
                 struct.pack_into("<I", ram, CURRENT_ACTOR & MASK, a)
+                charge = charge_setup(ram, a, lead) if arm == 0x55 else None
                 if rng.randrange(3) == 0:
                     struct.pack_into("<h", ram, PARALYSIS & MASK, rng.randrange(1, 100))
                 for off, n in ((0x3C, 4), (0x70, 8), (0x78, 8), (0x98, 8)):
@@ -5157,7 +5378,11 @@ def volley_check(out=sys.stdout, per=3):
                 m = bytearray(ram)
                 mach = Machine(m, RamWorld(m, lv), levelstate.Lcg(seed))
                 try:
-                    volley_fire(mach, a, arm, pct, volley_point(m, a, ox, oy, oz))
+                    if charge:                      # a plain entry: the vertex, the list's pointer
+                        volley_fire(mach, a, arm, pct, entry_point(m, a, charge[0]),
+                                    vertex=charge[0], word=charge[1])
+                    else:
+                        volley_fire(mach, a, arm, pct, volley_point(m, a, ox, oy, oz))
                 except NotImplementedError as e:
                     key = str(e).split("arm ")[-1]
                     missing.setdefault(key, set()).add(arm)
@@ -5167,8 +5392,11 @@ def volley_check(out=sys.stdout, per=3):
                 cpu.hooks[RAND] = lambda c, lcg=lcg: lcg()
                 cpu.hooks[SOUND_AT] = lambda c: 0
                 cpu.hooks[SOUND_CUE] = lambda c: 0
-                _call(cpu, AAE, [arm, pct, 0xFFFFFFFF, ox & 0xFFFFFFFF],
-                      [oy & 0xFFFFFFFF, oz & 0xFFFFFFFF, 0])
+                if charge:
+                    _call(cpu, AAE, [arm, pct, charge[0], SCRATCH_LIST], [0, 0, 0])
+                else:
+                    _call(cpu, AAE, [arm, pct, 0xFFFFFFFF, ox & 0xFFFFFFFF],
+                          [oy & 0xFFFFFFFF, oz & 0xFFFFFFFF, 0])
                 runs += 1
                 bad = _differ(_slots(cpu.ram), _slots(m))
                 acts = bytes(cpu.ram[oa:oa + ACTOR_STRIDE * ACTOR_N]) == bytes(m[oa:oa + ACTOR_STRIDE * ACTOR_N])

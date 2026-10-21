@@ -302,31 +302,47 @@ func _launch(a: Dictionary, kind: Dictionary, fired: Array) -> void:
 	if fx == null or not fx.has_method("volley_fire"):
 		return
 	var pct := KFCreatureAI.u16f(raw, 0x18) & 0xFF
-	var m := int(a["model"])
+	var who := actors.find(a)
 	for f in fired:
 		var w: Array
-		if f.size() == 4 and int(f[0]) == 0x8002:
+		var vertex := -1
+		if f.size() == 5 and int(f[0]) == 0x8002:
 			# a2 = -1: the offset the entry carries, turned by the creature's
 			# own angles (+0x40, no half turn) through vec_rotate
 			w = KFWeapon.vec_rotate(coll, 0, int(a["ry"]) & 0xFFF, 0,
 				[int(f[1]), int(f[2]), int(f[3])])
-		elif f.size() == 1:
-			var v := Vector3i(0, -(int(a["height"]) >> 1), -int(a["radius"]))
-			if KFAnim.models.has(m):
-				var vs := KFAnim.vertices(m, int(a.get("anim", 0x80)) & 0xFF, int(a["clock"]))
-				if int(f[0]) < vs.size():
-					v = vs[int(f[0])]
-			var sc := int(kind.get("scale", 0x1000))
-			w = KFWeapon.vec_rotate(coll, 0, (int(a["ry"]) + 0x800) & 0xFFF, 0,
-				[(v.x * sc) >> 12, (v.y * sc) >> 12, (v.z * sc) >> 12])
+		elif f.size() == 2:
+			vertex = int(f[0])
+			w = vertex_offset(a, vertex)
 		else:
 			continue                          # 0x8004, along a limb: not here
 		var point := Vector3i(int(a["px"]) + int(w[0]), int(a["py"]) + int(w[1]),
 			int(a["pz"]) + int(w[2]))
 		if arm == 0x27 and int(fx.call("field", "paralysis")) != 0:
 			a["eflags"] = int(a.get("eflags", 0)) | 0x100     # 0x8004f6bc
-		if not bool(fx.call("volley_fire", arm, pct, point, [0, int(a["ry"]), 0])):
+		if not bool(fx.call("volley_fire", arm, pct, point, [0, int(a["ry"]), 0], 0, who, vertex,
+				int(f[f.size() - 1]))):
 			KFInfo.note("volley: arm 0x%x is not in the port" % arm)
+
+
+# actor_vertex_point (0x8004ede0): vertex `vertex` of the creature's animated
+# model, scaled by its kind's +0x32 (+0x48) and turned by the yaw + 0x800 --
+# off its place; with no model (0, -height / 2, -radius) unscaled. Where a
+# volley's plain entry fires from, and where kind 0x55 sits while it charges.
+# @orig game:0x8004ede0 actor_vertex_point  status:partial -- the yaw alone (the port keeps no pitch or roll for a creature), one scale for three; tools/effects.py actor_vertex holds the game's own (volley_check, foe-0x55)
+func vertex_offset(a: Dictionary, vertex: int) -> Array:
+	var m := int(a["model"])
+	var kind: Dictionary = kinds.get(int(a["kind"]), {})
+	if not KFAnim.models.has(m):
+		return KFWeapon.vec_rotate(coll, 0, (int(a["ry"]) + 0x800) & 0xFFF, 0,
+			[0, -(int(a["height"]) >> 1), -int(a["radius"])])
+	var v := Vector3i.ZERO
+	var vs := KFAnim.vertices(m, int(a.get("anim", 0x80)) & 0xFF, int(a["clock"]))
+	if vertex >= 0 and vertex < vs.size():
+		v = vs[vertex]
+	var sc := int(kind.get("scale", 0x1000))
+	return KFWeapon.vec_rotate(coll, 0, (int(a["ry"]) + 0x800) & 0xFFF, 0,
+		[(v.x * sc) >> 12, (v.y * sc) >> 12, (v.z * sc) >> 12])
 
 
 # How render_walk (0x80040c94) turns a creature to draw it: its angles +0x40,

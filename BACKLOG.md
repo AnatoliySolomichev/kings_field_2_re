@@ -844,13 +844,19 @@ each one is also in its function's marker, as `partial` and what differs:
   `kind_behaviour_with_op` twice. Each copy is marked, and the self-test would
   show one drifting; folding them into one is a refactor nobody has needed yet.
 
-* **What creatures throw: in, but for two arms.** `actor_animation_effects`'
+* **What creatures throw: in, but for one arm.** `actor_animation_effects`'
   arms and the kinds only creatures throw are read and in the port
   (`effects.gd volley_fire`, FORMATS.md "What a creature's volley
   throws"), against the game's own, the lob and its arrows (0x50..0x53)
-  among them; 0x55 and 0x76 (a creature made, `sub_8004b524`,
-  `actor_wake`) are not read -- levels 17 and 26 for 0x55. And the 0x8004
-  entry, a point along a limb pulled towards the player.
+  and the charge (0x55, levels 17 and 26) among them; 0x76 (a creature
+  made, `sub_8004b524`, `actor_wake`) is not read, and no creature's record
+  names it. And the 0x8004 entry, a point along a limb pulled towards the
+  player. The charge's loose ends: the branch for a creature that left its
+  volley while it held one (gone) is read, never run; an 0x8002 entry's
+  vertex is -1, which `model_vertex` reads before the table (no list does
+  it; the port puts it at the place); `sub_800562f0`'s other modes (the
+  head's vertex, a random spread, a still puff) are not in; and the port
+  turns a creature's vertex by its yaw alone and one scale.
 * **The player's step the lob leads by** (`player.gd step`, 0x801b2600):
   read off `player_horizontal` and `player_vertical`, written where they
   write it, but no recording has the word -- the lob's checks draw it at

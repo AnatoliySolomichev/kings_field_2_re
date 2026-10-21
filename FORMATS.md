@@ -6663,8 +6663,9 @@ arm                    speed  a1    spawns                     after
                                     0x1e0, 0x258, 0x12c (0x81), 0x12c x 3, 0x3c0
 0x44 0x45              0x226, 0x2bc 0x83 dark slayer's 0x7c and 0x7b
 0x50 0x53              0x320  0x83  an arrow lobbed where the player will be (below)
-0x55, 0x76             0x55 with the list's next word; 0x76 makes a creature of the
-                       kind the list names (sub_8004b524, actor_wake) -- not read further
+0x55                   --     0x83  a fire ball charged in the creature's hand (below)
+0x76                   makes a creature of the kind the list's word names
+                       (sub_8004b524, actor_wake) -- not read further
 ```
 
 So a creature's fire ball, wind cutter, haze, lightning, flash, fire storm
@@ -6752,9 +6753,53 @@ creatures only level 16's kind 5 (model 104) throws one, 0x53, and none
 (a lead taken at `>> 7` instead fails 42 of 903), the `foe-0x50` and
 `foe-0x53` parts 63 of 63 runs each.
 
-What is left are 0x55 and 0x76 (0x76 makes a creature of the kind the
-volley's list names); in the port (`effects.gd volley_fire`, through
-`actors.gd`'s fire) they note themselves and throw nothing.
+**The list's words.** `actor_tick`'s fire (`0x80052484`) hands
+`actor_animation_effects` more than the entry: for a plain entry (a vertex)
+`a3` is a pointer into the list -- the entry plus the entries still to fire
+this time, less one -- and for an `0x8002` its stack word `sp+0x18` points
+just past the entry's three; the arms 0x55 and 0x76 read the halfword two on
+from there. A `0x8003 n`, "skip n", is how a list keeps such words out of
+the way: levels 17's and 26's casters (model 105) fire `0x8001 2, 0x9d,
+0x112, 0x8003 1, 0xcf8`, two at once, both handed 0xcf8. The word at
+`0x8018fac0` is `actor_tick_driver`'s loop index, the creature ticking.
+
+**The charge (arm and kind 0x55).** The arm spawns (`0x8004fb38`) with no
+velocity and three words: the creature's index, the vertex (a2) and the
+list's word. The kind (`effect_spawn` `0x80055ac4`): particle 9 at 0x400,
++7 9 (held), +0x44 the creature, +0x46 the vertex, +0x48 the word, +0xe
+0x40. Its tick (`0x800572d0`), held:
+
+```
+the creature (+0x44) not awake (+9 1) or not in its volley (op 0x19)   gone
+else    on actor_vertex_point(vertex +0x46) off sub_8004eee0's point;
+        +0x30 += 0x180 to 0x1800, all three scales; its velocity the step
+        it took (low halves); effect_puff's puff back along it (-0x2bc,
+        model 9, its size, rising 0x12c, life 3)
+        the creature's clock (+0x18, unsigned) at +0x48 or past: thrown --
+        sound 0x33 (0x800532d4), effect_aim at the player at 0x28a, the
+        spread 0x400, **five passes**, +7 0, a life of 0x32
+thrown  a puff (0x100, life 2), then the fire ball's own tick (0x80056910)
+```
+
+`effect_aim`'s last argument is how many passes: each but the last moves
+the target to the player's place plus the player's last step (`0x801b2600`)
+times the distance from the point over the speed (`vec_madd_s16`) and aims
+again -- the volleys pass 1, the charge 5. `actor_vertex_point`
+(`0x8004ede0`): `model_vertex` of `model_table[+1 + 0x80]` (MO.T's +1) at
+the creature's animation and clock, each axis by +0x48..+0x4c, turned by
+its angles with the yaw + 0x800; with no model `(0, -height/2, -radius)`
+unscaled. Held to the game's own: `volley_check` (the arm from a plain
+entry, its list word laid where the pointer reaches) and `foe-0x55`, the
+creature put in its volley and its clock moving 0xb4 a frame -- **63 of 63**
+runs, 1666 frames, 469 of them held and every one thrown; a throw one frame
+late, one aiming pass and a growth of 0x100 fail 2, 62 and 63 runs. The
+branch for a creature that has left its volley is read, not run. The port
+has it (`effects.gd _tick_charge`, `_puffs`; `actors.gd vertex_offset`),
+the self-test holding it to the Python (24 runs).
+
+What is left is 0x76 (a creature made of the kind the list's word names);
+in the port (`effects.gd volley_fire`, through `actors.gd`'s fire) it notes
+itself and throws nothing.
 
 ### Shape 255 is the void
 

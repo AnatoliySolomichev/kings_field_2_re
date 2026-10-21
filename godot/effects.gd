@@ -816,6 +816,15 @@ func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array,
 			_face(s)
 			w16(s + 0x2C, 0)
 			w16(s + 0xE, 0x80)
+		0x55:                               # 0x80055ac4: a fire ball a creature charges
+			particle(s, 9, 0x400, 5)
+			for o in [0x3C, 0x3A, 0x38]:
+				w16(s + o, 0)
+			w8(s + 7, 9)                    # held
+			w16(s + 0x44, int(args[1]))     # the creature, actor_tick_driver's index
+			w16(s + 0x46, int(args[2]))     # its vertex
+			w16(s + 0xE, 0x40)
+			w16(s + 0x48, int(args[3]))     # the creature's clock it is thrown at
 		0x50, 0x51, 0x52, 0x53:             # 0x80055a64, 0x80055a5c (0x52): an arrow
 			w8(s + 2, 6 if kind == 0x52 else 5)
 			w16(s + 0xE, 0)
@@ -1044,6 +1053,8 @@ func tick(s: int) -> void:
 			_tick_arrow(s)
 		0x52:
 			_tick_arrow52(s)
+		0x55:
+			_tick_charge(s)
 		WIND_CUTTER, RYU_GA:
 			_tick_wind(s)
 		HAZE:
@@ -2307,6 +2318,69 @@ func _tick_shot2e(s: int) -> void:
 		w16(s + 0x3A, u16(s + 0x3A) + 0xA)
 
 
+# effect_puff (0x800562f0) with no vertex (a1 -1): a puff where the effect is, 0x1e back
+# along its angles plus its velocity times k (>> 12) -- effect_spawn(10, 0,
+# 0x6f) of `model` at `size`, rising 0x12c, a life of `life`, mode 1. Its
+# point's fourth word and its velocity's fourth halfword are its stack's.
+# @orig game:0x800562f0 effect_puff  status:partial -- a1 -1 and a2 neither -1, -2 nor -3 (the head's vertex, the random spread and the still puff not here); through kind 0x55, foe_check
+func _puffs(s: int, k: int, size: int, life: int, model: int) -> void:
+	var d := coll.direction_from_angles(s16(s + 0x28), s16(s + 0x2A))
+	var v := PackedByteArray()
+	v.resize(8)
+	for i in 3:
+		var c := s16v(-((int(d[i]) * 0x1E) >> 12))
+		v.encode_s16(2 * i, s16v(c + ((s16(s + 0x38 + 2 * i) * k) >> 12)))
+	var pt := m.slice(s + 0x18, s + 0x24)
+	pt.resize(16)
+	spawn(0xA, 0, TRAIL, pt, [v, size, -0x12C, life, model, 0, 1, 0])
+
+
+# A fire ball a creature charges (0x800572d0, kind 0x55). Held (+7 9): gone
+# unless its creature (+0x44) is awake and in its volley (op 0x19); else on
+# the creature's vertex +0x46 off where sub_8004eee0 puts it, growing 0x180 a
+# frame to 0x1800, its velocity the step it took, puffing back along it
+# (-0x2bc, life 3); once the creature's clock reaches +0x48 it is thrown --
+# effect_aim at the player at 0x28a, five passes leading by the player's step
+# -- with +7 0 and a life of 0x32. Thrown, a puff (0x100, life 2) and the fire
+# ball's tick.
+# @orig game:0x800572d0 effect_tick+0xa14  status:verified -- tools/effects.py foe_check (foe-0x55) against the game's own, the creature in its volley and its clock moving; the self-test this to it
+func _tick_charge(s: int) -> void:
+	if u8(s + 7) != 9:
+		out_words([-0x12C, 2, 9, 0])
+		_puffs(s, 0x100, s16(s + 0x30), 2, 9)
+		_tick_fire(s)
+		return
+	var t := s16(s + 0x44)
+	var c: Array = world.charger(t, s16(s + 0x46))
+	if c.is_empty():
+		w8(s, 0xFF)
+		return
+	var place: PackedByteArray = world.actor_target(t, 0xC8)
+	var old := []
+	for i in 3:
+		old.append(u16(s + 0x18 + 4 * i))
+	for i in 3:
+		w32(s + 0x18 + 4 * i, int(c[i]) + place.decode_s32(4 * i))
+	var g := s16v(u16(s + 0x30) + 0x180)
+	w16(s + 0x30, 0x1800 if g > 0x1800 else g)
+	w16(s + 0x34, u16(s + 0x30))
+	w16(s + 0x32, u16(s + 0x30))
+	for i in 3:
+		w16(s + 0x38 + 2 * i, u16(s + 0x18 + 4 * i) - int(old[i]))
+	out_words([-0x12C, 3, 9, 0])
+	_puffs(s, -0x2BC, s16(s + 0x30), 3, 9)
+	if int(c[3]) < u16(s + 0x48):
+		return
+	out_words([0, -1, 0x400, 5])        # 0x800532d4's sound, then effect_aim
+	var p := Vector3i(int(world.field("px")), int(world.field("py")), int(world.field("pz")))
+	var a := aim(int(c[4]), int(c[5]), p, 0x28A, Vector3i(s32(s + 0x18), s32(s + 0x1C), s32(s + 0x20)),
+		0x400, -1, 5)
+	for i in 3:
+		w16(s + 0x38 + 2 * i, int(a[i]))
+	w8(s + 7, 0)
+	w16(s + 0x10, 0x32)
+
+
 # An arrow (0x80056ebc; 0x50, 0x51, 0x53): still while on the string (+7).
 # Then its height off where it left (+0x44) by vy t + 10 t t / 2, t the frames
 # flown; asked where it lands (radius and height 0x14), and if not, half a
@@ -3217,6 +3291,20 @@ func actor_target(t: int, off: int) -> PackedByteArray:
 	return tick_frame.slice(off, off + 16)
 
 
+# What kind 0x55 asks of the creature holding it (0x800572d0): nothing unless
+# it is awake and in its volley (op 0x19); else its vertex's point off it, as
+# actors.gd puts a volley's (actor_vertex_point), its clock and its angles --
+# [x, y, z, clock, pitch, yaw].
+# @port helper -- a creature's charge, from actors.gd
+func charger(t: int, vertex: int) -> Array:
+	var a = _actor(t)
+	var an := get_node_or_null("../Actors")
+	if a == null or an == null or int(a.get("st", 0)) != 1 or int(a.get("op", 0)) != 0x19:
+		return []
+	var w: Array = an.call("vertex_offset", a, vertex)
+	return [int(w[0]), int(w[1]), int(w[2]), int(a["clock"]) & 0xFFFF, 0, int(a["ry"])]
+
+
 # An effect holding creature c (+0x28 bit 0x800, 0x8005a810).
 # @port helper -- the hold handed to actors.gd
 func hold(c: int) -> void:
@@ -3818,33 +3906,43 @@ func strike_scale(p: Vector3i, radius: int, t: Vector3i, edge := EDGE, scale := 
 
 # --- what a volley throws -------------------------------------------------
 
-# effect_aim with one pass, no lead: the bearing from the point to the
-# target's eye (0x640 above its feet), its yaw pulled towards the creature's
-# facing (+0x42) the further off it is -- wholly past `spread` -- and its
-# pitch by its own distance from the creature's (+0x40); a velocity of
-# `speed` along it. [velocity x, y, z, the yaw].
-# @orig game:0x8004f1d0 effect_aim  status:verified -- 600 of 600 random cases of the game's own as tools/effects.py aim, which the self-test holds this to
+# effect_aim: the bearing from the point to the target's eye (0x640 above
+# its feet), its yaw pulled towards the creature's facing (+0x42) the further
+# off it is -- wholly past `spread` -- and its pitch by its own distance from
+# the creature's (+0x40); a velocity of `speed` along it. With more than one
+# pass, each but the last moves the target to the player's place plus the
+# player's last step (0x801b2600) times the distance from the point over the
+# speed (vec_madd_s16), and aims again. [velocity x, y, z, the yaw].
+# @orig game:0x8004f1d0 effect_aim  status:verified -- 600 of 600 random cases of the game's own as tools/effects.py aim, which the self-test holds this to; the passes through kind 0x55's throw, foe_check
 func aim(apitch: int, ayaw: int, target: Vector3i, speed: int, point: Vector3i,
-		spread := 0x400, pitch := -1) -> Array:
-	var ang := vec_to_angles(target.x - point.x, target.y - (point.y + 0x640),
-		target.z - point.z)
-	var d: int = (int(ang[1]) - ayaw) & 0xFFF
-	if d >= 0x800:
-		d = 0x1000 - d
-	var t: int = (d << 12) / spread
-	if t > 0x1000:
-		t = 0x1000
-	ang[1] = s16v(angle_lerp(int(ang[1]), ayaw, t))
-	if pitch == -1:
-		d = (int(ang[0]) - apitch) & 0xFFF
+		spread := 0x400, pitch := -1, passes := 1) -> Array:
+	var tg := target
+	while true:
+		var ang := vec_to_angles(tg.x - point.x, tg.y - (point.y + 0x640), tg.z - point.z)
+		var d: int = (int(ang[1]) - ayaw) & 0xFFF
 		if d >= 0x800:
 			d = 0x1000 - d
-		ang[0] = s16v(angle_lerp(int(ang[0]), apitch, d))
-	else:
-		ang[0] = s16v(pitch)
-	var v := coll.direction_from_angles(int(ang[0]), int(ang[1]))
-	var sp := s16v(speed)
-	return [s16v((v[0] * sp) >> 12), s16v((v[1] * sp) >> 12), s16v((v[2] * sp) >> 12), ang[1]]
+		var t: int = (d << 12) / spread
+		if t > 0x1000:
+			t = 0x1000
+		ang[1] = s16v(angle_lerp(int(ang[1]), ayaw, t))
+		if pitch == -1:
+			d = (int(ang[0]) - apitch) & 0xFFF
+			if d >= 0x800:
+				d = 0x1000 - d
+			ang[0] = s16v(angle_lerp(int(ang[0]), apitch, d))
+		else:
+			ang[0] = s16v(pitch)
+		var v := coll.direction_from_angles(int(ang[0]), int(ang[1]))
+		var sp := s16v(speed)
+		passes -= 1
+		if passes == 0:
+			return [s16v((v[0] * sp) >> 12), s16v((v[1] * sp) >> 12), s16v((v[2] * sp) >> 12), ang[1]]
+		var k := _trunc(vec_length_3d(s32v(point.x - tg.x), s32v(point.y - tg.y),
+			s32v(point.z - tg.z)), speed)
+		tg = Vector3i(s32v(target.x + int(world.field("pvx")) * k),
+			s32v(target.y + int(world.field("pvy")) * k), s32v(target.z + int(world.field("pvz")) * k))
+	return []
 
 
 # @orig game:0x80016c90 vec_to_angles  status:verified -- through effect_aim, the 600
@@ -3936,7 +4034,8 @@ func lob_solve(flag: int, d: int, h: int, g: int, v: int) -> Array:
 # +0x28 bit 0x100 while the player is paralysed (actors.gd does). `angles`
 # the creature's +0x40..+0x44. True when the arm is here.
 # @orig game:0x8004f5b8 actor_animation_effects+0x1a4  status:verified -- the arms after the point; tools/effects.py volley_check, 483 of 483 volleys of the game's own, every slot and creature; the self-test this to it; 0x50 and 0x53 (lobbed), 0x55 and 0x76 (a creature made) not here
-func volley_fire(arm: int, pct: int, point: Vector3i, angles: Array, w4 := 0) -> bool:
+func volley_fire(arm: int, pct: int, point: Vector3i, angles: Array, w4 := 0, who := -1,
+		vertex := -1, word := 0) -> bool:
 	var ap := int(angles[0])
 	var ay := int(angles[1])
 	var target := Vector3i(int(world.field("px")), int(world.field("py")), int(world.field("pz")))
@@ -4006,6 +4105,8 @@ func volley_fire(arm: int, pct: int, point: Vector3i, angles: Array, w4 := 0) ->
 				spawn(pct & 0xFF, 0x83, arm, pt, [v, ang, 0x258, 0x3C, 0x80, 0x8C, 0xA0])
 		EARTH_WAVE:                         # 0x8004faf8: the leftover velocity
 			spawn(pct & 0xFF, 0x83, arm, pt, [volley_left.duplicate(), 0x1000, 0x100, 0x1000, 1])
+		0x55:                               # 0x8004fb38: a fire ball held at the vertex
+			spawn(pct & 0xFF, 0x83, arm, pt, [null, who, vertex, word & 0xFFFF])
 		0x50, 0x53:                         # 0x8004fe48: lobbed at where the player goes
 			# six passes: the throw onto the target (lob_solve, 0xa a frame,
 			# 0x320, from 0x578 above the point), and the target the player
