@@ -635,7 +635,15 @@ the flame rod (**400 of 400**: the clock, the times, the pause, the meter, the
 guard, the spell begun, the fire ball and the blow's strength); a time of 19
 instead of 20, a guard that keeps the clock, a blow time that does not move
 on, a commit on `>` and a fire ball at any meter give 351, 385, 379, 377 and
-383.
+383. And the bows (`bow_runs`): the bow's own model put into the hand as
+`equip_weapon` puts it -- FDAT.T 0x62 + the bow written into `0x801b2598`
+and the game's own `model_install(0x20)` run on it -- then `held_item_tick`
+a frame at a time through a draw of 1 to 39 frames and its loosing, against
+`bow()` over the effects machine (**1688 of 1688** frames: the swing,
+`0x801b25a0`, the HP, the arrows, the throw and all 128 slots); an arrow
+taken from the next vertex, and a loosing one step off in yaw, fail every
+draw they touch. `bow_cases` hands 60 draws to the self-test in
+`weapon.json`.
 
 **`player.py`** — the player's stat block, from a snapshot or from the emulator.
 

@@ -1730,15 +1730,20 @@ func _use() -> bool:
 	return rest
 
 
-# held_item_tick (0x8002d2a0), last in the controller (0x80032150): the swing,
-# or between swings the meter's refill; the blow is actors.gd's to land.
-# @orig game:0x8002d2a0 held_item_tick  status:partial -- which of its two paths runs: the swing or the refill (weapon.gd)
+# held_item_tick (0x8002d2a0), last in the controller (0x80032150): a bow's
+# draw (0x1b, 0x1c), or the swing, or between swings the meter's refill; the
+# blow is actors.gd's to land.
+# @orig game:0x8002d2a0 held_item_tick  status:partial -- which of its three paths runs: the bow, the swing or the refill (weapon.gd)
 func _weapon() -> void:
 	# held_item_tick's .L47: with no weapon (0xff), nothing at all; and
 	# following the emulator the swing and the meter are the game's
 	if weapon_id >= KFWeapon.records.size() or KFGame.follow:
 		return
 	var rec: PackedByteArray = KFWeapon.records[weapon_id]
+	if KFWeapon.BOWS.has(weapon_id):
+		_bow(rec)
+		weapon_meter = int(wstate["meter"])
+		return
 	if int(wstate["clock"]) == -1:
 		KFWeapon.refill(wstate, rec, stat, KFPad.held(KFPad.ATTACK))
 	else:
@@ -1757,6 +1762,39 @@ func _weapon() -> void:
 		if int(ev["hit"]) >= 0:
 			_blow(rec, int(ev["hit"]), bool(ev["push"]))
 	weapon_meter = int(wstate["meter"])
+
+
+# A bow's frame over the player's own: the arrows counted in inventory_a
+# alone (0x800c85e8, not take_item's fallback to the second array), the HP
+# the second bow costs and the throw when the last of it goes, and the arrow
+# on the effects node, put on the hand's model as held.gd draws it -- the
+# swing's phase and clock. The sound 0x60 the port has not.
+# @port helper -- hands KFWeapon.bow the player, the effects node and the hand's model
+func _bow(rec: PackedByteArray) -> void:
+	var fx = get_node_or_null("../Effects")
+	if fx == null:
+		return
+	var item: int = KFWeapon.BOWS[weapon_id][1]
+	var p := {"pos": [gx, gy, gz, 0], "view": view_angles(), "bob": bob, "crouch": crouch,
+		"hp": hp, "arrows": {item: int(inventory.a[item])}, "rand": func() -> int: return rand()}
+	var key := KFWeapon.MODEL_KEY + weapon_id
+	var verts := func(ph: int, c: int) -> Array:
+		return KFAnim.vertices(key, ph, c) if KFAnim.models.has(key) else []
+	var ev := KFWeapon.bow(wstate, rec, weapon_id, KFPad.held(KFPad.ATTACK), p, fx, verts)
+	var a := inventory.a
+	a[item] = int(p["arrows"][item])
+	inventory.a = a
+	hp = int(p["hp"])
+	if ev.has("thrown"):
+		_throw(null)
+
+
+# The view's angles as 0x801b2608 holds them for what reads it: the pitch the
+# view draws at, the yaw with the knock-back's tilt, and its roll.
+# @port helper -- [pitch, yaw, roll], as _view draws them
+func view_angles() -> Array:
+	var p := view_pitch if view_pitch >= 0 else view_pitch_now()
+	return [_signed(p), _signed((facing + int(tilt[1])) & 0xFFF), _signed(int(tilt[2]) & 0xFFF)]
 
 
 # The blow: the probe's step off the pitch and facing, the offense ratings --

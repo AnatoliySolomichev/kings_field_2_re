@@ -12,7 +12,10 @@
 --   * cast flash, lightning bolt, freeze and thedek (the magic menu) at a
 --     creature and at a wall, and lightning once off a ledge, over a drop;
 --   * on level 16, let the archer (model 104) shoot at you a few times,
---     standing, walking straight and strafing.
+--     standing, walking straight and strafing;
+--   * with a bow in hand (large bow or elchris bow) and arrows, draw and
+--     loose a few times: a short draw, a full one held a while, looking up
+--     and down; once with no arrows.
 -- Once each is enough. tools/effects.py is what this is for: the machine is
 -- held to the game's own code already, and this holds it to the game in play.
 --
@@ -20,7 +23,10 @@
 --        slot lives: every live slot of the 128 at effect_slots (0x801b80ec,
 --        0x4c bytes), its index and its bytes in hex; the player's place and
 --        HP; its last step (0x801b2600, three s16 in hex: the strafe's x z
---        and the height's, which a creature's lob leads it by); and
+--        and the height's, which a creature's lob leads it by); the view's
+--        angles (0x801b2608), the bob and crouch (0x801b2650..55), the swing
+--        (0x801b25a0..af: the arrow on the string, the clock, the phase,
+--        the weapon) and the weapon meter (0x801b2502), for a bow; and
 --        effect_tick's outgoing words (sp+0x10..0x2c of its frame, below
 --        effect_driver's), which flash's second burst reads
 -- ACT    the same frame: each awake creature (+9 1) -- slot, place, +0xe, HP
@@ -106,8 +112,10 @@ bp28[1] = arm(0x8005bc50, 'fx', function()
         local tsp = reg(g, 'sp') - TICK_BELOW
         words = hex(tsp + 0x10, 0x20)
     end
-    log(string.format('FX vb=%d pos=%d,%d,%d hp=%d step=%s out=%s %s', s32(VBLANKS), s32(PLAYER),
-        s32(PLAYER + 4), s32(PLAYER + 8), u16(HP), hex(PLAYER + 0x10, 6), words, table.concat(live, ' ')))
+    log(string.format('FX vb=%d pos=%d,%d,%d hp=%d step=%s view=%s bob=%s swing=%s meter=%d out=%s %s',
+        s32(VBLANKS), s32(PLAYER), s32(PLAYER + 4), s32(PLAYER + 8), u16(HP), hex(PLAYER + 0x10, 6),
+        hex(PLAYER + 0x18, 6), hex(PLAYER + 0x60, 6), hex(PLAYER - 0x50, 16), u16(PLAYER - 0xee),
+        words, table.concat(live, ' ')))
     local acts = {}
     for k = 0, 199 do
         local a = ACTORS + k * ASTRIDE

@@ -260,6 +260,125 @@ static func vec_rotate(c: KFCollision, ax: int, ay: int, az: int, v: Array) -> A
 	return out
 
 
+# The bows (held_item_tick 0x8002d304): weapon -> the arrow's effect kind and
+# the item a shot uses up; the clock's step once loosed; the bow that costs HP.
+const BOWS := {0x1B: [0x51, 0x93], 0x1C: [0x52, 0x94]}
+const BOW_BACK := 0x190
+const BOW_COST := 0x1C
+const MODEL_KEY := 0x10000       # where tools/anim.py files a weapon's model for KFAnim (held.gd)
+
+
+# Where vertex `vertex` of the hand's model is, off the player's eye
+# (0x8002d530): the vertex less the record's +0x34 and +0x38 and plus its
+# +0x36, turned (vec_rotate) by the view's angles less +0x3c and +0x3e and
+# plus +0x40.
+# @orig game:0x8002d530 held_item_tick+0x290  status:verified -- tools/weapon.py bow_runs, the game's own held_item_tick with the bow's own model in hand (magic_check); the self-test this to it
+static func bow_point(c: KFCollision, rec: PackedByteArray, verts: Array, view: Array,
+		vertex: int) -> Array:
+	var v := Vector3i.ZERO
+	if vertex >= 0 and vertex < verts.size():
+		v = verts[vertex]
+	var o := [s16(v.x - u16(rec, 0x34)), s16(v.y + u16(rec, 0x36)), s16(v.z - u16(rec, 0x38))]
+	return vec_rotate(c, s16(int(view[0]) - u16(rec, 0x3C)), s16(int(view[1]) - u16(rec, 0x3E)),
+		s16(int(view[2]) + u16(rec, 0x40)), o)
+
+
+# One frame of a bow. `w` the swing, its `arrow` the slot on the string
+# (0x801b25a0) or -1; `p` the player: pos (x, y, z and the fourth word), view
+# (0x801b2608's three), bob, crouch, hp, arrows {item: count} -- inventory_a
+# alone -- and rand; `fx` the effects node the arrow is spawned in; `verts`
+# the hand's model's vertices for a phase and clock.
+#
+# Idle (clock -1) the meter and the pause 0, so a bow never fills. Loosed
+# (phase 1) the clock back 0x190 a frame, from 0xfff -1 and the meter 0.
+# Drawn: the first frame takes an arrow and spawns it (10, 0x42, kind 0x51 or
+# 0x52, at the player's place, along the view, no velocity) held with +7
+# 0x63; bow 0x1c costs (5 rand >> 15) + 3 HP, the last of it throwing the
+# player. The clock by +0x1c to 0xfff; from +0x1e the meter is the draw over
+# the rest in 5000ths, its first frame sounding 0x60. The arrow on the hand's
+# vertex +0x3a, 0x640 above the feet with the bob and the crouch, pointed
+# from vertex +0x42. Attack let go: loosed at 900 x meter / 5000 along its
+# angles, a life of 0x32, +0x44 its height, and phase 1 from 0. The events,
+# "sound" and "thrown".
+# @orig game:0x8002d304 held_item_tick+0x64  status:verified -- tools/weapon.py bow_runs: draws and looses, frame by frame, the swing, the HP, the arrows and all 128 effect slots as the game's own (magic_check); the self-test this to it
+static func bow(w: Dictionary, rec: PackedByteArray, weapon: int, attack_held: bool,
+		p: Dictionary, fx, verts: Callable) -> Array:
+	var ev := []
+	if int(w["clock"]) == -1:                       # .L19
+		w["meter"] = 0
+		w["pause"] = 0
+		return ev
+	if int(w.get("phase", 0)) == 1:                 # .L18
+		w["clock"] = s16(int(w["clock"]) + BOW_BACK)
+		if int(w["clock"]) >= 0xFFF:
+			w["clock"] = -1
+			w["meter"] = 0
+		return ev
+	if int(w.get("phase", 0)) != 0:
+		return ev
+	if int(w["clock"]) == 0:
+		var kind: int = BOWS[weapon][0]
+		var item: int = BOWS[weapon][1]
+		var arrows: Dictionary = p["arrows"]
+		if int(arrows.get(item, 0)) != 0:
+			arrows[item] = int(arrows[item]) - 1
+			var pt := PackedByteArray()
+			pt.resize(16)
+			for i in 4:
+				pt.encode_u32(4 * i, int(p["pos"][i]) & 0xFFFFFFFF)
+			var vw := PackedByteArray()
+			vw.resize(8)
+			for i in 3:
+				vw.encode_u16(2 * i, int(p["view"][i]) & 0xFFFF)
+			var s: int = fx.spawn(0xA, 0x42, kind, pt, [null, vw])
+			w["arrow"] = s
+			if s >= 0:
+				fx.w8(s + 7, 0x63)
+			if weapon == BOW_COST:
+				var d: int = ((5 * int((p["rand"] as Callable).call())) >> 15) + 3
+				if d < int(p["hp"]):
+					p["hp"] = int(p["hp"]) - d
+				else:
+					p["hp"] = 0
+					ev.append("thrown")
+		else:
+			w["arrow"] = -1
+	var c := s16(int(w["clock"]) + u16(rec, 0x1C))
+	w["clock"] = 0xFFF if c >= 0xFFF else c
+	var draw := u16(rec, 0x1E)
+	if int(w["clock"]) >= draw:
+		if int(w["meter"]) == 0:
+			ev.append("sound")
+		w["meter"] = _trunc((int(w["clock"]) - draw) * FULL, 0xFFF - draw) & 0xFFFF
+	else:
+		w["meter"] = 0
+	var s: int = int(w.get("arrow", -1))
+	if s >= 0:
+		var vs: Array = verts.call(int(w.get("phase", 0)), int(w["clock"]))
+		var a := bow_point(fx.coll, rec, vs, p["view"], s16(u16(rec, 0x3A)))
+		fx.w32(s + 0x18, int(p["pos"][0]) + int(a[0]))
+		fx.w32(s + 0x20, int(p["pos"][2]) + int(a[2]))
+		fx.w32(s + 0x1C, int(p["pos"][1]) + int(a[1]) + int(p["bob"]) + int(p["crouch"]) - 0x640)
+		var b := bow_point(fx.coll, rec, vs, p["view"], s16(u16(rec, 0x42)))
+		var ang: Array = fx.vec_to_angles(int(a[0]) - int(b[0]), int(a[1]) - int(b[1]),
+			int(a[2]) - int(b[2]))
+		for i in 3:
+			fx.w16(s + 0x28 + 2 * i, int(ang[i]))
+	if attack_held:
+		return ev
+	if s >= 0:
+		fx.w8(s + 7, 0)
+		var d: Array = fx.coll.direction_from_angles(fx.s16(s + 0x28), fx.s16(s + 0x2A))
+		var k := s16(_trunc(int(w["meter"]) * 900, FULL))
+		for i in 3:
+			fx.w16(s + 0x38 + 2 * i, s16((int(d[i]) * k) >> 12))
+		fx.w16(s + 0x10, 0x32)
+		fx.w16(s + 0x44, fx.u16(s + 0x1C))
+	w["phase"] = 1
+	w["clock"] = 0
+	return ev
+
+
 # The quarter step the probe walks (0x8002dbd8): the reach turned by the view,
 # its Y scaled by (0xe10 - reach) / 1800.
 # @orig game:0x8002dbd8 held_item_tick+0x938  status:transcribed -- a label inside held_item_tick

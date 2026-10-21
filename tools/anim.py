@@ -123,7 +123,7 @@ BANK_ANIMATED = (0x51,)    # the resident models an effect takes a vertex of: fl
 def load_bank(index):
     """model_table[index] of the resident bank (tools/modelbank.py) in the
     same wrapper as MO.T's: flame's head (0x51) has one animation, which
-    sub_8004352c runs by the effect's +0x14."""
+    model_vertex (0x8004352c) runs by the effect's +0x14."""
     import modelbank
     raw, at, _n = modelbank.block(modelbank.FDAT, modelbank.BLOCK if index >= modelbank.FIRST
                                   else 9)

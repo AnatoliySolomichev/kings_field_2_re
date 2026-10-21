@@ -3556,9 +3556,8 @@ deeper than any 2D part (from depth 0x100 on), so it is left out.
 the equipping, as `tools/ui.py` draws them (8 of the 25 screens the
 self-test holds); `godot/player.gd equip_weapon`, `equip_armour`, and every
 weapon's model in hand (`tools/level3d.py build_held_gltf`), the MAGIC and
-BUTTON lines, the USE MAGIC screen and the storage. Not there: the turning model, the
-guide, and a bow's own path through `held_item_tick` (weapons `0x1b`,
-`0x1c`).
+BUTTON lines, the USE MAGIC screen and the storage, and the bows (below,
+"The bows"). Not there: the turning model and the guide.
 
 ### The banners
 
@@ -6857,6 +6856,54 @@ the right -- lit by the player's cell's class, and animated by
 Z are flipped), with the level's class 0 baked in for now; the VRAM the port
 builds holds the weapon's pages as the snapshot has them (0xd and 0xe exactly).
 
+### The bows
+
+Weapons `0x1b` and `0x1c` take their own path through `held_item_tick`
+(`0x8002d304`..`0x8002d7b8`). `swing_start` begins a draw as it begins a
+swing -- the clock 0, phase 0, the meter emptied -- but between draws the bow
+path empties the meter and the pause (`.L19`) instead of refilling them, so
+a bow never fills and its swing is never charged.
+
+```
+frame of the draw    what happens
+first (clock 0)      an arrow out of inventory_a[0x93] (bow 0x1b) or [0x94]
+                     (0x1c) -- the first array alone, no fallback to the
+                     second -- spawned: effect_spawn(10, 0x42, 0x51 or 0x52,
+                     player_pos, no velocity, the view's angles), its slot in
+                     0x801b25a0 and +7 0x63 (on the string). Bow 0x1c costs
+                     (5 rand >> 15) + 3 HP; the last of it is 0 and
+                     player_throw(0). No arrow: 0x801b25a0 = 0 and the draw
+                     goes on empty
+every one            the clock += +0x1c (0x12c), to 0xfff; from +0x1e (0x800,
+                     0xc00) the meter = (clock - +0x1e) * 5000 / (0xfff -
+                     +0x1e), sound 0x60 the frame it leaves 0; else 0
+                     the arrow on the hand's model: vertex +0x3a of
+                     model_table[0x20] (model_vertex, the swing's phase and
+                     clock) less +0x34 and +0x38 and plus +0x36, vec_rotate by
+                     the view's angles less +0x3c and +0x3e and plus +0x40;
+                     at the player's x and z plus that, its y plus the bob and
+                     the crouch less 0x640; its angles vec_to_angles from
+                     vertex +0x42, done the same, to it
+attack let go        +7 0; the velocity direction_from_angles(its angles)
+                     scaled (vec_scale) by 900 * meter / 5000; a life of 0x32,
+                     +0x44 its height; phase 1, the clock 0
+phase 1              the clock += 0x190; at 0xfff, -1 and the meter 0
+```
+
+The arrows' own flight is the creatures' lob's kinds' (FORMATS.md, "What a
+creature's volley throws"): 0x51 falls, 0x52 homes on a creature in its
+cone. The hand's models (FDAT.T 0x62 + 0x1b and 0x1c, 175 and 374 vertices)
+have two animations each over the whole clock, the draw (segments of 682,
+682, 682 and 2050) and the release (1365, 1365, 1366). Held to the game's own
+(`tools/weapon.py bow_runs`, in `magic_check`): the bow's own model put into
+the hand as `equip_weapon` puts it (FDAT.T into `0x801b2598`,
+`model_install(0x20)`), random arrows, HP, view, bob and crouch, a draw of 1
+to 39 frames and its loosing -- **1688 of 1688** frames with the swing,
+`0x801b25a0`, the HP, the arrows, the throw and all 128 effect slots alike;
+an arrow taken from the next vertex fails every draw that had one, a loosing
+one step off in yaw every loosing. The port has it (`weapon.gd bow`,
+`player.gd _bow`), and the self-test holds it to the Python on 60 draws.
+
 ### The player's blow
 
 `tools/weapon.py`, and `godot/weapon.gd` for the port. `player_turn` starts a
@@ -7384,7 +7431,7 @@ flame (4)        sent at 0xfa from (0, -512, 2000): model 0x29 -- a head,
 ```
 
 **The head's vertex** (`sub_80053af4` through `sub_80053a0c`):
-`sub_8004352c` -- the creatures' `actor_vertex_point` routine -- on
+`model_vertex` (`0x8004352c`) -- the creatures' `actor_vertex_point` routine -- on
 `model_table[+3 + 0x28]` with the animation `+4` and the clock `+0x14`;
 each axis times its scale (`+0x30..`), `vec_rotate` by the angles with the
 yaw a half turn on, plus the point. The model is the resident bank's

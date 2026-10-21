@@ -232,6 +232,114 @@ def swing(w, rec, action_held=False, may=0, weapon=-1, magic=0):
     return ev
 
 
+# The bows (held_item_tick 0x8002d304): weapon -> the arrow's effect kind and
+# the item a shot uses up; the clock's step once the arrow is loosed
+BOWS = {0x1B: (0x51, 0x93), 0x1C: (0x52, 0x94)}
+BOW_BACK = 0x190
+BOW_COST = 0x1C             # the bow that costs HP to draw
+
+
+def bow_point(rec, verts, view, vertex):
+    """Where vertex `vertex` of the hand's model is, off the player's eye
+    (0x8002d530): the vertex less the record's +0x34 and +0x38 and plus its
+    +0x36, turned (vec_rotate) by the view's angles less +0x3c and +0x3e and
+    plus +0x40."""
+    v = verts[vertex] if 0 <= vertex < len(verts) else (0, 0, 0)
+    o = (s16(v[0] - u16(rec, 0x34)), s16(v[1] + u16(rec, 0x36)), s16(v[2] - u16(rec, 0x38)))
+    ang = (s16(view[0] - u16(rec, 0x3C)), s16(view[1] - u16(rec, 0x3E)),
+           s16(view[2] + u16(rec, 0x40)))
+    return vec_rotate(ang, o)
+
+
+def bow(w, rec, weapon, attack_held, p, mach, verts):
+    """One frame of a bow (held_item_tick 0x8002d304..0x8002d7b8).
+
+    `w` the swing: clock, phase, meter, pause, and `arrow` -- 0x801b25a0,
+    the slot of the arrow on the string or 0. `p` the player: pos (x, y, z
+    and the fourth word), view (0x801b2608's three), bob, crouch, hp,
+    arrows {item: count}, rand. `mach` the effects machine the arrow is
+    spawned in; `verts(phase, clock)` the hand's model's vertices.
+
+    Idle (clock -1): the meter and the pause 0, so a bow never fills. Loosed
+    (phase 1): the clock back 0x190 a frame to 0xfff, then -1 and the meter
+    0. Drawn (phase 0): the first frame takes an arrow (0x93 for bow 0x1b,
+    0x94 for 0x1c) and spawns it (10, 0x42, kind 0x51 or 0x52, at the
+    player's place, along the view, no velocity) held with +7 0x63; bow 0x1c
+    costs (5 rand >> 15) + 3 HP, the last of it throwing the player. The
+    clock by +0x1c to 0xfff; from +0x1e the meter is the draw over the rest
+    to 0xfff in 5000ths, its first frame sounding 0x60. The arrow is put on
+    the hand's vertex +0x3a, 0x640 above the feet with the bob and the
+    crouch, and pointed from vertex +0x42 to it. Attack let go: loosed --
+    900 x meter / 5000 along its angles, a life of 0x32, +0x44 its height --
+    and phase 1 from 0. Events: 'sound', 'thrown'."""
+    import effects
+    ev = []
+    if w["clock"] == -1:                                # .L19
+        w["meter"] = 0
+        w["pause"] = 0
+        return ev
+    if w["phase"] == 1:                                 # .L18
+        w["clock"] = s16(w["clock"] + BOW_BACK)
+        if w["clock"] >= 0xFFF:
+            w["clock"] = -1
+            w["meter"] = 0
+        return ev
+    if w["phase"] != 0:
+        return ev
+    if w["clock"] == 0:
+        kind, item = BOWS[weapon]
+        if p["arrows"].get(item, 0):
+            p["arrows"][item] -= 1
+            pt = struct.pack("<4i", *p["pos"])
+            view = struct.pack("<4H", *[v & 0xFFFF for v in p["view"]], 0)
+            s = mach.spawn(0xA, 0x42, kind, pt, [None, view])
+            w["arrow"] = s
+            if s:
+                mach.w8(s + 7, 0x63)
+            if weapon == BOW_COST:
+                d = ((5 * p["rand"]()) >> 15) + 3
+                if d < p["hp"]:
+                    p["hp"] -= d
+                else:
+                    p["hp"] = 0
+                    ev.append("thrown")
+        else:
+            w["arrow"] = 0
+    c = s16(w["clock"] + u16(rec, 0x1C))
+    w["clock"] = 0xFFF if c >= 0xFFF else c
+    draw = u16(rec, 0x1E)
+    if w["clock"] >= draw:
+        if w["meter"] == 0:
+            ev.append("sound")
+        w["meter"] = trunc((w["clock"] - draw) * FULL, 0xFFF - draw) & 0xFFFF
+    else:
+        w["meter"] = 0
+    s = w["arrow"]
+    if s:
+        vs = verts(w["phase"], w["clock"])
+        a = bow_point(rec, vs, p["view"], s16(u16(rec, 0x3A)))
+        mach.w32(s + 0x18, p["pos"][0] + a[0])
+        mach.w32(s + 0x20, p["pos"][2] + a[2])
+        mach.w32(s + 0x1C, p["pos"][1] + a[1] + p["bob"] + p["crouch"] - 0x640)
+        b = bow_point(rec, vs, p["view"], s16(u16(rec, 0x42)))
+        ang = effects.vec_to_angles(a[0] - b[0], a[1] - b[1], a[2] - b[2])
+        for i in range(3):
+            mach.w16(s + 0x28 + 2 * i, ang[i])
+    if attack_held:
+        return ev
+    if s:
+        mach.w8(s + 7, 0)
+        d = movement.direction_from_angles(mach.s16(s + 0x28), mach.s16(s + 0x2A))
+        k = s16(trunc(w["meter"] * 900, FULL))
+        for i in range(3):
+            mach.w16(s + 0x38 + 2 * i, s16((d[i] * k) >> 12))
+        mach.w16(s + 0x10, 0x32)
+        mach.w16(s + 0x44, mach.u16(s + 0x1C))
+    w["phase"] = 1
+    w["clock"] = 0
+    return ev
+
+
 COMBO_END = 0xFFFF
 COMBO_TIME = 20             # 0x800303d8
 
@@ -587,6 +695,7 @@ def export(out_dir):
         skills = [rng.choice((0x31, 0x32, 0x50)) for _ in range(5)]
         mays.append([wi, which, stat, skills, unlocked,
                      may_cast(wi, rec, which, lambda k: unlocked[k], stat, skills)])
+    bows = bow_cases(rng)
     path = os.path.join(out_dir, "weapon.json")
     with open(path, "w") as fh:
         json.dump({"_note": "FDAT 97 block 1, the 68-byte weapon records, and "
@@ -595,7 +704,7 @@ def export(out_dir):
                    "guard": {"0": level_guard(0)},
                    "swings": swings, "probes": probes, "damages": damages,
                    "knocks": knocks, "magic": magic, "windows": windows,
-                   "mays": mays, "swings2": swings2, "combos": combos}, fh,
+                   "mays": mays, "swings2": swings2, "combos": combos, "bows": bows}, fh,
                   separators=(",", ":"))
     return path
 
@@ -817,6 +926,7 @@ def magic_check(out=sys.stdout, n=200):
         note("the window", g == m, f"weapon {weapon:#x} clock {clock0:#x} {w}: game {g} model {m}")
     combo_runs(base, table, rng, note, n)
     swing_runs(base, table, rng, note, n)
+    bow_runs(base, table, rng, note, n)
     line = ", ".join(f"{k} {a} of {b}" for k, (a, b) in tally.items())
     print(f"  the weapons' magic against the game's own code over a1: {line}", file=out)
     if first:
@@ -968,6 +1078,151 @@ def swing_runs(base, table, rng, note, n):
         note("held_item_tick's swing", g == m,
              f"weapon {weapon:#x} phase {phase} clock {clock} hit {hit} sound {sound} "
              f"action {action} magic {magic}: game {g} model {m}")
+
+
+def bow_cases(rng, n=60):
+    """Draws of both bows for the self-test, over an effects machine of
+    free slots: [bow, arrows, hp, view, bob, crouch, pos, the rand values
+    drawn, frames], each frame [attack held, clock, phase, meter, pause, the
+    arrow's slot or -1, hp, arrows, thrown, sounded, the slots' md5]."""
+    import hashlib
+    import effects
+    import anim
+    import levelstate
+    table = records()
+    models = {w: anim.load_weapon(w) for w in BOWS}
+    o = effects.SLOTS & effects.MASK
+    out = []
+    for _ in range(n):
+        weapon = rng.choice(tuple(BOWS))
+        rec = table[weapon]
+        item = BOWS[weapon][1]
+        m = bytearray(0x200000)
+        for k in range(effects.COUNT):
+            m[o + effects.STRIDE * k] = 0xFF
+        mach = effects.Machine(m, None)
+        arrows = rng.choice((0, 1, 1, 3))
+        hp = rng.choice((3, 4, 6, 50))
+        view = [rng.randrange(-0x200, 0x200), rng.randrange(-0x800, 0x800), rng.choice((0, rng.randrange(-0x40, 0x40)))]
+        bob, crouch = rng.choice((0, rng.randrange(-0x40, 0x40))), rng.choice((0, 0, 0x30))
+        pos = [rng.randrange(0, 0x28000), rng.randrange(-0x3000, 0), rng.randrange(0, 0x28000), 0]
+        lcg = levelstate.Lcg(rng.randrange(1 << 30))
+        drawn = []
+
+        def rand(lcg=lcg, drawn=drawn):
+            v = lcg()
+            drawn.append(v)
+            return v
+        p = {"pos": pos, "view": view, "bob": bob, "crouch": crouch, "hp": hp,
+             "arrows": {item: arrows}, "rand": rand}
+        w = {"clock": 0, "phase": 0, "meter": 0, "pause": rng.randrange(3), "arrow": 0}
+        verts = (lambda ph, c, md=models[weapon]: anim.vertices(md, ph, c))
+        held = rng.randrange(1, 40)
+        frames = []
+        thrown = 0
+        for f in range(held + 14):
+            ev = bow(w, rec, weapon, f < held, p, mach, verts)
+            thrown += ev.count("thrown")
+            frames.append([int(f < held), w["clock"], w["phase"], w["meter"], w["pause"],
+                           (w["arrow"] - effects.SLOTS) // effects.STRIDE if w["arrow"] else -1,
+                           p["hp"], p["arrows"][item], thrown, int("sound" in ev),
+                           hashlib.md5(effects._slots(m).hex().encode()).hexdigest()])
+        out.append([weapon, arrows, hp, view, bob, crouch, pos, drawn, frames])
+    return out
+
+
+def bow_runs(base, table, rng, note, n):
+    """held_item_tick, the game's own, drawing a bow from swing_start's
+    clock 0: attack held a random number of frames, let go, and the string
+    back to -1. The bow's own model in the hand as equip_weapon puts it
+    (FDAT.T 0x62 + the bow into 0x801b2598, model_install 0x20), so the
+    arrow sits on the game's own vertex; effect_spawn the game's, rand,
+    the sounds and player_throw stood in for; random arrows held, HP, view,
+    bob and crouch. Every frame the swing, 0x801b25a0, the HP, the arrows,
+    the throw and all 128 effect slots against bow()."""
+    import mipsrun
+    import effects
+    import anim
+    import levelstate
+    from tarc import TArc
+    fdat = TArc(os.path.join(ROOT, "extract", "CD", "COM", "FDAT.T"))
+    models = {w: anim.load_weapon(w) for w in BOWS}
+    o = effects.SLOTS & 0x1FFFFF
+    for _ in range(max(n // 4, 1)):
+        weapon = rng.choice(tuple(BOWS))
+        rec = table[weapon]
+        kind, item = BOWS[weapon]
+        cpu = _weapon_cpu(base, weapon)
+        buf = cpu.rd(0x801B2598, 4)
+        raw = fdat.raw(0x62 + weapon)
+        cpu.ram[buf & 0x1FFFFF:(buf & 0x1FFFFF) + len(raw)] = raw
+        cpu.call(0x80042C64, 0x20, buf)                 # model_install
+        cpu.ram[o:o + effects.STRIDE * effects.COUNT] = bytes(effects.STRIDE * effects.COUNT)
+        for k in range(effects.COUNT):
+            cpu.ram[o + effects.STRIDE * k] = 0xFF
+        arrows = rng.choice((0, 1, 1, 2, 9))
+        hp = rng.choice((3, 4, 5, 7, 50, 200))
+        view = (rng.randrange(-0x200, 0x200) & 0xFFFF, rng.randrange(0x1000),
+                rng.choice((0, 0, rng.randrange(-0x40, 0x40) & 0xFFFF)))
+        bob, crouch = rng.choice((0, rng.randrange(-0x40, 0x40))), rng.choice((0, 0, 0x30))
+        w4 = rng.choice((0, rng.randrange(1 << 16)))
+        pause = rng.randrange(3)
+        cpu.wr(0x800C85E8 + item, 1, arrows)
+        cpu.wr(0x801B24FC, 2, hp)
+        for i, v in enumerate(view):
+            cpu.wr(0x801B2608 + 2 * i, 2, v)
+        cpu.wr(0x801B2650, 2, bob & 0xFFFF)
+        cpu.wr(0x801B2654, 2, crouch & 0xFFFF)
+        cpu.wr(0x801B25FC, 4, w4)
+        cpu.wr(0x801B25A4, 2, 0)
+        cpu.wr(0x801B25AE, 1, 0)
+        cpu.wr(0x801B2502, 2, 0)
+        cpu.wr(0x801B24F3, 1, pause)
+        cpu.wr(0x801B25A0, 4, 0)
+        seed = rng.randrange(1 << 30)
+        lcg = levelstate.Lcg(seed)
+        thrown = []
+        cpu.hooks[effects.RAND] = lambda c, lcg=lcg: lcg()
+        cpu.hooks[0x8001576C] = lambda c: 0
+        cpu.hooks[effects.SOUND_AT] = lambda c: 0
+        cpu.hooks[effects.SOUND_CUE] = lambda c: 0
+        cpu.hooks[0x80030A6C] = lambda c, t=thrown: t.append(c.r[4])
+        m = bytearray(cpu.ram)
+        mach = effects.Machine(m, None)
+        pos = struct.unpack_from("<4i", m, 0x1B25F0)
+        p = {"pos": pos, "view": [s16(v) for v in view], "bob": s16(bob), "crouch": crouch,
+             "hp": hp, "arrows": {item: arrows}, "rand": levelstate.Lcg(seed)}
+        w = {"clock": 0, "phase": 0, "meter": 0, "pause": pause, "arrow": 0}
+        verts = (lambda ph, c, md=models[weapon]: anim.vertices(md, ph, c))
+        held = rng.randrange(1, 40)
+        attack = cpu.rd(0x80081870, 2)
+        mthrown = 0
+        for f in range(held + 14):
+            on = f < held
+            cpu.wr(0x801B265C, 2, attack if on else 0)
+            try:
+                cpu.call(0x8002D2A0, 0, 0, 0)
+            except mipsrun.Stop as ex:
+                note("held_item_tick's bows", False, f"stopped: {ex}")
+                break
+            ev = bow(w, rec, weapon, on, p, mach, verts)
+            mthrown += ev.count("thrown")
+            g = (mipsrun.s32(cpu.rd(0x801B25A4, 2) << 16) >> 16, cpu.rd(0x801B25AE, 1),
+                 cpu.rd(0x801B2502, 2), cpu.rd(0x801B24F3, 1), cpu.rd(0x801B25A0, 4),
+                 cpu.rd(0x801B24FC, 2), cpu.rd(0x800C85E8 + item, 1), len(thrown))
+            mm = (w["clock"], w["phase"], w["meter"], w["pause"], w["arrow"], p["hp"],
+                  p["arrows"][item], mthrown)
+            gs = bytes(cpu.ram[o:o + effects.STRIDE * effects.COUNT])
+            ms = bytes(m[o:o + effects.STRIDE * effects.COUNT])
+            diff = next((i for i in range(len(gs)) if gs[i] != ms[i]), None)
+            same = g == mm and diff is None
+            note("held_item_tick's bows", same,
+                 f"bow {weapon:#x} frame {f} (held {held}) arrows {arrows} hp {hp}: game {g} "
+                 f"model {mm}" + ("" if diff is None else
+                                  f"; slot {diff // effects.STRIDE} +{diff % effects.STRIDE:#x} "
+                                  f"game {gs[diff]:#x} model {ms[diff]:#x}"))
+            if not same:
+                break
 
 
 def check(out=sys.stdout):

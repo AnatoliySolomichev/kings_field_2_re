@@ -455,8 +455,9 @@ What is left of movement:
    `emu/bp25.lua`'s recording (817 of 817 frames). The weapon in the hand is
    drawn too (`godot/held.gd`, FDAT entry 0x62 + the weapon, animated by the
    swing), and a death leaves its gold and its thing, which fall and can be
-   taken (FORMATS.md, "What a dying creature leaves"). Left: the bows (0x1b,
-   0x1c), the spells a swing can carry (+3, +4), phase 1, the lighting class
+   taken (FORMATS.md, "What a dying creature leaves"). The bows (0x1b, 0x1c)
+   are in (FORMATS.md, "The bows"). Left: the spells a swing can carry (+3,
+   +4), phase 1, the lighting class
    the hand is drawn with, and the dying creature's fade (+0x16, which the
    dying arm moves by 0x200 a frame either side of the clock's 0x800).
 4. **The door shoves the player — found.** The X writes `emu/bp15.lua` caught
@@ -588,9 +589,8 @@ Eating heals. Left, roughly in order:
   maps and notes (95..100); the guide is in (FORMATS.md, "The guide");
 * "equipment" is in (FORMATS.md, "The equipment screen") but for its MAGIC
   and BUTTON lines (`0x8001d0c4`, `0x8001d3a0`), the thing's turning model
-  and the guide; a bow in hand (weapons `0x1b`, `0x1c`) swings as a blade
-  does in the port, where `held_item_tick` has a path of its own for it.
-  The screens hold against `equip1`..`equip4`, 8 of 8 frames;
+  and the guide; a bow in hand (weapons `0x1b`, `0x1c`) draws and looses
+  its arrows (FORMATS.md, "The bows"). The screens hold against `equip1`..`equip4`, 8 of 8 frames;
 * "status/records" is in but for its CONVERSATION line (`text_pager`,
   `0x8001d944`); "use magic" is in but for its guide (FORMATS.md, "USE
   MAGIC"), and "storage" but for the guide and the turning model
@@ -874,8 +874,12 @@ each one is also in its function's marker, as `partial` and what differs:
   `spell_begin` -- the combination and the second swing it starts, with
   Seath's sword's guard and the flame rod's fire ball, all held to the
   game's own (`tools/weapon.py`, `magic_check`), and the story flags 39 and
-  45 unlocking their spells in `equip_weapon`. The bows' swing (weapons
-  `0x1b`, `0x1c`) is still not read.
+  45 unlocking their spells in `equip_weapon`. The bows (weapons `0x1b`,
+  `0x1c`) draw and loose their arrows, held to the game's own the same way
+  (`bow_runs`, 1688 of 1688 frames) -- but for the sound 0x60 at full draw,
+  which the port does not play, and the view's angles: `held_item_tick`
+  reads `0x801b2608` as `camera_pose` last left it, the port the view as it
+  draws it this frame; no recording has held a bow yet (PLAYTEST.md).
   Not yet:
   `sub_8004eee0`'s arms for a creature whose `+0x28 & 3` is not 0 (freeze
   and thedek take hold by it; none in the snapshots, so the port turns

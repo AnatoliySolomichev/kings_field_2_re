@@ -10,6 +10,11 @@
   "kind": "code",
   "evidence": "GAME.EXE header"
  },
+ "0x8004352c": {
+  "name": "model_vertex",
+  "kind": "code",
+  "evidence": "(slot, anim, clock, vertex, &out): vertex `vertex` of model_table[slot]'s first object as model_animate poses it for that animation and clock (anim 0x80 and up its base), an SVECTOR to out; zeros with no model. actor_vertex_point's for a creature, sub_80053a0c's for flame's head, and held_item_tick's for the arrow on a bow's string (slot 0x20, the swing's phase and clock, the record's +0x3a and +0x42) -- held to the game's own through tools/weapon.py bow_runs and tools/effects.py spell_hit_check"
+ },
  "0x80055db0": {
   "name": "effect_seek",
   "kind": "code",

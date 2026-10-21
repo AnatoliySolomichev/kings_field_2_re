@@ -2957,7 +2957,7 @@ func sight(point: Array, yaw: int, pitch: int, reach: int, ycone: int, pcone: in
 	return [int(r[0][0]) if r[0] != null else -1, int(r[1])]
 
 
-# sub_80053af4 (through 0x80053a0c and sub_8004352c): vertex `vertex` of the
+# sub_80053af4 (through 0x80053a0c and model_vertex): vertex `vertex` of the
 # effect's animated model -- model_table[+3 + 0x28], animation +4, clock
 # +0x14 -- each axis by its scale, turned by its angles with the yaw a half
 # turn on (vec_rotate), from its point.

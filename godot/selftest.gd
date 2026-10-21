@@ -604,10 +604,49 @@ func _weapon() -> bool:
 			bad += 1
 			if first == "":
 				first = "may_cast %s: godot %d" % [str(m.slice(0, 4)), got]
-	print("weapon: %d of %d cases match tools/weapon.py (%d swings, %d probes, %d damages, %d pushes, %d charged swings, %d windows, %d may_casts, %d second swings, %d combinations)" % [
+	# the bows: a draw and its loosing, frame by frame -- the swing, the arrow's
+	# slot, the HP, the arrows, the throw, the sound and the slots' md5
+	var bows: Array = d.get("bows", [])
+	if not bows.is_empty() and not KFAnim.models.has(KFWeapon.MODEL_KEY + 0x1B):
+		KFAnim.load_from("res://anim00.json")
+	for bw in bows:
+		var wi := int(bw[0])
+		var rec: PackedByteArray = KFWeapon.records[wi]
+		var item: int = KFWeapon.BOWS[wi][1]
+		var fx = load("res://effects.gd").new()
+		fx.load_records()
+		fx.coll = coll
+		fx.clear()
+		var rands: Array = (bw[7] as Array).duplicate()
+		var p := {"pos": (bw[6] as Array).map(func(v): return int(v)),
+			"view": (bw[3] as Array).map(func(v): return int(v)), "bob": int(bw[4]),
+			"crouch": int(bw[5]), "hp": int(bw[2]), "arrows": {item: int(bw[1])},
+			"rand": func() -> int: return int(rands.pop_front()) if not rands.is_empty() else 0}
+		var w := {"clock": 0, "phase": 0, "meter": 0, "pause": int(bw[8][0][4]), "arrow": -1}
+		var key := KFWeapon.MODEL_KEY + wi
+		var verts := func(ph: int, c: int) -> Array:
+			return KFAnim.vertices(key, ph, c) if KFAnim.models.has(key) else []
+		var thrown := 0
+		for fr in bw[8]:
+			n += 1
+			var ev := KFWeapon.bow(w, rec, wi, int(fr[0]) != 0, p, fx, verts)
+			thrown += ev.count("thrown")
+			var s: int = int(w["arrow"])
+			var got := [int(fr[0]), int(w["clock"]), int(w["phase"]), int(w["meter"]), int(w["pause"]),
+				s / 0x4C if s >= 0 else -1, int(p["hp"]), int(p["arrows"][item]), thrown,
+				1 if ev.has("sound") else 0]
+			var want := (fr as Array).slice(0, 10).map(func(v): return int(v))
+			if got != want or fx.m.hex_encode().md5_text() != str(fr[10]):
+				bad += 1
+				if first == "":
+					first = "bow %d: godot %s, python %s%s" % [wi, str(got), str(want),
+						"" if got != want else " (the slots differ)"]
+				break
+		fx.free()
+	print("weapon: %d of %d cases match tools/weapon.py (%d swings, %d probes, %d damages, %d pushes, %d charged swings, %d windows, %d may_casts, %d second swings, %d combinations, %d bows' draws)" % [
 		n - bad, n, d["swings"].size(), d["probes"].size(), d["damages"].size(), d["knocks"].size(),
 		d.get("magic", []).size(), d.get("windows", []).size(), d.get("mays", []).size(),
-		d.get("swings2", []).size(), d.get("combos", []).size()])
+		d.get("swings2", []).size(), d.get("combos", []).size(), bows.size()])
 	if bad > 0:
 		print("  first difference: " + first)
 	return bad == 0

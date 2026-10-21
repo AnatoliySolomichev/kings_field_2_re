@@ -202,7 +202,7 @@ def main(quick=False, only_check=False):
               "game's own pedestal arm"]))
     steps.append((["tools/weapon.py", "--check"],
         "the creatures' HP and the player's weapon, against snapshots and bp25",
-        ["awake creatures", "frames of the weapon", "blows landed"]))
+        ["awake creatures", "frames of the weapon", "blows landed", "the weapons' magic"]))
     steps.append((["tools/anim.py", "--check"],
         "the creatures' animation, against every snapshot's actor caches",
         ["caches hold", "last drawn"]))
