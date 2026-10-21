@@ -844,14 +844,13 @@ each one is also in its function's marker, as `partial` and what differs:
   `kind_behaviour_with_op` twice. Each copy is marked, and the self-test would
   show one drifting; folding them into one is a refactor nobody has needed yet.
 
-* **What creatures throw: the arms are in, twenty kinds are not.**
-  `actor_animation_effects`' arms are all read and in the port (`effects.gd
-  volley_fire`, FORMATS.md "What a creature's volley throws"), 483 of 483
-  against the game's own; but the effect kinds 0x20, 0x21, 0x25, 0x27,
-  0x28, 0x2a, 0x2c, 0x2f..0x35, 0x56, 0x64 and 0x66 have no arms in the
-  machine yet, and the arms 0x50 and 0x53 (lobbed, `sub_80017210`), 0x55
-  and 0x76 (a creature made) are not read. None of them is on the levels
-  the port builds (0, 4, 12); levels 1..3, 6, 7, 9, 11 and up use them.
+* **What creatures throw: in, but for four arms.** `actor_animation_effects`'
+  arms and the kinds only creatures throw are read and in the port
+  (`effects.gd volley_fire`, FORMATS.md "What a creature's volley
+  throws"), against the game's own; the arms 0x50 and 0x53 (lobbed,
+  `sub_80017210`), 0x55 and 0x76 (a creature made, `sub_8004b524`,
+  `actor_wake`) are not read -- levels 16, 17, 26 and 23. And the 0x8004
+  entry, a point along a limb pulled towards the player.
 * **Casting is in, and what it casts.** `player.gd` has the
   buttons, `cast_spell`, the pending action, `skill_practice`, the USE
   stretch, the timers and the attacking arms (the aim, the creature in

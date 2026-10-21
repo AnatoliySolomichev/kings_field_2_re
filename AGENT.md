@@ -202,10 +202,10 @@ the equipment tables, against a RAM snapshot           3264/3264, 2112/2112, 16/
                                                        player_recalc_stats 483 of
                                                        483 values over 21 snapshots
 the conversation hooks, two readings of one table      23 of 23
-the port against the game, function by function        763 of 763 placed: 441
+the port against the game, function by function        774 of 774 placed: 452
                                                        reproduce the game, 322 the
-                                                       port's own; 505 markers and
-                                                       997 cited addresses, every
+                                                       port's own; 516 markers and
+                                                       1029 cited addresses, every
                                                        one resolving
 the object loader, against 13 snapshots                angles 4344/4352, scale and
                                                        position 4352/4352, opcode
@@ -297,8 +297,10 @@ actor_attack_player and actor_take_hit                 frames, 15 struck, 11 dea
                                                        of 126 each (dark slayer's
                                                        also back at the player
                                                        and into the walls)
-what a creature's volley throws, against the game's   1449 of 1449 volleys, every
-own actor_animation_effects                            slot and creature
+what a creature's volley throws, against the game's   2583 of 2583 volleys, every
+own actor_animation_effects, and the kinds only        slot and creature; the
+creatures throw, end to end                            seventeen creatures' kinds
+                                                       63 of 63 each
 the fire ball, against the game's own effect_spawn    168 of 168 runs, 914 of
 and effect_driver (its world stood in for)             914 frames, queries, hits;
                                                        Seath's sword's 168 of 168
@@ -353,7 +355,7 @@ directions 400 of 400
 routines 14458 of 14458
 saves 45 of 45 · level states 46 of 46 streams, 958 of 958 things made,
 42 of 42 states written, 46 of 46 tables read and written again
-effects 1014 of 1014 runs, 23251 of 23251 frames · aims 300 of 300 · volleys 138 of 138
+effects 1422 of 1422 runs, 27135 of 27135 frames · aims 300 of 300 · volleys 246 of 246
 the run 150129 of 150129 frames
 player_take_hit 300 of 300 · the status 40 of 40 runs, 6312 of 6312 frames
 casting 1000 of 1000 · the attacking arms 240 of 240 · creature hits 400 of 400

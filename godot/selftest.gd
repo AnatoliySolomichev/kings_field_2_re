@@ -767,6 +767,11 @@ func _effects() -> bool:
 		rp.cws = _ints(run.get("spawn_ask", {}).get("cw", []))
 		rp.sfs = _ints(run.get("spawn_ask", {}).get("sf", []))
 		fx.trail_next = int(run["fields"].get("tn", 0))
+		if run.get("volley") != null:     # a creature's, as its volley throws it
+			var vs: Array = run["volley"]
+			var vp: Array = vs[2]
+			fx.volley_fire(int(vs[0]), int(vs[1]), Vector3i(int(vp[0]), int(vp[1]), int(vp[2])),
+				(vs[3] as Array).map(func(x): return int(x)))
 		for sp in run["spawns"]:
 			var args := []
 			for v in sp[4]:

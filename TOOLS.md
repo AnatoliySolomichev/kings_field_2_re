@@ -593,7 +593,10 @@ a creature.
 `volley_check` runs `actor_animation_effects` itself over every snapshot's
 creatures -- every arm from an `0x8002` entry at the player -- against
 `volley_point` and `volley_fire`: 483 of 483 volleys alike, every slot and
-creature, and it names the arms and kinds the machine has not.
+creature, and it names the arms and kinds the machine has not. The `foe-`
+parts of `spell_hit_check` send the kinds only creatures throw, each from a
+creature near the player through the game's own `actor_animation_effects`
+and the machine's `volley_fire`, and fly them end to end.
 
 An arm of `effect_tick` hands its calls their arguments on its own frame, and
 one of `effect_spawn`'s arms -- flash's second burst -- reads five more than

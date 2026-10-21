@@ -358,8 +358,8 @@ func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array,
 			w16(s + 0x34, int(args[1]))
 			w16(s + 0x30, int(args[1]))
 			w16(s + 0x44, int(args[2]))      # and its sound, every 30 blanks at most: not here
-		STONE:                              # 0x800541f4
-			w16(s + 0xE, 0x40)
+		STONE, 0x33:                        # 0x800541f4; 0x33's 0x800541ec, +0xe 0
+			w16(s + 0xE, 0x40 if kind == STONE else 0)
 			w8(s + 8, 1)
 			w8(s + 4, 0x80)
 			w8(s + 2, 0xF)
@@ -719,6 +719,103 @@ func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array,
 			for o in [0x38, 0x3A, 0x3C]:
 				w16(s + o, 0)
 			w16(s + 0x2A, int(args[1]))     # its place round the creature
+		0x20, 0x25:                         # 0x80054c68, a bolt drawn as model 0x2b
+			w8(s + 8, 1)
+			w8(s + 4, 0x80)
+			w8(s + 2, 0x2B)
+			w8(s + 3, 0x2B)
+			w8(s + 9, 5)
+			w16(s + 0x10, 0x46)
+			for o in [0x34, 0x32, 0x30]:
+				w16(s + o, 0x1000)
+			put(s + 0x28, (args[1] as PackedByteArray).slice(0, 8))
+			w16(s + 0xE, 0x140)
+		0x21:                               # 0x80054cd8
+			_aimed(s, 0x2C)
+			w8(s + 9, 5)
+		0x27:                               # 0x8005431c: a spore drawn +0xe 0x80
+			setup(s, 0x24, 0x400, 5)
+			w16(s + 0xE, 0x80)
+			w16(s + 0x10, 0x32)
+			w8(s + 0xD, 1)
+			w16(s + 0x44, 0x14)
+			w32(s + 0x1C, s32(s + 0x1C) - 0xC8)
+		0x56, 0x28:                         # 0x80053e44, 0x80053e6c: the fire ball's particle
+			particle(s, 9, 0x1000, 5)
+			w16(s + 0xE, 0x80)
+			if kind == 0x56:
+				w8(s + 0xB, 3)
+			w16(s + 0x10, 0x32)
+			w8(s + 0xD, 1)
+		0x66:                               # 0x8005437c
+			particle(s, 0xA, 0xC00, 5)
+			w16(s + 0x10, 0x32)
+			w8(s + 0xD, 1)                  # and its sound (0x31), not here
+		0x32:                               # 0x80054420: the velocity scattered
+			particle(s, 0x42, 0x800, 5)
+			w16(s + 0x10, 0x46)
+			w8(s + 0xB, 3)
+			w16(s + 0xE, 0)
+			for o in [0x38, 0x3A, 0x3C]:
+				w16(s + o, u16(s + o) - 0xA + ((20 * int(world.rand())) >> 15))
+		0x34:                               # 0x80054260
+			setup(s, 0x3D, 0xE10, 5)
+			w16(s + 0x30, 0x1400)
+			w16(s + 0x34, 0x1400)
+			w16(s + 0x10, 0x46)
+			w16(s + 0xE, 0x100)
+		0x2A:                               # 0x80054968: Seath's bolt's, no sound
+			setup(s, 0x2D, 0x1000, 5)
+			w16(s + 0x34, 0x1400)
+			w16(s + 0x10, 0x32)
+			w8(s + 0x44, 0)
+			w8(s + 0xD, 1)
+			_face(s)
+			w16(s + 0x2C, 0)
+			w16(s + 0xE, 0x40)
+		0x2C:                               # 0x80054714
+			setup(s, 0x3F, 0x800, 5)
+			w16(s + 0x10, 0x37)
+			w8(s + 0xD, 1)
+			w16(s + 0x44, 0)
+			w16(s + 0xE, 0x40)              # and its sound (4), not here
+		0x2F:                               # 0x80053ef0
+			setup(s, 0x40, 0x1000, 5)
+			w16(s + 0x10, 0x32)
+			w16(s + 0xE, 0)
+			w8(s + 0xD, 1)
+			_face(s)
+			w16(s + 0x2C, 0)
+			w16(s + 0x44, 0)
+		0x30, 0x35:                         # 0x80053f54, 0x80054a30
+			setup(s, 0x41, 0x100, 5)
+			w16(s + 0x10, 0x32)
+			_face(s)
+			w16(s + 0x2C, 0)
+			w16(s + 0xE, 0x140 if kind == 0x30 else 0x40)
+		0x31:                               # 0x8005462c: the excellector's second's, at 0x1770
+			setup(s, 0x39, 0x1770, 5)
+			w16(s + 0x10, 0x30)
+			w8(s + 0x44, 0)
+			w8(s + 0xD, 0)
+			w16(s + 0xE, 0xC0)
+			_face(s)
+			w16(s + 0x2C, 0)
+		0x64:                               # 0x80053ecc: not drawn
+			w8(s + 9, 5)
+			w8(s + 8, 0)
+			w8(s + 4, 0)
+			w16(s + 0x44, 0)
+			w16(s + 0x46, 0)
+			w16(s + 0x10, 0xFA)
+		0x2E:                               # 0x800549d0
+			setup(s, 0x2D, 0x1000, 5)
+			w16(s + 0x34, 0x2000)
+			w16(s + 0x10, 0x50)
+			w8(s + 0x44, 0)
+			_face(s)
+			w16(s + 0x2C, 0)
+			w16(s + 0xE, 0x80)
 		LIGHTNING, 0x7D, 0x81:              # 0x80055290, 0x80055258, 0x80055274
 			particle(s, 0xA, 0x800 if kind == LIGHTNING else 0x1000, 5)
 			w16(s + 0xE, 0x40 if kind == LIGHTNING else (0 if kind == 0x7D else 0xC0))
@@ -893,11 +990,11 @@ func tick(s: int) -> void:
 			_tick_dart(s)
 		0x23, 0x24:
 			_tick_bolt(s)
-		0x26:
+		0x26, 0x27:
 			_tick_spore(s)
 		TRAIL:
 			_tick_puff(s)
-		FIRE_BALL, ANORIUM:
+		FIRE_BALL, ANORIUM, 0x28:
 			_tick_fire(s)
 		CAPRICORN:
 			_tick_capricorn(s)
@@ -909,8 +1006,30 @@ func tick(s: int) -> void:
 			_tick_vaculacia(s)
 		SPLASH:
 			_tick_splash(s)
-		STONE:
+		STONE, 0x33:
 			_tick_stone(s)
+		0x20, 0x25:
+			_tick_bolt20(s)
+		0x21:
+			_tick_bolt21(s)
+		0x56:
+			_tick_fire56(s)
+		0x66, 0x32:
+			_tick_shot66(s)
+		0x34:
+			_tick_shot34(s)
+		0x2A:
+			_tick_shot2a(s)
+		0x2C:
+			_tick_shot2c(s)
+		0x2F:
+			_tick_shot2f(s)
+		0x30, 0x35:
+			_tick_shot30(s)
+		0x64:
+			_tick_thrower64(s)
+		0x2E:
+			_tick_shot2e(s)
 		WIND_CUTTER, RYU_GA:
 			_tick_wind(s)
 		HAZE:
@@ -1977,6 +2096,201 @@ func _tick_blade(s: int) -> void:
 		w16(s + 0x2A, u16(s + 0x2A) + 0xC8)
 		if s16(s + 0x32) < 0x78:
 			w8(s, 0xFF)
+
+
+# --- the creatures' own kinds -----------------------------------------------
+
+# Bolts 0x20 and 0x25 (0x80058cd8, 0x80058dfc): a dart's -- the player struck
+# within the scale / 8 as 0x81, the tiles alone met as 0x84, the move taken
+# back and gone -- a puff (its last 5 or 7), rolling 0x12c a frame.
+# @orig game:0x80058cd8 effect_tick+0x241c  status:verified -- 0x20's; 0x25's (0x80058dfc) the same but the puff; tools/effects.py foe_check against the game's own; the self-test this to it
+func _tick_bolt20(s: int) -> void:
+	w8(s, 0x81)
+	strike(point_at(s + 0x18), 0, s16(s + 0x30) >> 3, 0x8000, 0x400, 0x1000)
+	w8(s, 0x84)
+	if move(0x64, 0xC8, 0) != 0:
+		undo(s)
+		w8(s, 0xFF)
+	_puff(s, 1, 5 if u8(s + 1) == 0x20 else 7)
+	w16(s + 0x2C, u16(s + 0x2C) + 0x12C)
+
+
+# Bolt 0x21 (0x8005905c): 0x20's, moving as 0x81, the puff's last 8, no roll.
+# @orig game:0x8005905c effect_tick+0x27a0  status:verified -- tools/effects.py foe_check against the game's own; the self-test this to it
+func _tick_bolt21(s: int) -> void:
+	w8(s, 0x81)
+	strike(point_at(s + 0x18), 0, s16(s + 0x30) >> 3, 0x8000, 0x400, 0x1000)
+	w8(s, 0x81)
+	if move(0x64, 0xC8, 0) != 0:
+		undo(s)
+		w8(s, 0xFF)
+	_puff(s, 1, 8)
+
+
+# 0x56 (0x8005725c): the fire ball's flight with no height, turning 0x12c, a
+# splash a frame on water; meeting anything the move taken back and the thing
+# struck, then two frames growing 0x800, gone.
+# @orig game:0x8005725c effect_tick+0x9a0  status:verified -- tools/effects.py foe_check against the game's own; the self-test this to it
+func _tick_fire56(s: int) -> void:
+	var ph := u8(s + 7)
+	if ph == 0:
+		var hit := move(0xB4, 0, -0x12C)
+		if hit == 0:
+			_splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
+			return
+		undo(s)
+		_attack(s, hit)
+		w8(s + 7, 1)
+	elif ph >= 3:
+		w8(s, 0xFF)
+		return
+	w8(s + 4, ph - 0x80)
+	var v := (u16(s + 0x30) + 0x800) & 0xFFFF
+	for o in [0x30, 0x32, 0x34]:
+		w16(s + o, v)
+	w8(s + 7, u8(s + 7) + 1)
+
+
+# 0x66 and 0x32 (0x80057eec, 0x80057f20): effect_move at 0xb4, no height,
+# turning 0x258 (0x32: 0x12c, growing 0x20 a frame); the tiles end it,
+# anything else struck and gone.
+# @orig game:0x80057eec effect_tick+0x1630  status:verified -- 0x66's; 0x32's (0x80057f20) with its growth; tools/effects.py foe_check against the game's own; the self-test this to it
+func _tick_shot66(s: int) -> void:
+	var spin := 0x258
+	if u8(s + 1) == 0x32:
+		for o in [0x30, 0x34, 0x32]:
+			w16(s + o, u16(s + o) + 0x20)
+		spin = 0x12C
+	var hit := move(0xB4, 0, -spin)
+	if hit == 0:
+		return
+	if hit & 0xF == 0:
+		_attack(s, hit)
+	w8(s, 0xFF)
+
+
+# 0x34 (0x80057530): effect_move at 0xb4, the height's top bit; what it meets
+# struck (not the tiles) and gone; a splash a frame, turning 0x12c.
+# @orig game:0x80057530 effect_tick+0xc74  status:verified -- tools/effects.py foe_check against the game's own; the self-test this to it
+func _tick_shot34(s: int) -> void:
+	var hit := move(0xB4, 0x80000000, 0)
+	if hit != 0:
+		if hit & 0xF == 0:
+			_attack(s, hit)
+		w8(s, 0xFF)
+	_splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
+	w16(s + 0x2A, u16(s + 0x2A) + 0x12C)
+
+
+# 0x2a (0x80059734): through what it meets, the tiles ending it, striking each
+# thing once (+0x44 the latch); a splash a frame.
+# @orig game:0x80059734 effect_tick+0x2e78  status:verified -- tools/effects.py foe_check against the game's own; the self-test this to it
+func _tick_shot2a(s: int) -> void:
+	var hit := move(0xB4, 0, 0)
+	if hit == 0:
+		w8(s + 0x44, 0)
+	else:
+		if hit & 0xF:
+			w8(s, 0xFF)
+		if u8(s + 0x44) == 0:
+			w8(s + 0x44, 1)
+			_attack(s, hit)
+	_splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
+
+
+# 0x2c (0x8005799c): rolling 0x190, aimed along its velocity; effect_move at
+# 0xb4, the height's top bit: what it meets struck and gone; a puff a frame.
+# @orig game:0x8005799c effect_tick+0x10e0  status:verified -- tools/effects.py foe_check against the game's own; the self-test this to it
+func _tick_shot2c(s: int) -> void:
+	w16(s + 0x2C, u16(s + 0x2C) + 0x190)
+	_face(s)
+	var hit := move(0xB4, 0x80000000, 0)
+	if hit != 0:
+		_attack(s, hit)
+		w8(s, 0xFF)
+	for i in 3:
+		tick_frame.encode_s16(0xE0 + 2 * i, ((20 * int(world.rand())) >> 15) - 0xA)
+	spawn(0xA, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [tick_frame.slice(0xE0, 0xE8), 0x1400,
+		-0x100, 4, 0x16, 0, 2, 5], true)
+
+
+# 0x2f (0x800599a4): effect_move at 0xb4, the height's top bit: the tiles end
+# it, anything else struck (and it goes on); a splash a frame; +0xe
+# flickering 0..5 << 6.
+# @orig game:0x800599a4 effect_tick+0x30e8  status:verified -- tools/effects.py foe_check against the game's own; the self-test this to it
+func _tick_shot2f(s: int) -> void:
+	var hit := move(0xB4, 0x80000000, 0)
+	if hit != 0:
+		if hit & 0xF:
+			w8(s, 0xFF)
+		else:
+			_attack(s, hit)
+	_splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
+	var n := (u16(s + 0x44) + 1) & 0xFFFF
+	w16(s + 0x44, 0 if s16v(n) >= 6 else n)
+	w16(s + 0xE, u16(s + 0x44) << 6)
+
+
+# 0x30 and 0x35 (0x8005978c): growing 0x20 a frame, rolling 0xc8; effect_move
+# at 0xb4, no height: the tiles end it, anything else struck and gone; a
+# splash a frame.
+# @orig game:0x8005978c effect_tick+0x2ed0  status:verified -- tools/effects.py foe_check against the game's own; the self-test this to it
+func _tick_shot30(s: int) -> void:
+	for o in [0x30, 0x32, 0x34]:
+		w16(s + o, u16(s + o) + 0x20)
+	w16(s + 0x2C, u16(s + 0x2C) + 0xC8)
+	var hit := move(0xB4, 0, 0)
+	if hit != 0:
+		if hit & 0xF == 0:
+			_attack(s, hit)
+		w8(s, 0xFF)
+	_splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
+
+
+# 0x64 (0x80059900): not drawn; once on, on every odd count its velocity's x
+# shifted by (rand >> 6) - 0x100 and a 0x2e thrown along it (+0 0x81); gone at
+# the seventh.
+# @orig game:0x80059900 effect_tick+0x3044  status:verified -- tools/effects.py foe_check against the game's own; the self-test this to it
+func _tick_thrower64(s: int) -> void:
+	var n := s16(s + 0x44)
+	if n == 0:
+		w16(s + 0x46, 0)
+		w16(s + 0x44, u16(s + 0x44) + 1)
+	elif n == 1:
+		if u16(s + 0x46) & 1:
+			w16(s + 0x38, u16(s + 0x38) + (int(world.rand()) >> 6) - 0x100)
+			spawn(0xA, 0x81, 0x2E, m.slice(s + 0x18, s + 0x28), [m.slice(s + 0x38, s + 0x40)], true)
+		w16(s + 0x46, u16(s + 0x46) + 1)
+		if s16(s + 0x46) >= 7:
+			w8(s, 0xFF)
+
+
+# 0x2e (0x8005980c): aimed along its velocity; effect_move at 0xb4, no
+# height: what it meets struck, and it becomes a burst (0x58, 0x28 frames from
+# nothing); else a splash, and the player's own (+0 & 0x40) falls 10 a frame
+# faster up to 0x320.
+# @orig game:0x8005980c effect_tick+0x2f50  status:verified -- tools/effects.py foe_check against the game's own; the self-test this to it
+func _tick_shot2e(s: int) -> void:
+	_face(s)
+	var hit := move(0xB4, 0, 0)
+	if hit != 0:
+		_attack(s, hit)
+		w8(s + 1, BURST)
+		w8(s + 8, 1)
+		w8(s + 9, 5)
+		w8(s + 2, 0x15)
+		w8(s + 3, 0x15)
+		w8(s + 0xC, 0x34)
+		w16(s + 0x12, 0x1000)
+		w16(s + 0x10, 0x28)
+		w8(s + 4, 0)
+		for o in [0x30, 0x32, 0x34]:
+			w16(s + o, 0)
+		w16(s + 0xE, 0x40)
+		return
+	_splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
+	if u8(s) & 0x40 and s16(s + 0x3A) < 0x320:
+		w16(s + 0x3A, u16(s + 0x3A) + 0xA)
 
 
 # Haze (0x80058164): each thing it meets it strikes once (+0x44 the latch,

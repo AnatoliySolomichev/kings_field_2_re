@@ -482,7 +482,7 @@ def export(out_dir):
     # as fire_check stands them in: the answers, and the hits handed over
     fires = []
     frng = random.Random(0xF1E)
-    for kind_, speed_, _name, more_, nframes_ in SPELLS_SENT:
+    for kind_, speed_, _name, more_, nframes_ in SPELLS_SENT + FOES_SENT:
       speed_ = speed_ or 0
       for path in memcard._snapshots()[:6]:
           base = bytearray(open(path, "rb").read())
@@ -520,7 +520,7 @@ def export(out_dir):
               args_ = [vel] + [view if v == "view" else slot if v == "slot?" else v for v in more_
                                if v not in ("back", "anywhere")]
               a1_ = 0x42
-              if not speed_:
+              if not speed_ and "foe" not in more_:
                   a1_, point, args_ = _placed(m, more_, struct.unpack_from("<3i", point))
               w = StandIn(7, m, quiet=kind_ in QUIET)
               log = []
@@ -602,11 +602,31 @@ def export(out_dir):
                   drawn.append(v)
                   return v
               mach = Machine(m, w, rnd)
+              volley_spec = None
               try:
                   spawn_rand = []
-                  sps = _spawns(a1_, kind_, point, args_)
-                  for sp in sps:
-                      mach.spawn(*sp)
+                  if "foe" in more_:              # what volley_fire spawns, replayed
+                      awake_ = [k for k in range(ACTOR_N)
+                                if m[(ACTORS + ACTOR_STRIDE * k + 9) & MASK] == 1]
+                      if not awake_:
+                          continue
+                      a_ = ACTORS + ACTOR_STRIDE * frng.choice(awake_)
+                      sps = []
+
+                      def recsp(a0, a1, kd, pt, args, direct=False, sps=sps, sp_=mach.spawn):
+                          sps.append((a0, a1, kd, pt, args))
+                          return sp_(a0, a1, kd, pt, args, direct)
+                      mach.spawn = recsp
+                      vpt = volley_point(m, a_, frng.randrange(-0x200, 0x200),
+                                         frng.randrange(-0xA00, -0x200), frng.randrange(-0x300, 0x300))
+                      volley_fire(mach, a_, kind_, 0x30, vpt)
+                      del mach.spawn
+                      volley_spec = [kind_, 0x30, vpt,
+                                     list(struct.unpack_from("<3h", m, (a_ + 0x40) & MASK))]
+                  else:
+                      sps = _spawns(a1_, kind_, point, args_)
+                      for sp in sps:
+                          mach.spawn(*sp)
                   spawn_rand = list(drawn)
                   spawn_ask = {"cw": [list(x) for x in cws], "sf": [list(x) for x in sfs]}
                   frames = []
@@ -641,10 +661,11 @@ def export(out_dir):
                                             "cs": struct.unpack_from("<i", m, 0x801E6474 & MASK)[0],
                                             "tn": struct.unpack_from("<I", base, TRAIL_NEXT & MASK)[0]},
                                            **{f"w{k}": working[k] for k in range(5)}),
-                            "spawns": [[a0, a1, kd, pt.hex(),
+                            "spawns": [] if volley_spec else
+                                      [[a0, a1, kd, pt.hex(),
                                         [{"b": v.hex()} if isinstance(v, bytes) else v for v in args]]
                                        for a0, a1, kd, pt, args in sps],
-                            "frames": frames})
+                            "volley": volley_spec, "frames": frames})
     # and what a creature's volley throws: an arm of actor_animation_effects
     # fired at the player from a point about a creature, the slots after
     volleys = []
@@ -1017,7 +1038,13 @@ class Machine:
                0x72: self._spawn_72, 0x7E: self._spawn_72, 0x80: self._spawn_72,
                0x13: self._spawn_13, 0x29: self._spawn_13, 0x2D: self._spawn_13,
                FREEZE: self._spawn_10, THEDEK: self._spawn_10, SEGMENT: self._spawn_74,
-               SEGMENT2: self._spawn_74, BLADE: self._spawn_6c}.get(kind)
+               SEGMENT2: self._spawn_74, BLADE: self._spawn_6c,
+               0x20: self._spawn_20, 0x25: self._spawn_20, 0x21: self._spawn_21,
+               0x27: self._spawn_27, 0x56: self._spawn_56, 0x28: self._spawn_56,
+               0x66: self._spawn_66, 0x32: self._spawn_32, 0x34: self._spawn_34,
+               0x2A: self._spawn_2a, 0x2C: self._spawn_2c, 0x2F: self._spawn_2f,
+               0x30: self._spawn_30, 0x35: self._spawn_30, 0x31: self._spawn_31,
+               0x33: self._spawn_33, 0x64: self._spawn_64, 0x2E: self._spawn_2e}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_spawn's arm {kind:#x}")
         arm(s, args)
@@ -2492,6 +2519,308 @@ class Machine:
             if self.s16(s + 0x32) < 0x78:
                 self.w8(s, 0xFF)
 
+    # --- the creatures' own kinds (what actor_animation_effects throws) ---
+
+    def _spawn_20(self, s, args):           # 0x80054c68, bolts 0x20 and 0x25
+        """Model 0x2b at 0x1000, the creature's angles; 0x46 frames."""
+        self.w8(s + 8, 1)
+        self.w8(s + 4, 0x80)
+        self.w8(s + 2, 0x2B)
+        self.w8(s + 3, 0x2B)
+        self.w8(s + 9, 5)
+        self.w16(s + 0x10, 0x46)
+        for o in (0x34, 0x32, 0x30):
+            self.w16(s + o, 0x1000)
+        self.put(s + 0x28, args[1][:8])
+        self.w16(s + 0xE, 0x140)
+
+    def _tick_20(self, s):                  # 0x80058cd8 (0x20), 0x80058dfc (0x25)
+        """A dart's: the player struck within the scale / 8 as 0x81, the
+        tiles alone met as 0x84 -- the move taken back and gone -- a puff
+        of two fifths of its velocity, rolling 0x12c a frame."""
+        self.w8(s, 0x81)
+        self.strike(s + 0x18, 0, self.s16(s + 0x30) >> 3, 0x8000, 0x400, 0x1000)
+        self.w8(s, 0x84)
+        if self.move(0x64, 0xC8, 0):
+            self.undo(s)
+            self.w8(s, 0xFF)
+        self._puff(s, 1, 5 if self.u8(s + 1) == 0x20 else 7)
+        self.w16(s + 0x2C, self.u16(s + 0x2C) + 0x12C)
+
+    def _spawn_21(self, s, args):           # 0x80054cd8
+        self._aimed(s, 0x2C)
+        self.w8(s + 9, 5)
+
+    def _tick_21(self, s):                  # 0x8005905c: 0x20's, the puff's last 8, no roll
+        self.w8(s, 0x81)
+        self.strike(s + 0x18, 0, self.s16(s + 0x30) >> 3, 0x8000, 0x400, 0x1000)
+        self.w8(s, 0x81)
+        if self.move(0x64, 0xC8, 0):
+            self.undo(s)
+            self.w8(s, 0xFF)
+        self._puff(s, 1, 8)
+
+    def _spawn_27(self, s, args):           # 0x8005431c: a spore drawn +0xe 0x80
+        self.setup(s, 0x24, 0x400, 5)
+        self.w16(s + 0xE, 0x80)
+        self.w16(s + 0x10, 0x32)
+        self.w8(s + 0xD, 1)
+        self.w16(s + 0x44, 0x14)
+        self.w32(s + 0x1C, self.s32(s + 0x1C) - 0xC8)
+
+    def _spawn_56(self, s, args):           # 0x80053e44 (0x56), 0x80053e6c (0x28)
+        """The fire ball's particle 9, +0xe 0x80, 0x32 frames, the half
+        step; 0x56 three frames' grace."""
+        self.particle(s, 9, 0x1000, 5)
+        self.w16(s + 0xE, 0x80)
+        if self.u8(s + 1) == 0x56:
+            self.w8(s + 0xB, 3)
+        self.w16(s + 0x10, 0x32)
+        self.w8(s + 0xD, 1)
+
+    def _tick_56(self, s):                  # 0x8005725c
+        """The fire ball's flight with no height (turning 0x12c), and a
+        splash a frame on water under it; meeting anything the move taken
+        back and the thing struck, then it grows 0x800 a frame for two
+        frames and is gone."""
+        ph = self.u8(s + 7)
+        if ph == 0:
+            hit = self.move(0xB4, 0, -0x12C)
+            if not hit:
+                self.splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
+                return
+            self.undo(s)
+            self.attack(s, hit)
+            self.w8(s + 7, 1)
+        elif ph >= 3:
+            self.w8(s, 0xFF)
+            return
+        self.w8(s + 4, (ph - 0x80) & 0xFF)
+        v = (self.u16(s + 0x30) + 0x800) & 0xFFFF
+        for o in (0x30, 0x32, 0x34):
+            self.w16(s + o, v)
+        self.w8(s + 7, self.u8(s + 7) + 1)
+
+    def _spawn_66(self, s, args):           # 0x8005437c
+        self.particle(s, 0xA, 0xC00, 5)
+        self.w16(s + 0x10, 0x32)
+        self.w8(s + 0xD, 1)                 # and its sound, 0x31
+
+    def _tick_66(self, s):                  # 0x80057eec
+        """effect_move at 0xb4, no height, turning 0x258; meeting the tiles
+        gone, a creature, an object or the player struck and gone."""
+        hit = self.move(0xB4, 0, -0x258)
+        if not hit:
+            return
+        if not hit & 0xF:
+            self.attack(s, hit)
+        self.w8(s, 0xFF)
+
+    def _spawn_32(self, s, args):           # 0x80054420
+        """Particle 0x42 at 0x800, 0x46 frames, three frames' grace; the
+        velocity scattered rand() * 20 >> 15 less 10 each axis."""
+        self.particle(s, 0x42, 0x800, 5)
+        self.w16(s + 0x10, 0x46)
+        self.w8(s + 0xB, 3)
+        self.w16(s + 0xE, 0)
+        for o in (0x38, 0x3A, 0x3C):
+            self.w16(s + o, self.u16(s + o) - 0xA + ((20 * self.rand()) >> 15))
+
+    def _tick_32(self, s):                  # 0x80057f20: 0x66's, growing 0x20 a frame, turning 0x12c
+        for o in (0x30, 0x34, 0x32):
+            self.w16(s + o, self.u16(s + o) + 0x20)
+        hit = self.move(0xB4, 0, -0x12C)
+        if not hit:
+            return
+        if not hit & 0xF:
+            self.attack(s, hit)
+        self.w8(s, 0xFF)
+
+    def _spawn_34(self, s, args):           # 0x80054260
+        self.setup(s, 0x3D, 0xE10, 5)
+        self.w16(s + 0x30, 0x1400)
+        self.w16(s + 0x34, 0x1400)
+        self.w16(s + 0x10, 0x46)
+        self.w16(s + 0xE, 0x100)
+
+    def _tick_34(self, s):                  # 0x80057530
+        """effect_move at 0xb4, the height's top bit: what it meets struck
+        (not the tiles) and gone; a splash a frame, turning 0x12c."""
+        hit = self.move(0xB4, 0x80000000, 0)
+        if hit:
+            if not hit & 0xF:
+                self.attack(s, hit)
+            self.w8(s, 0xFF)
+        self.splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
+        self.w16(s + 0x2A, self.u16(s + 0x2A) + 0x12C)
+
+    def _spawn_2a(self, s, args):           # 0x80054968: Seath's bolt's, no sound
+        self.setup(s, 0x2D, 0x1000, 5)
+        self.w16(s + 0x34, 0x1400)
+        self.w16(s + 0x10, 0x32)
+        self.w8(s + 0x44, 0)
+        self.w8(s + 0xD, 1)
+        self.face(s)
+        self.w16(s + 0x2C, 0)
+        self.w16(s + 0xE, 0x40)
+
+    def _tick_2a(self, s):                  # 0x80059734
+        """Through what it meets, the tiles ending it, striking each thing
+        once (+0x44 the latch); a splash a frame on water under it."""
+        hit = self.move(0xB4, 0, 0)
+        if not hit:
+            self.w8(s + 0x44, 0)
+        else:
+            if hit & 0xF:
+                self.w8(s, 0xFF)
+            if self.u8(s + 0x44) == 0:
+                self.w8(s + 0x44, 1)
+                self.attack(s, hit)
+        self.splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
+
+    def _spawn_2c(self, s, args):           # 0x80054714
+        self.setup(s, 0x3F, 0x800, 5)
+        self.w16(s + 0x10, 0x37)
+        self.w8(s + 0xD, 1)
+        self.w16(s + 0x44, 0)
+        self.w16(s + 0xE, 0x40)             # and its sound, 4
+
+    def _tick_2c(self, s):                  # 0x8005799c
+        """Rolling 0x190, aimed along its velocity; effect_move at 0xb4,
+        the height's top bit: what it meets struck and gone; a puff a
+        frame (0x1400, -0x100, 4, 0x16, 0, 2, 5)."""
+        self.w16(s + 0x2C, self.u16(s + 0x2C) + 0x190)
+        self.face(s)
+        hit = self.move(0xB4, 0x80000000, 0)
+        if hit:
+            self.attack(s, hit)
+            self.w8(s, 0xFF)
+        v = [((20 * self.rand()) >> 15) - 0xA for _i in range(3)]
+        struct.pack_into("<3h", self.m, (TICK_SP + 0xE0) & MASK, *v)
+        self.spawn(0xA, 0, TRAIL, self.get(s + 0x18, 16),
+                   [self.get(TICK_SP + 0xE0, 8), 0x1400, -0x100, 4, 0x16, 0, 2, 5], direct=True)
+
+    def _spawn_2f(self, s, args):           # 0x80053ef0
+        self.setup(s, 0x40, 0x1000, 5)
+        self.w16(s + 0x10, 0x32)
+        self.w16(s + 0xE, 0)
+        self.w8(s + 0xD, 1)
+        self.face(s)
+        self.w16(s + 0x2C, 0)
+        self.w16(s + 0x44, 0)
+
+    def _tick_2f(self, s):                  # 0x800599a4
+        """effect_move at 0xb4, the height's top bit: the tiles end it,
+        anything else struck (and it goes on); a splash a frame; +0xe
+        flickering 0..5 << 6."""
+        hit = self.move(0xB4, 0x80000000, 0)
+        if hit:
+            if hit & 0xF:
+                self.w8(s, 0xFF)
+            else:
+                self.attack(s, hit)
+        self.splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
+        n = (self.u16(s + 0x44) + 1) & 0xFFFF
+        self.w16(s + 0x44, 0 if _s16_(n) >= 6 else n)
+        self.w16(s + 0xE, self.u16(s + 0x44) << 6)
+
+    def _spawn_30(self, s, args):           # 0x80053f54 (0x30), 0x80054a30 (0x35)
+        """Model 0x41 from 0x100, 0x32 frames, aimed along its velocity;
+        +0xe 0x140 (0x30) or 0x40 (0x35)."""
+        self.setup(s, 0x41, 0x100, 5)
+        self.w16(s + 0x10, 0x32)
+        self.face(s)
+        self.w16(s + 0x2C, 0)
+        self.w16(s + 0xE, 0x140 if self.u8(s + 1) == 0x30 else 0x40)
+
+    def _tick_30(self, s):                  # 0x8005978c (0x30, 0x35)
+        """Growing 0x20 a frame, rolling 0xc8; effect_move at 0xb4, no
+        height: the tiles end it, anything else struck and gone; a splash a
+        frame."""
+        for o in (0x30, 0x32, 0x34):
+            self.w16(s + o, self.u16(s + o) + 0x20)
+        self.w16(s + 0x2C, self.u16(s + 0x2C) + 0xC8)
+        hit = self.move(0xB4, 0, 0)
+        if hit:
+            if not hit & 0xF:
+                self.attack(s, hit)
+            self.w8(s, 0xFF)
+        self.splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
+
+    def _spawn_31(self, s, args):           # 0x8005462c: the excellector's second's, at 0x1770
+        self.setup(s, 0x39, 0x1770, 5)
+        self.w16(s + 0x10, 0x30)
+        self.w8(s + 0x44, 0)
+        self.w8(s + 0xD, 0)
+        self.w16(s + 0xE, 0xC0)
+        self.face(s)
+        self.w16(s + 0x2C, 0)
+
+    def _spawn_33(self, s, args):           # 0x800541ec: stone, +0xe 0
+        self._spawn_06(s, args)
+        self.w16(s + 0xE, 0)
+
+    def _spawn_64(self, s, args):           # 0x80053ecc
+        """Not drawn: 0xfa frames, its two counts 0."""
+        self.w8(s + 9, 5)
+        self.w8(s + 8, 0)
+        self.w8(s + 4, 0)
+        self.w16(s + 0x44, 0)
+        self.w16(s + 0x46, 0)
+        self.w16(s + 0x10, 0xFA)
+
+    def _tick_64(self, s):                  # 0x80059900
+        """+0x44 0: on to 1. 1: on every odd count, its velocity's x by
+        (rand >> 6) - 0x100 and a 0x2e from where it is along it (+0 0x81);
+        at the seventh, gone."""
+        n = self.s16(s + 0x44)
+        if n == 0:
+            self.w16(s + 0x46, 0)
+            self.w16(s + 0x44, self.u16(s + 0x44) + 1)
+        elif n == 1:
+            if self.u16(s + 0x46) & 1:
+                self.w16(s + 0x38, self.u16(s + 0x38) + (self.rand() >> 6) - 0x100)
+                self.spawn(0xA, 0x81, 0x2E, self.get(s + 0x18, 16), [self.get(s + 0x38, 8)],
+                           direct=True)
+            self.w16(s + 0x46, self.u16(s + 0x46) + 1)
+            if self.s16(s + 0x46) >= 7:
+                self.w8(s, 0xFF)
+
+    def _spawn_2e(self, s, args):           # 0x800549d0
+        self.setup(s, 0x2D, 0x1000, 5)
+        self.w16(s + 0x34, 0x2000)
+        self.w16(s + 0x10, 0x50)
+        self.w8(s + 0x44, 0)
+        self.face(s)
+        self.w16(s + 0x2C, 0)
+        self.w16(s + 0xE, 0x80)
+
+    def _tick_2e(self, s):                  # 0x8005980c
+        """Aimed along its velocity; effect_move at 0xb4, no height: what it
+        meets struck, and it becomes a burst (0x58, 0x28 frames from
+        nothing); else a splash, and the player's own (+0 & 0x40) falls 10 a
+        frame faster up to 0x320."""
+        self.face(s)
+        hit = self.move(0xB4, 0, 0)
+        if hit:
+            self.attack(s, hit)
+            self.w8(s + 1, BURST)
+            self.w8(s + 8, 1)
+            self.w8(s + 9, 5)
+            self.w8(s + 2, 0x15)
+            self.w8(s + 3, 0x15)
+            self.w8(s + 0xC, 0x34)
+            self.w16(s + 0x12, 0x1000)
+            self.w16(s + 0x10, 0x28)
+            self.w8(s + 4, 0)
+            for o in (0x30, 0x32, 0x34):
+                self.w16(s + o, 0)
+            self.w16(s + 0xE, 0x40)
+            return
+        self.splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
+        if self.u8(s) & 0x40 and self.s16(s + 0x3A) < 0x320:
+            self.w16(s + 0x3A, self.u16(s + 0x3A) + 0xA)
+
     def _spawn_0f(self, s, args):           # 0x80054294, tornado
         """The first of a cast's two (args[2] 0) is 0xc80 across and turned
         nothing, the second 2000 wider and turned half; the view's angles in
@@ -3083,7 +3412,13 @@ class Machine:
                0x81: self._tick_71, 0x72: self._tick_72, 0x7E: self._tick_72,
                0x80: self._tick_72, 0x13: self._tick_13, 0x29: self._tick_13,
                0x2D: self._tick_13, FREEZE: self._tick_10, THEDEK: self._tick_10,
-               SEGMENT: self._tick_74, SEGMENT2: self._tick_74, BLADE: self._tick_6c}.get(kind)
+               SEGMENT: self._tick_74, SEGMENT2: self._tick_74, BLADE: self._tick_6c,
+               0x20: self._tick_20, 0x25: self._tick_20, 0x21: self._tick_21,
+               0x27: self._tick_26, 0x56: self._tick_56, 0x28: self._tick_00,
+               0x66: self._tick_66, 0x32: self._tick_32, 0x34: self._tick_34,
+               0x2A: self._tick_2a, 0x2C: self._tick_2c, 0x2F: self._tick_2f,
+               0x30: self._tick_30, 0x35: self._tick_30, 0x33: self._tick_06,
+               0x64: self._tick_64, 0x2E: self._tick_2e}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_tick's arm {kind:#x}")
         arm(s)
@@ -4215,6 +4550,13 @@ about the mark's."""
 
 KIDS = {MARK: PILLAR, MARK2: PILLAR2}
 
+FOES_SENT = tuple((arm, 0, f"a creature's {arm:#x}", ("foe",), 60)
+                  for arm in (0x20, 0x21, 0x25, 0x27, 0x28, 0x2A, 0x2C, 0x2E, 0x2F, 0x30, 0x31,
+                              0x32, 0x33, 0x34, 0x35, 0x56, 0x66))
+"""The creatures' own kinds sent end to end: each arm thrown by a snapshot's
+creature through the game's own actor_animation_effects and the machine's
+volley_fire, at the player, and flown."""
+
 FLAT = {TORNADO: 0x540, LIGHTNING: 0, 0x7D: 0, 0x81: 0}
 
 QUIET = {FLAME}
@@ -4296,6 +4638,11 @@ def fire_hit_check(out=sys.stdout, per=10, frames=60, kind=None, speed=0x384, na
                 struct.pack_into("<H", ram, (WORKING & MASK) + 2 * k, rng.randrange(0, 200))
             start = (px + rng.randrange(-0x200, 0x200), py - 0x640, pz + rng.randrange(-0x200, 0x200))
             a = ACTORS + ACTOR_STRIDE * rng.choice(awake)
+            if "foe" in more:                               # one of the three nearest the player
+                near = sorted(awake, key=lambda k: sum(
+                    (struct.unpack_from("<i", ram, (ACTORS + ACTOR_STRIDE * k + 0x2C + 4 * i) & MASK)[0]
+                     - (px, py, pz)[i]) ** 2 for i in (0, 2)))
+                a = ACTORS + ACTOR_STRIDE * rng.choice(near[:3])
             t = struct.unpack_from("<3i", ram, (a + 0x2C) & MASK)
             if "back" in more:                          # from the creature, at the player
                 start, t = (t[0], t[1] - 0x640, t[2]), (px, py, pz)
@@ -4321,12 +4668,21 @@ def fire_hit_check(out=sys.stdout, per=10, frames=60, kind=None, speed=0x384, na
                 sps = _spawns(a1, kind, point, args)
             if rng.randrange(4) == 0:                       # water just under the path
                 struct.pack_into("<i", ram, SURFACE & MASK, py - 0x640 - rng.randrange(0, 0x1F4))
+            foe = None
+            if "foe" in more:                               # thrown by the creature, as it throws
+                struct.pack_into("<I", ram, CURRENT_ACTOR & MASK, a)
+                frame_ = mipsrun_stack() - 0x100 - 0xC0
+                for off, n_ in ((0x3C, 4), (0x70, 8), (0x78, 8)):
+                    ram[(frame_ + off) & MASK:(frame_ + off + n_) & MASK] = bytes(n_)
+                foe = (rng.randrange(-0x200, 0x200), rng.randrange(-0xA00, -0x200),
+                       rng.randrange(-0x300, 0x300))
             seed = rng.randrange(1 << 30)
             cpu = _game(bytes(ram))
             lcg = levelstate.Lcg(seed)
             cpu.hooks[RAND] = lambda c, lcg=lcg: lcg()
             g_calls = []
             cpu.hooks[SOUND_AT] = lambda c: 0
+            cpu.hooks[SOUND_CUE] = lambda c: 0
             cpu.hooks[hit.SKILL_PRACTICE] = lambda c, g=g_calls: g.append(("practice", c.r[4]))
             cpu.hooks[hit.STRONG_BLOW] = lambda c, g=g_calls: g.append(("strong",))
             cpu.hooks[hit.AWARD_EXP] = lambda c, g=g_calls: g.append(("exp", hit._s16(c.r[4])))
@@ -4363,10 +4719,16 @@ def fire_hit_check(out=sys.stdout, per=10, frames=60, kind=None, speed=0x384, na
             w.hurt_player = hurt_player
             mach = Machine(m, w, mlcg)
             try:
-                for sp in sps:
-                    game_spawn(cpu, *sp)
-                for sp in sps:
-                    mach.spawn(*sp)
+                if foe:
+                    ox, oy, oz = foe
+                    _call(cpu, AAE, [kind, 0x30, 0xFFFFFFFF, ox & 0xFFFFFFFF],
+                          [oy & 0xFFFFFFFF, oz & 0xFFFFFFFF, 0])
+                    volley_fire(mach, a, kind, 0x30, volley_point(m, a, ox, oy, oz))
+                else:
+                    for sp in sps:
+                        game_spawn(cpu, *sp)
+                    for sp in sps:
+                        mach.spawn(*sp)
                 runs += 1
                 ok = True
                 for f in range(frames):
@@ -4732,6 +5094,9 @@ def parts():
         tag = f"{kind:#x}" + "".join("-" + v for v in more if v in ("back", "anywhere"))
         out.append((tag, lambda kind=kind, speed=speed, name=name, more=more, n=n:
                     fire_hit_check(sys.stdout, 6, n, kind, speed, name, more)))
+    for kind, speed, name, more, n in FOES_SENT:
+        out.append((f"foe-{kind:#x}", lambda kind=kind, speed=speed, name=name, more=more, n=n:
+                    fire_hit_check(sys.stdout, 3, n, kind, speed, name, more)))
     return out
 
 

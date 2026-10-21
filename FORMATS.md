@@ -6674,11 +6674,41 @@ or tornado is the player's own effect with the player as its target. The
 census over all 28 levels: 37 arms in use, the bolts' 0x1f the commonest (28
 kinds over 17 levels). Held to the game's own (`tools/effects.py
 volley_check`, the effects' spawning arms the game's against the machine's,
-every slot and creature): 483 of 483 volleys of the arms whose kinds the
-machine has. The kinds it has not -- 0x20, 0x21, 0x25, 0x27, 0x28, 0x2a,
-0x2c, 0x2f..0x35, 0x56, 0x64, 0x66 -- and the arms 0x50, 0x53, 0x55, 0x76
-are what is left; in the port (`effects.gd volley_fire`, through
-`actors.gd`'s fire) they note themselves and throw nothing.
+every slot and creature): every volley alike.
+
+The kinds only creatures throw, each against the game's own end to end as
+the creature throws it (`foe-` parts of `spell_hit_check`):
+
+```
+0x20 0x25  a bolt drawn as model 0x2b with the creature's angles: a dart's
+           flight (the player within the scale / 8, the tiles alone, a puff
+           of two fifths of its speed), rolling 0x12c a frame
+0x21       the same as model 0x2c aimed along its velocity, moving as 0x81
+0x27       a spore drawn +0xe 0x80 (the spores' tick)
+0x28 0x56  the fire ball's particle; 0x28 the fire ball's own tick, 0x56 one of
+           its own with no height and the move always taken back
+0x66 0x32  particle 0xa / 0x42 flying flat, turning 0x258 / 0x12c; 0x32
+           scattered at birth (rand() * 20 >> 15 less 10 each axis) and
+           growing 0x20 a frame; the tiles end them, anything else is struck
+0x2a       Seath's bolt's model and size, through what it meets (struck once)
+0x2c       model 0x3f rolling 0x190, a puff a frame
+0x2f       model 0x40, the tiles ending it, anything else struck as it goes,
+           its +0xe flickering 0..5
+0x30 0x35  model 0x41 from 0x100 growing 0x20 a frame
+0x31       the excellector's second's at 0x1770, its tick
+0x33       stone with +0xe 0, its tick
+0x34       model 0x3d, 0x1400 by 0xe10, turning 0x12c
+0x2e       (arm 0x2e and 0x64) not drawn, 0xfa frames: on every odd count
+           of seven a 0x2e thrown along its velocity, the x shifted by
+           (rand >> 6) - 0x100; 0x2e is Seath's model at 0x2000 deep,
+           becoming orladin's burst (0x58) where it hits
+```
+
+What is left are the arms 0x50 and 0x53 (lobbed onto the player through
+`sub_80017210`, a fall solved in six passes) and 0x55 and 0x76 (0x76 makes a
+creature of the kind the volley's list names); in the port (`effects.gd
+volley_fire`, through `actors.gd`'s fire) they note themselves and throw
+nothing.
 
 ### Shape 255 is the void
 
