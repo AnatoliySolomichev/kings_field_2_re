@@ -816,6 +816,16 @@ func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array,
 			_face(s)
 			w16(s + 0x2C, 0)
 			w16(s + 0xE, 0x80)
+		0x50, 0x51, 0x52, 0x53:             # 0x80055a64, 0x80055a5c (0x52): an arrow
+			w8(s + 2, 6 if kind == 0x52 else 5)
+			w16(s + 0xE, 0)
+			w8(s + 8, 1)
+			w8(s + 4, 0x80)
+			w8(s + 0xC, 0xFF)
+			w8(s + 3, u8(s + 2))
+			put(s + 0x28, (args[1] as PackedByteArray).slice(0, 8))
+			w16(s + 0x2C, 0)
+			w16(s + 0x46, 0)                # the frames it has flown
 		LIGHTNING, 0x7D, 0x81:              # 0x80055290, 0x80055258, 0x80055274
 			particle(s, 0xA, 0x800 if kind == LIGHTNING else 0x1000, 5)
 			w16(s + 0xE, 0x40 if kind == LIGHTNING else (0 if kind == 0x7D else 0xC0))
@@ -1030,6 +1040,10 @@ func tick(s: int) -> void:
 			_tick_thrower64(s)
 		0x2E:
 			_tick_shot2e(s)
+		0x50, 0x51, 0x53:
+			_tick_arrow(s)
+		0x52:
+			_tick_arrow52(s)
 		WIND_CUTTER, RYU_GA:
 			_tick_wind(s)
 		HAZE:
@@ -2293,6 +2307,81 @@ func _tick_shot2e(s: int) -> void:
 		w16(s + 0x3A, u16(s + 0x3A) + 0xA)
 
 
+# An arrow (0x80056ebc; 0x50, 0x51, 0x53): still while on the string (+7).
+# Then its height off where it left (+0x44) by vy t + 10 t t / 2, t the frames
+# flown; asked where it lands (radius and height 0x14), and if not, half a
+# step and a quarter of one along the level, at the height it was.
+# @orig game:0x80056ebc effect_tick+0x600  status:verified -- tools/effects.py foe_check and volley_check against the game's own; the self-test this to it
+func _tick_arrow(s: int) -> void:
+	if u8(s + 7):
+		return
+	if s16(s + 0x46) == 0:
+		out_words([0x7148, 0])          # its sound (4): sub_80015688's two words
+	var t := s16v(u16(s + 0x46) + 1)
+	w16(s + 0x46, t)
+	var y0 := s32(s + 0x1C)
+	var vx := s16(s + 0x38)
+	var vz := s16(s + 0x3C)
+	var x := s32(s + 0x18)
+	var z := s32(s + 0x20)
+	var p := Vector3i(s32v(x + vx), s32v(s16(s + 0x44) + s16(s + 0x3A) * t + ((10 * t * t) >> 1)),
+		s32v(z + vz))
+	var hit := collide(p, 0x14, 0x14)
+	if hit == 0:
+		hit = collide(Vector3i(s32v(x + (vx >> 1)), y0, s32v(z + (vz >> 1))), 0x14, 0x14)
+	if hit == 0:
+		hit = collide(Vector3i(s32v(x + (vx >> 2)), y0, s32v(z + (vz >> 2))), 0x14, 0x14)
+	_arrow_on(s, p, hit, y0)
+
+
+# The other bow's arrow (0x80057098, 0x52): still while on the string. Going
+# anywhere along the level (vx or vz above 0) it homes -- effect_seek, 0x12c
+# at most, pulled 0xa (0x30 within 0x2000), turning 0x100, radius 0x14, 0x168
+# high, the cones 0x800; then down 5 a frame faster every second frame, asked
+# where it lands and half a step back.
+# @orig game:0x80057098 effect_tick+0x7dc  status:verified -- tools/effects.py foe_check and volley_check against the game's own; the self-test this to it
+func _tick_arrow52(s: int) -> void:
+	if u8(s + 7):
+		return
+	if s16(s + 0x38) > 0 or s16(s + 0x3C) > 0:
+		seek(0x12C, 0xA, 0x100, 0x14, 0x168, 0x2000, 0x30, 0x800)
+	if s16(s + 0x46) == 0:
+		out_words([0x7148, 0])
+	var t := s16v(u16(s + 0x46) + 1)
+	w16(s + 0x46, t)
+	var y0 := s32(s + 0x1C)
+	var x := s32(s + 0x18)
+	var z := s32(s + 0x20)
+	var p := Vector3i(s32v(x + s16(s + 0x38)), s32v(s16(s + 0x3A) + y0 + 5 * (t >> 1)),
+		s32v(z + s16(s + 0x3C)))
+	var hit := collide(p, 0x14, 0x14)
+	if hit == 0:
+		hit = collide(Vector3i((p.x + x) >> 1, (p.y + y0) >> 1, (p.z + z) >> 1), 0x14, 0x14)
+	_arrow_on(s, p, hit, y0)
+
+
+# What both arrows do after their asks: on to the new place, a splash on
+# water under it; meeting something, that struck (0x20000 its bit) and gone;
+# else +0xa the layer, and the angles along its velocity -- the fall the
+# change in height.
+# @orig game:0x8005701c effect_tick+0x760  status:verified -- the falling arrow's tail; through foe_check and volley_check
+# @orig game:0x800571e0 effect_tick+0x924  status:verified -- the homing arrow's, the same code twice
+func _arrow_on(s: int, p: Vector3i, hit: int, y0: int) -> void:
+	w32(s + 0x18, p.x)
+	w32(s + 0x1C, p.y)
+	w32(s + 0x20, p.z)
+	_splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
+	if hit != 0:
+		_attack(s, hit | 0x20000)
+		w8(s, 0xFF)
+		return
+	w8(s + 0xA, 2 if world.layer_offset != 0 else 1)
+	var a := vec_to_angles(s16(s + 0x38), s32v(p.y - y0), s16(s + 0x3C))
+	w16(s + 0x28, int(a[0]))
+	w16(s + 0x2A, int(a[1]))
+	w16(s + 0x2C, 0)
+
+
 # Haze (0x80058164): each thing it meets it strikes once (+0x44 the latch,
 # cleared on a clear frame), and the tiles end it -- the wind cutter's way,
 # with nothing turned and no splash.
@@ -2733,6 +2822,12 @@ func steer(accel: int, most: int, radius: int, height: int, dirv: Array) -> int:
 		return 0
 	return -1 if collide(Vector3i(s32(s + 0x18), s32(s + 0x1C), s32(s + 0x20)), radius,
 		height) != 0 else 0
+
+
+# vec_length_2d: the same in two.
+# @orig game:0x80016c08 vec_length_2d  status:verified -- through the lob's six passes, tools/effects.py volley_check against the game's own
+func vec_length_2d(a: int, b: int) -> int:
+	return coll.isqrt(((a >> 3) * (a >> 3) + (b >> 3) * (b >> 3)) & 0xFFFFFFFF) << 3
 
 
 # vec_length_3d: each >> 3, the squares summed in a word, the game's root, << 3.
@@ -3397,6 +3492,9 @@ func field(name: String) -> int:
 		"vp": return int(player.call("view_pitch_now")) if player.has_method("view_pitch_now") else 0
 		"pw": return 0                  # 0x801b25fc: not kept by the port
 		"vy": return (int(player.get("facing")) + int(player.get("tilt")[1])) & 0xFFFF
+		"pvx": return int(player.get("step").x)
+		"pvy": return int(player.get("step").y)
+		"pvz": return int(player.get("step").z)
 		"w0", "w1", "w2", "w3", "w4":
 			return int(player.get("working")[int(name.substr(1))])
 	return 0
@@ -3794,6 +3892,40 @@ const VOLLEY := {
 var volley_left := PackedByteArray([0, 0, 0, 0, 0, 0, 0, 0])   # the routine's sp+0x70: the last aim's velocity
 
 
+# sub_80017210 (flag, d, h, g, v, &t, &angle): how to throw at speed v under
+# a fall of g a frame onto a point d away and h above. The two times the
+# quadratic gives, (v v / 4 - h g / 4 +- the root) * 2 / g g, the nearer not
+# yet past (flag 0) or the larger; t its root, the frames scaled, and the
+# pitch vec_angle(((h + 2 g T) << 12) / (v / 2) / (t / 2), ((d << 14) / v) / t).
+# [0, t, angle], or [-1] with nothing written: the root of a negative, or both
+# times past.
+# @orig game:0x80017210 lob_solve  status:verified -- 600 of 600 calls of the game's own (tools/routines.py), 456 of them a throw
+func lob_solve(flag: int, d: int, h: int, g: int, v: int) -> Array:
+	var s4 := s32v(v * v)
+	var s0 := s32v(g * g)
+	var a0 := s4 >> 6
+	var disc := s32v(s32v(s32v(a0 * a0) - s32v(s32v(s32v(s0 * d) >> 10) * (d >> 2)))
+		- s32v(s32v(s32v(g * a0) >> 3) * (h >> 2)))
+	if disc < 0:
+		return [-1]
+	var r := s32v(coll.isqrt(s32v(disc << 4)) << 2)
+	var v1 := s32v((s4 >> 2) - (s32v(h * g) >> 2))
+	var t1 := s32v(s32v(v1 + r) << 1) / s0
+	var t2 := s32v(s32v(v1 - r) << 1) / s0
+	if t1 <= 0 and t2 <= 0:
+		return [-1]
+	var tt := t1
+	if flag == 0:
+		if t1 <= 0 or t2 < t1:
+			tt = t2
+	elif t1 < t2:
+		tt = t2
+	var q := coll.isqrt(s32v(tt << 14))
+	var x := (s32v(d << 14) / v) / q
+	var y := (s32v(s32v(h + (s32v(g * tt) << 1)) << 12) / (v >> 1)) / (q >> 1)
+	return [0, q, coll.vec_angle(y, x)]
+
+
 # What a creature's volley throws from `point` (x y z, the fourth word `w4`,
 # its frame's): each arm aims at the player's eye (effect_aim, one pass, the
 # spread 0x400) and spawns -- fire balls with their grace 3, two tornados
@@ -3874,6 +4006,40 @@ func volley_fire(arm: int, pct: int, point: Vector3i, angles: Array, w4 := 0) ->
 				spawn(pct & 0xFF, 0x83, arm, pt, [v, ang, 0x258, 0x3C, 0x80, 0x8C, 0xA0])
 		EARTH_WAVE:                         # 0x8004faf8: the leftover velocity
 			spawn(pct & 0xFF, 0x83, arm, pt, [volley_left.duplicate(), 0x1000, 0x100, 0x1000, 1])
+		0x50, 0x53:                         # 0x8004fe48: lobbed at where the player goes
+			# six passes: the throw onto the target (lob_solve, 0xa a frame,
+			# 0x320, from 0x578 above the point), and the target the player
+			# led by its last step (0x801b2600) times the frames >> 6. A pass
+			# with no throw keeps the frames and pitches 0x100; the frame's
+			# words start 0 here, stale stack in the game.
+			var step := Vector3i(int(world.field("pvx")), int(world.field("pvy")),
+				int(world.field("pvz")))
+			var player := target
+			var lob_t := 0
+			var lob_a := 0
+			for n in range(5, -1, -1):
+				var dd := vec_length_2d(s32v(target.x - point.x), s32v(target.z - point.z))
+				var l := lob_solve(0, dd, s32v(point.y + 0x578 - target.y), 0xA, 0x320)
+				if int(l[0]) == 0:
+					lob_t = int(l[1])
+					lob_a = int(l[2])
+				else:
+					lob_a = 0x100
+				if n == 0:
+					break
+				target = player + step * (lob_t >> 6)
+			var a := aim(ap, ay, target, 0x320, point, 0xC00, s16v(lob_a))
+			for i in 3:
+				volley_left.encode_s16(2 * i, int(a[i]))
+			var aa := PackedByteArray()
+			aa.resize(8)
+			aa.encode_s16(0, lob_a & 0xFFFF)
+			aa.encode_s16(2, int(a[3]) & 0xFFFF)
+			var s := spawn(pct & 0xFF, 0x83, arm, pt, [volley_left.duplicate(), aa])
+			if s >= 0:
+				w16(s + 0x10, 0x32)
+				w8(s + 7, 0)
+				w16(s + 0x44, point.y)
 		0x28:                               # 0x8004fb78: along the creature's own angles
 			var dv := coll.direction_from_angles(ap, ay)
 			var v := volley_left.duplicate()

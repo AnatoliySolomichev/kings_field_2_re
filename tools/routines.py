@@ -36,6 +36,7 @@ GAME_ISQRT = 0x80074508
 IN_RANGE, IN_ORIENTED_RECT, IN_RANGE_3D = 0x80016EC8, 0x80016D3C, 0x80016FB4
 FACING_TEST, APPROACH, FIXED_MADD = 0x80016A2C, 0x80015FDC, 0x80017158
 PLAYER_IN_RECT = 0x80046884
+LOB_SOLVE, GAME_SQRT12 = 0x80017210, 0x8007458C
 
 
 def s32(v):
@@ -147,6 +148,21 @@ def cases(n=300, snap=SNAP):
     out["fixed_madd"] = [[a, b, t, call(FIXED_MADD, a, b, t)] for a, b, t in
                          ((rng.randrange(-0x40000, 0x40000), rng.randrange(-0x40000, 0x40000),
                            rng.randrange(0, 0x1001)) for _ in range(n))]
+
+    out["game_sqrt12"] = [[x, call(GAME_SQRT12, x)] for x in
+                          [0, 1, 4, 0x1000, 0x7FFFFFFF] + [rng.randrange(0, 1 << rng.randrange(1, 31))
+                                                           for _ in range(n)]]
+    rows = []
+    for _ in range(n * 2):
+        flag = rng.randrange(2)
+        d = rng.randrange(0, 0x6000)
+        h = rng.randrange(-0x3000, 0x3000)
+        g = rng.choice((0xA, rng.randrange(1, 0x40)))
+        v = rng.choice((0x320, rng.randrange(0x40, 0x800)))
+        _pos(cpu, SCRATCH, (0x11111111, 0x22222222))   # left as they were when there is no throw
+        ret = call(LOB_SOLVE, flag, d, h, g, v, SCRATCH, SCRATCH + 4)
+        rows.append([flag, d, h, g, v, ret, s32(cpu.rd(SCRATCH, 4)), s32(cpu.rd(SCRATCH + 4, 4))])
+    out["lob_solve"] = rows
 
     rows = []
     for _ in range(n * 2):

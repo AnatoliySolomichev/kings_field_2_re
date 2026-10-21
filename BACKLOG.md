@@ -844,13 +844,18 @@ each one is also in its function's marker, as `partial` and what differs:
   `kind_behaviour_with_op` twice. Each copy is marked, and the self-test would
   show one drifting; folding them into one is a refactor nobody has needed yet.
 
-* **What creatures throw: in, but for four arms.** `actor_animation_effects`'
+* **What creatures throw: in, but for two arms.** `actor_animation_effects`'
   arms and the kinds only creatures throw are read and in the port
   (`effects.gd volley_fire`, FORMATS.md "What a creature's volley
-  throws"), against the game's own; the arms 0x50 and 0x53 (lobbed,
-  `sub_80017210`), 0x55 and 0x76 (a creature made, `sub_8004b524`,
-  `actor_wake`) are not read -- levels 16, 17, 26 and 23. And the 0x8004
+  throws"), against the game's own, the lob and its arrows (0x50..0x53)
+  among them; 0x55 and 0x76 (a creature made, `sub_8004b524`,
+  `actor_wake`) are not read -- levels 17 and 26 for 0x55. And the 0x8004
   entry, a point along a limb pulled towards the player.
+* **The player's step the lob leads by** (`player.gd step`, 0x801b2600):
+  read off `player_horizontal` and `player_vertical`, written where they
+  write it, but no recording has the word -- the lob's checks draw it at
+  random. A bp log of `0x801b2600..0x801b2605` beside the position would
+  hold it.
 * **Casting is in, and what it casts.** `player.gd` has the
   buttons, `cast_spell`, the pending action, `skill_practice`, the USE
   stretch, the timers and the attacking arms (the aim, the creature in

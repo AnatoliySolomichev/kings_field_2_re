@@ -6663,8 +6663,7 @@ arm                    speed  a1    spawns                     after
 0x2c 0x2f 0x30 0x31 0x35 0x06 0x33 0x34 0x64 (0x2e)   their kind, at 0x1a4, 0x1a4,
                                     0x1e0, 0x258, 0x12c (0x81), 0x12c x 3, 0x3c0
 0x44 0x45              0x226, 0x2bc 0x83 dark slayer's 0x7c and 0x7b
-0x50 0x53              lobbed: sub_80017210 solves a fall onto the player in six
-                       passes, life 0x32, +0x44 the point's height (not read further)
+0x50 0x53              0x320  0x83  an arrow lobbed where the player will be (below)
 0x55, 0x76             0x55 with the list's next word; 0x76 makes a creature of the
                        kind the list names (sub_8004b524, actor_wake) -- not read further
 ```
@@ -6704,11 +6703,59 @@ the creature throws it (`foe-` parts of `spell_hit_check`):
            becoming orladin's burst (0x58) where it hits
 ```
 
-What is left are the arms 0x50 and 0x53 (lobbed onto the player through
-`sub_80017210`, a fall solved in six passes) and 0x55 and 0x76 (0x76 makes a
-creature of the kind the volley's list names); in the port (`effects.gd
-volley_fire`, through `actors.gd`'s fire) they note themselves and throw
-nothing.
+**The lob (arms 0x50 and 0x53, `0x8004fe48`).** Six passes over a target
+that starts at the player: `lob_solve` (`0x80017210`, flag 0, a fall of 0xa
+a frame, the speed 0x320) onto it from the point, `d` the level distance
+(`vec_length_2d`) and `h` the point's height + 0x578 less the target's; then
+the target is the player's place plus the player's last step at
+`0x801b2600` times (the frames >> 6) (`0x800175a8`, a madd of halfwords, no
+shift). A pass with no throw keeps the frames the last one found and
+pitches 0x100; the routine's frame words they live in start as whatever
+the stack held, 0 in the checks. Then `effect_aim` at 0x320 with that pitch
+and the spread 0xc00, and the kind spawned with the pitch and the yaw as
+its angles, life 0x32, +7 0, +0x44 the point's height.
+
+`lob_solve(flag, d, h, g, v, &t, &angle)` is the throw at speed v under a
+fall of g onto a point d away and h above: `disc = (v v >> 6)^2 - (g g d >>
+10)(d >> 2) - (g (v v >> 6) >> 3)(h >> 2)`; no throw (-1, nothing written)
+when it is negative; the two times `((v v >> 2) - (h g >> 2) +- isqrt(disc
+<< 4) << 2) << 1 / g g`, none when both are 0 or less; flag 0 takes the
+smaller that is not past, 1 the larger; `t = isqrt(T << 14)`, the pitch
+`vec_angle(((h + 2 g T) << 12) / (v >> 1) / (t >> 1), (d << 14) / v / t)`.
+600 of 600 calls of the game's own (`tools/routines.py`), 456 of them a
+throw.
+
+**What the lob leads by is only the strafe.** `0x801b2600` and
+`0x801b2604` are written by `player_horizontal` (`0x8002ec7c`) with the step
+it ends on, whatever way it ends, and `player_walk` calls it twice a frame
+-- the forward step along facing + 0x400 (`0x8002fda0`), then the strafe
+along the facing (`0x8002fdb4`). So the lead is the strafe's step and the
+height's (`0x801b2602`, `player_vertical`: 0, or the velocity in the rise,
+the short drop and a clear frame of the fall); a player running straight at
+or from the archer is not led at all.
+
+The kinds (`effect_spawn` `0x80055a64`, 0x52 at `0x80055a5c`): model 5 (0x52
+model 6), +8 1, +4 0x80, +0xc 0xff, the angles args[1] points at with no
+roll, +0x46 the frames flown. 0x50, 0x51 and 0x53 fall (`0x80056ebc`): still
+while +7 is set; the first frame the sound 4; the height off where it left
+`+0x44 + vy t + (10 t t >> 1)`, t the frames flown; `effect_collide` at
+radius and height 0x14 where it lands, then a half and a quarter step along
+the level at the old height. 0x52 homes (`0x80057098`): while vx or vz is
+above 0, `effect_seek` (0x12c at most, 0xa a frame, 0x30 within 0x2000,
+turning 0x100, radius 0x14, 0x168 high, the cones 0x800); down `vy + 5 (t >>
+1)`, asked where it lands and half way back. Both then (`0x8005701c`,
+`0x800571e0`) move on, splash on water under it, and what they meet is
+struck with 0x20000 on the code and they are gone; else +0xa the layer and
+the angles along the velocity, the fall the change in height. 0x51 and 0x52
+are the player's bows' (items 0x93 and 0x94 in `held_item_tick`); of the
+creatures only level 16's kind 5 (model 104) throws one, 0x53, and none
+0x50. Held to the game's own: `volley_check` with the step drawn at random
+(a lead taken at `>> 7` instead fails 42 of 903), the `foe-0x50` and
+`foe-0x53` parts 63 of 63 runs each.
+
+What is left are 0x55 and 0x76 (0x76 makes a creature of the kind the
+volley's list names); in the port (`effects.gd volley_fire`, through
+`actors.gd`'s fire) they note themselves and throw nothing.
 
 ### Shape 255 is the void
 

@@ -482,6 +482,7 @@ def export(out_dir):
     # as fire_check stands them in: the answers, and the hits handed over
     fires = []
     frng = random.Random(0xF1E)
+    lrng = random.Random(0x1EAD)                    # the lob's lead, apart so the rest draw as they did
     for kind_, speed_, _name, more_, nframes_ in SPELLS_SENT + FOES_SENT:
       speed_ = speed_ or 0
       for path in memcard._snapshots()[:6]:
@@ -611,6 +612,8 @@ def export(out_dir):
                       if not awake_:
                           continue
                       a_ = ACTORS + ACTOR_STRIDE * frng.choice(awake_)
+                      if kind_ in LOBS:
+                          struct.pack_into("<3h", m, PLAYER_VEL & MASK, *[lrng.randrange(-0x60, 0x61) for _ in range(3)])
                       sps = []
 
                       def recsp(a0, a1, kd, pt, args, direct=False, sps=sps, sp_=mach.spawn):
@@ -660,6 +663,8 @@ def export(out_dir):
                                             "pw": struct.unpack_from("<i", m, (PLAYER_POS + 12) & MASK)[0],
                                             "cs": struct.unpack_from("<i", m, 0x801E6474 & MASK)[0],
                                             "tn": struct.unpack_from("<I", base, TRAIL_NEXT & MASK)[0]},
+                                           **dict(zip(("pvx", "pvy", "pvz"),
+                                                      struct.unpack_from("<3h", m, PLAYER_VEL & MASK))),
                                            **{f"w{k}": working[k] for k in range(5)}),
                             "spawns": [] if volley_spec else
                                       [[a0, a1, kd, pt.hex(),
@@ -681,6 +686,8 @@ def export(out_dir):
             continue
         for arm in VOLLEY_ARMS:
             m = bytearray(base)
+            if arm in LOBS:
+                struct.pack_into("<3h", m, PLAYER_VEL & MASK, *[lrng.randrange(-0x60, 0x61) for _ in range(3)])
             vy = vrng.randrange(0x1000)
             struct.pack_into("<4H", m, VIEW_ANGLES & MASK, 0, vy, 0, 0)
             a = ACTORS + ACTOR_STRIDE * vrng.choice(awake)
@@ -703,7 +710,9 @@ def export(out_dir):
             volleys.append({"label": f"{os.path.basename(path)[:-4]} arm {arm:#x}", "arm": arm,
                             "pct": pct, "point": point,
                             "angles": list(struct.unpack_from("<3h", m, (a + 0x40) & MASK)),
-                            "fields": {"px": px, "py": py, "pz": pz, "vy": vy},
+                            "fields": dict({"px": px, "py": py, "pz": pz, "vy": vy},
+                                           **dict(zip(("pvx", "pvy", "pvz"),
+                                                      struct.unpack_from("<3h", m, PLAYER_VEL & MASK)))),
                             "rand": vdrawn,
                             "md5": hashlib.md5(_slots(m).hex().encode()).hexdigest()})
     # and effect_aim: a creature's angles, the target, the speed, the point and
@@ -835,6 +844,8 @@ SLOTS, STRIDE, COUNT = 0x801B80EC, 0x4C, 128
 CURRENT, CURRENT_REC, INDEX = 0x801BA6F0, 0x801BA6EC, 0x801BA6F4
 SPELL_TABLE, RECORD = 0x801B77EC, 24
 PLAYER_POS, PLAYER_STATE = 0x801B25F0, 0x801B25E5
+PLAYER_VEL = 0x801B2600             # three s16 the lob leads the player by
+LOBS = (0x50, 0x53)                 # actor_animation_effects' arms that lead it
 HP, HP_MAX, POISON = 0x801B24FC, 0x801B24FA, 0x801B255C
 CURSE_LV, CURSE_T, DARK_LV, DARK_T = 0x801B255E, 0x801B2560, 0x801B2562, 0x801B2564
 SLOW, PARALYSIS = 0x801B2566, 0x801B2568
@@ -1044,7 +1055,9 @@ class Machine:
                0x66: self._spawn_66, 0x32: self._spawn_32, 0x34: self._spawn_34,
                0x2A: self._spawn_2a, 0x2C: self._spawn_2c, 0x2F: self._spawn_2f,
                0x30: self._spawn_30, 0x35: self._spawn_30, 0x31: self._spawn_31,
-               0x33: self._spawn_33, 0x64: self._spawn_64, 0x2E: self._spawn_2e}.get(kind)
+               0x33: self._spawn_33, 0x64: self._spawn_64, 0x2E: self._spawn_2e,
+               0x50: self._spawn_51, 0x51: self._spawn_51, 0x53: self._spawn_51,
+               0x52: self._spawn_51}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_spawn's arm {kind:#x}")
         arm(s, args)
@@ -2821,6 +2834,84 @@ class Machine:
         if self.u8(s) & 0x40 and self.s16(s + 0x3A) < 0x320:
             self.w16(s + 0x3A, self.u16(s + 0x3A) + 0xA)
 
+    def _spawn_51(self, s, args):           # 0x80055a64 (0x50, 0x51, 0x53), 0x80055a5c (0x52)
+        """An arrow: model 5 (0x52's 6), +0xc 0xff, the angles args[1]
+        points at, its roll 0, +0x46 the frames it has flown."""
+        self.w8(s + 2, 6 if self.u8(s + 1) == 0x52 else 5)
+        self.w16(s + 0xE, 0)
+        self.w8(s + 8, 1)
+        self.w8(s + 4, 0x80)
+        self.w8(s + 0xC, 0xFF)
+        self.w8(s + 3, self.u8(s + 2))
+        self.put(s + 0x28, args[1][:8])
+        self.w16(s + 0x2C, 0)
+        self.w16(s + 0x46, 0)
+
+    def _arrow_hit(self, s, hit, y0):
+        """What an arrow does after its asks: on to its new place, a splash on
+        water under it; meeting something, that struck (0x20000 its bit) and
+        gone; else +0xa its layer and the angles along its velocity -- the
+        fall the change in height."""
+        self.splash_one(s + 0x18, 0x2000, 0x2000, 0x1F4)
+        if hit:
+            self.attack(s, hit | 0x20000)
+            self.w8(s, 0xFF)
+            return
+        self.w8(s + 0xA, 2 if self.w.layer_offset else 1)
+        ang = vec_to_angles(self.s16(s + 0x38), _s32(self.s32(s + 0x1C) - y0), self.s16(s + 0x3C))
+        self.w16(s + 0x28, ang[0])
+        self.w16(s + 0x2A, ang[1])
+        self.w16(s + 0x2C, 0)
+
+    def _tick_51(self, s):                  # 0x80056ebc (0x50, 0x51, 0x53): a falling arrow
+        """Still while on the string (+7). Each frame the height off its start
+        (+0x44) by vy t + 10 t t / 2, t the frames flown; asked where it
+        lands, then half a step and a quarter of one along the level (radius
+        and height 0x14)."""
+        if self.u8(s + 7):
+            return
+        if self.s16(s + 0x46) == 0:                 # its sound, 4: sub_80015688's two words
+            self.out_words([0x7148, 0])
+        t = _s16_(self.u16(s + 0x46) + 1)
+        self.w16(s + 0x46, t)
+        y0 = self.s32(s + 0x1C)
+        vx, vy, vz = self.s16(s + 0x38), self.s16(s + 0x3A), self.s16(s + 0x3C)
+        x, z = self.s32(s + 0x18), self.s32(s + 0x20)
+        p = (_s32(x + vx), _s32(self.s16(s + 0x44) + vy * t + ((10 * t * t) >> 1)), _s32(z + vz))
+        hit = self.collide(p, 0x14, 0x14)
+        if not hit:
+            hit = self.collide((_s32(x + (vx >> 1)), y0, _s32(z + (vz >> 1))), 0x14, 0x14)
+        if not hit:
+            hit = self.collide((_s32(x + (vx >> 2)), y0, _s32(z + (vz >> 2))), 0x14, 0x14)
+        for i in range(3):
+            self.w32(s + 0x18 + 4 * i, p[i])
+        self._arrow_hit(s, hit, y0)
+
+    def _tick_52(self, s):                  # 0x80057098: the other bow's arrow, homing
+        """Still while on the string. Going anywhere level (vx or vz > 0) it
+        homes (effect_seek: 0x12c at most, pulled 0xa -- 0x30 within 0x2000
+        -- turning 0x100, radius 0x14, 0x168 high, cones 0x800); then down
+        5 a frame faster each two frames, asked where it lands and half a
+        step back."""
+        if self.u8(s + 7):
+            return
+        if self.s16(s + 0x38) > 0 or self.s16(s + 0x3C) > 0:
+            self.seek(0x12C, 0xA, 0x100, 0x14, 0x168, 0x2000, 0x30, 0x800)
+        if self.s16(s + 0x46) == 0:
+            self.out_words([0x7148, 0])
+        t = _s16_(self.u16(s + 0x46) + 1)
+        self.w16(s + 0x46, t)
+        y0 = self.s32(s + 0x1C)
+        x, z = self.s32(s + 0x18), self.s32(s + 0x20)
+        p = (_s32(x + self.s16(s + 0x38)), _s32(self.s16(s + 0x3A) + y0 + 5 * (t >> 1)),
+             _s32(z + self.s16(s + 0x3C)))
+        hit = self.collide(p, 0x14, 0x14)
+        if not hit:
+            hit = self.collide(((p[0] + x) >> 1, (p[1] + y0) >> 1, (p[2] + z) >> 1), 0x14, 0x14)
+        for i in range(3):
+            self.w32(s + 0x18 + 4 * i, p[i])
+        self._arrow_hit(s, hit, y0)
+
     def _spawn_0f(self, s, args):           # 0x80054294, tornado
         """The first of a cast's two (args[2] 0) is 0xc80 across and turned
         nothing, the second 2000 wider and turned half; the view's angles in
@@ -3418,7 +3509,8 @@ class Machine:
                0x66: self._tick_66, 0x32: self._tick_32, 0x34: self._tick_34,
                0x2A: self._tick_2a, 0x2C: self._tick_2c, 0x2F: self._tick_2f,
                0x30: self._tick_30, 0x35: self._tick_30, 0x33: self._tick_06,
-               0x64: self._tick_64, 0x2E: self._tick_2e}.get(kind)
+               0x64: self._tick_64, 0x2E: self._tick_2e, 0x50: self._tick_51,
+               0x51: self._tick_51, 0x53: self._tick_51, 0x52: self._tick_52}.get(kind)
         if arm is None:
             raise NotImplementedError(f"effect_tick's arm {kind:#x}")
         arm(s)
@@ -3815,6 +3907,38 @@ def volley_point(m, actor, ox, oy, oz):
     return [_s32(struct.unpack_from("<i", m, a + 0x2C + 4 * i)[0] + w[i]) for i in range(3)]
 
 
+def lob_solve(flag, d, h, g, v):
+    """sub_80017210 (flag, d, h, g, v, &t, &angle): how to throw at speed v,
+    under a fall of g a frame, onto a point d away and h above: the two
+    times the quadratic gives, (v^2/4 - hg/4 +- the root) * 2 / g^2, the
+    nearer (flag 0) or the farther, its root q -- the frames, scaled -- and
+    the pitch vec_angle(((h + 2gT) << 12) / (v/2) / (q/2), ((d << 14) / v) / q).
+    (0, q, angle), or (-1, None, None) with nothing written when there is no
+    throw: the root of a negative, or both times past."""
+    trunc = movement.trunc
+    s4 = _s32(v * v)
+    s0 = _s32(g * g)
+    a0 = s4 >> 6
+    disc = _s32(_s32(_s32(a0 * a0) - _s32(_s32(_s32(s0 * d) >> 10) * (d >> 2)))
+                - _s32(_s32(_s32(g * a0) >> 3) * (h >> 2)))
+    if disc < 0:
+        return -1, None, None
+    r = _s32(movement.game_isqrt(_s32(disc << 4)) << 2)
+    v1 = _s32((s4 >> 2) - (_s32(h * g) >> 2))
+    t1 = trunc(_s32(_s32(v1 + r) << 1), s0)
+    t2 = trunc(_s32(_s32(v1 - r) << 1), s0)
+    if t1 <= 0 and t2 <= 0:
+        return -1, None, None
+    if flag == 0:
+        tt = t2 if t1 <= 0 or t2 < t1 else t1
+    else:
+        tt = t2 if t1 < t2 else t1
+    q = movement.game_isqrt(_s32(tt << 14))
+    x = trunc(trunc(_s32(d << 14), v), q)
+    y = trunc(trunc(_s32(_s32(h + (_s32(g * tt) << 1)) << 12), v >> 1), q >> 1)
+    return 0, q, movement.vec_angle(y, x)
+
+
 def volley_fire(mach, actor, arm, pct, point, w4=0):
     """actor_animation_effects' arms (0x8004f5b8 on) over the machine, from
     `point` (x y z; its fourth word `w4`, the routine's frame's): each aims
@@ -3883,6 +4007,27 @@ def volley_fire(mach, actor, arm, pct, point, w4=0):
         s = spawn(0x83, 0x28, [mach.volley_left])
         if s:
             mach.w8(s + 0xB, 3)
+    elif arm in LOBS:                               # 0x8004fe48: lobbed at where the player goes
+        target = list(player)
+        lob_t, lob_a = 0, 0                         # the frame's words 0x98, 0x9c: stale stack in the game
+        pv = struct.unpack_from("<3h", m, PLAYER_VEL & MASK)
+        for n in range(5, -1, -1):
+            d = vec_length_2d(_s32(target[0] - point[0]), _s32(target[2] - point[2]))
+            r, tq, ang = lob_solve(0, d, _s32(point[1] + 0x578 - target[1]), 0xA, 0x320)
+            if r == 0:
+                lob_t, lob_a = tq, ang
+            else:
+                lob_a = 0x100
+            if n == 0:
+                break
+            target = [_s32(player[i] + pv[i] * (lob_t >> 6)) for i in range(3)]
+        v, yaw = aim(angles, target, 0x320, point, _s16_(lob_a), 0xC00)
+        mach.volley_left = struct.pack("<3h", *v) + left[6:8]
+        s = spawn(0x83, arm, [mach.volley_left, struct.pack("<3h", lob_a & 0xFFFF, yaw, 0) + bytes(2)])
+        if s:
+            mach.w16(s + 0x10, 0x32)
+            mach.w8(s + 7, 0)
+            mach.w16(s + 0x44, point[1])
     elif arm in (0x12, 0x14):                       # 0x8004fc74: flash, at the eye
         ang = vec_to_angles(_s32(player[0] - point[0]), _s32(player[1] - (point[1] + 0x640)),
                             _s32(player[2] - point[2]))
@@ -4552,7 +4697,7 @@ KIDS = {MARK: PILLAR, MARK2: PILLAR2}
 
 FOES_SENT = tuple((arm, 0, f"a creature's {arm:#x}", ("foe",), 60)
                   for arm in (0x20, 0x21, 0x25, 0x27, 0x28, 0x2A, 0x2C, 0x2E, 0x2F, 0x30, 0x31,
-                              0x32, 0x33, 0x34, 0x35, 0x56, 0x66))
+                              0x32, 0x33, 0x34, 0x35, 0x56, 0x66, 0x50, 0x53))
 """The creatures' own kinds sent end to end: each arm thrown by a snapshot's
 creature through the game's own actor_animation_effects and the machine's
 volley_fire, at the player, and flown."""
@@ -4616,6 +4761,7 @@ def fire_hit_check(out=sys.stdout, per=10, frames=60, kind=None, speed=0x384, na
     import levelstate
     import hit
     rng = random.Random(0xF1E2)
+    lead = random.Random(0x1EAD)                    # the lob's lead, apart so the rest draw as they did
     runs = good = nframes = fgood = skipped = 0
     hurt = killed = player = 0
     first = []
@@ -4670,9 +4816,11 @@ def fire_hit_check(out=sys.stdout, per=10, frames=60, kind=None, speed=0x384, na
                 struct.pack_into("<i", ram, SURFACE & MASK, py - 0x640 - rng.randrange(0, 0x1F4))
             foe = None
             if "foe" in more:                               # thrown by the creature, as it throws
+                if kind in LOBS:
+                    struct.pack_into("<3h", ram, PLAYER_VEL & MASK, *[lead.randrange(-0x60, 0x61) for _ in range(3)])
                 struct.pack_into("<I", ram, CURRENT_ACTOR & MASK, a)
                 frame_ = mipsrun_stack() - 0x100 - 0xC0
-                for off, n_ in ((0x3C, 4), (0x70, 8), (0x78, 8)):
+                for off, n_ in ((0x3C, 4), (0x70, 8), (0x78, 8), (0x98, 8)):
                     ram[(frame_ + off) & MASK:(frame_ + off + n_) & MASK] = bytes(n_)
                 foe = (rng.randrange(-0x200, 0x200), rng.randrange(-0xA00, -0x200),
                        rng.randrange(-0x300, 0x300))
@@ -4976,6 +5124,7 @@ def volley_check(out=sys.stdout, per=3):
     import memcard
     import levelstate
     rng = random.Random(0x70113)
+    lead = random.Random(0x1EAD)                    # the player's last step, for the lob to lead by
     runs = good = 0
     missing = {}
     first = []
@@ -4994,11 +5143,13 @@ def volley_check(out=sys.stdout, per=3):
         for _ in range(per):
             for arm in VOLLEY_ARMS:
                 ram = bytearray(base)
+                if arm in LOBS:
+                    struct.pack_into("<3h", ram, PLAYER_VEL & MASK, *[lead.randrange(-0x60, 0x61) for _ in range(3)])
                 a = ACTORS + ACTOR_STRIDE * rng.choice(awake)
                 struct.pack_into("<I", ram, CURRENT_ACTOR & MASK, a)
                 if rng.randrange(3) == 0:
                     struct.pack_into("<h", ram, PARALYSIS & MASK, rng.randrange(1, 100))
-                for off, n in ((0x3C, 4), (0x70, 8), (0x78, 8)):
+                for off, n in ((0x3C, 4), (0x70, 8), (0x78, 8), (0x98, 8)):
                     ram[(frame + off) & MASK:(frame + off + n) & MASK] = bytes(n)
                 ox, oy, oz = rng.randrange(-0x200, 0x200), rng.randrange(-0xA00, 0), rng.randrange(-0x300, 0x300)
                 pct = rng.randrange(1, 100)

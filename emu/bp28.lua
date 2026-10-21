@@ -10,15 +10,19 @@
 --   * with both meters full, press CROSS, SQUARE, TRIANGLE in turn (the
 --     default scheme), each within twenty frames -- the second swing's;
 --   * cast flash, lightning bolt, freeze and thedek (the magic menu) at a
---     creature and at a wall, and lightning once off a ledge, over a drop.
+--     creature and at a wall, and lightning once off a ledge, over a drop;
+--   * on level 16, let the archer (model 104) shoot at you a few times,
+--     standing, walking straight and strafing.
 -- Once each is enough. tools/effects.py is what this is for: the machine is
 -- held to the game's own code already, and this holds it to the game in play.
 --
 -- FX     at the head of effect_driver (0x8005bc50), once a frame while a
 --        slot lives: every live slot of the 128 at effect_slots (0x801b80ec,
 --        0x4c bytes), its index and its bytes in hex; the player's place and
---        HP; and effect_tick's outgoing words (sp+0x10..0x2c of its frame,
---        below effect_driver's), which flash's second burst reads
+--        HP; its last step (0x801b2600, three s16 in hex: the strafe's x z
+--        and the height's, which a creature's lob leads it by); and
+--        effect_tick's outgoing words (sp+0x10..0x2c of its frame, below
+--        effect_driver's), which flash's second burst reads
 -- ACT    the same frame: each awake creature (+9 1) -- slot, place, +0xe, HP
 -- SPAWN  effect_spawn (0x80053c84): a0..a2, the point's 16 bytes, the eight
 --        stack words from sp+0x10, the velocity's 8 bytes, and the caller
@@ -102,8 +106,8 @@ bp28[1] = arm(0x8005bc50, 'fx', function()
         local tsp = reg(g, 'sp') - TICK_BELOW
         words = hex(tsp + 0x10, 0x20)
     end
-    log(string.format('FX vb=%d pos=%d,%d,%d hp=%d out=%s %s', s32(VBLANKS), s32(PLAYER),
-        s32(PLAYER + 4), s32(PLAYER + 8), u16(HP), words, table.concat(live, ' ')))
+    log(string.format('FX vb=%d pos=%d,%d,%d hp=%d step=%s out=%s %s', s32(VBLANKS), s32(PLAYER),
+        s32(PLAYER + 4), s32(PLAYER + 8), u16(HP), hex(PLAYER + 0x10, 6), words, table.concat(live, ' ')))
     local acts = {}
     for k = 0, 199 do
         local a = ACTORS + k * ASTRIDE

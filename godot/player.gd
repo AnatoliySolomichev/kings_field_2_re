@@ -149,6 +149,7 @@ var gz := 0
 # the vertical state machine: the byte at 0x801b25e8 and the s16 at 0x801b2656
 var vstate := 0
 var vvel := 0
+var step := Vector3i.ZERO          # 0x801b2600: the last step player_horizontal took, x z, and player_vertical's y
 # 0x801b2648 and 0x801b2646: the two ground speeds the ramp drives
 var fwd_speed := 0
 var stf_speed := 0
@@ -2288,8 +2289,11 @@ func _view() -> void:
 #                                query looked at gives; else stay
 #
 # The creatures are the awake ones in `creatures`, asked as actor_spot_taken
-# asks for the player (_creature_at).
-# @orig game:0x8002e3f8 player_horizontal  status:transcribed -- tools/replay.py: 124 891 of 125 116 ground frames; the creatures against the Python on made steps
+# asks for the player (_creature_at). Whichever way it ends, the step it ends
+# on goes to 0x801b2600 and 0x801b2604 (0x8002ec7c) -- `step`, which a
+# creature's lob leads the player by; called twice a frame, the strafe last,
+# so that is the strafe's.
+# @orig game:0x8002e3f8 player_horizontal  status:transcribed -- tools/replay.py: 124 891 of 125 116 ground frames; the creatures against the Python on made steps; the step it leaves read, not in a recording
 func _horizontal(angle: int, dist: int) -> void:
 	var s4: int = (coll.game_cos(angle) * dist) >> 12
 	var s2: int = (coll.game_sin(angle) * dist) >> 12
@@ -2331,6 +2335,8 @@ func _horizontal(angle: int, dist: int) -> void:
 				continue
 			gx = tx
 			gz = tz
+			step.x = s4                   # 0x8002ec7c: whatever it ends on
+			step.z = s2
 			return
 		var oi: int = q["object"]
 		if oi != -1 and (int(coll.objects[oi][4]) & 4) and tries < RECT_TRIES.size():
@@ -2419,6 +2425,8 @@ func _horizontal(angle: int, dist: int) -> void:
 		diag = true
 	gx = x
 	gz = z
+	step.x = s4
+	step.z = s2
 
 
 # actor_spot_taken (0x8004d644) as the player asks it: the first creature, in
@@ -2578,10 +2586,14 @@ func _bob(mag: int) -> void:
 # player_vertical (0x8002ed60). The horizontal is the caller's; this is the
 # height, and the state machine that owns it. Every branch here was matched
 # against the instruction the game actually took -- see tools/movement.py bp15.
-# @orig game:0x8002ed60 player_vertical  status:verified -- 48 of 48 of the game's own height stores, tools/movement.py bp15
+# The height's step goes to 0x801b2602 (`step.y`): 0 (0x8002eda0), or the
+# velocity before this frame's pull in the rise, the short drop and a clear
+# frame of the fall.
+# @orig game:0x8002ed60 player_vertical  status:verified -- 48 of 48 of the game's own height stores, tools/movement.py bp15; step.y read, not in a recording
 func _move(dx: int, dz: int) -> void:
 	gx += dx
 	gz += dz
+	step.y = 0                                        # 0x8002eda0; the falls' velocity below
 
 	if vstate == 0x20:                                # 0x8002ee50, rising
 		var surf20 := coll.surface(gx, gy, gz)
@@ -2592,6 +2604,7 @@ func _move(dx: int, dz: int) -> void:
 				ry = surf20
 			vstate = 0
 		gy = ry
+		step.y = vvel
 		vvel += V_ACCEL_RISE
 		return
 
@@ -2604,6 +2617,7 @@ func _move(dx: int, dz: int) -> void:
 			vstate = 0
 		else:
 			gy = ny
+		step.y = vvel
 		vvel += V_ACCEL_SHORT
 		return
 
@@ -2613,6 +2627,7 @@ func _move(dx: int, dz: int) -> void:
 		last_surface = int(q40["floor"])
 		if int(q40["mask"]) == 0:
 			gy = fy
+			step.y = vvel
 			vvel = coll._s16(vvel + V_ACCEL_LONG)
 			dip = vvel >> 1                           # 0x8002ef30, the view nods
 			return

@@ -15,6 +15,16 @@
   "kind": "code",
   "evidence": "(most, accel, turn, radius, height, near, near_accel, cone): a player's effect (+0 & 0x40) asks sub_8004d3c4 along its own angles (0x5dc0, the cones, no noise) for a creature and turns its pitch and yaw towards that creature's middle by `turn` each (angle_approach); any other effect asks sub_8002b80c after the player. Then effect_steer along direction_from_angles of its angles -- `accel`, or `near_accel` once the distance is `near` or less -- at most `most`; its answer. Flash's and triple fang's second's homing (0x80059c60, the four numbers out of the slot's +0x44..+0x4a) and the second moonlight sword's mark (0x800584d0); held to the game's own by tools/effects.py spell_hit_check"
  },
+ "0x80017210": {
+  "name": "lob_solve",
+  "kind": "code",
+  "evidence": "(flag, d, h, g, v, &t, &angle): the throw at speed v under a fall of g a frame onto a point d away and h above. The two times of the quadratic, (v*v/4 - h*g/4 +- 4 isqrt(disc << 4)) * 2 / (g*g), disc = (v*v>>6)^2 - (g*g*d>>10)(d>>2) - (g (v*v>>6) >> 3)(h>>2); the nearer that is not past (flag 0) or the larger; t = isqrt(T << 14) and the pitch vec_angle(((h + 2gT) << 12) / (v/2) / (t/2), ((d << 14) / v) / t). 0, or -1 with nothing written when disc < 0 or both times are past. actor_animation_effects' arms 0x50 and 0x53 (0x8004feb8) call it six times to lead the player; held to the game's own by tools/routines.py (600 cases) and tools/effects.py volley_check"
+ },
+ "0x800175a8": {
+  "name": "vec_madd_s16",
+  "kind": "code",
+  "evidence": "(a, v, k, out): out[i] = a[i] + v[i] * k for three words a and three halfwords v, nothing shifted. actor_animation_effects' lob (0x8004fee8) puts the player's place plus its step 0x801b2600 times (t >> 6) at its target; effect_aim and 0x80046dcc the same"
+ },
  "0x8007458c": {
   "name": "game_sqrt12",
   "kind": "code",

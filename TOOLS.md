@@ -592,8 +592,11 @@ a creature.
 
 `volley_check` runs `actor_animation_effects` itself over every snapshot's
 creatures -- every arm from an `0x8002` entry at the player -- against
-`volley_point` and `volley_fire`: 483 of 483 volleys alike, every slot and
-creature, and it names the arms and kinds the machine has not. The `foe-`
+`volley_point` and `volley_fire`: 2709 of 2709 volleys alike (three a snapshot), every slot and
+creature, and it names the arms and kinds the machine has not. For the lob
+(0x50, 0x53) it draws the player's last step at `0x801b2600` at random from
+a stream of its own, so the lead is tried and the other arms draw as they
+did; the export does the same and hands the step over as `pvx`..`pvz`. The `foe-`
 parts of `spell_hit_check` send the kinds only creatures throw, each from a
 creature near the player through the game's own `actor_animation_effects`
 and the machine's `volley_fire`, and fly them end to end.
@@ -1097,7 +1100,9 @@ python3 tools/mipsrun.py --check
 **`routines.py`** asks the small routines themselves -- the sine and cosine,
 `vec_angle`, `ratan2`, `arctan_unit`, the square root, `in_range`,
 `in_range_3d`, `in_oriented_rect`, `facing_test`, `approach`, `fixed_madd`,
-`player_in_rect` -- some 14 500 calls over `a1`, corners and all, and writes
+`player_in_rect`, `game_sqrt12` and the creatures' lob, `lob_solve` (its
+answer and the two words it writes, primed so that a call with no throw
+shows it wrote nothing) -- some 15 400 calls over `a1`, corners and all, and writes
 the game's answers to `routinecheck.json`; `godot/selftest.gd` puts each to
 the port's copy (`routines:`). It found the port's height test ignoring the
 `0xffff` that tells `in_range` to skip it; `in_range_3d` went in after orladin

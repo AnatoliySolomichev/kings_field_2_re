@@ -855,7 +855,7 @@ func _effects() -> bool:
 		elif first == "":
 			first = "%s: the slots differ %s" % [v["label"], rp.bad]
 	fx.free()
-	print("effects: %d of %d runs, %d of %d frames of the effect machine as tools/effects.py's (whose machine the game's own effect_spawn and effect_driver hold: 189 of 189 runs, the healing spells' 126 of 126, the fire ball's 168 of 168); %d of %d aims as its effect_aim (600 of 600 the game's); %d of %d volleys as its volley_fire (483 of 483 the game's)" % [
+	print("effects: %d of %d runs, %d of %d frames of the effect machine as tools/effects.py's (whose machine the game's own effect_spawn and effect_driver hold: 189 of 189 runs, the healing spells' 126 of 126, the fire ball's 168 of 168); %d of %d aims as its effect_aim (600 of 600 the game's); %d of %d volleys as its volley_fire (2709 of 2709 the game's)" % [
 		good, runs, fgood, frames, aok, aims, vok, vols])
 	if first != "":
 		print("  first difference: " + first)
@@ -1143,14 +1143,17 @@ func _lifts() -> bool:
 
 # The game's own small routines, called by tools/mipsrun.py over a snapshot
 # (tools/routines.py), against the port's copies one call at a time: the sine
-# and cosine, the bearings, the square root, the range tests, facing_test,
-# approach, fixed_madd and player_in_rect.
+# and cosine, the bearings, the square roots, the range tests, facing_test,
+# approach, fixed_madd, player_in_rect and the creatures' lob, lob_solve --
+# its answer, and the frames and the pitch it wrote when it threw.
 func _routines() -> bool:
 	if not FileAccess.file_exists("res://routinecheck.json"):
 		print("routines: no cases to check against")
 		return true
 	var doc = JSON.parse_string(FileAccess.get_file_as_string("res://routinecheck.json"))
 	var r: Dictionary = doc["routines"]
+	var fx = load("res://effects.gd").new()
+	fx.coll = coll
 	var n := 0
 	var bad := 0
 	var first := ""
@@ -1174,6 +1177,13 @@ func _routines() -> bool:
 					got = coll.ratan2(c[0], c[1])
 				"game_isqrt":
 					got = coll.isqrt(c[0])
+				"game_sqrt12":
+					got = coll.sqrt12(c[0])
+				"lob_solve":
+					var l: Array = fx.lob_solve(c[0], c[1], c[2], c[3], c[4])
+					got = 1 if int(l[0]) == c[5] and (c[5] != 0 or (int(l[1]) == c[6]
+						and int(l[2]) == c[7])) else 0
+					want = 1
 				"in_range":
 					got = coll.in_range(c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8])
 				"in_range_3d":
@@ -1203,6 +1213,7 @@ func _routines() -> bool:
 				if first == "":
 					first = "%s%s: godot %d, the game %d" % [name, str(c.slice(0, c.size() - 1)), got, want]
 		per[name] = "%d/%d" % [ok, (r[name] as Array).size()]
+	fx.free()
 	print("routines: %d of %d calls of the game's own routines answered alike (%s)" % [
 		n - bad, n, ", ".join(per.keys().map(func(k): return "%s %s" % [k, per[k]]))])
 	if bad > 0:
