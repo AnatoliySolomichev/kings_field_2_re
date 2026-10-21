@@ -1495,8 +1495,20 @@ python3 tools/portmap.py godot/ai.gd:213    the same, by line
 python3 tools/portmap.py game:0x8004e928    the game's side: what in the port copies
                                             it, and every line of the port citing it
 python3 tools/portmap.py --next             what to port next, and why that
-python3 tools/portmap.py --doc              regenerate PORT.md
+python3 tools/portmap.py --doc              regenerate PORT.md, record the progress
+python3 tools/portmap.py --progress         how much of the game the port has, by
+                                            executable, and what moved since the record
 ```
+
+Every form that reports (the summary, `--check`, `--doc`, `--progress`) ends
+with the `progress:` line: of each executable's own code -- everything below
+`library_start`, the lowest routine `tools/psyq.py` names by the Sony
+library's own messages -- the share in routines whose start a marker claims,
+verified and transcribed whole and partial at half. `data/progress.json` keeps
+the last figure and a line of history whenever it moves; a figure that differs
+from it is printed as `progress changed since the record of DATE: was -> now`
+until `--doc` records it. PORT.md, "How much of the game the port has", is the
+table.
 
 The two sides drifted apart in the obvious way: `godot/player.gd` opened with
 forty lines of prose saying it came from `player_vertical` at `0x8002ed60`,

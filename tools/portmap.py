@@ -3,7 +3,10 @@
 
     python3 tools/portmap.py                    the coverage, in one screen
     python3 tools/portmap.py --check            every rule below; exit 1 if not
-    python3 tools/portmap.py --doc              regenerate PORT.md
+    python3 tools/portmap.py --doc              regenerate PORT.md, and record the
+                                                progress (data/progress.json)
+    python3 tools/portmap.py --progress         how much of the game the port has,
+                                                and what changed since the record
     python3 tools/portmap.py --next             what to port next, and why that
     python3 tools/portmap.py game:0x8002ed60    the game's side: what the port
                                                 does with that routine, and every
@@ -94,6 +97,11 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 GODOT = os.path.join(ROOT, "godot")
 DB = os.path.join(ROOT, "out", "rdis")
 EXES = ("boot", "open", "game", "end")
+PROGRESS = os.path.join(ROOT, "data", "progress.json")
+# How much a routine counts when the marker on its start says this: a partial
+# one at half is a convention -- its note says what is missing, not how much --
+# and a guessed one not at all.
+WEIGHT = {"verified": 1.0, "transcribed": 1.0, "partial": 0.5}
 
 MARK = re.compile(
     r"@orig\s+(?P<exe>\w+):(?P<addr>0x[0-9a-fA-F]+)"
@@ -407,6 +415,8 @@ def check(out=sys.stdout):
     bad = problems()
     for b in bad:
         print(b, file=out)
+    for line in progress_lines():
+        print(line, file=out)
     return len(bad)
 
 
@@ -737,6 +747,23 @@ def document(path=None):
         p("the Sony library, the CD reader and the memory card. They are a")
         p("floor, not a score.")
         p()
+        p("## How much of the game the port has")
+        p()
+        p("The score: each executable's own code -- everything below the first")
+        p("routine the Sony library's own messages name (`tools/psyq.py`), since")
+        p("the game's objects are linked first -- and of it the routines whose")
+        p("start a marker claims: verified and transcribed whole, **partial at")
+        p("half** (a convention; the note says what is missing, not how much).")
+        p("In instructions:")
+        p()
+        prog = progress()
+        progress_table(prog, fh)
+        p()
+        hist = (recorded() or {}).get("history", [])
+        if hist:
+            p("Its history (`data/progress.json`, a line whenever it moves): "
+              + ", ".join(f"{h['date']} {h['all']}%" for h in hist[-12:]) + ".")
+            p()
         p("## Every function, file by file")
         p()
         for f in fs:
@@ -798,6 +825,126 @@ def document(path=None):
     return path
 
 
+# --- the progress -----------------------------------------------------------
+
+def library_start(nick):
+    """Where the Sony library begins in an executable: the lowest routine
+    tools/psyq.py names by the library's own messages. The game's objects
+    are linked first, so from there on it is the library -- the CD reader,
+    the GPU queue, the memory card, the GTE's arithmetic -- which the port
+    has Godot for. None when the messages name nothing (the boot loader)."""
+    import psyq
+    try:
+        _exe, _g, found, _clashes = psyq.named(nick)
+    except Exception:
+        return None
+    return min(found) if found else None
+
+
+def progress():
+    """How much of the game's own code has a copy in the port. Per
+    executable, the instructions below library_start, and of them those in
+    routines whose start a marker claims, by its status: verified and
+    transcribed whole, partial at half, guessed and a stretch marked inside a
+    routine not at all. {nick: {...}, "all": {...}}, each with `own`,
+    `verified`, `transcribed`, `partial`, `library` (instructions) and
+    `percent` (to a tenth)."""
+    _rows, marked = coverage()
+    rank = ("verified", "transcribed", "partial", "guessed")
+    keys = ("own", "verified", "transcribed", "partial", "library")
+    out = {}
+    tot = dict.fromkeys(keys, 0)
+    for nick in EXES:
+        db = database(nick)
+        if db is None:
+            continue
+        lib = library_start(nick)
+        r = dict.fromkeys(keys, 0)
+        done = marked.get(nick, {})
+        for f in db["functions"].values():
+            if lib is not None and f["start"] >= lib:
+                r["library"] += f["insns"]
+                continue
+            r["own"] += f["insns"]
+            sts = [m.get("status") for m in done.get(f["start"], [])]
+            st = next((k for k in rank if k in sts), None)
+            if st in WEIGHT:
+                r[st] += f["insns"]
+        out[nick] = r
+        for k in keys:
+            tot[k] += r[k]
+    out["all"] = tot
+    for r in out.values():
+        r["percent"] = round(100 * sum(r[k] * w for k, w in WEIGHT.items())
+                             / max(r["own"], 1), 1)
+    return out
+
+
+def recorded():
+    """The last progress recorded (data/progress.json), or None."""
+    try:
+        with open(PROGRESS) as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+
+
+def progress_lines(p=None, rec=None):
+    """The progress in a line, and -- when it differs from the record -- what
+    changed since, executable by executable."""
+    p = p or progress()
+    rec = recorded() if rec is None else rec
+    per = ", ".join(f"{k} {v['percent']}%" for k, v in p.items() if k != "all")
+    lines = [f"progress: {p['all']['percent']}% of the game's own code has a copy in the "
+             f"port ({per}; partial routines at half, the Sony library left out)"]
+    last = (rec or {}).get("now")
+    if last is None:
+        lines.append("  no progress recorded yet: python3 tools/portmap.py --doc records it")
+        return lines
+    moved = [k for k, v in p.items() if last.get(k) != v["percent"]]
+    if moved:
+        lines.append(f"  progress changed since the record of {rec.get('date', '?')}: "
+                     + ", ".join(f"{'all' if k == 'all' else k} {last.get(k)}% -> "
+                                 f"{p[k]['percent']}%" for k in ["all"] + [k for k in moved
+                                                                          if k != "all"]))
+    return lines
+
+
+def record_progress(p=None):
+    """Write the progress to data/progress.json -- the figure now and, when it
+    moved, one more line of its history (the date and each percentage)."""
+    import datetime
+    p = p or progress()
+    rec = recorded() or {"history": []}
+    now = {k: v["percent"] for k, v in p.items()}
+    changed = rec.get("now") != now
+    if changed:
+        rec["date"] = datetime.date.today().isoformat()
+        rec["history"] = rec.get("history", []) + [dict(date=rec["date"], **now)]
+    rec["_note"] = ("tools/portmap.py --doc: the share of each executable's own code "
+                    "(below the Sony library) with a copy in the port, partial routines "
+                    "at half; `history` gains a line whenever it moves")
+    rec["now"] = now
+    rec["instructions"] = {k: {kk: v[kk] for kk in ("own", "verified", "transcribed",
+                                                     "partial", "library")}
+                           for k, v in p.items()}
+    with open(PROGRESS, "w") as fh:
+        json.dump(rec, fh, indent=1, sort_keys=True)
+        fh.write("\n")
+    return changed
+
+
+def progress_table(p, out):
+    """The progress, a row an executable."""
+    print("| executable | own code | verified | transcribed | partial | done | "
+          "the library |", file=out)
+    print("| --- | --- | --- | --- | --- | --- | --- |", file=out)
+    for k, r in p.items():
+        print(f"| {'**all**' if k == 'all' else k} | {r['own']} | {r['verified']} | "
+              f"{r['transcribed']} | {r['partial']} | **{r['percent']}%** | {r['library']} |",
+              file=out)
+
+
 def summary(out=sys.stdout):
     fs = files()
     n = tally(fs)
@@ -816,6 +963,8 @@ def summary(out=sys.stdout):
                  "inside them" if r["parts"] else "")
               + f", {r['insns_ported']:6d} of {r['insns']:6d} "
               f"instructions ({pct}%)", file=out)
+    for line in progress_lines():
+        print(line, file=out)
     bad = problems(fs)
     for b in bad:
         print(b, file=out)
@@ -832,6 +981,17 @@ if __name__ == "__main__":
         sys.exit(1 if check() else 0)
     elif argv[0] == "--doc":
         print(f"wrote {os.path.relpath(document(), ROOT)}")
+        lines = progress_lines()
+        for line in lines:
+            print(line)
+        if record_progress():
+            print("  recorded in data/progress.json")
+            document()                      # its history line too
+    elif argv[0] == "--progress":
+        p = progress()
+        progress_table(p, sys.stdout)
+        for line in progress_lines(p):
+            print(line)
     elif argv[0] == "--next":
         nxt()
     elif argv[0].endswith(".gd") or ".gd:" in argv[0]:

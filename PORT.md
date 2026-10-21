@@ -59,6 +59,25 @@ Those percentages are of *all* the code in the image, which includes
 the Sony library, the CD reader and the memory card. They are a
 floor, not a score.
 
+## How much of the game the port has
+
+The score: each executable's own code -- everything below the first
+routine the Sony library's own messages name (`tools/psyq.py`), since
+the game's objects are linked first -- and of it the routines whose
+start a marker claims: verified and transcribed whole, **partial at
+half** (a convention; the note says what is missing, not how much).
+In instructions:
+
+| executable | own code | verified | transcribed | partial | done | the library |
+| --- | --- | --- | --- | --- | --- | --- |
+| boot | 115 | 0 | 50 | 0 | **43.5%** | 0 |
+| open | 2736 | 0 | 948 | 659 | **46.7%** | 17266 |
+| game | 77735 | 14051 | 8188 | 27665 | **46.4%** | 15777 |
+| end | 680 | 0 | 0 | 0 | **0.0%** | 9286 |
+| **all** | 81266 | 14051 | 9186 | 28324 | **46.0%** | 42329 |
+
+Its history (`data/progress.json`, a line whenever it moves): 2026-10-21 46.0%.
+
 ## Every function, file by file
 
 ### [`godot/actors.gd`](godot/actors.gd)

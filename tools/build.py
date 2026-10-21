@@ -129,7 +129,7 @@ def main(quick=False, only_check=False):
         run(["tools/objops.py", "--doc"], "OBJECTS.md", keep=["wrote"])
 
         print("\nThe port, against the game")
-        run(["tools/portmap.py", "--doc"], "PORT.md", keep=["wrote"])
+        run(["tools/portmap.py", "--doc"], "PORT.md", keep=["wrote", "progress", "recorded"])
 
     print("\nWhat has to still be true")
     steps = []
@@ -250,7 +250,7 @@ def main(quick=False, only_check=False):
         "the pseudocode, against the instructions it is read from",
         ["every block's statements", "differs"]))
     steps.append((["tools/portmap.py"], "the port, function by function, against the game",
-        ["functions in", "markers,", "every function", "problems", "godot/"]))
+        ["functions in", "markers,", "every function", "problems", "godot/", "progress"]))
     good = run_all(steps)
     if not quick and not only_check:
         print("\nThe Godot build")

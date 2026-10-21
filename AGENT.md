@@ -172,6 +172,19 @@ only called; BACKLOG.md, "The port against the game", has the ones still open.
 A marker says the port reproduces that code. It does not say it reproduces it
 correctly; that is what the recordings are for.
 
+**How much of the game the port has is counted, every run.** `portmap.py`
+(the summary, `--check`, `--doc`, `--progress`) prints a `progress:` line:
+the share of each executable's own code -- below the first routine the Sony
+library's own messages name (`tools/psyq.py`), the game's objects being linked
+first -- that sits in routines whose start a marker claims, verified and
+transcribed whole, **partial at half** (a convention: its note says what is
+missing, not how much). The last figure is in `data/progress.json`, with a
+line of history each time it moves; while the port is ahead of the record the
+same commands print `progress changed since the record: ... -> ...`, and
+`--doc` (which `build.py` runs) records it. **When a commit moves it, tell
+the user the line -- was and now -- in the report** (in Russian), and commit
+`data/progress.json` with the change.
+
 ---
 
 ## What counts as done
@@ -202,6 +215,10 @@ the equipment tables, against a RAM snapshot           3264/3264, 2112/2112, 16/
                                                        player_recalc_stats 483 of
                                                        483 values over 21 snapshots
 the conversation hooks, two readings of one table      23 of 23
+how much of the game the port has (portmap progress)   46.0% of the game's own
+                                                       code (game 46.4%, open
+                                                       46.7%, end 0%; partial at
+                                                       half, the library left out)
 the port against the game, function by function        788 of 788 placed: 462
                                                        reproduce the game, 326 the
                                                        port's own; 527 markers and
