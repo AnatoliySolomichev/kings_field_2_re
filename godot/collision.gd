@@ -271,6 +271,46 @@ func isqrt(x: int) -> int:
 	return ((v << t1) & 0xFFFFFFFF) >> 12
 
 
+# 0x8007458c, the library's SquareRoot12: isqrt's leading-zero count and
+# table with the root left in 20.12 -- a shift left by (0x13 - t2) >> 1, or
+# right (srlv) by its negation, and no >> 12. A lightning's bolt sizes its
+# sphere through it twice.
+# @orig game:0x8007458c game_sqrt12  status:verified -- through the lightning's bolts, tools/effects.py spell_hit_check against the game's own
+func sqrt12(x: int) -> int:
+	x &= 0xFFFFFFFF
+	if isqrt_table.is_empty():
+		return 0
+	var sign := (x >> 31) & 1
+	var lzc := 0
+	var bit := 31
+	while bit >= 0 and ((x >> bit) & 1) == sign:
+		lzc += 1
+		bit -= 1
+	if lzc == 0x20:
+		return 0
+	var t2 := lzc & ~1
+	var t1 := (0x13 - t2) >> 1
+	var t3 := t2 - 0x18
+	var t4: int
+	if t3 >= 0:
+		t4 = (x << t3) & 0xFFFFFFFF
+		if t4 & 0x80000000:
+			t4 -= 0x100000000
+	else:
+		t4 = (x - 0x100000000 if sign else x) >> (0x18 - t2)
+	var idx := t4 - 0x40
+	var v := 0
+	if idx >= 0 and idx < isqrt_table.size():
+		v = isqrt_table[idx]
+	elif idx >= -320 and idx < -128 and isqrt_below.size() == 192:
+		v = isqrt_below[idx + 320]
+	else:
+		return 0
+	if t1 >= 0:
+		return (v << t1) & 0xFFFFFFFF
+	return (v & 0xFFFFFFFF) >> -t1
+
+
 # @orig game:0x800328c0 tile_op_20_wall  status:verified -- opcode 0x20's face test, which 0x21 and 0x22 make on two faces; 1427 of 1430, 83 of 83 and 143 of 143 logged calls on cells carrying them
 func _plane(f: int, tx: int, tz: int, op0: int, a3: int, t6: int) -> bool:
 	match f:

@@ -15,6 +15,11 @@
   "kind": "code",
   "evidence": "(most, accel, turn, radius, height, near, near_accel, cone): a player's effect (+0 & 0x40) asks sub_8004d3c4 along its own angles (0x5dc0, the cones, no noise) for a creature and turns its pitch and yaw towards that creature's middle by `turn` each (angle_approach); any other effect asks sub_8002b80c after the player. Then effect_steer along direction_from_angles of its angles -- `accel`, or `near_accel` once the distance is `near` or less -- at most `most`; its answer. Flash's and triple fang's second's homing (0x80059c60, the four numbers out of the slot's +0x44..+0x4a) and the second moonlight sword's mark (0x800584d0); held to the game's own by tools/effects.py spell_hit_check"
  },
+ "0x8007458c": {
+  "name": "game_sqrt12",
+  "kind": "code",
+  "evidence": "the library's SquareRoot12: game_isqrt's (0x80074508) GTE leading-zero count and isqrt_table, with the shift (0x13 - t2) >> 1 -- left, or srlv right by its negation -- and no >> 12, so the root of a 20.12 value in 20.12. A lightning's bolt (effect_tick 0x80059540) takes its sphere's size as game_sqrt12(game_sqrt12(h * (h * h >> 12))) >> 3; held to the game's own by tools/effects.py spell_hit_check (movement.sqrt12)"
+ },
  "0x8009c800": {
   "name": "text_end",
   "kind": "data",

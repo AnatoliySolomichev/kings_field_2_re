@@ -371,6 +371,43 @@ def game_isqrt(x):
     return ((v << t1) & 0xFFFFFFFF) >> 12
 
 
+def sqrt12(x):
+    """`0x8007458c`, the library's SquareRoot12: game_isqrt's leading-zero
+    count and table, the root left in 20.12 -- a shift left by (0x13 - t2)
+    >> 1, or (srlv) right by its negation -- and no >> 12. A lightning's bolt
+    takes its sphere's size through it twice."""
+    global _IS, _IB
+    if _IS is None:
+        _IS = _isqrt_table()
+        _IB = _isqrt_below()
+    x &= 0xFFFFFFFF
+    if x & 0x80000000:
+        lzc = 32 - ((~x) & 0xFFFFFFFF).bit_length()
+    else:
+        lzc = 32 - x.bit_length()
+    if lzc == 0x20:
+        return 0
+    t2 = lzc & ~1
+    t1 = (0x13 - t2) >> 1
+    t3 = t2 - 0x18
+    sx = x - 0x100000000 if x & 0x80000000 else x
+    if t3 >= 0:
+        t4 = (x << t3) & 0xFFFFFFFF
+        t4 = t4 - 0x100000000 if t4 & 0x80000000 else t4
+    else:
+        t4 = sx >> (0x18 - t2)
+    idx = t4 - 0x40
+    if 0 <= idx < 192:
+        v = _IS[idx]
+    elif -320 <= idx < -128:
+        v = _IB[idx + 320]
+    else:
+        return 0
+    if t1 >= 0:
+        return (v << t1) & 0xFFFFFFFF
+    return (v & 0xFFFFFFFF) >> -t1
+
+
 def step_distances(strafe_speed, forward_speed):
     """`0x8002fc94`: the two distances, from the two speeds.
 

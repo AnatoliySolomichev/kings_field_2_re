@@ -7274,6 +7274,56 @@ has it (`effects.gd`; 558 of 558 machine runs in the self-test now, the export's
 stand-in world letting flame fly long enough to look, shoot and breathe),
 and `sight` (`player.gd`) takes the noise now.
 
+### Lightning
+
+`player_action`'s arm for lightning bolt (spell `0x13`) sends kind `0x71`
+level -- the velocity's y zeroed -- at `0x258`, and hands it how many frames
+to fly level: the creature in sight's distance over 600, less 8, at least 2,
+or 10 with none. The creatures' `0x7d` and `0x81` take the same tick.
+
+```
+lightning (0x71)  particle 0xa, 0x800 across (0x7d, 0x81: 0x1000), +0xe 0x40
+                  (0, 0xc0); life 0x64, +0x44 the level frames; sound 0x2e.
+  +7 0, level     effect_move at 0x32, the height's top bit, turning 0x12c a
+                  frame; +0x44 counted down, at 0 it falls (+7 1). The tiles
+                  stop it: the move taken back, the level speed zeroed, +7 1.
+  +7 1, falling   0x46 a frame faster, the level speed by 0xbb8/0x1000 a frame
+                  (fixed_madd). The floor under it is the nearer (higher) of
+                  collision_surface and surface_plane_18 as the last query
+                  left them; with it 0x1b58 or more below -- over a drop -- it
+                  strikes at once, and else when the tiles stop it (the move
+                  taken back, collide_surface asked at 0x32).
+  the strike      +7 2; at (x, the floor, z): a bolt (0x72; 0x7e, 0x80) with
+                  +0 | 3, as high as it fell, and an earth wave (0x16, earth
+                  wave's own arms) with its +0, half that far at a sixteenth
+                  of it a frame, scale 0x800 -- both handed effect_tick's
+                  sp+0x160 for a velocity, which the puffs below leave.
+  +7 2            shrinking 0x80 a frame, gone at nothing.
+  every frame     of 0 and 1, four puffs where it is, each axis (rand >> 7)
+                  - 0x80 (0x800, -0x80, 5, 0xc, 0, 1, 1).
+the bolt (0x72)   particle 0xb at 0x1000, its height +0x32, twelve frames.
+                  Its first three (+7 0..2) a sphere (0x13; 0x29, 0x2d) with
+                  +0 | 3, its limit a quarter of game_sqrt12(game_sqrt12(h *
+                  (h * h >> 12))) >> 3 -- the height to the three quarters --
+                  and a velocity from sp+0x168. Flickering (+4 0x80, 0x81) and,
+                  while +7 is under 9, a flash of light: sub_8003456c((0xc8,
+                  0xb4, 0xa0), 0, 0x7d00, k) when the player is nearer than
+                  0x7d00, k = (sin(+7 << 8) / 2 + 0x400) * (0x7d00 - the
+                  distance) / 0x7d00.
+the sphere (0x13) model 0x15 from nothing growing 0x80 a frame, a shell 3.5
+                  times it (effect_grow 0x3800, 0x400, 0x8000), a puff rising
+                  from it each frame and a turn of 0x40.
+```
+
+`0x8007458c` is the library's **SquareRoot12** (`game_sqrt12`): the same
+leading-zero count and table as `game_isqrt`, with the root left in 20.12.
+
+Against the game's own end to end (`spell_hit_check`), at the creatures and
+anywhere into the walls, and the creatures' two kinds the same way: 126 of
+126 runs each. The water's side of the floor's choice was never met there:
+no lightning in the snapshots' places fell over water. In the port
+(`effects.gd`), the self-test holding it to the Python.
+
 ### The player's death
 
 `apply_damage` that leaves no HP calls `player_throw` (`0x80030a6c`) with the

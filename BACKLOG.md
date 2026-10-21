@@ -854,7 +854,8 @@ each one is also in its function's marker, as `partial` and what differs:
   0x5a, and its lead's tile test), orladin (its bursts, 0x58, and rays,
   0x5b), tornado, fire wall, fire storm (homing: `effect_home`,
   `effect_steer`) and flame (its head's vertex, its fire balls, its two
-  bursts), flash (homing: `effect_seek`), with `effect_strike`'s creature
+  bursts), flash (homing: `effect_seek`), lightning (its bolts and their
+  spheres, and the earth wave it leaves), with `effect_strike`'s creature
   half (`0x8004ceac`); and the weapons' charged swing -- the window, the
   shots, `weapon_may_cast` and
   `spell_begin` -- the combination and the second swing it starts, with
@@ -863,10 +864,10 @@ each one is also in its function's marker, as `partial` and what differs:
   45 unlocking their spells in `equip_weapon`. The bows' swing (weapons
   `0x1b`, `0x1c`) is still not read.
   Not yet:
-  the other attacking kinds' effects (lightning's 0x71 -- long, it follows
-  the ground with collide_surface -- freeze and thedek, 0x10 and 0x05, each
-  a five-arm machine of its own), each of which spends its MP and spawns
-  nothing that stays; tornado's and fire wall's strike points, stack
+  the other attacking kinds' effects -- freeze and thedek, 0x10 and 0x05,
+  each a five-arm machine of its own drawing a trail through four buffers
+  of 24 at 0x801e7594 (gp+0x124 the next) -- each of which spends its MP
+  and spawns nothing that stays (lightning is in: FORMATS.md, "Lightning"); tornado's and fire wall's strike points, stack
   leftovers the first reader of a frame takes from the rest of the game's
   frame (FORMATS.md, "Tornado", "Fire wall"), and flash's second burst,
   whose life is one (FORMATS.md, "The weapons' spells") -- the port keeps

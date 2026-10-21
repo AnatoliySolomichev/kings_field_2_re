@@ -92,6 +92,7 @@ const SLAYER := 0x7B
 const SPHERE2 := 0x44
 const SPHERE := 0x45
 const SPARK := 0x03
+const LIGHTNING := 0x71            # the creatures' 0x7d and 0x81; bolts 0x72, 0x7e, 0x80; spheres 0x13, 0x29, 0x2d
 const BANK_KEY := 0x20000          # KFAnim's key for model_table[index] of the resident bank
 const EMPTY := [0x08, 0x0A, 0x0E, 0x18, 0x1D, 0x2B, 0x39, 0x3B, 0x3D, 0x3F, 0x41, 0x43, 0x49,
 	0x4A, 0x4D, 0x4E, 0x4F, 0x54, 0x57, 0x60, 0x61, 0x62, 0x63, 0x68, 0x69, 0x6A, 0x6B, 0x6D,
@@ -118,6 +119,7 @@ var collide_actor := -1             # 0x801e648c: the creature the last query me
 var collide_mask := 0               # 0x801e6488: what the last query answered
 var tick_frame := PackedByteArray()  # effect_tick's stack frame (0x2b8): what one arm leaves the next
 var surface18 := 100000             # 0x801e647c: the water the last query found
+var collision_surface := 100000     # 0x801e6474: the nearest surface the last tile query found
 var acc := 0.0
 var player: Node3D
 var coll: KFCollision
@@ -677,6 +679,24 @@ func spawn(a0: int, a1: int, kind: int, point: PackedByteArray, args: Array,
 		SLAYER:                             # 0x80055718: not drawn
 			w8(s + 8, 0)
 			w16(s + 0x10, 0x14)             # with its sound (0x65), not here
+		LIGHTNING, 0x7D, 0x81:              # 0x80055290, 0x80055258, 0x80055274
+			particle(s, 0xA, 0x800 if kind == LIGHTNING else 0x1000, 5)
+			w16(s + 0xE, 0x40 if kind == LIGHTNING else (0 if kind == 0x7D else 0xC0))
+			w16(s + 0x10, 0x64)
+			w16(s + 0x44, int(args[1]))     # the frames it flies level; its sound (0x2e), not here
+		0x72, 0x7E, 0x80:                   # 0x800552d0, a bolt
+			particle(s, 0xB, 0x1000, 5)
+			w16(s + 0xE, 0x40)
+			w16(s + 0x10, 0xC)
+			w16(s + 0x32, int(args[1]))     # as high as the lightning fell
+		0x13, 0x29, 0x2D:                   # 0x80055328, 0x80055300, 0x80055314: a bolt's sphere
+			w8(s + 2, 0x15)
+			w8(s + 3, 0x15)
+			w16(s + 0xE, 0x40 if kind == 0x13 else (0xC0 if kind == 0x29 else 0))
+			_from_nothing(s, u16(s + 0xE))
+			for o in [0x2C, 0x2A, 0x28]:
+				w16(s + o, 0)
+			w16(s + 0x44, _trunc(int(args[1]), 4))   # and its sound (0x26), not here
 		TRAIL:                              # 0x80055738
 			particle(s, int(args[4]), int(args[1]), int(args[6]) | 4)
 			w16(s + 0x44, int(args[2]))
@@ -925,6 +945,12 @@ func tick(s: int) -> void:
 			_tick_slayer2(s)
 		SLAYER:
 			_tick_slayer(s)
+		LIGHTNING, 0x7D, 0x81:
+			_tick_lightning(s)
+		0x72, 0x7E, 0x80:
+			_tick_bolt_of(s)
+		0x13, 0x29, 0x2D:
+			_tick_bolt_sphere(s)
 
 
 # The fire ball (0x80056910): in flight (+7 0) effect_move at radius 0xb4 and
@@ -1483,6 +1509,142 @@ func _tick_slayer(s: int) -> void:
 	var f := u8(s)
 	spawn(0xA if f & 0x40 else u8(s + 6), f, SPHERE, m.slice(s + 0x18, s + 0x28), [null, 0x1A4],
 		true)
+
+
+# --- lightning ------------------------------------------------------------
+
+# Lightning (0x8005917c; the creatures' 0x7d and 0x81 the same), by +7. 0:
+# level, effect_move at 0x32 (the height's top bit, turning 0x12c a frame),
+# counting +0x44 down; the tiles stop it -- the move taken back, the level
+# speed zeroed -- and it falls (+7 1). 1: falling 0x46 a frame faster, the
+# level speed to 0xbb8/0x1000 each frame; with the floor under it -- the
+# nearer of the surface and the water the last query found -- 0x1b58 or more
+# below, over a drop, or once the tiles stop it (the move taken back,
+# collide_surface asked), it strikes: +7 2, a bolt (0x72; 0x7e, 0x80) standing on the floor as high
+# as it fell, and an earth wave (0x16) there, half that far at a sixteenth a
+# frame -- their velocity the last puff's. 2: shrinking 0x80 a frame, gone at
+# nothing. While 0 or 1, four puffs a frame where it is.
+# @orig game:0x8005917c effect_tick+0x28c0  status:verified -- tools/effects.py spell_hit_check against the game's own end to end, the player's and the creatures' kinds; the self-test this to it; the sounds not here
+func _tick_lightning(s: int) -> void:
+	var kind := u8(s + 1)
+	var ph := u8(s + 7)
+	if ph == 2:
+		var v := (u16(s + 0x30) - 0x80) & 0xFFFF
+		w16(s + 0x30, v)
+		w16(s + 0x32, v)
+		if s16v(v) <= 0:
+			w8(s, 0xFF)
+		return
+	var hit := move(0x32, 0x80000000, -0x12C)
+	var drop := 0
+	var strike := false
+	if hit != 0:
+		if hit & 0xF:
+			undo(s)
+			if ph == 0:
+				w16(s + 0x3C, 0)
+				w16(s + 0x38, 0)
+			else:
+				out_words([0])
+				world.surface(s32(s + 0x18), s32(s + 0x1C), s32(s + 0x20), 0x32, 0)
+				drop = _floor_under(s)
+				strike = true
+		if not strike:
+			w8(s + 7, 1)
+	if not strike:
+		if ph == 1:
+			w16(s + 0x3A, u16(s + 0x3A) - 0x46)
+			w16(s + 0x38, KFCreatureAI.lerp_fixed(0, s16(s + 0x38), 0xBB8))
+			w16(s + 0x3C, KFCreatureAI.lerp_fixed(0, s16(s + 0x3C), 0xBB8))
+			drop = _floor_under(s)
+			strike = drop >= 0x1B58
+		elif ph == 0:
+			var c := u16(s + 0x44)
+			w16(s + 0x44, c - 1)
+			if s16v(c) <= 0:
+				w8(s + 7, 1)
+	if strike:
+		w8(s + 7, 2)
+		var point := PackedByteArray()
+		point.resize(16)
+		point.encode_s32(0, s32(s + 0x18))
+		point.encode_s32(4, s32v(drop + s32(s + 0x1C)))
+		point.encode_s32(8, s32(s + 0x20))
+		point.encode_s32(12, tick_frame.decode_s32(0x15C))
+		for i in 16:
+			tick_frame[0x150 + i] = point[i]
+		var vel := tick_frame.slice(0x160, 0x168)
+		var bolt := 0x72
+		var last := 1
+		if kind == 0x7D:
+			bolt = 0x7E
+			last = 3
+		elif kind == 0x81:
+			bolt = 0x80
+			last = 0
+		spawn(0xA, u8(s) | 3, bolt, point, [vel, drop], true)
+		spawn(0xA, u8(s), 0x16, point, [vel, drop >> 1, drop >> 4, 0x800, last], true)   # and the sound (0x27), not here
+	for _k in 4:
+		for i in 3:
+			tick_frame.encode_s16(0x160 + 2 * i, (int(world.rand()) >> 7) - 0x80)
+		spawn(0xA, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [tick_frame.slice(0x160, 0x168), 0x800,
+			-0x80, 5, 0xC, 0, 1, 1], true)
+
+
+# The nearer (higher) of collision_surface and surface_plane_18, as the last
+# query left them, less the point's height (0x80059210).
+# @orig game:0x80059210 effect_tick+0x2954  status:verified -- through lightning; the water's side of the choice never met in the check's runs
+func _floor_under(s: int) -> int:
+	var surf := int(world.field("cs"))
+	var water := int(world.field("s18"))
+	var f := surf if surf < water else water
+	tick_frame.encode_s32(0x154, f)
+	return s32v(f - s32(s + 0x1C))
+
+
+# A lightning's bolt (0x80059518; 0x7e, 0x80): its first three frames (+7 0..2)
+# a sphere (0x13; 0x29, 0x2d; +0 | 3) where it stands, as large as the cube of
+# its height under two roots, an eighth (game_sqrt12 twice) -- its velocity the
+# stack's. Flickering, and while +7 is under 9 a flash of light (0xc8, 0xb4,
+# 0xa0) out to 0x7d00 when the player is nearer than that: (sin(+7 << 8) / 2
+# + 0x400) times how much nearer, over 0x7d00. +7 counts.
+# @orig game:0x80059518 effect_tick+0x2c5c  status:verified -- tools/effects.py spell_hit_check against the game's own end to end; the self-test this to it
+func _tick_bolt_of(s: int) -> void:
+	var kind := u8(s + 1)
+	var ph := u8(s + 7)
+	if ph < 3:
+		var h := s16(s + 0x32)
+		var a := s32v(h * (s32v(h * h) >> 12))
+		var r := s32v(coll.sqrt12(coll.sqrt12(a))) >> 3
+		var child := 0x13 if kind == 0x72 else (0x29 if kind == 0x7E else 0x2D)
+		spawn(0xA, u8(s) | 3, child, m.slice(s + 0x18, s + 0x28), [tick_frame.slice(0x168, 0x170), r],
+			true)
+	w8(s + 4, (ph & 1) - 0x80)
+	if u8(s + 7) < 9:
+		var d := vec_length_3d(s32v(int(world.field("px")) - s32(s + 0x18)),
+			s32v(int(world.field("py")) - s32(s + 0x1C)), s32v(int(world.field("pz")) - s32(s + 0x20)))
+		if d < 0x7D01:
+			var v := s32v(((coll.game_sin(u8(s + 7) << 8) >> 1) + 0x400) * (0x7D00 - d))
+			var k := s16v(_trunc(v, 0x7D00))
+			out_words([0x7D00, k])
+			world.lighting([0xC8, 0xB4, 0xA0], 0, 0x7D00, k)
+	w8(s + 7, u8(s + 7) + 1)
+
+
+# A bolt's sphere (0x80059688; 0x29, 0x2d): growing 0x80 a frame to +0x44,
+# striking a shell 3.5 times it (effect_grow 0x3800, 0x400, 0x8000); a puff
+# rising from it, each axis rand >> 6 less 0x100 across, -(rand >> 7) - 0x80
+# up (0x2000, -0x80, 0xf, 0xc, 0xa, 1, 1); turning 0x40 a frame.
+# @orig game:0x80059688 effect_tick+0x2dcc  status:verified -- through lightning, tools/effects.py spell_hit_check
+func _tick_bolt_sphere(s: int) -> void:
+	out_words([0x8000])
+	grow(0x3800, s16(s + 0x44), 0x80, 0x400, 0x8000)
+	tick_frame.encode_s16(0x168, (int(world.rand()) >> 6) - 0x100)
+	tick_frame.encode_s16(0x16C, (int(world.rand()) >> 6) - 0x100)
+	tick_frame.encode_s16(0x16A, -(int(world.rand()) >> 7) - 0x80)
+	spawn(0xA, 0, TRAIL, m.slice(s + 0x18, s + 0x28), [tick_frame.slice(0x168, 0x170), 0x2000,
+		-0x80, 0xF, 0xC, 0xA, 1, 1], true)
+	w16(s + 0x2A, u16(s + 0x2A) + 0x40)
 
 
 # Haze (0x80058164): each thing it meets it strikes once (+0x44 the latch,
@@ -2199,11 +2361,13 @@ func collide_wrapper(x: int, y: int, z: int, r: int, h: int) -> int:
 	coll.radius = r
 	coll.body = h & 0x0FFFFFFF
 	coll.flags = h & 0xF0000000
+	coll.surfaces.clear()
 	var q := coll.query(x, y, z)
 	coll.flags = 0
 	coll.radius = keep_r
 	coll.body = keep_b
 	surface18 = int(coll.surfaces.get(0x18, 100000))
+	collision_surface = int(q["floor"])
 	return int(q["mask"])
 
 
@@ -2230,6 +2394,7 @@ func surface_ceiling(x: int, y: int, z: int, r: int, h: int) -> Array:
 	coll.radius = keep_r
 	coll.body = keep_b
 	surface18 = int(coll.surfaces.get(0x18, 100000))
+	collision_surface = int(q["floor"])
 	return [int(q["floor"]), int(q["ceil"])]
 
 
@@ -2512,6 +2677,7 @@ func field(name: String) -> int:
 		"py": return int(player.get("gy"))
 		"pz": return int(player.get("gz"))
 		"s18": return surface18
+		"cs": return collision_surface
 		"vp": return int(player.call("view_pitch_now")) if player.has_method("view_pitch_now") else 0
 		"pw": return 0                  # 0x801b25fc: not kept by the port
 		"vy": return (int(player.get("facing")) + int(player.get("tilt")[1])) & 0xFFFF
@@ -2745,11 +2911,13 @@ func collide_query(x: int, y: int, z: int, r: int, h: int, flags: int) -> int:
 		coll.radius = r
 		coll.body = h & 0x0FFFFFFF          # tile_collision's mask: the top bits are flags
 		coll.flags = h & 0xF0000000
+		coll.surfaces.clear()
 		var q := coll.query(x, y, z)
 		coll.flags = 0
 		coll.radius = keep_r
 		coll.body = keep_b
 		surface18 = int(coll.surfaces.get(0x18, 100000))   # seeded 100000 (0x8003265c)
+		collision_surface = int(q["floor"])
 		mask = int(q["mask"])
 		var at := int(q["at"])
 		layer_offset = 5 if at >= 0 and at % 6 != 0 else 0
