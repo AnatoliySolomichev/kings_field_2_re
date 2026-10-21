@@ -6626,6 +6626,60 @@ speed. With more than one pass it leads the target by its velocity
 root: `tools/movement.py vlen` takes `math.isqrt`, and the game's comes back
 one short on a square.
 
+### What a creature's volley throws
+
+`actor_animation_effects` (`0x8004f414`) is called by a volley (opcode 0x19)
+for each entry its list fires, with the record's `+0xc` as the arm and its
+`+0x18` as the percentage. The point first: a plain entry is a vertex of the
+creature's animated model, an `0x8002 x y z` entry that offset turned by the
+creature's `+0x40` angles, an `0x8004 v1 v2 t` entry a point along a limb
+with the aim pulled towards the player by `t` (not read further). Then
+the arm, which is almost always the effect's own kind: it aims at the
+player's eye with `effect_aim` -- one pass, the spread `0x400`, the pitch
+pulled towards the creature's own -- and spawns with `a1` `0x83` (strikes the
+player, collides with the tiles, the objects and the player) or `0x81`:
+
+```
+arm                    speed  a1    spawns                     after
+0x00 0x56 0x66         0x1f4  0x83  its kind                   +0xb 3; sound 0x31
+0x26 (spores), 0x27    0      0x81  its kind                   +0xb 0; 0x27 sets the
+                                                               creature's 0x100 while the
+                                                               player is paralysed
+0x0f (tornado)         0x200  0x81  two, numbered, no view     the pitch 0
+0x13 0x29/0x7d 0x2d/0x81 0x258 0x83 0x71, 0x7d, 0x81 with      level frames: the
+                                    (distance - 2000) / 600    distance off the point
+0x0d                   0x2a8  0x83  wind cutter
+0x0b (haze)            0xc8   0x83  four, numbered 0..3
+0x32                   0xc8   0x83  four
+0x02 0x57              0x190  0x83  fire storm at the player   (0xfe, 2)
+0x07                   --     0x83  earth wave (0x1000, 0x100, 0x1000, 1), its velocity
+                                    the routine's frame's -- the last aim's
+0x28                   --     0x83  along the creature's own angles at 0x226, +0xb 3
+0x42                   --     0x83  Seath's bolt at 0x400 along the bearing to the eye,
+                                    one step out
+0x12 0x14              --     0x83  flash at the eye, 0xc8 (0x12) or 0x14 a frame, the
+                                    creature's angles and the five numbers
+0x2a, 0x1f..0x25       0x258, 0x12c 0x83 their kind, the creature's angles
+0x2c 0x2f 0x30 0x31 0x35 0x06 0x33 0x34 0x64 (0x2e)   their kind, at 0x1a4, 0x1a4,
+                                    0x1e0, 0x258, 0x12c (0x81), 0x12c x 3, 0x3c0
+0x44 0x45              0x226, 0x2bc 0x83 dark slayer's 0x7c and 0x7b
+0x50 0x53              lobbed: sub_80017210 solves a fall onto the player in six
+                       passes, life 0x32, +0x44 the point's height (not read further)
+0x55, 0x76             0x55 with the list's next word; 0x76 makes a creature of the
+                       kind the list names (sub_8004b524, actor_wake) -- not read further
+```
+
+So a creature's fire ball, wind cutter, haze, lightning, flash, fire storm
+or tornado is the player's own effect with the player as its target. The
+census over all 28 levels: 37 arms in use, the bolts' 0x1f the commonest (28
+kinds over 17 levels). Held to the game's own (`tools/effects.py
+volley_check`, the effects' spawning arms the game's against the machine's,
+every slot and creature): 483 of 483 volleys of the arms whose kinds the
+machine has. The kinds it has not -- 0x20, 0x21, 0x25, 0x27, 0x28, 0x2a,
+0x2c, 0x2f..0x35, 0x56, 0x64, 0x66 -- and the arms 0x50, 0x53, 0x55, 0x76
+are what is left; in the port (`effects.gd volley_fire`, through
+`actors.gd`'s fire) they note themselves and throw nothing.
+
 ### Shape 255 is the void
 
 The grid's empty cells carry shape 255 in both layers, and every tool here,

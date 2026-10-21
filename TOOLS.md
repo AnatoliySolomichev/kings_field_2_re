@@ -590,6 +590,11 @@ splash 137, a depth of 0x1f0 167).
 and leaves the planes in RAM: **210 of 210** runs, 2512 frames, 34 hits on
 a creature.
 
+`volley_check` runs `actor_animation_effects` itself over every snapshot's
+creatures -- every arm from an `0x8002` entry at the player -- against
+`volley_point` and `volley_fire`: 483 of 483 volleys alike, every slot and
+creature, and it names the arms and kinds the machine has not.
+
 An arm of `effect_tick` hands its calls their arguments on its own frame, and
 one of `effect_spawn`'s arms -- flash's second burst -- reads five more than
 it is handed; so the machine lays the words each call `effect_tick` makes

@@ -645,6 +645,46 @@ def export(out_dir):
                                         [{"b": v.hex()} if isinstance(v, bytes) else v for v in args]]
                                        for a0, a1, kd, pt, args in sps],
                             "frames": frames})
+    # and what a creature's volley throws: an arm of actor_animation_effects
+    # fired at the player from a point about a creature, the slots after
+    volleys = []
+    vrng = random.Random(0x70114)
+    for path in memcard._snapshots()[:6]:
+        base = bytearray(open(path, "rb").read())
+        o = SLOTS & MASK
+        base[o:o + STRIDE * COUNT] = bytes(STRIDE * COUNT)
+        for k in range(COUNT):
+            base[o + STRIDE * k] = 0xFF
+        awake = [k for k in range(ACTOR_N) if base[(ACTORS + ACTOR_STRIDE * k + 9) & MASK] == 1]
+        if not awake:
+            continue
+        for arm in VOLLEY_ARMS:
+            m = bytearray(base)
+            vy = vrng.randrange(0x1000)
+            struct.pack_into("<4H", m, VIEW_ANGLES & MASK, 0, vy, 0, 0)
+            a = ACTORS + ACTOR_STRIDE * vrng.choice(awake)
+            point = volley_point(m, a, vrng.randrange(-0x200, 0x200), vrng.randrange(-0xA00, 0),
+                                 vrng.randrange(-0x300, 0x300))
+            pct = vrng.randrange(1, 100)
+            vl = levelstate.Lcg()
+            vdrawn = []
+
+            def vrnd(vl=vl, vdrawn=vdrawn):
+                v = vl()
+                vdrawn.append(v)
+                return v
+            mach = Machine(m, StandIn(7, m), vrnd)
+            try:
+                volley_fire(mach, a, arm, pct, point)
+            except NotImplementedError:
+                continue
+            px, py, pz = struct.unpack_from("<3i", m, PLAYER_POS & MASK)
+            volleys.append({"label": f"{os.path.basename(path)[:-4]} arm {arm:#x}", "arm": arm,
+                            "pct": pct, "point": point,
+                            "angles": list(struct.unpack_from("<3h", m, (a + 0x40) & MASK)),
+                            "fields": {"px": px, "py": py, "pz": pz, "vy": vy},
+                            "rand": vdrawn,
+                            "md5": hashlib.md5(_slots(m).hex().encode()).hexdigest()})
     # and effect_aim: a creature's angles, the target, the speed, the point and
     # the spread, and the velocity and yaw aim() gives -- the game's own, 600
     # of 600 (aim_check)
@@ -662,7 +702,8 @@ def export(out_dir):
     with open(path, "w") as fh:
         json.dump({"_note": "the effect machine of tools/effects.py over snapshots, the "
                             "world's answers in order; and effect_aim's cases",
-                   "runs": runs, "aims": aims, "heals": heals, "fires": fires},
+                   "runs": runs, "aims": aims, "heals": heals, "fires": fires,
+                   "volleys": volleys},
                   fh, separators=(",", ":"))
     return path
 
@@ -3396,6 +3437,128 @@ def aim(actor_angles, target, speed, point, pitch=-1, spread=0x400):
     return [_s16_((c * sp) >> 12) for c in v], ang[1]
 
 
+# --- what a creature's volley throws -------------------------------------------
+
+# actor_animation_effects (0x8004f414), its arms after the point: by the
+# record's +0xc -- the arm, the effect's kind but for a few -- (the speed
+# effect_aim is handed, effect_spawn's a1, the kind or None for the arm's
+# own, what follows the velocity, the byte written at +0xb of the slot it
+# gets or None). "angles": a pointer to the creature's +0x40.
+VOLLEY = {
+    0x00: (0x1F4, 0x83, None, [], 3),               # 0x8004f5c0, and its sound 0x31
+    0x56: (0x1F4, 0x83, None, [], 3),
+    0x66: (0x1F4, 0x83, None, [], 3),
+    0x26: (0, 0x81, None, [], 0),                   # 0x8004f6c4, the spores
+    0x0D: (0x2A8, 0x83, None, [], None),            # 0x8004f7e0
+    0x2A: (0x258, 0x83, None, ["angles"], None),    # 0x8004f8c4
+    0x2C: (0x1A4, 0x83, None, [], None),            # 0x8004f8d4
+    0x35: (0x12C, 0x81, None, [], None),            # 0x8004f8e4
+    0x31: (0x258, 0x83, None, [], None),            # 0x8004f924
+    0x44: (0x226, 0x83, SLAYER2, [], None),         # 0x8004f934: dark slayer's second
+    0x45: (0x2BC, 0x83, SLAYER, [], None),          # 0x8004f978: and its first
+    0x02: (0x190, 0x83, None, [0xFE, 2], None),     # 0x8004fa60: fire storm, at the player
+    0x57: (0x190, 0x83, None, [0xFE, 2], None),
+    0x2E: (0x3C0, 0x83, 0x64, [], None),            # 0x8004fac4
+    0x64: (0x3C0, 0x83, None, [], None),            # 0x8004fac8
+    0x2F: (0x1A4, 0x83, None, [], None),            # 0x8004fad8
+    0x30: (0x1E0, 0x83, None, [], None),            # 0x8004fae8
+    0x06: (0x12C, 0x83, None, [], None),            # 0x8004fbc4
+    0x33: (0x12C, 0x83, None, [], None),
+    0x34: (0x12C, 0x83, None, [], None),
+}
+VOLLEY.update({k: (0x12C, 0x83, None, ["angles"], None) for k in range(0x1F, 0x26)})  # 0x8004fc18
+VOLLEY_POINT = 0x801FF0E0           # where the check lays the point it hands the machine
+
+
+def volley_point(m, actor, ox, oy, oz):
+    """actor_animation_effects' point for an 0x8002 entry (a2 -1): the
+    offset (a3, sp+0x10, sp+0x14) turned by the creature's +0x40 angles
+    (vec_rotate), from its place."""
+    import weapon
+    a = actor & MASK
+    w = weapon.vec_rotate(struct.unpack_from("<3h", m, a + 0x40), (ox, oy, oz))
+    return [_s32(struct.unpack_from("<i", m, a + 0x2C + 4 * i)[0] + w[i]) for i in range(3)]
+
+
+def volley_fire(mach, actor, arm, pct, point, w4=0):
+    """actor_animation_effects' arms (0x8004f5b8 on) over the machine, from
+    `point` (x y z; its fourth word `w4`, the routine's frame's): each aims
+    at the player's eye (effect_aim, one pass, the spread 0x400) and spawns.
+    The routine's sp+0x70 is kept as mach.volley_left: each aim's velocity
+    lands there, and earth wave's arm hands on what it holds without setting
+    it. Arms it does not have raise NotImplementedError."""
+    m = mach.m
+    a = actor & MASK
+    angles = (struct.unpack_from("<h", m, a + 0x40)[0], struct.unpack_from("<h", m, a + 0x42)[0])
+    player = struct.unpack_from("<3i", m, PLAYER_POS & MASK)
+    pt = struct.pack("<4i", *point, w4)
+    left = getattr(mach, "volley_left", bytes(8))
+
+    def aim_at(speed, pitch=-1):
+        v, _y = aim(angles, player, speed, point, pitch)
+        mach.volley_left = struct.pack("<3h", *v) + left[6:8]
+        return mach.volley_left
+
+    def spawn(a1, kind, args):
+        return mach.spawn(pct & 0xFF, a1, kind, pt, args)
+
+    if arm in VOLLEY:
+        speed, a1, kind, more, b = VOLLEY[arm]
+        vel = aim_at(speed)
+        s = spawn(a1, arm if kind is None else kind,
+                  [vel] + [bytes(m[a + 0x40:a + 0x48]) if v == "angles" else v for v in more])
+        if s and b is not None:
+            mach.w8(s + 0xB, b)
+        return
+    if arm == 0x27:                                 # 0x8004f6a0
+        if struct.unpack_from("<h", m, PARALYSIS & MASK)[0]:
+            struct.pack_into("<I", m, a + 0x28, struct.unpack_from("<I", m, a + 0x28)[0] | 0x100)
+        s = spawn(0x81, arm, [aim_at(0)])
+        if s:
+            mach.w8(s + 0xB, 0)
+    elif arm == TORNADO:                            # 0x8004f620: two, the view's pointer 0
+        vel = aim_at(0x200, 0)
+        spawn(0x81, arm, [vel, None, 0])
+        spawn(0x81, arm, [vel, None, 1])
+    elif arm in (0x13, 0x29, 0x7D, 0x2D, 0x81):     # 0x8004f724: lightning, its level frames
+        kind = {0x13: LIGHTNING, 0x29: 0x7D, 0x7D: 0x7D, 0x2D: 0x81, 0x81: 0x81}[arm]
+        vel = aim_at(0x258)
+        d = vec_length_3d(*[_s32(point[i] - player[i]) for i in range(3)])
+        n = int(_s32(d - 0x7D0) / 600)
+        spawn(0x83, kind, [vel, max(n, 0)])
+    elif arm == HAZE:                               # 0x8004f7f0: four, numbered
+        for i in range(4):
+            spawn(0x83, arm, [aim_at(0xC8), i])
+    elif arm == 0x32:                               # 0x8004f85c: four
+        for _i in range(4):
+            spawn(0x83, arm, [aim_at(0xC8)])
+    elif arm == SEATHS:                             # 0x8004f9bc: at the eye, one step out
+        ang = vec_to_angles(_s32(player[0] - point[0]), _s32(player[1] - (point[1] + 0x640)),
+                            _s32(player[2] - point[2]))
+        d = movement.direction_from_angles(ang[0], ang[1])
+        v = [_s16_((c * 0x400) >> 12) for c in d]
+        pt = struct.pack("<4i", *[_s32(point[i] + v[i]) for i in range(3)], w4)
+        mach.volley_left = struct.pack("<3h", *v) + left[6:8]
+        spawn(0x83, arm, [mach.volley_left, struct.pack("<3h", ang[0], ang[1], 0) + bytes(2)])
+    elif arm == EARTH_WAVE:                         # 0x8004faf8
+        spawn(0x83, arm, [left, 0x1000, 0x100, 0x1000, 1])
+    elif arm == 0x28:                               # 0x8004fb78: along the creature's angles
+        d = movement.direction_from_angles(angles[0], angles[1])
+        mach.volley_left = struct.pack("<3h", *[_s16_((c * 0x226) >> 12) for c in d]) + left[6:8]
+        s = spawn(0x83, 0x28, [mach.volley_left])
+        if s:
+            mach.w8(s + 0xB, 3)
+    elif arm in (0x12, 0x14):                       # 0x8004fc74: flash, at the eye
+        ang = vec_to_angles(_s32(player[0] - point[0]), _s32(player[1] - (point[1] + 0x640)),
+                            _s32(player[2] - point[2]))
+        d = movement.direction_from_angles(ang[0], ang[1])
+        sc = 0xC8 if arm == 0x12 else 0x14
+        mach.volley_left = struct.pack("<3h", *[_s16_((c * sc) >> 12) for c in d]) + left[6:8]
+        spawn(0x83, arm, [mach.volley_left, bytes(m[a + 0x40:a + 0x48]), 0x258, 0x3C, 0x80, 0x8C, 0xA0])
+    else:
+        raise NotImplementedError(f"actor_animation_effects' arm {arm:#x}")
+
+
 class RamWorld:
     """The rest of the game as a snapshot's RAM has it, for the check:
     collide_query's tiles (the grid in RAM), the occupancy byte, the objects
@@ -4431,6 +4594,93 @@ def fire_check(out=sys.stdout, per=8, frames=60, kind=FIRE_BALL, speed=0x384,
     return good == runs
 
 
+VOLLEY_ARMS = (0x00, 0x56, 0x66, 0x0F, 0x27, 0x26, 0x13, 0x29, 0x7D, 0x2D, 0x81, 0x0D, 0x0B,
+               0x32, 0x2A, 0x2C, 0x35, 0x31, 0x44, 0x45, 0x42, 0x02, 0x57, 0x2E, 0x64, 0x2F,
+               0x30, 0x07, 0x55, 0x28, 0x06, 0x33, 0x34, 0x1F, 0x20, 0x21, 0x22, 0x23, 0x24,
+               0x25, 0x12, 0x14, 0x76, 0x50, 0x53)
+"""Every arm of actor_animation_effects' switch that does something."""
+AAE, SOUND_CUE = 0x8004F414, 0x80015654
+
+
+def volley_check(out=sys.stdout, per=3):
+    """actor_animation_effects, the game's own, against volley_point and
+    volley_fire over every snapshot: a creature fires each arm from an 0x8002
+    entry -- an offset turned by its angles -- at the player, and all 128
+    slots and all 200 creatures must come out alike, the effects' own
+    spawning arms the game's against the machine's. The routine's frame's
+    leftovers (the point's fourth word, the velocity's) laid 0 on both
+    sides. Arms or kinds the machine has not, counted and named."""
+    import random
+    import memcard
+    import levelstate
+    rng = random.Random(0x70113)
+    runs = good = 0
+    missing = {}
+    first = []
+    oa = ACTORS & MASK
+    frame = mipsrun_stack() - 0x100 - 0xC0          # actor_animation_effects' sp, as _call runs it
+    for path in memcard._snapshots():
+        base = bytearray(open(path, "rb").read())
+        o = SLOTS & MASK
+        base[o:o + STRIDE * COUNT] = bytes(STRIDE * COUNT)
+        for k in range(COUNT):
+            base[o + STRIDE * k] = 0xFF
+        lv = base[0x8018FAD9 & MASK]
+        awake = [k for k in range(ACTOR_N) if base[(ACTORS + ACTOR_STRIDE * k + 9) & MASK] == 1]
+        if not awake:
+            continue
+        for _ in range(per):
+            for arm in VOLLEY_ARMS:
+                ram = bytearray(base)
+                a = ACTORS + ACTOR_STRIDE * rng.choice(awake)
+                struct.pack_into("<I", ram, CURRENT_ACTOR & MASK, a)
+                if rng.randrange(3) == 0:
+                    struct.pack_into("<h", ram, PARALYSIS & MASK, rng.randrange(1, 100))
+                for off, n in ((0x3C, 4), (0x70, 8), (0x78, 8)):
+                    ram[(frame + off) & MASK:(frame + off + n) & MASK] = bytes(n)
+                ox, oy, oz = rng.randrange(-0x200, 0x200), rng.randrange(-0xA00, 0), rng.randrange(-0x300, 0x300)
+                pct = rng.randrange(1, 100)
+                seed = rng.randrange(1 << 30)
+                m = bytearray(ram)
+                mach = Machine(m, RamWorld(m, lv), levelstate.Lcg(seed))
+                try:
+                    volley_fire(mach, a, arm, pct, volley_point(m, a, ox, oy, oz))
+                except NotImplementedError as e:
+                    key = str(e).split("arm ")[-1]
+                    missing.setdefault(key, set()).add(arm)
+                    continue
+                cpu = _game(bytes(ram))
+                lcg = levelstate.Lcg(seed)
+                cpu.hooks[RAND] = lambda c, lcg=lcg: lcg()
+                cpu.hooks[SOUND_AT] = lambda c: 0
+                cpu.hooks[SOUND_CUE] = lambda c: 0
+                _call(cpu, AAE, [arm, pct, 0xFFFFFFFF, ox & 0xFFFFFFFF],
+                      [oy & 0xFFFFFFFF, oz & 0xFFFFFFFF, 0])
+                runs += 1
+                bad = _differ(_slots(cpu.ram), _slots(m))
+                acts = bytes(cpu.ram[oa:oa + ACTOR_STRIDE * ACTOR_N]) == bytes(m[oa:oa + ACTOR_STRIDE * ACTOR_N])
+                if not bad and acts:
+                    good += 1
+                elif len(first) < 4:
+                    first.append(f"  {os.path.basename(path)} arm {arm:#x}: " + (
+                        f"slot {bad[0][0]} +{bad[0][1]:#x} game {bad[0][2]:#x} here {bad[0][3]:#x}"
+                        if bad else "the creatures differ"))
+    for line in first:
+        print(line, file=out)
+    print(f"actor_animation_effects, the game's own, against the machine: {good} of {runs} "
+          f"volleys with all 128 slots and all 200 creatures alike", file=out)
+    if missing:
+        print("  not in the machine: " + "; ".join(
+            f"{k} (arm {', '.join(f'{x:#x}' for x in sorted(v))})" for k, v in sorted(missing.items())),
+            file=out)
+    return good == runs
+
+
+def mipsrun_stack():
+    import mipsrun
+    return mipsrun.STACK
+
+
 def aim_check(out=sys.stdout, n=600):
     """effect_aim, the game's, against aim() on random creatures, targets and
     points: the velocity and the yaw it answers."""
@@ -4477,7 +4727,7 @@ def parts():
            ("machine", machine_check), ("magic", magic_check), ("fire", fire_check),
            ("fire_seaths", lambda: fire_check(kind=SEATHS, speed=0x384, name="Seath's sword's",
                                               more=("view",))),
-           ("fire_world", fire_world_check)]
+           ("fire_world", fire_world_check), ("volley", volley_check)]
     for kind, speed, name, more, n in SPELLS_SENT:
         tag = f"{kind:#x}" + "".join("-" + v for v in more if v in ("back", "anywhere"))
         out.append((tag, lambda kind=kind, speed=speed, name=name, more=more, n=n:
@@ -4500,4 +4750,5 @@ if __name__ == "__main__":
     good = fire_check(kind=SEATHS, speed=0x384, name="Seath's sword's", more=("view",)) and good
     good = fire_world_check() and good
     good = spell_hit_check() and good
+    good = volley_check() and good
     sys.exit(0 if good else 1)

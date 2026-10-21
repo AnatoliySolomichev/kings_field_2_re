@@ -288,22 +288,18 @@ func _animate(k: int) -> void:
 # +0xc): a plain entry is a vertex of the creature's animated model -- scaled
 # by +0x48 and turned by the yaw + 0x800 (actor_vertex_point, 0x8004ede0) --
 # and an 0x8002 entry carries an offset of its own, turned by the creature's
-# angles as they are (vec_rotate, 0x8004f48c); the arm throws from there: 0x26 a spore, with +0x18's low byte as its
-# percentage (tools/effects.py puts slot 40's spore at the point bp26 logged,
-# to the unit); 0x1f..0x25 a bolt, aimed at the player and flown by the effect
-# machine (effects.gd volley_bolt). Of those, effects.gd has 0x1f, 0x22, 0x23
-# and 0x24 -- level 4's model-53 and model-67 creatures', and level 12's.
-# @orig game:0x8004f414 actor_animation_effects  status:partial -- the point -- off the creature's vertex, or an 0x8002 entry's offset turned by its angles -- and the switch, for arms 0x26 and 0x1f..0x25; the 0x8004 entry (a point along a limb, 0x8004f49c) and the other arms are not here
-# @orig game:0x8004f6c4 actor_animation_effects+0x2b0  status:verified -- arm 0x26, the spores
+# angles as they are (vec_rotate, 0x8004f48c); the arm throws from there
+# (effects.gd volley_fire), and 0x27 marks the creature (+0x28 bit 0x100)
+# while the player is paralysed.
+# @orig game:0x8004f414 actor_animation_effects  status:partial -- the point -- off the creature's vertex, or an 0x8002 entry's offset turned by its angles -- and the switch into effects.gd volley_fire; the 0x8004 entry (a point along a limb, 0x8004f49c) not here
+# @orig game:0x8004f6a0 actor_animation_effects+0x28c  status:verified -- arm 0x27's mark on the creature; tools/effects.py volley_check
 func _launch(a: Dictionary, kind: Dictionary, fired: Array) -> void:
 	var raw: Array = a["rec"]
 	if raw == null:
 		return
 	var arm := int(raw[0xC])
-	if arm != 0x26 and (arm < 0x1F or arm > 0x25):
-		return
 	var fx := get_node_or_null("../Effects")
-	if fx == null or not fx.has_method("spawn"):
+	if fx == null or not fx.has_method("volley_fire"):
 		return
 	var pct := KFCreatureAI.u16f(raw, 0x18) & 0xFF
 	var m := int(a["model"])
@@ -327,10 +323,10 @@ func _launch(a: Dictionary, kind: Dictionary, fired: Array) -> void:
 			continue                          # 0x8004, along a limb: not here
 		var point := Vector3i(int(a["px"]) + int(w[0]), int(a["py"]) + int(w[1]),
 			int(a["pz"]) + int(w[2]))
-		if arm == 0x26:
-			fx.spawn_spore(point, pct)
-		else:
-			fx.volley_bolt(arm, pct, point, 0, int(a["ry"]))
+		if arm == 0x27 and int(fx.call("field", "paralysis")) != 0:
+			a["eflags"] = int(a.get("eflags", 0)) | 0x100     # 0x8004f6bc
+		if not bool(fx.call("volley_fire", arm, pct, point, [0, int(a["ry"]), 0])):
+			KFInfo.note("volley: arm 0x%x is not in the port" % arm)
 
 
 # How render_walk (0x80040c94) turns a creature to draw it: its angles +0x40,

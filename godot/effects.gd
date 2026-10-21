@@ -173,6 +173,7 @@ func clear() -> void:
 	trails.resize(4 * 576)
 	trails.fill(0)
 	trail_next = 0
+	volley_left = PackedByteArray([0, 0, 0, 0, 0, 0, 0, 0])
 
 
 # @port engine -- runs effect_driver at the game's 15 frames a second
@@ -3412,7 +3413,7 @@ func strike_scale(p: Vector3i, radius: int, t: Vector3i, edge := EDGE, scale := 
 # `speed` along it. [velocity x, y, z, the yaw].
 # @orig game:0x8004f1d0 effect_aim  status:verified -- 600 of 600 random cases of the game's own as tools/effects.py aim, which the self-test holds this to
 func aim(apitch: int, ayaw: int, target: Vector3i, speed: int, point: Vector3i,
-		spread := 0x400) -> Array:
+		spread := 0x400, pitch := -1) -> Array:
 	var ang := vec_to_angles(target.x - point.x, target.y - (point.y + 0x640),
 		target.z - point.z)
 	var d: int = (int(ang[1]) - ayaw) & 0xFFF
@@ -3422,10 +3423,13 @@ func aim(apitch: int, ayaw: int, target: Vector3i, speed: int, point: Vector3i,
 	if t > 0x1000:
 		t = 0x1000
 	ang[1] = s16v(angle_lerp(int(ang[1]), ayaw, t))
-	d = (int(ang[0]) - apitch) & 0xFFF
-	if d >= 0x800:
-		d = 0x1000 - d
-	ang[0] = s16v(angle_lerp(int(ang[0]), apitch, d))
+	if pitch == -1:
+		d = (int(ang[0]) - apitch) & 0xFFF
+		if d >= 0x800:
+			d = 0x1000 - d
+		ang[0] = s16v(angle_lerp(int(ang[0]), apitch, d))
+	else:
+		ang[0] = s16v(pitch)
 	var v := coll.direction_from_angles(int(ang[0]), int(ang[1]))
 	var sp := s16v(speed)
 	return [s16v((v[0] * sp) >> 12), s16v((v[1] * sp) >> 12), s16v((v[2] * sp) >> 12), ang[1]]
@@ -3453,46 +3457,121 @@ static func s16v(v: int) -> int:
 	return v - 0x10000 if v & 0x8000 else v
 
 
-# A volley's bolt (actor_animation_effects' arm for 0x1f..0x25, 0x8004fc18):
-# effect_aim from the point at the player with a speed of 0x12c, the spread
-# 0x400 and one pass, then effect_spawn(pct, 0x83, kind, the point, that
-# velocity, the creature's angles).
-# @orig game:0x8004fc18 actor_animation_effects+0x804  status:transcribed -- the arm for 0x1f to 0x25; of those kinds effect_spawn here has 0x1f, 0x22, 0x23 and 0x24
-func volley_bolt(kind: int, pct: int, point: Vector3i, apitch: int, ayaw: int) -> void:
-	if player == null or coll == null:
-		return
-	var t := Vector3i(int(player.get("gx")), int(player.get("gy")), int(player.get("gz")))
-	var a := aim(apitch, ayaw, t, 0x12C, point)
-	var v := PackedByteArray()
-	v.resize(8)
-	for i in 3:
-		v.encode_s16(2 * i, int(a[i]))
+# actor_animation_effects' arms after the point (0x8004f5b8 on), by the
+# record's +0xc -- the arm, the effect's kind but for a few: [the speed
+# effect_aim is handed, effect_spawn's a1, the kind or -1 for the arm's own,
+# what follows the velocity ("angles" the creature's), the byte written at +0xb
+# of the slot it gets or -1].
+const VOLLEY := {
+	0x00: [0x1F4, 0x83, -1, [], 3], 0x56: [0x1F4, 0x83, -1, [], 3], 0x66: [0x1F4, 0x83, -1, [], 3],
+	0x26: [0, 0x81, -1, [], 0], 0x0D: [0x2A8, 0x83, -1, [], -1],
+	0x2A: [0x258, 0x83, -1, ["angles"], -1], 0x2C: [0x1A4, 0x83, -1, [], -1],
+	0x35: [0x12C, 0x81, -1, [], -1], 0x31: [0x258, 0x83, -1, [], -1],
+	0x44: [0x226, 0x83, 0x7C, [], -1], 0x45: [0x2BC, 0x83, 0x7B, [], -1],
+	0x02: [0x190, 0x83, -1, [0xFE, 2], -1], 0x57: [0x190, 0x83, -1, [0xFE, 2], -1],
+	0x2E: [0x3C0, 0x83, 0x64, [], -1], 0x64: [0x3C0, 0x83, -1, [], -1],
+	0x2F: [0x1A4, 0x83, -1, [], -1], 0x30: [0x1E0, 0x83, -1, [], -1],
+	0x06: [0x12C, 0x83, -1, [], -1], 0x33: [0x12C, 0x83, -1, [], -1], 0x34: [0x12C, 0x83, -1, [], -1],
+	0x1F: [0x12C, 0x83, -1, ["angles"], -1], 0x20: [0x12C, 0x83, -1, ["angles"], -1],
+	0x21: [0x12C, 0x83, -1, ["angles"], -1], 0x22: [0x12C, 0x83, -1, ["angles"], -1],
+	0x23: [0x12C, 0x83, -1, ["angles"], -1], 0x24: [0x12C, 0x83, -1, ["angles"], -1],
+	0x25: [0x12C, 0x83, -1, ["angles"], -1],
+}
+var volley_left := PackedByteArray([0, 0, 0, 0, 0, 0, 0, 0])   # the routine's sp+0x70: the last aim's velocity
+
+
+# What a creature's volley throws from `point` (x y z, the fourth word `w4`,
+# its frame's): each arm aims at the player's eye (effect_aim, one pass, the
+# spread 0x400) and spawns -- fire balls with their grace 3, two tornados
+# with no view, lightning with its level frames off the distance, four haze
+# numbered, four of 0x32, Seath's bolt one step out along the bearing to the
+# eye, earth wave handed the routine's leftover velocity, 0x28 along the
+# creature's own angles, flash at the eye -- and 0x27 sets the creature's
+# +0x28 bit 0x100 while the player is paralysed (actors.gd does). `angles`
+# the creature's +0x40..+0x44. True when the arm is here.
+# @orig game:0x8004f5b8 actor_animation_effects+0x1a4  status:verified -- the arms after the point; tools/effects.py volley_check, 483 of 483 volleys of the game's own, every slot and creature; the self-test this to it; 0x50 and 0x53 (lobbed), 0x55 and 0x76 (a creature made) not here
+func volley_fire(arm: int, pct: int, point: Vector3i, angles: Array, w4 := 0) -> bool:
+	var ap := int(angles[0])
+	var ay := int(angles[1])
+	var target := Vector3i(int(world.field("px")), int(world.field("py")), int(world.field("pz")))
+	var pt := PackedByteArray()
+	pt.resize(16)
+	pt.encode_s32(0, point.x)
+	pt.encode_s32(4, point.y)
+	pt.encode_s32(8, point.z)
+	pt.encode_s32(12, w4)
 	var ang := PackedByteArray()
 	ang.resize(8)
-	ang.encode_s16(0, apitch)
-	ang.encode_s16(2, ayaw)
-	var p := PackedByteArray()
-	p.resize(16)
-	p.encode_s32(0, point.x)
-	p.encode_s32(4, point.y)
-	p.encode_s32(8, point.z)
-	spawn(pct, 0x83, kind, p, [v, ang])
-
-
-# effect_spawn's spore, as actor_animation_effects arm 0x26 asks for it: the
-# point the creature's vertex gives, effect_aim's velocity at a speed of 0,
-# +6 the percentage -- and then the grace count +0xb set to 0 (0x8004f720),
-# so a spore meets the tiles from its first frame.
-# @orig game:0x8004f6c4 actor_animation_effects+0x2b0  status:verified -- arm 0x26; tools/effects.py against bp26
-func spawn_spore(point: Vector3i, pct: int) -> void:
-	var p := PackedByteArray()
-	p.resize(16)
-	p.encode_s32(0, point.x)
-	p.encode_s32(4, point.y)
-	p.encode_s32(8, point.z)
-	var s := spawn(pct, 0x81, 0x26, p, [null])
-	if s >= 0:
-		w8(s + 0xB, 0)
+	for i in 3:
+		ang.encode_s16(2 * i, int(angles[i]) if angles.size() > i else 0)
+	var aim_at := func(speed: int, pitch: int) -> PackedByteArray:
+		var a := aim(ap, ay, target, speed, point, 0x400, pitch)
+		for i in 3:
+			volley_left.encode_s16(2 * i, int(a[i]))
+		return volley_left.duplicate()
+	if VOLLEY.has(arm):
+		var row: Array = VOLLEY[arm]
+		var args := [aim_at.call(int(row[0]), -1)]
+		for v in row[3]:
+			args.append(ang if str(v) == "angles" else v)
+		var s := spawn(pct & 0xFF, int(row[1]), arm if int(row[2]) < 0 else int(row[2]), pt, args)
+		if s >= 0 and int(row[4]) >= 0:
+			w8(s + 0xB, int(row[4]))
+		return true
+	match arm:
+		0x27:                               # 0x8004f6a0: the flag is actors.gd's
+			var s := spawn(pct & 0xFF, 0x81, arm, pt, [aim_at.call(0, -1)])
+			if s >= 0:
+				w8(s + 0xB, 0)
+		TORNADO:                            # 0x8004f620: two, the view's pointer 0
+			var v: PackedByteArray = aim_at.call(0x200, 0)
+			spawn(pct & 0xFF, 0x81, arm, pt, [v, null, 0])
+			spawn(pct & 0xFF, 0x81, arm, pt, [v, null, 1])
+		0x13, 0x29, 0x7D, 0x2D, 0x81:       # 0x8004f724: lightning, its level frames
+			var kind := LIGHTNING if arm == 0x13 else (0x7D if arm in [0x29, 0x7D] else 0x81)
+			var v: PackedByteArray = aim_at.call(0x258, -1)
+			var d := vec_length_3d(s32v(point.x - target.x), s32v(point.y - target.y),
+				s32v(point.z - target.z))
+			spawn(pct & 0xFF, 0x83, kind, pt, [v, maxi(_trunc(s32v(d - 0x7D0), 600), 0)])
+		HAZE:                               # 0x8004f7f0: four, numbered
+			for i in 4:
+				spawn(pct & 0xFF, 0x83, arm, pt, [aim_at.call(0xC8, -1), i])
+		0x32:                               # 0x8004f85c: four
+			for _i in 4:
+				spawn(pct & 0xFF, 0x83, arm, pt, [aim_at.call(0xC8, -1)])
+		SEATHS, 0x12, 0x14:                 # 0x8004f9bc, 0x8004fc74: at the eye
+			var a := vec_to_angles(s32v(target.x - point.x), s32v(target.y - (point.y + 0x640)),
+				s32v(target.z - point.z))
+			var dv := coll.direction_from_angles(int(a[0]), int(a[1]))
+			var sc := 0x400 if arm == SEATHS else (0xC8 if arm == 0x12 else 0x14)
+			var v := volley_left.duplicate()
+			for i in 3:
+				v.encode_s16(2 * i, s16v((int(dv[i]) * sc) >> 12))
+			volley_left = v.duplicate()
+			if arm == SEATHS:
+				for i in 3:
+					pt.encode_s32(4 * i, s32v(pt.decode_s32(4 * i) + v.decode_s16(2 * i)))
+				var aa := PackedByteArray()
+				aa.resize(8)
+				aa.encode_s16(0, int(a[0]))
+				aa.encode_s16(2, int(a[1]))
+				spawn(pct & 0xFF, 0x83, arm, pt, [v, aa])
+			else:
+				spawn(pct & 0xFF, 0x83, arm, pt, [v, ang, 0x258, 0x3C, 0x80, 0x8C, 0xA0])
+		EARTH_WAVE:                         # 0x8004faf8: the leftover velocity
+			spawn(pct & 0xFF, 0x83, arm, pt, [volley_left.duplicate(), 0x1000, 0x100, 0x1000, 1])
+		0x28:                               # 0x8004fb78: along the creature's own angles
+			var dv := coll.direction_from_angles(ap, ay)
+			var v := volley_left.duplicate()
+			for i in 3:
+				v.encode_s16(2 * i, s16v((int(dv[i]) * 0x226) >> 12))
+			volley_left = v.duplicate()
+			var s := spawn(pct & 0xFF, 0x83, 0x28, pt, [v])
+			if s >= 0:
+				w8(s + 0xB, 3)
+		_:
+			return false
+	return true
 
 
 # --- drawing --------------------------------------------------------------

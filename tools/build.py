@@ -210,7 +210,8 @@ def main(quick=False, only_check=False):
                "effect_spawn and effect_driver, the game's",
                "the healing and protecting spells' effects", "the fire ball",
                "end to end, the game's own collide_query",
-               "the game's own effect_spawn and effect_driver over the"]
+               "the game's own effect_spawn and effect_driver over the",
+               "actor_animation_effects, the game's own", "not in the machine"]
     names = effect_parts()
     if names:
         for name in names:
