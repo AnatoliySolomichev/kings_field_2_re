@@ -431,6 +431,12 @@ sub_8004d3c4, player_in_rect, take_item, give_item, skill_unlock,
 find_free_slot and init_object_record run as the game's. `godot/useitem.gd`
 reproduces the model on **336 of 336** of its runs (`usecheck.json`).
 
+`--check` also runs the warp, `warp_to` (`0x8005c864`), the game's own over
+`a1`: every record from its own block and from others, its fields at random,
+`level_load` ending a change at once and the triggers, fades and stats
+logged -- **280 of 280** runs give the model's calls and 21 fields; the port's
+`warp_plan` gives the model's plan on **55 of 55**.
+
 **`savemap.py`** — what the game persists, field by field: 57 globals and the
 offset each occupies in a save, taken from the serialiser and its inverse and
 kept only where the two agree.

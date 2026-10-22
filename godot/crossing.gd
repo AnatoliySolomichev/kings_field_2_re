@@ -116,3 +116,45 @@ func _cross(hit: Dictionary) -> void:
 	KFGame.block = want
 	KFGame.level = lv
 	get_tree().change_scene_to_file(scene)
+
+
+# warp_to's level change, the plan KFUseItem.warp_plan made of it: on the
+# level in hand the player is put down where the record says and the
+# creatures may wake anywhere (spawn_anywhere); from another, that level's
+# world loaded and the player carried over to the place, as a crossing
+# carries them. Either way the facing and the pitch are the record's, the
+# player's state 0 and the view's tilt gone. The game fades to black and
+# back around it (fade_frames); the port does not.
+# @port engine -- warp_to's change of place or level, as _cross makes one
+func warp(plan: Dictionary) -> void:
+	if plan.is_empty() or player == null:
+		return
+	var lv := int(plan["level"])
+	var p: Array = plan["pos"]
+	var at := Vector3i(int(p[0]), int(p[1]), int(p[2]))
+	if not bool(plan["same"]):
+		var scene := "res://world%02d.tscn" % lv
+		if not ResourceLoader.exists(scene):
+			KFInfo.note("warp: level %d is not built (python3 tools/level3d.py %d)" % [lv, lv])
+			return
+	player.facing = int(plan["facing"])
+	player.pitch = int(plan["pitch"])
+	player.pstate = 0
+	player.tilt = [0, 0, 0]
+	player.tilt_vel = [0, 0, 0]
+	KFGame.block = (plan["block"] as Array).map(func(v): return int(v))
+	KFInfo.note("warp: level %d, cell (%d, %d), facing 0x%x, block %s" % [lv, at.x >> 11,
+		at.z >> 11, int(plan["facing"]), str(KFGame.block)])
+	if bool(plan["same"]):
+		player.gx = at.x
+		player.gy = at.y
+		player.gz = at.z
+		player.rotation.y = float(player.facing) * TAU / 4096.0
+		player._to_godot()
+		var an := get_node_or_null("../Actors")
+		if an:
+			an.spawn_anywhere = true
+		return
+	player.carry_over(at)
+	KFGame.level = lv
+	get_tree().change_scene_to_file("res://world%02d.tscn" % lv)

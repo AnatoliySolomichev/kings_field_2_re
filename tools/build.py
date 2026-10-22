@@ -201,8 +201,8 @@ def main(quick=False, only_check=False):
         ["opened lids", "things lying", "Silviera's key", "pedestal lines",
               "game's own pedestal arm"]))
     steps.append((["tools/useitem.py", "--check"],
-        "a thing used, against the game's own use_item over every level",
-        ["use_item, against", "  level "]))
+        "a thing used and the warp, against the game's own use_item and warp_to",
+        ["use_item, against", "  level ", "the warp, against", "  record "]))
     steps.append((["tools/weapon.py", "--check"],
         "the creatures' HP and the player's weapon, against snapshots and bp25",
         ["awake creatures", "frames of the weapon", "blows landed", "the weapons' magic"]))

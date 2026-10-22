@@ -3292,5 +3292,25 @@
   "name": "bonus_skills_timer",
   "kind": "data",
   "evidence": "use_item's thing 0x80 sets it to 0x384 (0x8005d170) when no statue of block 6 has answered; while it is not 0 player_recalc_stats adds five to every working skill, and player_controller's end counts it down, the stats and announce 0x1b at 0 (FORMATS.md)"
+ },
+ "0x8005c864": {
+  "name": "warp_to",
+  "kind": "code",
+  "evidence": "a warp to one of fourteen fixed places (warp_records, 0x800130f0): for record i -- below 0xc, or 0xd -- nothing if its level is 0xff, else fade_frames to black and actors_retire_marked; the level loaded (res_upload_wait and level_load until level_change_busy is 0); object_trigger for the record's level (on the block in hand, only its byte 2, and spawn_anywhere 1); the player at the record's cell + 0x400, height -(+5 << 7), facing -(+6), player_state and the view's additions 0, view_angles from player_pitch's eight bytes; but for 0xd the fades back and object_trigger for the record's bytes 1 and 2 as the block's 3 and 4; below 0xc 0x801b25ee 1, use_answer 1 and the stats; view_tilt 0. use_item calls it for Ichrius' eye, wings and crown (records 1, 6, 9) and the ids 0x96..0xa1, cutscene_step with 0xc, level_overlay_tick with 0xd. tools/useitem.py warp_check, 280 of 280 runs of the game's own"
+ },
+ "0x800130f0": {
+  "name": "warp_records",
+  "kind": "data",
+  "evidence": "fourteen records of eight bytes that warp_to copies to its stack (up to script_opcode_table): +0 the level (0xff none: record 8), +1 and +2 the block's bytes 3 and 4, +3 and +4 the cell x and z, +5 the height in 128s, +6 the facing, negated"
+ },
+ "0x80046c00": {
+  "name": "fade_frames",
+  "kind": "code",
+  "evidence": "(mode, from, to, step): frames of the game -- screen_fade(mode, (s * s) >> 16 to 0xff for each of three), res_upload_spu, res_upload_vram, camera_pose, render_frame -- with s from `from` to `to` by `step`: warp_to's fade to black (1, 0, 0x1000, 0x100) and back (1, 0x1000, 0, -0x100)"
+ },
+ "0x80019538": {
+  "name": "res_upload_wait",
+  "kind": "code",
+  "evidence": "res_upload_spu, res_upload_vram and two VSync(0): the step warp_to and level_load's callers take between level_load's calls while a change is under way"
  }
 }

@@ -3162,8 +3162,7 @@ drawn by a transcription of the same routines -- 17 of 17 screens give
 frames. "Equipment" is there too (below); "use magic", "status/records",
 "storage" and "system", the chosen thing's model turning in "use item"
 (`0x80025be8`) are not yet. What a thing does once chosen is `use_item`,
-whole but for block 6's two statues and the warp (`godot/useitem.gd`, the next
-section).
+whole but for block 6's two statues (`godot/useitem.gd`, the next section).
 
 ### A thing used: use_item whole
 
@@ -3187,7 +3186,7 @@ find_object is always asked from the feet, `0x320` past the type's reach,
 | the wise fruit (`0x70`) | `0x801b2530` + 1 up to 4 -- not taken here either; at 4 "Nothing happens" |
 | crystal flask (`0x76`) | find_object's first object: a fountain of **type `0xfe` fills it with a blue potion** (`0x77`), one of **type `0xfb` with a gold one** (`0x78`); given, announce `0xc` and the flask taken; the pack full, give_item's own "can't carry" (`0xb`) and the flask kept. Fountains: `0xfe` on levels 2, 3, 4, 5, 7, 10, 11, `0xfb` on 1, 6, 9 |
 | `0x80` | on block 6 the two statues (slots `0x5b` and `0x53`: a scene of the game's frames with their creatures, story bytes `0x801ba9ab`, `0x801ba9b0`); else taken, and **`bonus_skills_timer` (`0x801b2578`) 900 frames** -- five on every working skill, which player_recalc_stats reads |
-| Ichrius' eye, wings, crown (`0x82..0x84`) | `sub_8005c864` with record 1, 6, 9 -- a warp to a fixed place of a level, its fourteen records at `0x800130f0` (not in the port yet, BACKLOG.md) -- not on blocks `0x19` and `0x1b`, nor while a change to one is under way; ids `0x96..0xa1`, which nothing holds, the same with `item - 0x96` |
+| Ichrius' eye, wings, crown (`0x82..0x84`) | **`warp_to`** (`0x8005c864`) with record 1, 6, 9 -- a warp to a fixed place of a level (below, "The warp") -- not on blocks `0x19` and `0x1b`, nor while a change to one is under way; ids `0x96..0xa1`, which nothing holds, the same with `item - 0x96` |
 | the seven keys | each object find_object finds in turn has the key tried on it (`key_test`): 1 the sound (`sound_key_fits`), 3 or 4 "Wrong key!" (7), else the next |
 | Orladin's key (`0x88`) | every object found: a type-`0xa2` lock that asks for it (`+0x38` `0x88`) becomes `0xfe` and the key is taken; a free type-`0x102` pedestal (`+0x38` `0xff`) holds the key's number, state 0, the key taken and **the key's own object made in the gold ring** (find_free_slot(`0x15e`, 10, drop_count_gold), init_object_record, its type `0x88`, `+0x3c` the count), the pedestal's `+0x39` its place; anything else a 3 from key_test "Wrong key!". Locks on levels 14, 16, 17 (opcode `0x17`), pedestals there too (opcode `0x1a`) |
 | Silviera's key (`0x8d`) | "Keys" above: the first object only |
@@ -3235,9 +3234,60 @@ it (`use_item`, `views`): the self-test holds it to 336 of the model's runs
 entry less `0x96`, as a sign's), which `tools/useitem.py` writes for the
 level's creatures, rectangles and slot 11. `player.gd` keeps the floor
 (`layer`), `actors.gd` and `ai.gd` a creature's (`floor`). Not in the port:
-the warp itself (`sub_8005c864`), the level's own entries 2, 6 and 11, the
-statues, and anything that acts on what Orladin's key leaves (opcodes `0x17`
-and `0x1a`, the key's own object).
+the level's own entries 2, 6 and 11, the statues, and anything that acts on
+what Orladin's key leaves (opcodes `0x17` and `0x1a`, the key's own object).
+
+### The warp: warp_to
+
+**`warp_to(i)`** (`0x8005c864`) puts the player at one of fourteen fixed
+places, **`warp_records`** (`0x800130f0`, eight bytes each, copied to its stack):
+
+```
++0  the level -- 0xff none        +3, +4  the cell x and z
++1, +2  the block's bytes 3, 4    +5      the height, in 128s
++6  u16 the facing, negated
+```
+
+Records 0..11 are one place on each of levels 0..11 but 8 (level `0xff`),
+12 is level 27's and 13 level 24's. For a record below `0xc`, or `0xd`, a
+level of `0xff` returns at once; else **fade_frames** (`0x80046c00`: frames of
+the game with screen_fade at `(s * s) >> 16`, `s` from 0 to `0x1000` by
+`0x100`) to black and `actors_retire_marked`. Then the level is loaded
+(`res_upload_wait`, `level_load`, until `level_change_busy` is 0),
+**object_trigger** asked for the record's level -- `(L, L, L, ff, ff)` from
+another block, and on the one in hand only `(ff, ff, L, ff, ff)` and
+`spawn_anywhere` 1 -- and loaded again. The player: `player_state` 0, the
+view's additions (`0x801b2620..24`) 0, `view_angles` the eight bytes from
+`player_pitch`, the place the cell + `0x400` across and along, the height
+`-(+5 << 7)`, the facing `-(+6)` into `player_facing` and the view's yaw.
+Record `0xd` sets the pitch to 0 and stands `0x7d0` along instead of `0x400`,
+and nothing more; the others fade back (`fade_frames(1, 0x1000, 0x1000, 0)`,
+`res_wait`, `fade_frames(1, 0x1000, 0, -0x100)`, `screen_fade(0xff, 0, 0,
+0)`) and ask object_trigger for `(ff, ff, ff, +1, +2)` -- the place's sound
+banks, as the block's bytes 3 and 4 are for a crossing (level 4's `13, 15`).
+Below `0xc`: `0x801b25ee` 1 (written here and read nowhere the walk finds),
+`use_answer` 1 and the stats. Last `view_tilt` 0.
+
+`use_item` asks it for Ichrius' eye, wings and crown: **record 1, level 1's
+cell (32, 14); 6, level 6's (34, 67) facing `0x800`; 9, level 9's (39, 56)
+facing `0x800`** -- the things stay in the pack. `cutscene_step` asks for
+`0xc` (level 27) and `level_overlay_tick` for `0xd` (level 24, while
+`0x801ba9ee` is set).
+
+**Checked against the game's own.** `tools/useitem.py warp_check` runs
+GAME.EXE's `warp_to` over `a1`, every record from its own block and from
+others, the fields it writes drawn at random, `level_load` standing in to end
+a change at once and object_trigger, the fades, `actors_retire_marked`,
+`res_wait`, `screen_fade` and the stats logged: **280 of 280** runs give the
+model's calls, arguments and all, and its 21 fields.
+
+**In the port**: `godot/useitem.gd warp_plan` is what it leaves in the port's
+terms -- the block after the two triggers (a `ff` keeps the byte in hand, as
+the crossings' do), the level, the place, the facing, the pitch, the answer --
+55 of 55 plans as the model's in the self-test; `godot/crossing.gd warp` puts
+the player down there, on the level in hand with `spawn_anywhere`, or loads
+the other level's world and carries the player over as a crossing does. Not
+the fades, and not the two other callers' scenes.
 
 ### Status/records, and running the game's own code
 

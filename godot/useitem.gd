@@ -76,10 +76,10 @@ const NEW_SPELL := 3
 const OBJECT_FIELDS := ["slot", "type", "cls", "b0", "op", "state", "x", "y", "z", "yaw",
 	"height", "reach", "top", "lock", "b39", "h3a", "h3c", "b40"]
 
-static var warps: Array = []                  # sub_8005c864's fourteen records
+static var warps: Array = []                  # warp_to's fourteen records
 
 
-# @port data -- reads useitem.json, sub_8005c864's records as tools/useitem.py wrote them
+# @port data -- reads useitem.json, warp_to's records as tools/useitem.py wrote them
 static func load_from(path := "res://useitem.json") -> bool:
 	if not FileAccess.file_exists(path):
 		return false
@@ -238,7 +238,7 @@ static func _statues(w: Dictionary, item: int, calls: Array) -> void:
 
 
 # Ichrius' eye, wings and crown, and the ids 0x96..0xa1 nothing holds:
-# sub_8005c864 with record 1, 6 or 9 (item - 0x96 for the rest) -- not on
+# warp_to with record 1, 6 or 9 (item - 0x96 for the rest) -- not on
 # blocks 0x19 and 0x1b, nor while a change to one is under way. It answers
 # itself, unless its record's level is 0xff (record 8).
 # @orig game:0x8005d500 use_item+0x920  status:verified -- tools/useitem.py, the warp's call and its refusal among 2800 runs of the game's own; the warp itself stood in for
@@ -251,14 +251,53 @@ static func _warp(w: Dictionary, item: int, calls: Array) -> void:
 		w["answer"] = 1
 
 
-# Whether sub_8005c864(i) answers: it returns at once for a record whose
+# Whether warp_to(i) answers: it returns at once for a record whose
 # level is 0xff (0x8005c938), and sets 0x801ba984 below record 0xc
 # (0x8005cb94).
-# @port helper -- what sub_8005c864 answers, read off it; the warp itself is the caller's
+# @port helper -- what warp_to answers, read off it; the warp itself is the caller's
 static func warp_answers(i: int) -> bool:
 	if (i < 0xC or i == 0xD) and i < warps.size() and int(warps[i][0]) == 0xFF:
 		return false
 	return i < 0xC
+
+
+# warp_to (0x8005c864), what it leaves in the port's terms. Record i of
+# warp_records (0x800130f0): +0 the level, +1 and +2 the block's bytes 3 and
+# 4, +3 and +4 the cell, +5 the height in 128s, +6 the facing negated. Below
+# record 0xc, or 0xd, a level of 0xff does nothing (record 8: {}). Then
+# object_trigger for the level -- (L, L, L, -, -) from another block, (-, -,
+# L, -, -) on the one in hand, which also sets spawn_anywhere -- and the
+# player at the cell + 0x400 across and along, -(+5 << 7) high, facing
+# -(+6); record 0xd puts the pitch at 0 and the player 0x7d0 along rather
+# than 0x400, and the others ask object_trigger again for (-, -, -, +1, +2).
+# Below 0xc it answers. A byte the trigger leaves as - keeps the block's in
+# hand, as the crossings' do. `block` is the five bytes in hand; the plan:
+# {level, block, same, pos, facing, pitch, answer}.
+# @orig game:0x8005c864 warp_to  status:partial -- the place, the facing, the pitch, the block and the answer: tools/useitem.py warp_check, 280 of 280 runs of the game's own, the self-test this to it; not the fades (fade_frames), the tilt and the view's additions the new scene starts without, or 0x801b25ee
+static func warp_plan(i: int, block: Array, pitch: int) -> Dictionary:
+	if i < 0 or i >= warps.size():
+		return {}
+	var rec: Array = warps[i]
+	var lv := int(rec[0])
+	if (i < 0xC or i == 0xD) and lv == 0xFF:
+		return {}
+	var b := block.duplicate()
+	var same := lv == int(block[0])
+	var trig := [[0xFF, 0xFF, lv, 0xFF, 0xFF]] if same else [[lv, lv, lv, 0xFF, 0xFF]]
+	var z := (int(rec[4]) << 11) + 0x400
+	if i == 0xD:
+		pitch = 0
+		z = (int(rec[4]) << 11) + 0x7D0
+	else:
+		trig.append([0xFF, 0xFF, 0xFF, int(rec[1]), int(rec[2])])
+	for t in trig:
+		for k in 5:
+			if int(t[k]) != 0xFF:
+				b[k] = int(t[k])
+	return {"level": int(b[1]), "block": b, "same": same,
+		"pos": [(int(rec[3]) << 11) + 0x400, -(int(rec[5]) << 7), z],
+		"facing": (-(int(rec[6]) | (int(rec[7]) << 8))) & 0xFFF, "pitch": pitch,
+		"answer": 1 if i < 0xC else 0}
 
 
 # The seven keys of the shared arm: each object find_object finds in turn has

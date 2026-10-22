@@ -3,7 +3,8 @@
 
     python3 tools/useitem.py            the arms, and the check below
     python3 tools/useitem.py --check    the model against the game's own
-                                        use_item, run over every level
+                                        use_item, run over every level, and
+                                        the warp (warp_to) against its own
 
 **`use_item(pos, angles, item)`** is what a thing does once the menu has
 closed on it (`player_turn`, 0x80030708: `player_pos` and `player_pitch`, so
@@ -37,7 +38,7 @@ something answered, and `clear_movement_state`:
                            give_item's own "can't carry" and the flask kept
 0x80                       on block 6 the two statues (slots 0x5b, 0x53); else
                            taken, 0x801b2578 900 frames (five on every skill)
-0x82, 0x83, 0x84           Ichrius' eye, wings, crown: sub_8005c864 with 1, 6,
+0x82, 0x83, 0x84           Ichrius' eye, wings, crown: warp_to with 1, 6,
                            9 -- not on blocks 0x19 and 0x1b, nor while a
                            change to one is under way
 0x96..0xa1                 the same with item - 0x96 (no such things are held)
@@ -71,7 +72,7 @@ answers too when it unlocks a spell, 0x80029fb0), find_free_slot and
 init_object_record run; what it calls beyond them is stood in for and logged,
 in order -- announce, load_entry, sound_key_fits, player_recalc_stats,
 pedestal_put_key, clear_movement_state, the level's own entries (by where they
-return to) and sub_8005c864, the warp, whose answer the stand-in gives as the
+return to) and warp_to, the warp, whose answer the stand-in gives as the
 routine does (0x8005c938, 0x8005cb94: none for a record whose level is 0xff,
 else 1 for those below 0xc). The model must give the same log, the same
 answer, the same pack, skills, stat 36, 0x801b2530, 0x801b2578, spells and
@@ -118,7 +119,7 @@ RECALC = 0x80029500
 PUT_KEY = 0x8005C7E8
 CLEAR_MOVEMENT = 0x8002B6F0
 WARP = 0x8005C864
-WARP_TABLE = 0x800130F0          # sub_8005c864's records, eight bytes each
+WARP_TABLE = 0x800130F0          # warp_to's records, eight bytes each
 
 TRUTH_GLASS = 0x65
 EATEN = (0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x77, 0x78)
@@ -337,14 +338,14 @@ def _skill_data():
 
 
 def warp_record(i):
-    """sub_8005c864's record i (0x800130f0), as GAME.EXE holds it."""
+    """warp_to's record i (0x800130f0), as GAME.EXE holds it."""
     import mips
     exe = mips.load("game")
     return list(exe.bytes(WARP_TABLE + 8 * i, 8))
 
 
 def warp_answers(i):
-    """Whether sub_8005c864(i) answers: it returns at once for a record whose
+    """Whether warp_to(i) answers: it returns at once for a record whose
     level is 0xff (0x8005c938), and sets 0x801ba984 for i below 0xc
     (0x8005cb94)."""
     if i < 0xC or i == 0xD:
@@ -816,6 +817,177 @@ def check(out=sys.stdout, per_level=100, seed=7, levels=range(28), verbose=False
     return ok == n
 
 
+# --- the warp: warp_to -----------------------------------------------------
+
+WARP_FADE = 0x80046C00           # fade_frames(mode, from, to, step)
+WARP_UPLOAD = 0x80019538         # res_upload_wait
+RETIRE = 0x8004B794              # actors_retire_marked
+LEVEL_LOAD = 0x80018358
+OBJECT_TRIGGER = 0x80017C78
+RES_WAIT = 0x80019AB4
+SCREEN_FADE = 0x8003D624
+SPAWN_ANYWHERE = 0x801B24F2
+PLAYER_STATE = 0x801B25E5
+VIEW_ANGLES = 0x801B2608         # pitch, yaw, roll, and 0x801b260e
+VIEW_TILT = 0x801B2618           # pitch, yaw, roll
+VIEW_ADD = 0x801B2620            # pitch, yaw, roll, added to the view
+WARPED = 0x801B25EE              # written 1, read nowhere this walk finds
+CUTSCENE_WARP, ENDING_WARP = 0xC, 0xD
+
+# the fields the warp writes, (address, size), what the check compares
+WARP_FIELDS = ((PLAYER_STATE, 1), (VIEW_ADD, 2), (VIEW_ADD + 2, 2), (VIEW_ADD + 4, 2),
+               (VIEW_ANGLES, 2), (VIEW_ANGLES + 2, 2), (VIEW_ANGLES + 4, 2), (VIEW_ANGLES + 6, 2),
+               (PLAYER_ANGLES, 2), (PLAYER_ANGLES + 2, 2), (PLAYER_ANGLES + 4, 2),
+               (PLAYER_ANGLES + 6, 2), (PLAYER_POS, 4), (PLAYER_POS + 4, 4), (PLAYER_POS + 8, 4),
+               (SPAWN_ANYWHERE, 1), (WARPED, 1), (ANSWER, 4),
+               (VIEW_TILT, 2), (VIEW_TILT + 2, 2), (VIEW_TILT + 4, 2))
+
+
+def warp_fields(ram):
+    """The warp's fields out of RAM, {address: value}."""
+    return {a: int.from_bytes(ram[a & MASK:(a & MASK) + n], "little") for a, n in WARP_FIELDS}
+
+
+def warp(f, i, block):
+    """warp_to(i) over the fields `f` ({address: value}, WARP_FIELDS),
+    the block in hand `block` (current_level_block): [the calls it makes
+    beyond what it runs], f changed as RAM would be. level_load is taken to
+    finish a change at once, as the check's stand-in does."""
+    calls = []
+    rec = warp_record(i) if 0 <= i < 14 else None
+    if rec is None:
+        raise ValueError(f"no record {i}")
+    lv = rec[0]
+    if i < 0xC or i == ENDING_WARP:
+        if lv == 0xFF:
+            return calls
+        calls.append(("fade", 1, 0, 0x1000, 0x100))
+        calls.append(("retire",))
+    calls += [("upload",), ("level_load",)]
+    if lv != block:
+        calls.append(("trigger", lv, lv, lv, 0xFF, 0xFF, 0x7F, 0x7F, 0x7F))
+    else:
+        calls.append(("trigger", 0xFF, 0xFF, lv, 0xFF, 0xFF, 0x7F, 0x7F, 0x7F))
+        f[SPAWN_ANYWHERE] = 1
+    calls += [("upload",), ("level_load",)]
+    f[PLAYER_STATE] = 0
+    for k in (0, 2, 4):
+        f[VIEW_ADD + k] = 0
+    for k in (0, 2, 4, 6):                   # the 8 bytes from player_pitch
+        f[VIEW_ANGLES + k] = f[PLAYER_ANGLES + k]
+    f[PLAYER_POS] = (rec[3] << 11) + 0x400
+    f[PLAYER_POS + 8] = (rec[4] << 11) + 0x400
+    f[PLAYER_POS + 4] = (-(rec[5] << 7)) & 0xFFFFFFFF
+    face = (-(rec[6] | rec[7] << 8)) & 0xFFFF
+    f[PLAYER_ANGLES + 2] = face
+    f[VIEW_ANGLES + 2] = face
+    if i == ENDING_WARP:
+        f[PLAYER_ANGLES + 4] = 0
+        f[VIEW_ANGLES + 4] = 0
+        f[PLAYER_ANGLES] = 0
+        f[VIEW_ANGLES] = 0
+        f[PLAYER_POS + 8] = (rec[4] << 11) + 0x7D0
+    else:
+        calls += [("fade", 1, 0x1000, 0x1000, 0), ("res_wait",),
+                  ("fade", 1, 0x1000, 0, 0xFFFFFF00), ("screen_fade", 0xFF, 0, 0, 0)]
+        calls.append(("trigger", 0xFF, 0xFF, 0xFF, rec[1], rec[2], 0x7F, 0x7F, 0x7F))
+    if i < 0xC:
+        f[WARPED] = 1
+        f[ANSWER] = 1
+        calls.append(("recalc",))
+    for k in (0, 2, 4):
+        f[VIEW_TILT + k] = 0
+    return calls
+
+
+def warp_run(cpu, i):
+    """The game's own warp_to(i) over the machine: the calls it made
+    beyond what it ran. level_load ends a change at once (level_change_busy
+    0); object_trigger, the fades and the rest are logged."""
+    calls = []
+
+    def stack(c, n):
+        return [c.rd(c.r[29] + 0x10 + 4 * k, 4) for k in range(n)]
+
+    def load(c):
+        calls.append(("level_load",))
+        c.wr(BUSY, 2, 0)
+
+    cpu.hooks = {
+        WARP_FADE: lambda c: calls.append(("fade", c.r[4], c.r[5], c.r[6], c.r[7])),
+        RETIRE: lambda c: calls.append(("retire",)),
+        WARP_UPLOAD: lambda c: calls.append(("upload",)),
+        LEVEL_LOAD: load,
+        OBJECT_TRIGGER: lambda c: calls.append(
+            ("trigger", c.r[4] & 0xFF, c.r[5] & 0xFF, c.r[6] & 0xFF, c.r[7] & 0xFF,
+             *[v & 0xFF for v in stack(c, 4)])),
+        RES_WAIT: lambda c: calls.append(("res_wait",)),
+        SCREEN_FADE: lambda c: calls.append(("screen_fade", c.r[4], c.r[5], c.r[6], c.r[7])),
+        RECALC: lambda c: calls.append(("recalc",)),
+    }
+    cpu.call(WARP, i)
+    return calls
+
+
+def warp_check(out=sys.stdout, n=280, seed=13):
+    """The model against the game's own warp_to, every record from the
+    block it names and from others, over a1 with the fields drawn at random."""
+    import mipsrun
+    rng = random.Random(seed)
+    ram0 = open(os.path.join(ROOT, "out", "snap", "a1.ram"), "rb").read()
+    ok = 0
+    told = False
+    for k in range(n):
+        i = k % 14
+        cpu = mipsrun.CPU(ram0)
+        rec = warp_record(i)
+        block = rec[0] if rng.random() < 0.4 and rec[0] != 0xFF else rng.randrange(28)
+        cpu.wr(BLOCK, 1, block)
+        cpu.wr(BUSY, 2, rng.choice((0, 0, 1)))
+        for a, sz in WARP_FIELDS:
+            cpu.wr(a, sz, rng.randrange(1 << (8 * sz)))
+        f = warp_fields(cpu.ram)
+        want = warp(f, i, block)
+        got = warp_run(cpu, i)
+        after = warp_fields(cpu.ram)
+        why = None
+        if want != got:
+            why = f"calls: model {want}, game {got}"
+        elif f != after:
+            why = "; ".join(f"{a:#x} model {f[a]:#x} game {after[a]:#x}"
+                            for a in f if f[a] != after[a])
+        if why is None:
+            ok += 1
+        elif not told:
+            told = True
+            print(f"  record {i}, block {block}: {why}", file=out)
+    print(f"warp_to, the warp, against the game's own: {ok} of {n} runs agree -- "
+          f"every record from its own block and from others, the calls and "
+          f"{len(WARP_FIELDS)} fields", file=out)
+    return ok == n
+
+
+def warp_plan(i, block, pitch):
+    """What warp(i) leaves, in the port's terms: the block in hand after its
+    object_trigger calls (an 0xff byte keeps the byte in hand, as the
+    crossings' do), whether the level was the one in hand, the place, the
+    facing (0..0xfff), the pitch and the answer -- or {} for a record that
+    does nothing. `block` is the five bytes in hand."""
+    f = {a: 0 for a, _n in WARP_FIELDS}
+    f[PLAYER_ANGLES] = pitch & 0xFFFF
+    calls = warp(f, i, block[0])
+    if not calls:
+        return {}
+    b = list(block)
+    for c in calls:
+        if c[0] == "trigger":
+            b = [cur if v == 0xFF else v for cur, v in zip(b, c[1:6])]
+    return {"level": b[1], "block": b, "same": f[SPAWN_ANYWHERE] == 1,
+            "pos": [s32(f[PLAYER_POS]), s32(f[PLAYER_POS + 4]), s32(f[PLAYER_POS + 8])],
+            "facing": f[PLAYER_ANGLES + 2] & 0xFFF, "pitch": s16(f[PLAYER_ANGLES]),
+            "answer": f[ANSWER]}
+
+
 # --- for the port ---------------------------------------------------------------
 
 # The fields of an object the port's copy (godot/useitem.gd) reads, in order.
@@ -868,7 +1040,7 @@ def truth_pages(lv):
 
 
 def export(out_dir, lv=0, per_level=12, seed=11):
-    """useitem.json -- sub_8005c864's fourteen records, which the port's copy
+    """useitem.json -- warp_to's fourteen records, which the port's copy
     asks whether a warp answers -- the truth glass's pages for level `lv`
     (read/N.png, N the entry less 0x96, as document.gd opens a sign's), and
     usecheck.json: runs of the model the self-test holds godot/useitem.gd to."""
@@ -876,7 +1048,7 @@ def export(out_dir, lv=0, per_level=12, seed=11):
     import readables
     import tim
     with open(os.path.join(out_dir, "useitem.json"), "w") as fh:
-        json.dump({"_note": "GAME.EXE 0x800130f0, sub_8005c864's records; tools/useitem.py wrote it",
+        json.dump({"_note": "GAME.EXE 0x800130f0, warp_to's records; tools/useitem.py wrote it",
                    "warps": [warp_record(i) for i in range(14)]}, fh, separators=(",", ":"))
     os.makedirs(os.path.join(out_dir, "read"), exist_ok=True)
     arc = readables.archive(ITEM_ARCHIVE)
@@ -903,9 +1075,19 @@ def export(out_dir, lv=0, per_level=12, seed=11):
                 if after[f] != row["world"][f]:
                     row["want"][f] = after[f]
             rows.append(row)
+    warps = []
+    for i in range(14):
+        for block in ([warp_record(i)[0]] * 5, [0, 0, 0, 0, 0], [4, 4, 4, 13, 15],
+                      [rng.randrange(28) for _ in range(5)]):
+            if block[0] == 0xFF:
+                continue
+            pitch = s16(rng.randrange(0x10000))
+            warps.append({"record": i, "block": block, "pitch": pitch,
+                          "want": warp_plan(i, block, pitch)})
     path = os.path.join(out_dir, "usecheck.json")
     with open(path, "w") as fh:
-        json.dump({"fields": list(OBJECT_FIELDS), "cases": rows}, fh, separators=(",", ":"))
+        json.dump({"fields": list(OBJECT_FIELDS), "cases": rows, "warps": warps}, fh,
+                  separators=(",", ":"))
     return path
 
 
@@ -916,7 +1098,9 @@ def main():
                      else os.path.join(ROOT, "out", "godot")))
         return
     if "--check" in a or not a:
-        sys.exit(0 if check(verbose="-v" in a) else 1)
+        good = check(verbose="-v" in a)
+        good = warp_check() and good
+        sys.exit(0 if good else 1)
 
 
 if __name__ == "__main__":

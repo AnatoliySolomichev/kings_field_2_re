@@ -2437,7 +2437,19 @@ func _use_items() -> bool:
 			print("  first difference: level %d, item 0x%x: %s" % [int(c["level"]), int(c["item"]), why])
 	print("use_item: %d of %d runs match tools/useitem.py -- calls, answer, pack, figures and objects" % [
 		ok, cases.size()])
-	return ok == cases.size()
+	# warp_to's plans: the block, the place, the facing, the pitch, the answer
+	var wok := 0
+	var ws: Array = doc.get("warps", [])
+	for c in ws:
+		var got := KFUseItem.warp_plan(int(c["record"]), (c["block"] as Array).map(
+			func(v): return int(v)), int(c["pitch"]))
+		if JSON.stringify(_norm(got)) == JSON.stringify(_norm(c["want"])):
+			wok += 1
+		elif wok == 0:
+			print("  first difference: warp record %d from %s: %s, python %s" % [int(c["record"]),
+				str(c["block"]), str(got), str(c["want"])])
+	print("warp_to: %d of %d plans match tools/useitem.py" % [wok, ws.size()])
+	return ok == cases.size() and wok == ws.size()
 
 
 # @port helper -- a case's world, as KFUseItem.run takes it

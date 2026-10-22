@@ -276,13 +276,13 @@ reading a row would be reading whatever follows the table.
 
   0x8004a120  opcode 0xe7
       115 instructions in 19 blocks
-      calls player_in_rect, sub_80046c00, grid_mark, place_player_on_terrain, res_wait, screen_fade
-      reads player_pos, writes player_pos, writes player_facing, reads player_facing
+      calls player_in_rect, fade_frames, grid_mark, place_player_on_terrain, res_wait, screen_fade
+      reads player_pos, writes player_pos, writes player_layer, writes player_facing, reads player_facing
 
   0x8004a66c  opcode 0xe8   -- 12 objects in the game
       102 instructions in 16 blocks
       calls player_in_rect, screen_capture, grid_mark, place_player_on_terrain
-      reads player_pos, writes player_pos, writes player_facing, reads player_facing
+      reads player_pos, writes player_pos, writes player_layer, writes player_facing, reads player_facing
 
   0x8004a5b8  opcode 0xea   -- 8 objects in the game
       95 instructions in 17 blocks
@@ -291,7 +291,7 @@ reading a row would be reading whatever follows the table.
 
   0x8004a2e0  opcode 0xeb   -- 16 objects in the game
       182 instructions in 35 blocks
-      calls player_in_rect, sub_80046c00, actors_retire_marked, sub_80019538, level_load, object_trigger, res_wait
+      calls player_in_rect, fade_frames, actors_retire_marked, res_upload_wait, level_load, object_trigger, res_wait
       reads level_change_busy, reads current_level_block, writes spawn_anywhere, writes player_state, points at player_pitch, points at view_angles
 ```
 

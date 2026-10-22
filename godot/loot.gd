@@ -747,8 +747,8 @@ func _talk_next() -> void:
 # pack and the figures, every object as it is now (views) and the awake
 # creatures -- the routine over it, and what it did, back: the locks, states
 # and places it wrote into whatever keeps them, then its calls acted out.
-# The level's own entries are not in the port, nor the warp (sub_8005c864)
-# yet, nor an object made for Orladin's key.
+# The level's own entries are not in the port, nor an object made for
+# Orladin's key; the warp goes to crossing.gd.
 # @port engine -- the world handed to KFUseItem.run and its calls acted out
 func use_item(id: int) -> void:
 	var c: KFCollision = player.coll
@@ -784,6 +784,7 @@ func use_item(id: int) -> void:
 		if o.get("made", false):
 			KFInfo.note("use: Orladin's key's object in slot %d is not made in the port" % k)
 	var recalc := false
+	var warp := {}
 	for call in calls:
 		match str(call[0]):
 			"announce":
@@ -803,13 +804,19 @@ func use_item(id: int) -> void:
 			"recalc":
 				recalc = true
 			"warp":
-				KFInfo.note("use: item %d asks for warp record %d -- sub_8005c864 is not in the port yet" % [
-					id, int(call[1])])
+				warp = KFUseItem.warp_plan(int(call[1]), KFGame.block if not KFGame.block.is_empty()
+					else [player._level(), player._level(), player._level(), player._level(),
+						player._level()], int(player.pitch))
+				KFInfo.note("use: item %d, warp record %d: %s" % [id, int(call[1]), str(warp)])
 			"clear":
 				player.clear_movement()
 	if recalc:
 		player.recalc_stats()
 	KFInfo.note("use: item %d, %s" % [id, "answered" if int(w["answer"]) else "nothing happens"])
+	if not warp.is_empty():
+		var cr := get_node_or_null("../Crossing")
+		if cr:
+			cr.warp(warp)
 
 
 # Every object as use_item's find_object and its arms see it, slot by slot:

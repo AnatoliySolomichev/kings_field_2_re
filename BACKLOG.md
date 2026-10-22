@@ -574,9 +574,11 @@ Eating heals. Left, roughly in order:
   game's own over every level (2800 of 2800 runs), and in the port
   (`godot/useitem.gd`, the self-test 336 of 336): the truth glass, the flask,
   the figures, the keys, Silviera's key, Orladin's key, `0x80`'s 900 frames
-  (FORMATS.md, "A thing used"). Left of it: **the warp** (`sub_8005c864`,
-  Ichrius' eye, wings and crown -- the port logs the call and stops); block
-  6's two statues (`0x80` there runs a scene of the game's frames until a
+  (FORMATS.md, "A thing used"), and the warp Ichrius' eye, wings and crown
+  ask for (`warp_to`, FORMATS.md "The warp", 280 of 280 runs of the game's
+  own; the port without its fades, and not for `cutscene_step`'s record
+  `0xc` or `level_overlay_tick`'s `0xd`; `0x801b25ee`, which it sets, is read
+  nowhere the walk finds). Left of it: block 6's two statues (`0x80` there runs a scene of the game's frames until a
   creature wakes); the level's own entry 2 (levels 1, 2, 4, 5, 7, 8, 17, 20,
   23, 25 and 27 have one) and give_item's and take_item's entries 6 and 11;
   and what acts on Orladin's key's work -- opcodes `0x17` (the locks, eight
