@@ -25,8 +25,8 @@ extends Node
 #
 # Locks other than 0xff say why not (KFMessages): 0xf1 "Sealed", 0xf0 "Spell
 # is Cast", an opened chest with nothing in it "Empty", and the rest --
-# keys, in the main -- "Locked". The keys themselves are use_item's: try_key
-# tries one on what is in front, and put_key stands Silviera's on a pedestal.
+# keys, in the main -- "Locked". The keys themselves are use_item's
+# (godot/useitem.gd), which use_item here hands the world to.
 #
 # A pedestal (opcode 0x18, level 4's type 0x101) holds a gate's bits: the key
 # put on it is an object of its own in the ring of slots 380..395, which
@@ -312,7 +312,7 @@ func _exit_tree() -> void:
 
 # @port engine -- USE into _interact, the arms at 15 a second, and object_give's own frames while it runs
 func _process(dt: float) -> void:
-	if rows.is_empty():
+	if rows.is_empty() and reading == null:
 		return
 	if dream != null:
 		# the night's dream: START or a face button ends it, as play_movie's
@@ -351,7 +351,8 @@ func _process(dt: float) -> void:
 			reading = null
 			KFGame.modal = false
 			player.clear_movement()
-			_interact(resume, true)
+			if resume >= 0:                # a page use_item showed resumes nothing
+				_interact(resume, true)
 		return
 	if not give.is_empty():
 		# object_give reads the pad itself: a press is a word that is not 0
@@ -741,59 +742,174 @@ func _talk_next() -> void:
 	_interact(0, true)
 
 
-# use_item's arm for the keys (0x8005d188): royal, copper, silver, magician's,
-# jail, dwarves' and Lyn's. find_object offers each object in front of the
-# player -- from the player's own place this time, 0x320 more than the type's
-# reach, 0x6a4 as the point's height, within 0x200 of the facing -- and the key
-# is tried on it (0x80046608): 1 it fitted and the lock is 0xff now, open to
-# USE; 3 or 4 "Wrong key!"; anything else the next object. The key is kept.
-# The chests and pedestals here and the doors and gates in doors.gd are
-# offered in slot order.
-# @orig game:0x8005d188 use_item+0x5a8  status:transcribed -- the keys' arm; not the sound when one fits (sound_key_fits)
-func try_key(key: int) -> int:
+# use_item (0x8005cbe0) for the thing `id` (godot/useitem.gd): the world
+# as the routine reads it, out of the port -- the player, the block, the
+# pack and the figures, every object as it is now (views) and the awake
+# creatures -- the routine over it, and what it did, back: the locks, states
+# and places it wrote into whatever keeps them, then its calls acted out.
+# The level's own entries are not in the port, nor the warp (sub_8005c864)
+# yet, nor an object made for Orladin's key.
+# @port engine -- the world handed to KFUseItem.run and its calls acted out
+func use_item(id: int) -> void:
 	var c: KFCollision = player.coll
-	var offered := []
-	for k in slots:
-		offered.append([int(k), rows[k], "lock"])
+	if KFUseItem.warps.is_empty():
+		KFUseItem.load_from()
+	var ch: Dictionary = player.character
+	var objs := views()
+	var before := []
+	for o in objs:
+		before.append(null if o == null else (o as Dictionary).duplicate())
+	var block: Array = KFGame.block
+	var w := {"pos": [player.gx, player.gy, player.gz], "pitch": int(player.pitch),
+		"facing": KFWeapon.s16(int(player.facing)), "layer": int(player.layer),
+		"block": int(block[0]) if not block.is_empty() else player._level(),
+		"busy": 0, "pending": 0xFF, "inv": player.inventory,
+		"skills": ch.get("grow", [0, 0, 0, 0, 0]), "stat36": int(ch.get("stat36", 20)),
+		"wis": int(ch.get("wis", 0)), "b578": int(player.bonus[2]),
+		"drops": int(counters[0x15E]), "spells": ch.get("spells", []),
+		"flags": KFTalk.flags, "objects": objs, "creatures": _awake()}
+	var calls := KFUseItem.run(w, id, c)
+	ch["stat36"] = int(w["stat36"])
+	ch["wis"] = int(w["wis"])
+	player.bonus[2] = int(w["b578"])
+	counters[0x15E] = int(w["drops"])
+	for k in objs.size():
+		var o = objs[k]
+		if o == null or before[k] == null:
+			continue
+		for f in ["lock", "state", "b39"]:
+			if int(o[f]) != int(before[k][f]):
+				_write_view(k, o)
+				break
+		if o.get("made", false):
+			KFInfo.note("use: Orladin's key's object in slot %d is not made in the port" % k)
+	var recalc := false
+	for call in calls:
+		match str(call[0]):
+			"announce":
+				KFMessages.announce(int(call[1]))
+			"load_entry":
+				var d = get_node_or_null("../UI/Document")
+				if d != null and d.open(int(call[2]) - 0x96):
+					reading = d
+					resume = -1
+					KFGame.modal = true
+				KFInfo.note("use: item %d shows ITEM.T %d" % [id, int(call[2])])
+			"put_key":
+				for pd in pedestals:
+					if int(pd["slot"]) == int(call[1]):
+						_put_key(pd, int(call[2]))
+				KFInfo.note("key: item %d put on the pedestal in slot %d" % [int(call[2]), int(call[1])])
+			"recalc":
+				recalc = true
+			"warp":
+				KFInfo.note("use: item %d asks for warp record %d -- sub_8005c864 is not in the port yet" % [
+					id, int(call[1])])
+			"clear":
+				player.clear_movement()
+	if recalc:
+		player.recalc_stats()
+	KFInfo.note("use: item %d, %s" % [id, "answered" if int(w["answer"]) else "nothing happens"])
+
+
+# Every object as use_item's find_object and its arms see it, slot by slot:
+# lootNN.json's find rows, over them what this file, doors.gd and the
+# pedestals keep now -- a thing made or taken, a lock turned, a door's yaw.
+# @port helper -- the port's objects as KFUseItem's world rows
+func views() -> Array:
+	var out := []
+	out.resize(396)
+	for k in finds:
+		var f: Array = finds[k]
+		out[k] = {"slot": k, "cls": int(f[1]), "type": int(f[2]), "x": int(f[3]),
+			"y": int(f[4]), "z": int(f[5]), "yaw": KFWeapon.s16(int(f[6])), "height": int(f[7]),
+			"reach": int(f[8]), "top": int(f[9]), "op": int(f[10]) if f.size() > 10 else 0xFF,
+			"state": 0, "lock": int(f[11]) if f.size() > 11 else 0xFF,
+			"b39": int(f[12]) if f.size() > 12 else 0xFF, "h3a": int(f[13]) if f.size() > 13 else 0xFFFF,
+			"h3c": 0, "b0": int(f[14]) if f.size() > 14 else 0,
+			"b40": int(f[15]) if f.size() > 15 else 0xFF}
+	for k in rows:
+		var r: Dictionary = rows[k]
+		var p: Vector3i = r["pos"]
+		if out[k] == null:
+			out[k] = {"slot": k, "cls": int(r["cls"]), "reach": int(r["reach"]),
+				"top": int(r["top"]), "yaw": 0, "height": 0, "op": int(r.get("op", 0xFF)),
+				"b39": 0xFF, "h3a": 0xFFFF, "b0": 0, "b40": 0xFF}
+		out[k]["type"] = int(r["type"])
+		out[k]["x"] = p.x
+		out[k]["y"] = p.y
+		out[k]["z"] = p.z
+		out[k]["lock"] = int(r.get("lock", 0xFF))
+		out[k]["state"] = int(r.get("state", 0))
+		out[k]["h3c"] = int(r.get("count", 0))
 	var dn := get_node_or_null("../Doors")
 	if dn:
-		for d in dn.doors:
-			offered.append([int(d["slot"]), d, "door"])
-		for d in dn.lifts:
-			offered.append([int(d["slot"]), d, "lift"])
-		for d in dn.gates:
-			offered.append([int(d["slot"]), d, "lock"])
+		for d in dn.doors + dn.lifts + dn.gates + dn.walls:
+			var k := int(d["slot"])
+			if out[k] == null:
+				continue
+			out[k]["yaw"] = KFWeapon.s16(int(d["yaw"]))
+			out[k]["state"] = int(d["state"])
+			out[k]["lock"] = int(d["lock"]) if d.has("lock") else int(d["tail"][0])
 	for pd in pedestals:
-		offered.append([int(pd["slot"]), pd, "lock"])
-	offered.sort_custom(func(a, b): return int(a[0]) < int(b[0]))
-	for o in offered:
-		var r: Dictionary = o[1]
-		if int(r.get("type", 0)) == GONE:
+		var k := int(pd["slot"])
+		if out[k] == null:
 			continue
-		var p: Vector3i = r["pos"] if r.has("pos") else Vector3i(int(r["x"]), int(r["y"]), int(r["z"]))
-		var px: int = player.gx
-		var pz: int = player.gz
-		var top := int(r.get("top", r.get("height", 0)))
-		if str(o[2]) == "door":
-			# find_object's point for a class-1 door: 0x400 back along its yaw
-			var yaw := int(r["yaw"])
-			px += (c.game_cos(yaw) * -0x400) >> 12
-			pz += (c.game_sin(yaw) * -0x400) >> 12
-			top = int(r["height"])
-		if c.in_range(p.x, p.y, p.z, px, player.gy, pz, int(r["reach"]) + 0x320, top, 0x6A4) < 0:
+		out[k]["lock"] = int(pd["lock"])
+		out[k]["state"] = int(pd["state"])
+		out[k]["b39"] = int(pd["ring"])
+	for k in held_locks:
+		if out[k] == null:
 			continue
-		if int(r.get("type", 0)) != NO_FACING and not _facing(player.facing,
-				c.vec_angle(p.x - px, p.z - pz), 0x200):
+		out[k]["op"] = int(held_locks[k]["op"])
+		out[k]["state"] = int(held_locks[k]["state"])
+		out[k]["lock"] = int(held_locks[k]["lock"])
+	return out
+
+
+# What use_item wrote of an object, into what keeps it: a pedestal's lock,
+# state and place in the ring, a chest's or a thing's lock and state, a
+# door's, a lift's, a gate's or a wall's lock (doors.gd), and for an object
+# the port does not move, its held lock.
+# @port helper -- a world row's lock, state and +0x39 back where the port keeps them
+func _write_view(k: int, o: Dictionary) -> void:
+	for pd in pedestals:
+		if int(pd["slot"]) == k:
+			pd["lock"] = int(o["lock"])
+			pd["state"] = int(o["state"])
+			pd["ring"] = int(o["b39"])
+			return
+	if rows.has(k):
+		rows[k]["lock"] = int(o["lock"])
+		rows[k]["state"] = int(o["state"])
+		return
+	var dn := get_node_or_null("../Doors")
+	if dn:
+		for d in dn.doors + dn.lifts + dn.gates + dn.walls:
+			if int(d["slot"]) == k:
+				dn._set_lock(d, int(o["lock"]))
+				return
+	var g := _gate_of(k)
+	g["lock"] = int(o["lock"])
+	g["state"] = int(o["state"])
+
+
+# The awake creatures as use_item's truth glass looks at them: [slot, +0xe,
+# +0x28, x, y, z, its model (+1), the floor it stands on (+3)].
+# @port helper -- actors.gd's awake creatures, as sub_8004d3c4's list
+func _awake() -> Array:
+	var out := []
+	var an := get_node_or_null("../Actors")
+	if an == null or an.get("actors") == null:
+		return out
+	var list: Array = an.get("actors")
+	for k in list.size():
+		var a = list[k]
+		if a == null or int(a.get("st", 0)) != 1:
 			continue
-		var got := key_test(r, str(o[2]), key)
-		if got == 1:
-			KFInfo.note("key: item %d opens the lock of slot %d" % [key, int(o[0])])
-			return 1
-		if got == 3 or got == 4:
-			KFMessages.announce(7)                     # "Wrong key!"
-			KFInfo.note("key: item %d does not fit slot %d" % [key, int(o[0])])
-			return got
-	return 0
+		out.append([k, int(a.get("op", 0)), int(a.get("eflags", 0)), int(a["px"]), int(a["py"]),
+			int(a["pz"]), int(a.get("model", 0)), int(a.get("floor", 0))])
+	return out
 
 
 # 0x80046608: a key tried on an object, by its opcode -- the doors 0..5 and
@@ -823,39 +939,6 @@ static func key_test(r: Dictionary, kind: String, key: int) -> int:
 	else:
 		r["lock"] = 0xFF
 	return 1
-
-
-# use_item's arm for Silviera's key (0x8005d244): find_object's first object
-# in front of the player -- from their own place, 0x320 past its reach, 0x6a4
-# as the point's height, within 0x200 of the facing -- and that one only. A
-# type-0x101 pedestal whose lock is 0xff takes the key: the lock the key's
-# number, the state 0, the key out of the pack, and pedestal_put_key stands
-# it there (1). Anything else has the key tried on it, and a 3 is "Wrong
-# key!" (1); the rest is 0, "Nothing happens" -- a key that fits too, which
-# the shared arm would have answered with its sound.
-# @orig game:0x8005d244 use_item+0x664  status:transcribed -- held to silv1 and silv2 through tools/chests.py check_pedestal
-func put_key(item: int) -> int:
-	var k := find_object(0, Vector3i(player.gx, player.gy, player.gz), 0x320, 0x6A4,
-		int(player.facing), 0x200)
-	if k < 0:
-		return 0
-	for pd in pedestals:
-		if int(pd["slot"]) != k or int(pd["type"]) != PEDESTAL:
-			continue
-		if int(pd["lock"]) != FREE:
-			return 0
-		pd["lock"] = item
-		pd["state"] = 0
-		player.inventory.take_item(item)
-		_put_key(pd, item)
-		KFInfo.note("key: item %d put on the pedestal in slot %d" % [item, k])
-		return 1
-	var o := _lockable(k)
-	if not o.is_empty() and key_test(o[0], str(o[1]), item) == 3:
-		KFMessages.announce(WRONG_KEY)
-		KFInfo.note("key: item %d does not fit slot %d" % [item, k])
-		return 1
-	return 0
 
 
 # pedestal_put_key (0x8005c7e8): the first free slot of the ring 380..395 --
@@ -991,97 +1074,6 @@ func _gate_of(slot: int) -> Dictionary:
 		held_locks[slot] = {"op": int(f[10]) if f.size() > 11 else 0xFF, "state": 0,
 			"lock": int(f[11]) if f.size() > 11 else 0xFF}
 	return held_locks[slot]
-
-
-# What key_test is to ask of the object in `slot`: [its dictionary, the kind]
-# -- a chest's or a pedestal's lock, a door's or a lift's tail, a gate's lock
-# -- or, for an object the port does not move, its opcode and lock as placed.
-# @port helper -- the object find_object found, for key_test
-func _lockable(slot: int) -> Array:
-	if rows.has(slot):
-		return [rows[slot], "lock"]
-	for pd in pedestals:
-		if int(pd["slot"]) == slot:
-			return [pd, "lock"]
-	var dn := get_node_or_null("../Doors")
-	if dn:
-		for d in dn.doors:
-			if int(d["slot"]) == slot:
-				return [d, "door"]
-		for d in dn.lifts:
-			if int(d["slot"]) == slot:
-				return [d, "lift"]
-	if finds.has(slot):
-		return [_gate_of(slot), "lock"]
-	return []
-
-
-# find_object (0x80045c7c): from slot `start` on, the first object whose type
-# is not 0xff within `add` past its type's reach (+6) of the point `pt` --
-# `own` as the point's height -- and, but for type 0x95, within `tol` of
-# `facing`. A class-0 door is asked from 0x700 behind the point along its own
-# yaw, a class-0x1b one from 0x700 ahead and a class-1 door from 0x400
-# behind, the record's +0xc as its top; anything else from the point itself,
-# the type's +8 its top. Over the objects as they are now: lootNN.json's find
-# rows, with what loot.gd has made and taken and a swinging door's yaw.
-# @orig game:0x80045c7c find_object  status:transcribed -- the plain test and the three doors' points, over every object
-func find_object(start: int, pt: Vector3i, add: int, own: int, facing: int, tol: int) -> int:
-	var c: KFCollision = player.coll
-	var yaws := {}
-	var dn := get_node_or_null("../Doors")
-	if dn:
-		for d in dn.doors:
-			yaws[int(d["slot"])] = int(d["yaw"])
-	var order: Array = finds.keys()
-	for k in rows:
-		if not finds.has(int(k)):
-			order.append(int(k))
-	order.sort()
-	for k in order:
-		if int(k) < start:
-			continue
-		var cls := 0x40
-		var typ := GONE
-		var o := Vector3i.ZERO
-		var yaw := 0
-		var height := 0
-		var reach := 0
-		var top := 0
-		if finds.has(k):
-			var f: Array = finds[k]
-			cls = int(f[1])
-			typ = int(f[2])
-			o = Vector3i(int(f[3]), int(f[4]), int(f[5]))
-			yaw = int(f[6])
-			height = int(f[7])
-			reach = int(f[8])
-			top = int(f[9])
-		if rows.has(k):
-			var r: Dictionary = rows[k]
-			typ = int(r["type"])
-			o = r["pos"]
-			if not finds.has(k):
-				cls = int(r["cls"])
-				reach = int(r["reach"])
-				top = int(r["top"])
-		if typ == GONE:
-			continue
-		yaw = int(yaws.get(k, yaw))
-		var px := pt.x
-		var pz := pt.z
-		var door := cls == 0 or cls == 1 or cls == 0x1B
-		if door:
-			var off := 0x700 if cls == 0x1B else (-0x700 if cls == 0 else -0x400)
-			px += (c.game_cos(yaw) * off) >> 12
-			pz += (c.game_sin(yaw) * off) >> 12
-			top = height
-		if c.in_range(o.x, o.y, o.z, px, pt.y, pz, reach + add, top, own) < 0:
-			continue
-		if not door and typ == NO_FACING:
-			return int(k)
-		if _facing(facing, c.vec_angle(o.x - px, o.z - pz), tol):
-			return int(k)
-	return -1
 
 
 # object_interact's .L28: what a chest's lock says to USE.

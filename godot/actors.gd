@@ -84,6 +84,7 @@ func _ready() -> void:
 			a[key] = int(v) if typeof(v) == TYPE_FLOAT else v
 		a["st"] = DORMANT
 		a["ry"] = a["yaw"]
+		a["floor"] = int(a["layer"])     # +3, the floor it stands on: actor_spawn's, then actor_move_vertical's
 		_home(a)
 		actors[a["slot"]] = a
 	var root := get_node_or_null("../Creatures")
@@ -718,11 +719,13 @@ func _block(k: int, why: String) -> void:
 		_state(k, HELD, why)
 
 
-# 0x8004b868 and 0x8004b698
+# 0x8004b868 and 0x8004b698. The floor it stands on (+3) is its home's
+# (+6), none for category 3.
 # @orig game:0x8004b868 actor_spawn  status:transcribed
 func _spawn(k: int) -> void:
 	var a: Dictionary = actors[k]
 	a["ry"] = a["yaw"]
+	a["floor"] = 0 if int(a["cat"]) == 3 else int(a["layer"])
 	_home(a)
 	_state(k, ACTIVE, "woken")
 	if (a["flags"] & 1) == 0:

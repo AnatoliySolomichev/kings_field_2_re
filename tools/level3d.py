@@ -1092,14 +1092,16 @@ def find_rows(load):
     tests a point against, for godot/loot.gd find_object -- and the opcode
     and the lock (+0x38) key_test asks of what it finds; then +0x39 and the
     halfword at +0x3a, which with the rest are what level_state_write reads of
-    a slot (godot/levelstate.gd's table)."""
+    a slot (godot/levelstate.gd's table); then the record's +0 and +0x40 as
+    the loader leaves them, which use_item's truth glass asks (godot/useitem.gd)."""
     out = []
     for k, o in sorted(load.recs.items()):
         tr = load.rows[o["type"]]
         out.append([k, o["cls"], o["type"], o["x"], o["y"], o["z"], o["angles"][1],
                     o["height"], struct.unpack_from("<H", tr, 6)[0],
                     struct.unpack_from("<H", tr, 8)[0], o["op"], o["tail"][0],
-                    o["tail"][1], struct.unpack_from("<H", bytes(o["tail"]), 2)[0]])
+                    o["tail"][1], struct.unpack_from("<H", bytes(o["tail"]), 2)[0],
+                    o["b0"], o["tail"][8]])
     return out
 
 
@@ -1616,7 +1618,7 @@ def project(lv, out="out/godot", start=(57, 4)):
                  "doors.gd", "sky.gd", "hud.gd", "compass.gd", "ai.gd",
                  "weapon.gd", "anim.gd", "effects.gd", "held.gd",
                  "loot.gd", "messages.gd", "document.gd", "talk.gd", "info.gd", "menu.gd",
-                 "crossing.gd", "card.gd", "levelstate.gd", "loadscreen.gd"):
+                 "crossing.gd", "card.gd", "levelstate.gd", "loadscreen.gd", "useitem.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening
@@ -1798,6 +1800,11 @@ def project(lv, out="out/godot", start=(57, 4)):
         levelup.export(out)
     except Exception as e:                       # no disc image, no level table
         print(f"level table skipped: {e}")
+    try:
+        import useitem
+        useitem.export(out, lv)
+    except Exception as e:                       # no snapshot, no use_item cases
+        print(f"use_item cases skipped: {e}")
     print(f"godot project in {out}/ — player starts in cell ({cx},{cz})")
 
 
@@ -1841,7 +1848,7 @@ def verify(out="out/godot"):
         if line.startswith(("loaded:", "movement:", "steps:", "creature steps:",
                             "fences:",
                             "creature run:",
-                            "levels:", "skills:", "angles:",
+                            "levels:", "use_item:", "angles:",
                             "scripts:", "damage:", "equipment:", "player_recalc_stats:", "knock-back:", "weapon:", "animation:", "effects:", "lift doors:", "chests:", "inscriptions:", "conversations:", "menus:", "routines:", "saves:", "level states:", "the run:", "player_take_hit:", "the status:", "casting:", "the attacking arms:", "creature hits:", "creature strikes:", "creature holds:", "FAIL", "  first",
                             "  level case", "  angle (", "  script level",
                             "  hit ")):

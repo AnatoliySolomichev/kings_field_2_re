@@ -215,14 +215,14 @@ the equipment tables, against a RAM snapshot           3264/3264, 2112/2112, 16/
                                                        player_recalc_stats 483 of
                                                        483 values over 21 snapshots
 the conversation hooks, two readings of one table      23 of 23
-how much of the game the port has (portmap progress)   46.0% of the game's own
-                                                       code (game 46.4%, open
+how much of the game the port has (portmap progress)   46.5% of the game's own
+                                                       code (game 46.9%, open
                                                        46.7%, end 0%; partial at
                                                        half, the library left out)
-the port against the game, function by function        788 of 788 placed: 462
-                                                       reproduce the game, 326 the
-                                                       port's own; 527 markers and
-                                                       1057 cited addresses, every
+the port against the game, function by function        803 of 803 placed: 469
+                                                       reproduce the game, 334 the
+                                                       port's own; 535 markers and
+                                                       1071 cited addresses, every
                                                        one resolving
 the object loader, against 13 snapshots                angles 4344/4352, scale and
                                                        position 4352/4352, opcode
@@ -327,6 +327,11 @@ and effect_driver (its world stood in for)             914 frames, queries, hits
                                                        34 hits on a creature
 the attacking arms, against the game's own             840 of 840 casts, every
 player_action (aim, creature in sight, spawns)         spawn and argument
+a thing used, against the game's own use_item over     2800 of 2800 runs: calls,
+every level (tools/useitem.py)                         answer, pack, figures and
+                                                       396 object records; the
+                                                       truth glass's three pages,
+                                                       the flask, every key
 casting, against the game's own cast_spell,            1260 of 1260 of each:
 player_action, player_turn and the controller's end    casts, actions, pending,
                                                        timers, the USE stretch
@@ -378,6 +383,7 @@ effects 1494 of 1494 runs, 27656 of 27656 frames · aims 300 of 300 · volleys 2
 the run 150129 of 150129 frames
 player_take_hit 300 of 300 · the status 40 of 40 runs, 6312 of 6312 frames
 casting 1000 of 1000 · the attacking arms 240 of 240 · creature hits 400 of 400
+use_item 336 of 336
 ```
 
 **Tell the two kinds apart.** Against a recording or a RAM snapshot — the

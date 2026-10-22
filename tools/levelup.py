@@ -162,84 +162,9 @@ def award(state, delta, rng=None, flags=None, data=None):
     return s
 
 
-# use_item's arms for the things that raise a figure (0x8005cd04..0x8005ce7c,
-# 0x8005cc4c..0x8005cd00): verdite every skill once, the power fruit stat 36
-# three times, the wise fruit 0x801b2530 once (up to 4), a crystal its own
-# skill three times. A banner the first time anything answers -- 0xd, 1, 2, or
-# 0x12 + the skill -- and the skill_unlock banners between.
-VERDITE, POWER_FRUIT, WISE_FRUIT = 0x6E, 0x6F, 0x70
-CRYSTALS = range(0x71, 0x76)          # fire, earth, water, wind, light
-WIS_CAP = 5
-
-
-def use_arm(item, s, flags, data=None):
-    """One of those arms on `s` ("grow", "stat36", "wis", "spells"). Returns
-    (banners, whether it answered -- 0x801ba984 -- and whether it took the
-    thing itself)."""
-    banners = []
-    answered = False
-    took = False
-    if item == VERDITE or item in CRYSTALS:
-        took = True
-        ks = range(4, -1, -1) if item == VERDITE else [item - CRYSTALS.start] * 3
-        for k in ks:
-            s["grow"][k] += 1
-            if s["grow"][k] >= 1000:
-                s["grow"][k] = STAT_CAP
-                continue
-            got = skill_unlock(s, k, flags, data)
-            banners += got
-            answered = answered or bool(got)
-            if not answered:
-                answered = True
-                banners.append(0xD if item == VERDITE else 0x12 + k)
-    elif item == POWER_FRUIT:
-        for _ in range(3):
-            s["stat36"] += 1
-            if s["stat36"] >= 1000:
-                s["stat36"] = STAT_CAP
-                continue
-            if not answered:
-                answered = True
-                banners.append(1)
-    elif item == WISE_FRUIT:
-        s["wis"] += 1
-        if s["wis"] >= WIS_CAP:
-            s["wis"] = WIS_CAP - 1
-        else:
-            answered = True
-            banners.append(2)
-    return banners, answered, took
-
-
-def arm_cases():
-    """States through the arms for the port's copy (godot/selftest.gd)."""
-    import copy
-    data = skill_data()
-    rows = []
-    starts = [
-        {"grow": [0, 0, 0, 0, 10], "stat36": 20, "wis": 0},
-        {"grow": [19, 34, 0, 64, 9], "stat36": 997, "wis": 3},
-        {"grow": [999, 998, 49, 79, 114], "stat36": 999, "wis": 4},
-    ]
-    for st in starts:
-        for fl in (0, 1):
-            for item in [VERDITE, POWER_FRUIT, WISE_FRUIT] + list(CRYSTALS):
-                s = copy.deepcopy(st)
-                s["spells"] = new_spells()
-                flags = [0] * 0x100
-                for k in range(4):
-                    flags[SKILL_FLAG + k] = fl
-                before = copy.deepcopy(s)
-                banners, answered, took = use_arm(item, s, flags, data)
-                rows.append({"item": item, "state": before, "flags": fl,
-                             "want": {"grow": s["grow"], "stat36": s["stat36"],
-                                      "wis": s["wis"],
-                                      "spells": [i for i, v in enumerate(s["spells"]) if v],
-                                      "unlocked": flags[SKILL_UNLOCKED:SKILL_UNLOCKED + 5],
-                                      "banners": banners, "answered": answered,
-                                      "took": took}})
-    return rows
+# use_item's arms for the things that raise a figure -- verdite, the fruits
+# and the crystals -- are tools/useitem.py's now, with the rest of the routine
+# and held to the game's own.
 
 
 def check_spells(out=sys.stdout):
@@ -283,8 +208,6 @@ def export(out_dir):
             for hp, mp, g, n in table()]
     cases(out_dir)
     th, ul = skill_data()
-    with open(os.path.join(out_dir, "skillcheck.json"), "w") as fh:
-        json.dump({"arms": arm_cases()}, fh, separators=(",", ":"))
     path = os.path.join(out_dir, "levels.json")
     with open(path, "w") as fh:
         json.dump({"_note": f"FDAT.T entry {ENTRY} at offset {OFFSET}, "

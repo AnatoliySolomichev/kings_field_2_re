@@ -335,6 +335,9 @@ func _init() -> void:
 	if not _chests():
 		quit(1)
 		return
+	if not _use_items():
+		quit(1)
+		return
 	if not _inscriptions():
 		quit(1)
 		return
@@ -2380,6 +2383,88 @@ func _menus() -> bool:
 
 
 # @port check -- a primitive list with every number an int and every pair an array, for comparing
+# use_item (0x8005cbe0), godot/useitem.gd against the runs tools/useitem.py
+# made of its model, which is held to the game's own use_item over every
+# level: the calls in order, the answer, the pack, the figures, the spells and
+# flags, and every object it was handed.
+func _use_items() -> bool:
+	if not FileAccess.file_exists("res://usecheck.json"):
+		print("use_item: no cases to check against")
+		return true
+	if not KFUseItem.load_from():
+		print("use_item: usecheck.json but no useitem.json")
+		return false
+	var doc = JSON.parse_string(FileAccess.get_file_as_string("res://usecheck.json"))
+	var names: Array = doc["fields"]
+	var ok := 0
+	var told := false
+	var cases: Array = doc["cases"]
+	for c in cases:
+		var cw: Dictionary = c["world"]
+		var want: Dictionary = c["want"]
+		var w := _use_world(cw, names)
+		var calls := KFUseItem.run(w, int(c["item"]), coll)
+		var why := ""
+		if JSON.stringify(_norm(calls)) != JSON.stringify(_norm(want["calls"])):
+			why = "calls %s, python %s" % [str(calls), str(want["calls"])]
+		elif int(w["answer"]) != int(want["answer"]):
+			why = "answer %d, python %d" % [int(w["answer"]), int(want["answer"])]
+		else:
+			var inv: KFItems = w["inv"]
+			var got := {"inv_a": Array(inv.a).slice(0, 0x96), "inv_b": Array(inv.b).slice(0, 0x96),
+				"skills": w["skills"], "stat36": w["stat36"], "wis": w["wis"], "b578": w["b578"],
+				"drops": w["drops"], "spells": w["spells"], "flags": (w["flags"] as Array).slice(0, 0x100)}
+			for f in got:
+				var exp = want.get(f, cw[f])
+				if JSON.stringify(_norm(got[f])) != JSON.stringify(_norm(exp)):
+					why = "%s %s, python %s" % [f, str(got[f]), str(exp)]
+					break
+			if why == "":
+				for row in want.get("objects", cw["objects"]):
+					var o = w["objects"][int(row[0])]
+					for i in names.size():
+						var key: String = "lock" if str(names[i]) == "b38" else str(names[i])
+						if o == null or int(o[key]) != int(row[i]):
+							why = "object %d %s %s, python %d" % [int(row[0]), key,
+								"missing" if o == null else str(o[key]), int(row[i])]
+							break
+					if why != "":
+						break
+		if why == "":
+			ok += 1
+		elif not told:
+			told = true
+			print("  first difference: level %d, item 0x%x: %s" % [int(c["level"]), int(c["item"]), why])
+	print("use_item: %d of %d runs match tools/useitem.py -- calls, answer, pack, figures and objects" % [
+		ok, cases.size()])
+	return ok == cases.size()
+
+
+# @port helper -- a case's world, as KFUseItem.run takes it
+func _use_world(cw: Dictionary, names: Array) -> Dictionary:
+	var w := {}
+	for k in ["pitch", "facing", "layer", "block", "busy", "pending", "stat36", "wis", "b578", "drops"]:
+		w[k] = int(cw[k])
+	w["pos"] = (cw["pos"] as Array).map(func(v): return int(v))
+	for k in ["skills", "spells", "flags"]:
+		w[k] = (cw[k] as Array).map(func(v): return int(v))
+	var inv := KFItems.new()
+	for i in KFItems.COUNT:
+		inv.a[i] = int(cw["inv_a"][i])
+		inv.b[i] = int(cw["inv_b"][i])
+	w["inv"] = inv
+	var objs := []
+	objs.resize(396)
+	for row in cw["objects"]:
+		var o := {}
+		for i in names.size():
+			o["lock" if str(names[i]) == "b38" else str(names[i])] = int(row[i])
+		objs[int(row[0])] = o
+	w["objects"] = objs
+	w["creatures"] = (cw["creatures"] as Array).map(func(r): return (r as Array).map(func(v): return int(v)))
+	return w
+
+
 func _norm(v):
 	if v is Array:
 		var out := []
@@ -2707,30 +2792,4 @@ func _levels() -> bool:
 				break
 	print("levels: %d of %d cases match tools/levelup.py exactly" % [
 		cases.size() - bad_l, cases.size()])
-	var arms_ok := 0
-	var arms: Array = []
-	if FileAccess.file_exists("res://skillcheck.json"):
-		arms = JSON.parse_string(FileAccess.get_file_as_string("res://skillcheck.json"))["arms"]
-	for c in arms:
-		var st: Dictionary = (c["state"] as Dictionary).duplicate(true)
-		var flags := []
-		flags.resize(KFTalk.FLAG_COUNT)
-		flags.fill(0)
-		for k in 4:
-			flags[KFLevels.SKILL_FLAG + k] = int(c["flags"])
-		var r := KFLevels.use_arm(int(c["item"]), st, flags)
-		var spells := []
-		for i in st["spells"].size():
-			if int(st["spells"][i]) != 0:
-				spells.append(i)
-		var got := {"grow": st["grow"], "stat36": st["stat36"], "wis": st["wis"],
-			"spells": spells, "unlocked": flags.slice(KFLevels.SKILL_UNLOCKED, KFLevels.SKILL_UNLOCKED + 5),
-			"banners": r["banners"], "answered": r["answered"], "took": r["took"]}
-		if JSON.stringify(_norm(got)) == JSON.stringify(_norm(c["want"])):
-			arms_ok += 1
-		elif arms_ok == 0:
-			print("  first difference: item %d: godot %s python %s" % [int(c["item"]),
-				str(got), str(c["want"])])
-	print("skills: %d of %d uses of verdite, the fruits and the crystals match tools/levelup.py" % [
-		arms_ok, arms.size()])
-	return bad_l == 0 and arms_ok == arms.size()
+	return bad_l == 0

@@ -408,6 +408,29 @@ table.
 Checked: **13 of 13** RAM snapshots hold what their level's record says, and
 `godot/levelup.gd` reproduces the Python model on **40 of 40** cases.
 
+**`useitem.py`** — a thing used: `use_item` (`0x8005cbe0`) whole, every arm
+of its 61 (FORMATS.md, "A thing used").
+
+```
+python3 tools/useitem.py --check     the model against the game's own use_item
+python3 tools/useitem.py --export D  useitem.json, usecheck.json and the truth
+                                     glass's pages (read/N.png) into D
+```
+
+`--check` runs GAME.EXE's own `use_item` with `tools/mipsrun.py` over every
+level (`level_cpu`: the level's objects as its own loader leaves them), the
+player put in front of the fountains, locks, pedestals, the class-0xe2
+rectangles, slot 11 and the creatures, the thing, pack, skills, spells, floors
+and counts at random: **2800 of 2800** runs give the model's calls in order,
+its answer, the pack, the figures, the spells, the flags and all 396 object
+records byte for byte, and it prints how many went down each arm's ways. What
+use_item calls beyond what it runs -- announce, load_entry, sound_key_fits,
+player_recalc_stats, pedestal_put_key, the level's entries, the warp,
+clear_movement_state -- is stood in for and logged; find_object, key_test,
+sub_8004d3c4, player_in_rect, take_item, give_item, skill_unlock,
+find_free_slot and init_object_record run as the game's. `godot/useitem.gd`
+reproduces the model on **336 of 336** of its runs (`usecheck.json`).
+
 **`savemap.py`** — what the game persists, field by field: 57 globals and the
 offset each occupies in a save, taken from the serialiser and its inverse and
 kept only where the two agree.

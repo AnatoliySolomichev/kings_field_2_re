@@ -459,14 +459,20 @@ func move_horizontal(a: Dictionary, flags: int, others: Array, player: Vector3i)
 	return seen
 
 
-# actor_move_vertical (0x8004e330), states 0, 0x10 and 0x20.
+# actor_move_vertical (0x8004e330), states 0, 0x10 and 0x20. Each frame
+# the floor it stands on (+3) is the layer collide_surface asked -- 2 the
+# upper, else 1 (0x8004e3b4) -- and again the one a free fall's step was
+# asked on (0x8004e680).
 # @orig game:0x8004e330 actor_move_vertical  status:partial -- not the ballistic 0x30, nor the blow a fall onto the player deals
 func move_vertical(a: Dictionary, kind: Dictionary) -> void:
 	var keep_r := coll.radius
 	var keep_b := coll.body
 	coll.radius = int(a["radius"])
 	coll.body = int(a["height"])
-	var surf := int(coll.query(int(a["px"]), int(a["py"]), int(a["pz"]), int(a["py"]) - 0x500)["floor"])
+	var sq := coll.query(int(a["px"]), int(a["py"]), int(a["pz"]), int(a["py"]) - 0x500)
+	var surf := int(sq["floor"])
+	if int(sq["at"]) >= 0:
+		a["floor"] = 2 if int(sq["at"]) % 6 == 3 else 1
 	match int(a["vst"]):
 		0:
 			var d := surf - int(a["py"])
@@ -491,6 +497,8 @@ func move_vertical(a: Dictionary, kind: Dictionary) -> void:
 			if int(q["mask"]) == 0:
 				a["py"] = ny
 				a["vy"] = s16(int(a["vy"]) + int(kind["fall"]))
+				if int(q["at"]) >= 0:
+					a["floor"] = 2 if int(q["at"]) % 6 == 3 else 1
 			elif int(q["mask"]) & 4:
 				a["py"] = int(q["floor"])
 				a["vy"] = 0

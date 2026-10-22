@@ -3277,5 +3277,20 @@
   "name": "weapon_guard",
   "kind": "data",
   "evidence": "Seath's sword's guard: held_item_tick clears it on every blow's frame and, in the combination's swing with the action button held, sets it and holds the clock back (0x8002da6c); player_take_hit lets no hit through while it is set (0x8002ab2c), player_controller halves both walk caps (0x800313b8), equip_weapon clears it"
+ },
+ "0x801ba984": {
+  "name": "use_answer",
+  "kind": "data",
+  "evidence": "whether a thing used did anything: use_item clears it first (0x8005cc20) and, 0 at its end, announces 0xa \"Nothing happens\" (0x8005d770); every arm that acts sets it, and so do skill_unlock when it unlocks a spell (0x80029fb0) and sub_8005c864 below its record 0xc (0x8005cba4). tools/useitem.py holds the routine to the game's own over every level, 2800 of 2800 runs"
+ },
+ "0x801b2644": {
+  "name": "player_layer",
+  "kind": "data",
+  "evidence": "the cell layer the player stands on, 0 or 5: collision_layer_offset as player_horizontal takes a step (0x8002e590); 5 from new_character (0x8002b614) and the crystal's revive (0x80031dcc), 5 or 0 by the record's +0x36 from object_interpreter's teleports (0x8004a228, 0x8004a760); saved and restored. use_item's truth glass reads it as floor 2 (not 0) or 1 (0x8005d588), against a creature's +3 and a class-0xe2 rectangle's +0x40; draw_held_item and draw_model_plain index the lighting by it"
+ },
+ "0x801b2578": {
+  "name": "bonus_skills_timer",
+  "kind": "data",
+  "evidence": "use_item's thing 0x80 sets it to 0x384 (0x8005d170) when no statue of block 6 has answered; while it is not 0 player_recalc_stats adds five to every working skill, and player_controller's end counts it down, the stats and announce 0x1b at 0 (FORMATS.md)"
  }
 }

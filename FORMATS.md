@@ -3011,7 +3011,7 @@ Silviera's key asks `find_object` for **the first object** in front, whatever
 it is -- a gate within reach and lower in the table than the pedestal gets
 "Wrong key!" -- so the port exports every object's place, class, reach
 and top (`lootNN.json`'s `find`) and asks the same question of them
-(`godot/loot.gd find_object`). A plain fit on anything but a pedestal is no
+(`godot/useitem.gd find_object`, over `godot/loot.gd views`). A plain fit on anything but a pedestal is no
 answer here: the shared arm's sound and flag are not in this one, and the menu
 says "Nothing Happens".
 
@@ -3122,7 +3122,7 @@ and system. "Use item" (`0x8001aa84`) lists the things 95..149 in inventory_a
 | gold potion | HP + 200, MP + 100, a crystal flask back |
 
 and then `use_item` runs for it, whose last step is the level's own entry 2
-and, when nothing has answered, "Nothing Happens".
+and, when nothing has answered, "Nothing Happens" (below, "A thing used").
 
 The choice itself goes through `ui_prompt` (`0x80024c70`) of kind 0: two
 answers, "use" at (45, 58) and "cancel" at (45, 84), each on a 54-wide plate
@@ -3161,10 +3161,83 @@ drawn by a transcription of the same routines -- 17 of 17 screens give
 `tools/ui.py`'s primitive lists, and the use-item ones give the game's own
 frames. "Equipment" is there too (below); "use magic", "status/records",
 "storage" and "system", the chosen thing's model turning in "use item"
-(`0x80025be8`) and `use_item`'s arms for Orladin's and Silviera's keys, the
-flask, the truth glass and Ichrius' things are not yet. The seven keys
-of the shared arm are (`godot/loot.gd`, `try_key`, "Keys" above); anything
-else that is not eaten says "Nothing Happens".
+(`0x80025be8`) are not yet. What a thing does once chosen is `use_item`,
+whole but for block 6's two statues and the warp (`godot/useitem.gd`, the next
+section).
+
+### A thing used: use_item whole
+
+**`use_item(pos, angles, item)`** (`0x8005cbe0`) is what a thing does once the
+menu has closed on it (`player_turn`, `0x80030708`, hands it `player_pos` and
+`player_pitch`, so `angles[1]` is the facing). It clears its answer,
+**`use_answer`** (`0x801ba984`), switches on `item - 0x65` (61 arms from
+`0x800131a0`) and ends, whatever the arm, by calling the level's own entry 2
+(`level_hooks + 8`, with the angles and the thing), announcing `0xa` --
+"Nothing happens" -- unless the answer was set, and `clear_movement_state`.
+find_object is always asked from the feet, `0x320` past the type's reach,
+`0x6a4` as the point's height, within `0x200` of the facing.
+
+| thing | the arm |
+|---|---|
+| truth glass (`0x65`) | the creature in sight (`sub_8004d3c4` from the feet along the angles, reach `0x1f40`, cones `0x1f4`, no noise) **on the player's floor** shows `ITEM.T 0x10e + its model` (`+1`) -- "Mantrap: a gigantic, carnivorous plant ..."; else find_object's first object, when it is slot 11 of block `0x11` (its `+0` not 0), `ITEM.T 0x131` -- Orladin, the master Archmage, the portrait on level 17; else the first object of a class-`0xe2` type (type 297, five or so a level) whose `+0x40` is that floor and whose rectangle -- cells `+0x14 >> 11`, `+0x1c >> 11`, `+0x38` by `+0x39` -- holds the player's cell: `ITEM.T 0x32a + its +0x3a`, the area's name and story ("Lake Noel ...") |
+| the eaten things (`0x68..0x6d`, `0x77`, `0x78`) | answered: `item_consume` has eaten them |
+| verdite (`0x6e`) | taken; every skill + 1 from 4 down |
+| the crystals (`0x71..0x75`) | taken; their skill + 1, three times |
+| the power fruit (`0x6f`) | stat 36 + 1, three times -- **not taken here** (item_consume has) |
+| the wise fruit (`0x70`) | `0x801b2530` + 1 up to 4 -- not taken here either; at 4 "Nothing happens" |
+| crystal flask (`0x76`) | find_object's first object: a fountain of **type `0xfe` fills it with a blue potion** (`0x77`), one of **type `0xfb` with a gold one** (`0x78`); given, announce `0xc` and the flask taken; the pack full, give_item's own "can't carry" (`0xb`) and the flask kept. Fountains: `0xfe` on levels 2, 3, 4, 5, 7, 10, 11, `0xfb` on 1, 6, 9 |
+| `0x80` | on block 6 the two statues (slots `0x5b` and `0x53`: a scene of the game's frames with their creatures, story bytes `0x801ba9ab`, `0x801ba9b0`); else taken, and **`bonus_skills_timer` (`0x801b2578`) 900 frames** -- five on every working skill, which player_recalc_stats reads |
+| Ichrius' eye, wings, crown (`0x82..0x84`) | `sub_8005c864` with record 1, 6, 9 -- a warp to a fixed place of a level, its fourteen records at `0x800130f0` (not in the port yet, BACKLOG.md) -- not on blocks `0x19` and `0x1b`, nor while a change to one is under way; ids `0x96..0xa1`, which nothing holds, the same with `item - 0x96` |
+| the seven keys | each object find_object finds in turn has the key tried on it (`key_test`): 1 the sound (`sound_key_fits`), 3 or 4 "Wrong key!" (7), else the next |
+| Orladin's key (`0x88`) | every object found: a type-`0xa2` lock that asks for it (`+0x38` `0x88`) becomes `0xfe` and the key is taken; a free type-`0x102` pedestal (`+0x38` `0xff`) holds the key's number, state 0, the key taken and **the key's own object made in the gold ring** (find_free_slot(`0x15e`, 10, drop_count_gold), init_object_record, its type `0x88`, `+0x3c` the count), the pedestal's `+0x39` its place; anything else a 3 from key_test "Wrong key!". Locks on levels 14, 16, 17 (opcode `0x17`), pedestals there too (opcode `0x1a`) |
+| Silviera's key (`0x8d`) | "Keys" above: the first object only |
+| the rest | nothing of its own |
+
+Each step that raises a figure under 1000 calls `skill_unlock`, the stats and,
+the first time, a banner (`0xd`, `0x12 + k`, 1, 2); **skill_unlock answers
+too** when it unlocks a spell (`0x80029fb0`, with its own banner 3), so a
+crystal that brings a spell says only "new spell". At 1000 the figure is 999
+and the step says nothing.
+
+**The floor** is the same two ways everywhere it is asked: **`player_layer`**
+(`0x801b2644`) is collision_layer_offset, 0 or 5, as `player_horizontal` takes
+a step (`0x8002e590`) -- 5 from new_character and the crystal's revive, 5 or 0
+from the teleports by their record's `+0x36` -- and use_item reads it as floor
+2 (not 0) or 1; a creature's **`+3`** is the same 2 or 1, from its home's `+6`
+when it wakes (`actor_spawn`, none for category 3) and then every frame
+`actor_move_vertical`'s collide_surface layer (`0x8004e3b4`, and the free
+fall's step at `0x8004e680`); a class-`0xe2` rectangle's `+0x40` is its
+placement's `+0`, which the loader moves there (`+0` then 0).
+
+`give_item` returns 0 when it gave and 1 when the pack was full -- the
+pseudocode reads it as the level hook's answer, which it is not: `move $v0,
+$zero` follows the hook's call.
+
+**Checked against the game's own.** `tools/useitem.py --check` runs GAME.EXE's
+`use_item` with `tools/mipsrun.py` over every level -- its objects as its own
+load_object_placement leaves them, the snapshot's creatures -- the player put
+in front of fountains, locks, pedestals, the rectangles, slot 11 and the
+creatures, the thing, the pack, the skills, the spells, the floors and the
+counts at random: **2800 of 2800 runs** give the model's calls in order
+(announce, load_entry, sound_key_fits, player_recalc_stats, pedestal_put_key,
+the level's entries 2, 6 and 11, the warp, clear_movement_state), its answer,
+pack, skills, stat 36, `0x801b2530`, the timer, the spells, the story flags and
+all 396 object records byte for byte -- the game's find_object, key_test,
+sub_8004d3c4, player_in_rect, take_item, give_item, skill_unlock,
+find_free_slot and init_object_record running. Every arm's ways are among
+them: 151 creatures', 76 slot 11's and 553 areas' pages, 77 flasks filled and
+8 refused, 47 keys that fit and 27 that did not, Orladin's on its locks and
+pedestals, 26 figures that brought a spell. Not run: `0x80` on block 6.
+
+**In the port**: `godot/useitem.gd` is the routine over a world loot.gd hands
+it (`use_item`, `views`): the self-test holds it to 336 of the model's runs
+(calls, answer, pack, figures, objects). The pages are `read/N.png` (N the
+entry less `0x96`, as a sign's), which `tools/useitem.py` writes for the
+level's creatures, rectangles and slot 11. `player.gd` keeps the floor
+(`layer`), `actors.gd` and `ai.gd` a creature's (`floor`). Not in the port:
+the warp itself (`sub_8005c864`), the level's own entries 2, 6 and 11, the
+statues, and anything that acts on what Orladin's key leaves (opcodes `0x17`
+and `0x1a`, the key's own object).
 
 ### Status/records, and running the game's own code
 

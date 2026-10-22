@@ -150,6 +150,11 @@ var gz := 0
 var vstate := 0
 var vvel := 0
 var step := Vector3i.ZERO          # 0x801b2600: the last step player_horizontal took, x z, and player_vertical's y
+# 0x801b2644: the floor the player stands on, as collision_layer_offset was
+# when player_horizontal last took a step -- 0 the cell's lower layer, 5 its
+# upper; new_character and the crystal's revive put 5 (0x8002b614,
+# 0x80031dcc). use_item's truth glass asks it.
+var layer := 5
 # 0x801b2648 and 0x801b2646: the two ground speeds the ramp drives
 var fwd_speed := 0
 var stf_speed := 0
@@ -342,6 +347,7 @@ func _ready() -> void:
 		weapon_meter = int(arrive[12])
 		magic_meter = int(arrive[13])
 		poison = int(arrive[14])
+		layer = int(arrive[15])
 		rotation.y = float(facing) * TAU / 4096.0
 		_to_godot()
 	arrive = null
@@ -359,7 +365,7 @@ func _ready() -> void:
 func carry_over(p: Vector3i) -> void:
 	carried = [inventory, gold, character, weapon_id, worn, [spell_a, spell_b, item_b]]
 	arrive = [p.x, p.y, p.z, facing, pitch, vstate, vvel, fwd_speed, stf_speed,
-		hp, hp_max, mp, weapon_meter, magic_meter, poison]
+		hp, hp_max, mp, weapon_meter, magic_meter, poison, layer]
 
 
 # A save, as save_restore put it back (KFCard.restore): where the player
@@ -370,7 +376,7 @@ func carry_over(p: Vector3i) -> void:
 # equip_weapon takes the weapon up again, its meter at 0, and recalculates the
 # stats; and the magic meter is game_main's block_zero of the player block,
 # which nothing restores.
-# @orig game:0x8005ffd0 save_restore  status:partial -- the player's fields the port keeps; the curse and the timers (0x801b255e..0x801b2578), 0x801b24ec, 0x801b2644, 0x801b2522, 0x801b250a..0x801b2512, 0x801b2514, 0x801b24f1, the panel's bytes and the minutes are read and not used
+# @orig game:0x8005ffd0 save_restore  status:partial -- the player's fields the port keeps; the curse and the timers (0x801b255e..0x801b2578), 0x801b24ec, 0x801b2522, 0x801b250a..0x801b2512, 0x801b2514, 0x801b24f1, the panel's bytes and the minutes are read and not used
 # @orig game:0x80028f90 save_loaded_fixup  status:partial -- the clearing (sub_80028e9c), equip_weapon and the stats; not equip_armour(0xff, 0xff), the three bonus timers' effects respawned (effect_spawn), set_spell_a/b's resources or the control scheme
 func take_save(f: Dictionary) -> void:
 	flying = false
@@ -380,6 +386,7 @@ func take_save(f: Dictionary) -> void:
 	var pf := KFCard.num(f, "pitch_facing")
 	pitch = coll._s16(pf & 0xFFFF)
 	facing = (pf >> 16) & 0xFFF
+	layer = KFCard.num(f, "b2644")
 	hp = KFCard.num(f, "hp")
 	hp_max = KFCard.num(f, "hp_max")
 	mp = KFCard.num(f, "mp")
@@ -2094,7 +2101,7 @@ func _dying() -> void:
 static var respawn = null
 # Where a crossing puts the player down in the next level's world, and how:
 # [x, y, z, facing, pitch, vertical state and velocity, speeds, HP, its
-# maximum, MP, the two meters, the poison].
+# maximum, MP, the two meters, the poison, the floor (0x801b2644)].
 static var arrive = null
 # What the player carries across that reload when the crystal revives them:
 # [the inventory, the gold, the character, the weapon, what is worn, the
@@ -2373,6 +2380,8 @@ func _horizontal(angle: int, dist: int) -> void:
 				continue
 			gx = tx
 			gz = tz
+			if int(q["at"]) >= 0:         # 0x8002e590: the layer that step was asked on
+				layer = 5 if int(q["at"]) % 6 == 3 else 0
 			step.x = s4                   # 0x8002ec7c: whatever it ends on
 			step.z = s2
 			return

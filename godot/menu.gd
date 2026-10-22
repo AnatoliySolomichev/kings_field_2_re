@@ -41,11 +41,6 @@ const STORE_LAST := 0x95                                      # the storage's li
 const CANCEL_WORD := [0x02, 0x00, 0x0D, 0x02, 0x04, 0x0B, 0xFF]   # "cancel"
 const FIRST_THING := 0x5F
 const LAST_THING := 0x95
-const NOTHING_HAPPENS := 0xA
-# The keys use_item's arm at 0x8005d188 takes: royal, copper, silver,
-# magician's, jail, dwarves', Lyn's.
-const KEYS := [135, 137, 138, 139, 140, 142, 144]
-const SILVIERA_KEY := 141          # an arm of its own (0x8005d244): the pedestals
 # ui_panel's modes with no count column
 const NO_COUNTS := [2, 3, 4, 8, 9, 0x10]
 # ui_ratings_page's lines, as its sb's leave the label record for each: two
@@ -2140,10 +2135,8 @@ func _step(press: int) -> void:
 
 
 # The thing chosen: 104..120 are eaten (item_consume), then the menu closes
-# and use_item runs, whose last word is the level's entry 2 and, if nothing
-# has answered, "Nothing Happens".
+# and use_item runs (godot/useitem.gd, through loot.gd).
 # @orig game:0x8001b254 item_consume  status:transcribed
-# @orig game:0x8005d748 use_item+0xb68  status:partial -- the tail: the level's entry 2 not called (level 0's is empty, 0x801e8704; level 4's answers item 0x7b alone); the eaten things, the keys (loot.gd try_key, put_key) and the arms that raise a figure (levelup.gd use_arm) answer, the rest say "Nothing Happens"
 func _use(id: int) -> void:
 	var inv: KFItems = player.inventory
 	var eaten := false
@@ -2180,29 +2173,9 @@ func _use(id: int) -> void:
 			inv.a[0x76] = int(inv.a[0x76]) + 1       # the crystal flask back
 	KFInfo.note("use: item %d%s" % [id, " eaten" if eaten else ""])
 	_close()
-	var answered := eaten
-	if id >= KFLevels.VERDITE and id < KFLevels.FIRST_CRYSTAL + 5:
-		# use_item's arms that raise a figure, then player_recalc_stats
-		var r := KFLevels.use_arm(id, player.character, KFTalk.flags)
-		if bool(r["took"]):
-			inv.take_item(id)
-		for b in r["banners"]:
-			KFMessages.announce(int(b))
-		player.recalc_stats()
-		answered = bool(r["answered"])
-		KFInfo.note("use: item %d -- skills %s, stat 36 %d, 0x801b2530 %d" % [id,
-			str(player.character["grow"]), int(player.character["stat36"]),
-			int(player.character.get("wis", 0))])
-	if id in KEYS:
-		var lt := get_node_or_null("../../Loot")
-		if lt and int(lt.try_key(id)) != 0:
-			answered = true
-	elif id == SILVIERA_KEY:
-		var lt := get_node_or_null("../../Loot")
-		if lt and int(lt.put_key(id)) != 0:
-			answered = true
-	if not answered:
-		KFMessages.announce(NOTHING_HAPPENS)
+	var lt := get_node_or_null("../../Loot")
+	if lt:
+		lt.use_item(id)
 
 
 # The BUTTON page's end (0x8001d734): set_spell_b with the row's spell, then

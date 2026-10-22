@@ -570,21 +570,20 @@ Eating heals. Left, roughly in order:
 
 * `ui_status_page` (`0x800227ec`) is in and holds: `menu1`'s frame is the
   model's, 428 of 428 primitives;
-* `use_item`'s arms (`0x8005cbe0`, 61 of them): the seven keys of the shared
-  arm are in (`godot/loot.gd` `try_key`, transcribed: no recording has a key
-  used yet -- a bp session using the copper key on level 0's slot 9 would
-  check it); so are verdite, the fruits and the crystals, with
-  `skill_unlock` (FORMATS.md, "Four of the five skills never grow" -- which
-  they now do). So is Silviera's key (`0x8005d244`) with level 4's
-  pedestals (opcode 0x18, `object_use_state`) and the key they hold, which
-  opens their gates (FORMATS.md, "Keys"): `silv1` to `silv2` replayed, 13 of
-  13, and the twenty frames between against the game's own code run over
-  silv1 (`tools/mipsrun.py`), 72 of 72; bp27 now logs the pedestals (P lines)
-  for a session that puts the key down and takes it back. Orladin's key
-  (`0x8005d300`, the pedestals of type 0x102, opcode 0x1a, of levels 14, 16
-  and 17, and the type-0xa2 locks), the flask, the truth glass, Ichrius'
-  things and the spell books are not, nor the level's entry 2 (level 0's is
-  empty, level 4's answers item 0x7b alone);
+* `use_item` (`0x8005cbe0`) is whole in `tools/useitem.py`, held to the
+  game's own over every level (2800 of 2800 runs), and in the port
+  (`godot/useitem.gd`, the self-test 336 of 336): the truth glass, the flask,
+  the figures, the keys, Silviera's key, Orladin's key, `0x80`'s 900 frames
+  (FORMATS.md, "A thing used"). Left of it: **the warp** (`sub_8005c864`,
+  Ichrius' eye, wings and crown -- the port logs the call and stops); block
+  6's two statues (`0x80` there runs a scene of the game's frames until a
+  creature wakes); the level's own entry 2 (levels 1, 2, 4, 5, 7, 8, 17, 20,
+  23, 25 and 27 have one) and give_item's and take_item's entries 6 and 11;
+  and what acts on Orladin's key's work -- opcodes `0x17` (the locks, eight
+  states) and `0x1a` (the pedestals, object_use_state) and the key's own
+  object in the gold ring, which the port does not make. No recording has a
+  thing used yet: `emu/bp20.lua` logs the thing, the place, the floor, the
+  page and the answer now (PLAYTEST.md);
 * the chosen thing's model turning in the lists (`0x80025be8`), and the
   maps and notes (95..100); the guide is in (FORMATS.md, "The guide");
 * "equipment" is in (FORMATS.md, "The equipment screen") but for its MAGIC
@@ -822,6 +821,11 @@ each one is also in its function's marker, as `partial` and what differs:
   behind") -- untested by eye: the port's shaders compile only in a window.
 * **`give_item` and `take_item` call the level's own hook** after the count
   changes (`level_hooks+0x18`, `+0x2c`); `godot/items.gd` does not.
+* **The timers are not carried over a crossing.** `player.gd carry_over`
+  takes the pack, the figures, HP and MP, the meters, the poison and the
+  floor, not the bonus timers (`0x801b256a`, `256e`, `bonus_skills_timer`),
+  the curse, the dark or the light; the game keeps them all, being one
+  player block. Nothing compared it.
 * **`new_character` does much more than `KFLevels.fresh`**: the gold, the
   equipment slots, the place and the spells.
 * **The movie's skip.** `godot/cutscene.gd` uses `OPEN.EXE`'s rule for

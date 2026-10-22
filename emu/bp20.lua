@@ -21,9 +21,11 @@
 --         instructions of `rand` and a seven-arm switch and nobody has seen it
 --         run.
 --
---   ITEM  `use_item` (0x8005cbe0) with the selected item, and `give_item`,
---         `take_item` and `has_item` with the id -- so a session says which
---         items the game actually asks about.
+--   ITEM  `use_item` (0x8005cbe0) with the selected item, the place, the
+--         facing, the floor and the block, its answer at the end, the page
+--         load_entry shows, and `give_item`, `take_item` and `has_item` with
+--         the id -- so a session says which items the game actually asks
+--         about, and what tools/useitem.py's model should have answered.
 --
 --   TALK  `script_interpreter` (0x8005c308) per call, with the entity, and the
 --         opcode it is about to run. `emu/bp21.lua` is the script that does
@@ -187,7 +189,24 @@ arm(0x8005cbe0, 'use', function()
     bump('use')
     local g = cpu()
     if g == nil then return end
-    log(string.format('ITEM use a0=%d %s', reg(g, 4), where()))
+    -- the thing (a2), where the player stands and faces, the floor
+    -- (0x801b2644) and the block: what tools/useitem.py's world starts from
+    log(string.format('ITEM use a0=%d item=%d pos=%d,%d,%d pitch=%d facing=%d layer=%d block=%d %s',
+        reg(g, 4), reg(g, 6), s32(PLAYER_POS), s32(PLAYER_POS + 4), s32(PLAYER_Z),
+        u16(0x801B2610), u16(0x801B2612), u16(0x801B2644), u8(0x8018FAD8), where()))
+end)
+-- use_item's end, after the level's entry 2: the answer (0x801ba984) that
+-- decides "Nothing happens"
+arm(0x8005d764, 'useend', function()
+    bump('useend')
+    log(string.format('ITEM end answer=%d', u32(0x801BA984)))
+end)
+-- load_entry: the page a thing (the truth glass) or a sign shows
+arm(0x800441d4, 'page', function()
+    bump('page')
+    local g = cpu()
+    if g == nil then return end
+    log(string.format('ITEM page archive=%d entry=%d', reg(g, 4), reg(g, 5)))
 end)
 for addr, name in pairs({[0x8005d7bc] = 'has', [0x8005d7f8] = 'take',
                          [0x8005d898] = 'give'}) do

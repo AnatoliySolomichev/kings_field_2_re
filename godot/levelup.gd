@@ -39,11 +39,6 @@ const SPELLS := 96
 const FIRST_SPELL := 29              # light: new_character sets its flag by hand (0x801b7aa4)
 const LEVEL_UP := 0                  # the banners
 const NEW_SPELL := 3
-const VERDITE := 0x6E
-const POWER_FRUIT := 0x6F
-const WISE_FRUIT := 0x70
-const FIRST_CRYSTAL := 0x71          # fire, earth, water, wind, light
-const WIS_CAP := 5
 
 static var levels: Array = []
 static var skills := {}
@@ -148,58 +143,6 @@ static func skill_unlock(s: Dictionary, k: int, flags: Array) -> Array:
 				flags[SKILL_UNLOCKED + k] = 1
 				break
 	return out
-
-
-# use_item's arms for the things that raise a figure: verdite every skill
-# once (0x8005cd04), the power fruit stat 36 three times (0x8005cd90), the wise
-# fruit 0x801b2530 once, up to 4 (0x8005ce10), a crystal its own skill three
-# times (0x8005cc4c..0x8005cc70). A banner the first time anything answers --
-# 0xd, 1, 2, or 0x12 + the skill -- with skill_unlock's between. The answer:
-# the banners, whether it answered (0x801ba984), whether it took the thing
-# itself (verdite and the crystals; item_consume has the fruits).
-# @orig game:0x8005cc4c use_item+0x6c  status:transcribed -- the crystals' arm, as tools/levelup.py use_arm; player_recalc_stats is the caller's
-# @orig game:0x8005cd04 use_item+0x124  status:transcribed -- verdite's arm
-# @orig game:0x8005cd90 use_item+0x1b0  status:transcribed -- the power fruit's arm
-# @orig game:0x8005ce10 use_item+0x230  status:transcribed -- the wise fruit's arm
-static func use_arm(item: int, s: Dictionary, flags: Array) -> Dictionary:
-	var banners := []
-	var answered := false
-	var took := false
-	var grow: Array = s["grow"]
-	if item == VERDITE or (item >= FIRST_CRYSTAL and item < FIRST_CRYSTAL + 5):
-		took = true
-		var ks := [4, 3, 2, 1, 0]
-		if item != VERDITE:
-			var k := item - FIRST_CRYSTAL
-			ks = [k, k, k]
-		for k in ks:
-			grow[k] = int(grow[k]) + 1
-			if int(grow[k]) >= 1000:
-				grow[k] = STAT_CAP
-				continue
-			var got := skill_unlock(s, k, flags)
-			banners += got
-			answered = answered or not got.is_empty()
-			if not answered:
-				answered = true
-				banners.append(0xD if item == VERDITE else 0x12 + k)
-	elif item == POWER_FRUIT:
-		for _i in 3:
-			s["stat36"] = int(s["stat36"]) + 1
-			if int(s["stat36"]) >= 1000:
-				s["stat36"] = STAT_CAP
-				continue
-			if not answered:
-				answered = true
-				banners.append(1)
-	elif item == WISE_FRUIT:
-		s["wis"] = int(s.get("wis", 0)) + 1
-		if int(s["wis"]) >= WIS_CAP:
-			s["wis"] = WIS_CAP - 1
-		else:
-			answered = true
-			banners.append(2)
-	return {"banners": banners, "answered": answered, "took": took}
 
 
 # new_character's spell flags (0x8002b618): all clear, then light's set.
