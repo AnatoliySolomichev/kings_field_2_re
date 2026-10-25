@@ -191,7 +191,7 @@ def world_of(ram):
             "z": i32(r + 0x1C), "yaw": s16(u16(r + 0x26)), "b38": u8(r + 0x38),
             "b39": u8(r + 0x39), "h3a": u16(r + 0x3A), "h3c": u16(r + 0x3C),
             "b40": u8(r + 0x40), "cls": u8(row), "reach": u16(row + 6),
-            "top": u16(row + 8)})
+            "top": u16(row + 8), "b3d": u8(r + 0x3D), "clk": u16(r + 0xA)})
     cur = struct.unpack_from("<I", ram, CURRENT_ACTOR & MASK)[0]
     for k in range(ACTOR_N):
         a = ACTORS + ACTOR_STRIDE * k
@@ -517,11 +517,88 @@ def use_item(w, item):
             elif key_test(o, item) == 3:
                 say(WRONG_KEY)
                 answer()
-    calls.append(("hook", "use"))
+    level_use(w, item, calls)
     if not w["answer"]:
         say(NOTHING_HAPPENS)
     calls.append(("clear",))
     return calls
+
+
+LEVEL_USE = (5, 7, 20, 23, 25, 27)     # the levels whose entry 2 is read here
+HAND_KEY = 0x85                        # the levels' own keys on their own pedestals
+STONE_KEY = 0x86
+NO_USE = 0x23                          # the banner levels 7, 25 and 27 raise for 0x85
+
+
+def level_use(w, item, calls):
+    """The level's own entry 2 (level_hooks + 8: player_pos, player_pitch,
+    the thing), for the levels read here; the others' are logged."""
+    lv = w.get("overlay", w["block"])
+    if lv not in LEVEL_USE:
+        calls.append(("hook", "use"))
+        return
+    flags = w["flags"]
+
+    def answer():
+        w["answer"] = 1
+
+    def first():
+        return find_object(w, 0, 0x320, 0x6A4, 0x200)
+    if lv in (25, 27):
+        if item == HAND_KEY:
+            answer()
+            calls.append(("announce", NO_USE))
+    elif lv == 20:
+        if item != 0x7E or not in_rect(w, 0x26, 0x10, 3, 2):
+            return
+        if w["inv_a"][0x7D] or w["inv_b"][0x7D]:
+            if flags[0x56] == 0:
+                flags[0x56] = 1
+                flags[0x57] = 0
+                take_item(w, calls, 0x7E)
+                answer()
+        elif flags[0x56] == 0:
+            calls.append(("announce", 0x10))
+            answer()
+    elif lv == 5:
+        if item != 0x66:
+            return
+        k = first()
+        if k == -1:
+            return
+        o = w["objects"][k]
+        if o["op"] != 0x53 or o["b3d"] >= 0x97:
+            return
+        if not (w["inv_a"][o["b3d"]] or w["inv_b"][o["b3d"]]):
+            return
+        if o["clk"] == 0 or o["clk"] >= 0xFFF:
+            o["state"] = 1
+            answer()
+    elif lv in (7, 23):
+        key, typ = (HAND_KEY, 0x140) if lv == 7 else (STONE_KEY, 0x13F)
+        if item != key:
+            return
+        k = first()
+        if k == -1:
+            if lv == 7:
+                answer()
+                calls.append(("announce", NO_USE))
+            return
+        o = w["objects"][k]
+        if o["type"] == typ:
+            import ai
+            if lv == 7 and not ai.facing_test(s16(w["facing"] + 0x800), o["yaw"], 0x100):
+                return
+            if o["b38"] != 0xFF:
+                return
+            o["b38"] = item
+            o["state"] = 0
+            answer()
+            take_item(w, calls, item)
+            calls.append(("put_key", k, item))
+        elif key_test(o, item) == 3:
+            calls.append(("announce", WRONG_KEY))
+            answer()
 
 
 # --- against the game's own -----------------------------------------------------
@@ -575,6 +652,8 @@ def game_run(cpu, item):
         WARP: warp,
     }
     for n in (2, 6, 11):
+        if n == 2 and getattr(cpu, "level", None) in LEVEL_USE:
+            continue                      # the overlay's own code runs
         cpu.hooks[entry(n)] = level_hook
     cpu.call(USE_ITEM, PLAYER_POS, PLAYER_ANGLES, item)
     return calls
@@ -584,9 +663,11 @@ def _put(cpu, a, n, v):
     cpu.wr(a, n, v & ((1 << (8 * n)) - 1))
 
 
-def _targets(w):
+def _targets(w, lv=None):
     """The things worth standing in front of on this level, by what asks
-    them: {scenario: [(object, [items])]}."""
+    them: {scenario: [(object, [items])]}. A type of 300 or more is the
+    level's own, so level 7's pedestals (0x140) and 23's (0x13f) are asked
+    for on their own level."""
     out = {}
     for o in w["objects"]:
         t = o["type"]
@@ -604,12 +685,16 @@ def _targets(w):
             out.setdefault("area", []).append((o, [TRUTH_GLASS]))
         if o["slot"] == 0xB:
             out.setdefault("slot11", []).append((o, [TRUTH_GLASS]))
+        if (lv, t) in ((7, 0x140), (23, 0x13F)):
+            out.setdefault("own pedestal", []).append((o, [HAND_KEY, STONE_KEY]))
+        if lv == 5 and o["op"] == 0x53:
+            out.setdefault("0x53", []).append((o, [0x66]))
     return out
 
 
 ARMS = ([TRUTH_GLASS, FLASK, VERDITE, POWER_FRUIT, WISE_FRUIT, STATUE_THING, ORLADIN_KEY,
          SILVIERA_KEY] + list(CRYSTALS) + list(EATEN) + list(ICHRIUS) + list(KEYS)
-        + [0x66, 0x79, 0x7B, 0x8F, 0x95, 0x97, 0xA1, 0x20, 0xA2])
+        + [0x66, 0x79, 0x7B, 0x8F, 0x95, 0x97, 0xA1, 0x20, 0xA2, HAND_KEY, STONE_KEY, 0x7E])
 
 
 def cases(lv, n, rng, snap="a1"):
@@ -619,9 +704,14 @@ def cases(lv, n, rng, snap="a1"):
     base = mipsrun.level_cpu(lv, snap)
     ram0 = bytes(base.ram)
     w0 = world_of(ram0)
-    targets = _targets(w0)
+    targets = _targets(w0, lv)
     out = []
     kinds = sorted(targets) + (["creature"] if w0["creatures"] else []) + ["anything"]
+    if lv == 20:
+        kinds += ["rect 20"] * 2
+    if lv in (25, 27):
+        kinds += ["the level's thing"]
+    kinds += [k for k in ("own pedestal", "0x53") if k in targets] * 2
     for _ in range(n):
         cpu = mipsrun.CPU(ram0)
         cpu.hooks.update(base.hooks)
@@ -630,12 +720,14 @@ def cases(lv, n, rng, snap="a1"):
         if kind in targets:
             o, items = rng.choice(targets[kind])
             item = rng.choice(items)
+            if kind == "own pedestal" and rng.random() < 0.8:
+                item = HAND_KEY if lv == 7 else STONE_KEY      # the level's own
             if o["cls"] == AREA_CLASS and item == TRUTH_GLASS and o["b38"] and o["b39"]:
                 x = ((o["x"] >> 11) + rng.randrange(o["b38"] + 2) - 1) * 0x800 + rng.randrange(0x800)
                 z = ((o["z"] >> 11) + rng.randrange(o["b39"] + 2) - 1) * 0x800 + rng.randrange(0x800)
                 fac = rng.randrange(0x1000)
             else:
-                d = rng.randrange(0x100, 0x800 if kind == "lock" else 0xC00)
+                d = rng.randrange(0x100, 0x800 if kind in ("lock", "own pedestal") else 0xC00)
                 a = rng.randrange(0x1000)
                 # find_object asks a door from a point off the player's along
                 # the door's own yaw: stand where that point falls near it
@@ -646,9 +738,34 @@ def cases(lv, n, rng, snap="a1"):
                 z = oz + ((movement.game_sin(a) * d) >> 12)
                 fac = (movement.vec_angle(s32(ox - x), s32(oz - z))
                        + rng.randrange(-0x300, 0x300)) & 0xFFF
+                if kind == "own pedestal" and lv == 7 and rng.random() < 0.7:
+                    # level 7's asks the player to face it: stand where the
+                    # way to it is its yaw turned round
+                    want = (o["yaw"] - 0x800) & 0xFFF
+                    for _ in range(64):
+                        a = rng.randrange(0x1000)
+                        x = ox + ((movement.game_cos(a) * d) >> 12)
+                        z = oz + ((movement.game_sin(a) * d) >> 12)
+                        to = movement.vec_angle(s32(ox - x), s32(oz - z))
+                        if abs(((to - want + 0x800) & 0xFFF) - 0x800) < 0xA0:
+                            break
+                    fac = (to + rng.randrange(-0x80, 0x80)) & 0xFFF
             y = o["y"] + rng.randrange(-0x400, 0x400)
             if o["slot"] == 0xB and rng.random() < 0.7:
                 block = 0x11
+        elif kind == "the level's thing":
+            item = HAND_KEY
+            x, y, z = w0["pos"]
+            fac = rng.randrange(0x1000)
+        elif kind == "rect 20":
+            item = 0x7E if rng.random() < 0.8 else rng.choice(ARMS)
+            inside = rng.random() < 0.8          # its rectangle, or about it
+            x = ((0x26 + rng.randrange(3)) if inside else (0x25 + rng.randrange(5))) * 0x800 \
+                + rng.randrange(0x800)
+            z = ((0x10 + rng.randrange(2)) if inside else (0xF + rng.randrange(4))) * 0x800 \
+                + rng.randrange(0x800)
+            y = w0["pos"][1]
+            fac = rng.randrange(0x1000)
         elif kind == "creature":
             c = rng.choice(w0["creatures"])
             item = TRUTH_GLASS if rng.random() < 0.8 else rng.choice(ARMS)
@@ -691,6 +808,10 @@ def cases(lv, n, rng, snap="a1"):
         _put(cpu, WIS, 2, rng.randrange(5))
         for k in range(4):
             _put(cpu, FLAGS + 0x6D + k, 1, rng.choice((0, 1)))
+        for k in (0x56, 0x57):                     # level 20's
+            _put(cpu, FLAGS + k, 1, rng.choice((0, 0, 1, 2)))
+        _put(cpu, INV_A + 0x7D, 1, rng.choice((0, 1)))
+        _put(cpu, INV_B + 0x7D, 1, rng.choice((0, 0, 1)))
         for i in range(96):
             if rng.random() < 0.3:
                 _put(cpu, SPELL_TABLE + 24 * i, 1, rng.choice((0, 1)))
@@ -703,7 +824,14 @@ def cases(lv, n, rng, snap="a1"):
             if p["type"] == ORLADIN_LOCK:
                 r = OBJECTS + STRIDE * p["slot"]
                 _put(cpu, r + 0x38, 1, rng.choice((0x88, 0x88, 0xFE, 0x87)))
-        if item in (FLASK, ORLADIN_KEY, SILVIERA_KEY) and rng.random() < 0.7:
+            if (lv, p["type"]) in ((7, 0x140), (23, 0x13F)):
+                r = OBJECTS + STRIDE * p["slot"]
+                _put(cpu, r + 0x38, 1, rng.choice((0xFF, 0xFF, 0x85, 0x86)))
+            if lv == 5 and p["op"] == 0x53:
+                r = OBJECTS + STRIDE * p["slot"]
+                _put(cpu, r + 0xA, 2, rng.choice((0, 0, 0x800, 0xFFF, 0x1000)))
+        if item in (FLASK, ORLADIN_KEY, SILVIERA_KEY, HAND_KEY, STONE_KEY, 0x66, 0x7E) \
+                and rng.random() < 0.7:
             _put(cpu, INV_A + item, 1, rng.choice((1, 2)))
         if kind == "lock" and rng.random() < 0.5:
             r = OBJECTS + STRIDE * o["slot"]
@@ -715,6 +843,7 @@ def cases(lv, n, rng, snap="a1"):
             if rng.random() < 0.5:
                 _put(cpu, r + 6, 2, rng.choice((0x60, 0x77, 0x88)))
                 _put(cpu, r + 0x3C, 2, rng.randrange(0x10000))
+        cpu.level = lv                    # whose overlay is in
         out.append((cpu, item))
     return out
 
@@ -755,6 +884,16 @@ def outcome(item, calls, w):
         if 3 in said:
             return "the figures: raised, a spell unlocked"
         return "the figures: raised" if w["answer"] else "the figures: at their most"
+    lv = w.get("overlay")
+    if lv in LEVEL_USE and item in (HAND_KEY, STONE_KEY, 0x66, 0x7E):
+        took = ("hook", "take") in calls
+        said = [c[1] for c in calls if c[0] == "announce"]
+        what = ("put on a pedestal" if any(c[0] == "put_key" for c in calls) else
+                "wrong" if WRONG_KEY in said else
+                "taken" if took else
+                f"banner {said[0]:#x}" if said and said[0] != NOTHING_HAPPENS else
+                "answered" if w["answer"] else "nothing")
+        return f"level {lv}'s own, {item:#x}: {what}"
     if item == STATUE_THING:
         return "0x80: the 900 frames"
     if item in EATEN:
@@ -766,6 +905,7 @@ def compare(cpu, item):
     """One run both ways: None when they agree, else what differs."""
     ram = bytes(cpu.ram)
     w = world_of(ram)
+    w["overlay"] = getattr(cpu, "level", w["block"])
     want = use_item(w, item)
     got = game_run(cpu, item)
     after = world_of(bytes(cpu.ram))
@@ -1001,7 +1141,7 @@ def warp_plan(i, block, pitch):
 
 # The fields of an object the port's copy (godot/useitem.gd) reads, in order.
 OBJECT_FIELDS = ("slot", "type", "cls", "b0", "op", "state", "x", "y", "z", "yaw",
-                 "height", "reach", "top", "b38", "b39", "h3a", "h3c", "b40")
+                 "height", "reach", "top", "b38", "b39", "h3a", "h3c", "b40", "b3d", "clk")
 CREATURE_FIELDS = ("slot", "e", "flags", "x", "y", "z", "model", "floor")
 
 
@@ -1022,6 +1162,7 @@ def compact(w):
             objs.append([o[f] for f in OBJECT_FIELDS])
     out = {k: w[k] for k in ("pitch", "facing", "layer", "block", "busy", "pending",
                              "stat36", "wis", "b578", "drops")}
+    out["overlay"] = w.get("overlay", w["block"])
     for k in ("pos", "skills", "spells", "inv_a", "inv_b", "flags"):
         out[k] = list(w[k])
     out["objects"] = objs
@@ -1068,11 +1209,13 @@ def export(out_dir, lv=0, per_level=12, seed=11):
     rows = []
     for level in range(28):
         try:
-            runs = cases(level, per_level, rng)
+            # the levels whose own entry 2 is read, four times over
+            runs = cases(level, per_level * (4 if level in LEVEL_USE else 1), rng)
         except Exception:                                          # noqa: BLE001
             continue
         for cpu, item in runs:
             w = world_of(bytes(cpu.ram))
+            w["overlay"] = level
             if item == STATUE_THING and w["block"] == 6:
                 continue
             row = {"level": level, "item": item, "world": compact(w)}

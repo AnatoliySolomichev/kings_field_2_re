@@ -581,8 +581,12 @@ Eating heals. Left, roughly in order:
   40 -- but not for `cutscene_step`'s record `0xc` or `level_overlay_tick`'s
   `0xd`; `0x801b25ee`, which it sets, is read
   nowhere the walk finds). Left of it: block 6's two statues (`0x80` there runs a scene of the game's frames until a
-  creature wakes); the level's own entry 2 (levels 1, 2, 4, 5, 7, 8, 17, 20,
-  23, 25 and 27 have one) and give_item's and take_item's entries 6 and 11.
+  creature wakes); the level's own entry 2 of levels 1, 2 (a thing handed
+  to a creature, `script_interpreter` after), 4, 8 and 17 (scenes) -- 5, 7,
+  20, 23, 25 and 27's are in (FORMATS.md, "The levels' own use of a thing",
+  2800 of 2800), but for what opcodes `0x53` and `0xa7` then do with level 5's
+  objects and level 7's pedestal -- and give_item's and take_item's entries 6
+  and 11.
   What Orladin's key opens is in (FORMATS.md, "What Orladin's key opens"):
   the seals (opcode `0x17`) and what they lift (`0x10`), the pedestals
   (`0x1a`) and the key's own object in the gold ring, held to the game's own

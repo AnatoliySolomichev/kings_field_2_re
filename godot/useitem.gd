@@ -74,7 +74,11 @@ const FULL := 0xB                             # give_item's own "can't carry"
 const NEW_SPELL := 3
 
 const OBJECT_FIELDS := ["slot", "type", "cls", "b0", "op", "state", "x", "y", "z", "yaw",
-	"height", "reach", "top", "lock", "b39", "h3a", "h3c", "b40"]
+	"height", "reach", "top", "lock", "b39", "h3a", "h3c", "b40", "b3d", "clk"]
+const LEVEL_USE := [5, 7, 20, 23, 25, 27]     # the levels whose entry 2 is read
+const HAND_KEY := 0x85                        # levels 7's and 23's own keys, for their own pedestals
+const STONE_KEY := 0x86
+const NO_USE := 0x23                          # the banner levels 7, 25 and 27 raise for 0x85
 
 static var warps: Array = []                  # warp_to's fourteen records
 
@@ -90,8 +94,8 @@ static func load_from(path := "res://useitem.json") -> bool:
 	return true
 
 
-# The routine: the arm, then the level's entry 2, the banner, the stop.
-# @orig game:0x8005cbe0 use_item  status:partial -- every arm but block 6's two statues (their scene runs frames of the game until the creature wakes; here the thing goes on as when none is found); tools/useitem.py 2800 of 2800 runs of the game's own over every level, the self-test this to it; the level's own entries 2, 6 and 11 are logged, not run
+# The routine: the arm, then the level's entry 2 (level_use), the banner, the stop.
+# @orig game:0x8005cbe0 use_item  status:partial -- every arm but block 6's two statues (their scene runs frames of the game until the creature wakes; here the thing goes on as when none is found); tools/useitem.py 2800 of 2800 runs of the game's own over every level, the self-test this to it; the level's own entry 2 is in for levels 5, 7, 20, 23, 25 and 27 (level_use), and logged for the rest, as entries 6 and 11 are
 # @orig game:0x8005d60c use_item+0xa2c  status:verified -- the eaten things' arm: answered, item_consume has eaten them
 # @orig game:0x8005d748 use_item+0xb68  status:verified -- the tail: the level's entry 2, "Nothing happens", clear_movement_state
 static func run(w: Dictionary, item: int, c: KFCollision) -> Array:
@@ -116,11 +120,92 @@ static func run(w: Dictionary, item: int, c: KFCollision) -> Array:
 		_orladin(w, item, c, calls)
 	elif item == SILVIERA_KEY:
 		_silviera(w, item, c, calls)
-	calls.append(["hook", "use"])
+	level_use(w, item, c, calls)
 	if int(w["answer"]) == 0:
 		calls.append(["announce", NOTHING_HAPPENS])
 	calls.append(["clear"])
 	return calls
+
+
+# The level's own entry 2 (level_hooks + 8: player_pos, player_pitch, the
+# thing), for the levels whose entry is read (tools/useitem.py level_use);
+# the others' is logged, ["hook", "use"]. w["overlay"] is the level whose
+# code is loaded.
+#   5   0x66 on find_object's first object, if its opcode is 0x53 and the
+#       thing its +0x3d names (under 0x97) is held: while its clock +0xa is
+#       0 or at 0xfff, its +8 to 1, answered
+#   7   0x85 on the first object: none -- answered, banner 0x23; a type-0x140
+#       pedestal facing the player (facing + 0x800 within 0x100 of its yaw)
+#       with +0x38 0xff -- the key's number, +8 0, the key taken and
+#       pedestal_put_key; anything else key_test, 3 "Wrong key!"
+#   20  0x7e with the player in cells 0x26..0x28 by 0x10..0x11: 0x7d held and
+#       flag 0x56 0 -- the flag 1, 0x57 0, the thing taken; 0x7d not held and
+#       the flag 0 -- banner 0x10; answered either way
+#   23  0x86 as 7's 0x85, on a type-0x13f pedestal, no facing asked, and with
+#       nothing found nothing said
+#   25, 27  0x85: answered, banner 0x23
+# @orig game:0x8005d75c use_item+0xb7c  status:verified -- the call of the level's entry 2 (level_hooks + 8); levels 5, 7, 20, 23, 25 and 27's own entries, out of their overlays, written out here as tools/useitem.py level_use, which the overlays' own code holds inside 2800 of 2800 runs of the game's use_item; the other levels' logged
+static func level_use(w: Dictionary, item: int, c: KFCollision, calls: Array) -> void:
+	var lv := int(w.get("overlay", w["block"]))
+	if not (lv in LEVEL_USE):
+		calls.append(["hook", "use"])
+		return
+	var flags: Array = w["flags"]
+	var inv: KFItems = w["inv"]
+	match lv:
+		25, 27:
+			if item == HAND_KEY:
+				w["answer"] = 1
+				calls.append(["announce", NO_USE])
+		20:
+			if item != 0x7E or not KFObjects.player_in_rect(int(w["pos"][0]), int(w["pos"][2]), 0x26, 0x10, 3, 2):
+				return
+			if inv.has_item(0x7D):
+				if int(flags[0x56]) == 0:
+					flags[0x56] = 1
+					flags[0x57] = 0
+					_take(w, 0x7E, calls)
+					w["answer"] = 1
+			elif int(flags[0x56]) == 0:
+				calls.append(["announce", 0x10])
+				w["answer"] = 1
+		5:
+			if item != 0x66:
+				return
+			var k := find_object(w, 0, c)
+			if k == -1:
+				return
+			var o: Dictionary = w["objects"][k]
+			if int(o["op"]) != 0x53 or int(o["b3d"]) >= 0x97 or not inv.has_item(int(o["b3d"])):
+				return
+			if int(o["clk"]) == 0 or int(o["clk"]) >= 0xFFF:
+				o["state"] = 1
+				w["answer"] = 1
+		7, 23:
+			var key := HAND_KEY if lv == 7 else STONE_KEY
+			if item != key:
+				return
+			var k := find_object(w, 0, c)
+			if k == -1:
+				if lv == 7:
+					w["answer"] = 1
+					calls.append(["announce", NO_USE])
+				return
+			var o: Dictionary = w["objects"][k]
+			if int(o["type"]) == (0x140 if lv == 7 else 0x13F):
+				if lv == 7 and not LOOT._facing(KFWeapon.s16(int(w["facing"]) + 0x800),
+						KFWeapon.s16(int(o["yaw"])), 0x100):
+					return
+				if int(o["lock"]) != 0xFF:
+					return
+				o["lock"] = item
+				o["state"] = 0
+				w["answer"] = 1
+				_take(w, item, calls)
+				calls.append(["put_key", k, item])
+			elif LOOT.key_test(o, "lock", item) == 3:
+				calls.append(["announce", WRONG_KEY])
+				w["answer"] = 1
 
 
 # The truth glass: the creature in sight on the player's floor -- its page

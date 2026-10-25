@@ -1050,8 +1050,9 @@ def build_loot(lv, load, grid, look, prims_of, rows, slots):
 
 PEDESTAL_OPS = (0x18,)
 # use_item's arms: Silviera's key asks for type 0x101, Orladin's for 0x102
-# (whose pedestals, opcode 0x1a, are loot.gd's rows: tools/seals.py)
-PEDESTAL_KEYS = {0x101: 141, 0x102: 0x88}
+# (whose pedestals, opcode 0x1a, are loot.gd's rows: tools/seals.py); level
+# 23's own entry 2 puts 0x86 on its type 0x13f (tools/useitem.py level_use)
+PEDESTAL_KEYS = {0x101: 141, 0x102: 0x88, 0x13F: 0x86}
 
 
 def build_pedestals(lv, load, look, prims_of, rows, keys):
@@ -1105,7 +1106,8 @@ def find_rows(load):
     and the lock (+0x38) key_test asks of what it finds; then +0x39 and the
     halfword at +0x3a, which with the rest are what level_state_write reads of
     a slot (godot/levelstate.gd's table); then the record's +0 and +0x40 as
-    the loader leaves them, which use_item's truth glass asks (godot/useitem.gd)."""
+    the loader leaves them, which use_item's truth glass asks (godot/useitem.gd),
+    and +0x3d, the thing level 5's own entry 2 asks an opcode-0x53 object for."""
     out = []
     for k, o in sorted(load.recs.items()):
         tr = load.rows[o["type"]]
@@ -1113,7 +1115,7 @@ def find_rows(load):
                     o["height"], struct.unpack_from("<H", tr, 6)[0],
                     struct.unpack_from("<H", tr, 8)[0], o["op"], o["tail"][0],
                     o["tail"][1], struct.unpack_from("<H", bytes(o["tail"]), 2)[0],
-                    o["b0"], o["tail"][8]])
+                    o["b0"], o["tail"][8], o["tail"][5]])
     return out
 
 

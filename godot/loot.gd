@@ -1004,7 +1004,8 @@ func use_item(id: int) -> void:
 		"skills": ch.get("grow", [0, 0, 0, 0, 0]), "stat36": int(ch.get("stat36", 20)),
 		"wis": int(ch.get("wis", 0)), "b578": int(player.bonus[2]),
 		"drops": int(counters[0x15E]), "spells": ch.get("spells", []),
-		"flags": KFTalk.flags, "objects": objs, "creatures": _awake()}
+		"flags": KFTalk.flags, "objects": objs, "creatures": _awake(),
+		"overlay": player._level()}
 	var calls := KFUseItem.run(w, id, c)
 	ch["stat36"] = int(w["stat36"])
 	ch["wis"] = int(w["wis"])
@@ -1075,14 +1076,15 @@ func views() -> Array:
 			"state": 0, "lock": int(f[11]) if f.size() > 11 else 0xFF,
 			"b39": int(f[12]) if f.size() > 12 else 0xFF, "h3a": int(f[13]) if f.size() > 13 else 0xFFFF,
 			"h3c": 0, "b0": int(f[14]) if f.size() > 14 else 0,
-			"b40": int(f[15]) if f.size() > 15 else 0xFF}
+			"b40": int(f[15]) if f.size() > 15 else 0xFF,
+			"b3d": int(f[16]) if f.size() > 16 else 0xFF, "clk": 0}
 	for k in rows:
 		var r: Dictionary = rows[k]
 		var p: Vector3i = r["pos"]
 		if out[k] == null:
 			out[k] = {"slot": k, "cls": int(r["cls"]), "reach": int(r["reach"]),
 				"top": int(r["top"]), "yaw": 0, "height": 0, "op": int(r.get("op", 0xFF)),
-				"b39": 0xFF, "h3a": 0xFFFF, "b0": 0, "b40": 0xFF}
+				"b39": 0xFF, "h3a": 0xFFFF, "b0": 0, "b40": 0xFF, "b3d": 0xFF, "clk": 0}
 		out[k]["type"] = int(r["type"])
 		out[k]["x"] = p.x
 		out[k]["y"] = p.y

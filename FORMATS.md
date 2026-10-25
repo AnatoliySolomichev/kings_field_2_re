@@ -3436,6 +3436,41 @@ and in the game the thing lies there to take, where the port kept it hidden.
 The rows carry the loader's `+0` and `+0x38` now (`objload.Load.loaded`),
 and `loot.gd` runs the first frame itself after the level's record.
 
+### The levels' own use of a thing: entry 2
+
+Whatever its arm did, use_item ends by handing the level's own code -- entry
+2, `level_hooks + 8` -- `player_pos`, `player_pitch` and the thing
+(`0x8005d75c`). Levels 1, 2, 4, 5, 7, 8, 17, 20, 23, 25 and 27 have one; six
+of them are read:
+
+| level | the thing | what its entry 2 does |
+|---|---|---|
+| 5 | varde's key (`0x66`) | on find_object's first object, if its opcode is `0x53` and the thing its `+0x3d` names (under `0x97`) is held -- the key itself, on all seven of the level's type-`0x12c` objects -- while its clock `+0xa` is 0 or at `0xfff`: its `+8` 1, answered |
+| 7 | ichrius' key (`0x85`) | on the first object: none -- answered, banner `0x23`; the type-`0x140` pedestal (slot 12, opcode `0xa7`, cell (66, 9)) with the player facing it (facing + `0x800` within `0x100` of its yaw) and its `+0x38` `0xff` -- the key's number, `+8` 0, answered, the key taken and `pedestal_put_key`; anything else key_test, 3 "Wrong key!" |
+| 20 | fairy fossil (`0x7e`) | in cells `0x26..0x28` by `0x10..0x11`: with the moonlight sword (`0x7d`) held and story flag `0x56` 0 -- the flag 1, `0x57` 0, the fossil taken, answered; without the sword and the flag 0 -- banner `0x10`, answered |
+| 23 | key of the corridor (`0x86`) | as level 7's, on a type-`0x13f` pedestal (slots 88, 89, 92, 93, opcode `0x18`, Silviera's kind -- two pairs, gates of type `0xae` that want both), no facing asked, and nothing said when nothing is found |
+| 25, 27 | ichrius' key (`0x85`) | answered, banner `0x23` |
+
+And `menu_use_item` keeps level 2's four things uneaten for its entry 2
+("Casting", above): the earth herb, the dragon crystal, the blood stone and
+the moon stone, each while story byte `0x801ba998` names it, go to the
+creature in slot 4 -- `actor_spot_taken` from the feet at `0x578` by
+`0x6a4`, the thing taken, `script_interpreter` for the creature, the byte to
+1, 2, 3 or 4 and `0x800463bc(0x9a)`. Level 1's hands the blood herb (`0x7f`)
+to slot 20 the same way, and 4, 8 and 17 run scenes of their own; none of
+those five is modelled or in the port yet.
+
+**Checked against the game's own.** `tools/useitem.py`'s 2800 runs of
+GAME.EXE's own `use_item` run those six levels' own entry 2 out of their
+overlays instead of logging it, the player stood before the pedestals, the
+opcode-`0x53` objects and in level 20's rectangle, the flags, the clocks and
+the sword at random: **2800 of 2800** still give the model's calls, answer,
+pack, flags and all 396 object records -- the key put on both levels'
+pedestals, the fossil taken, both banners. The port's `useitem.gd level_use`
+holds to the model in the self-test (552 of 552). What follows the record's
+change is not all in the port: level 7's pedestal is opcode `0xa7` and level
+5's objects opcode `0x53`, neither of which the port runs.
+
 ### Status/records, and running the game's own code
 
 The main page's fourth line, **status/records** (`menu_records`,

@@ -2587,6 +2587,7 @@ func _use_world(cw: Dictionary, names: Array) -> Dictionary:
 	var w := {}
 	for k in ["pitch", "facing", "layer", "block", "busy", "pending", "stat36", "wis", "b578", "drops"]:
 		w[k] = int(cw[k])
+	w["overlay"] = int(cw.get("overlay", cw["block"]))
 	w["pos"] = (cw["pos"] as Array).map(func(v): return int(v))
 	for k in ["skills", "spells", "flags"]:
 		w[k] = (cw[k] as Array).map(func(v): return int(v))

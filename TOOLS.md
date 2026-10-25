@@ -421,7 +421,9 @@ python3 tools/useitem.py --export D  useitem.json, usecheck.json and the truth
 level (`level_cpu`: the level's objects as its own loader leaves them), the
 player put in front of the fountains, locks, pedestals, the class-0xe2
 rectangles, slot 11 and the creatures, the thing, pack, skills, spells, floors
-and counts at random: **2800 of 2800** runs give the model's calls in order,
+and counts at random -- levels 5, 7, 20, 23, 25 and 27 running their own
+entry 2 out of their overlays (`level_use`), the player stood where those
+ask -- : **2800 of 2800** runs give the model's calls in order,
 its answer, the pack, the figures, the spells, the flags and all 396 object
 records byte for byte, and it prints how many went down each arm's ways. What
 use_item calls beyond what it runs -- announce, load_entry, sound_key_fits,

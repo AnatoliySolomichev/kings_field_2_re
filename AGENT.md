@@ -331,7 +331,8 @@ a thing used, against the game's own use_item over     2800 of 2800 runs: calls,
 every level (tools/useitem.py)                         answer, pack, figures and
                                                        396 object records; the
                                                        truth glass's three pages,
-                                                       the flask, every key
+                                                       the flask, every key; six
+                                                       levels' own entry 2 run
 the warp, against the game's own warp_to               280 of 280 runs, every
                                                        record, calls and fields
 Orladin's seals and pedestals, against the game's      7600 of 7600 frames of the
@@ -392,7 +393,7 @@ effects 1494 of 1494 runs, 27656 of 27656 frames · aims 300 of 300 · volleys 2
 the run 150129 of 150129 frames
 player_take_hit 300 of 300 · the status 40 of 40 runs, 6312 of 6312 frames
 casting 1200 of 1200 · the attacking arms 240 of 240 · creature hits 400 of 400
-use_item 336 of 336 · warp_to 55 of 55 · seals 975 of 975 · fades 117 of 117
+use_item 552 of 552 · warp_to 55 of 55 · seals 975 of 975 · fades 117 of 117
 ```
 
 **Tell the two kinds apart.** Against a recording or a RAM snapshot — the
