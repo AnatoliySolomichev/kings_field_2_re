@@ -3312,5 +3312,15 @@
   "name": "res_upload_wait",
   "kind": "code",
   "evidence": "res_upload_spu, res_upload_vram and two VSync(0): the step warp_to and level_load's callers take between level_load's calls while a change is under way"
+ },
+ "0x8002fddc": {
+  "kind": "code",
+  "name": "item_eaten_first",
+  "evidence": "(thing): a switch of seventeen arms on thing - 0x68 from 0x80011a78, 1 for 0x68..0x6d, 0x6f, 0x70, 0x77 and 0x78 and 0 for verdite and the crystals (and anything outside); player_turn's square button calls item_consume on its thing only when this says 1, then use_item. tools/magic.py button_check runs the stretch, 1260 of 1260"
+ },
+ "0x8018fadd": {
+  "kind": "data",
+  "name": "level_loaded",
+  "evidence": "level_load writes pending_level here once the level is in (0x80018558), init_level_state zeroes it (0x800176e4); the map screens index level_map_rects by it (ui_draw_map, map_mark_seen) and menu_use_item tests it for 2 before keeping four things uneaten (0x8001add4)"
  }
 }

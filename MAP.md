@@ -18,7 +18,7 @@ handlers and whatever a pointer table reaches have to be.
 
 | subsystem | routines | instructions | named |
 | --- | --- | --- | --- |
-| player | 213 | 23539 | 110 |
+| player | 213 | 23539 | 111 |
 | objects | 94 | 14706 | 70 |
 | render | 63 | 13950 | 44 |
 | library | 87 | 7591 | 59 |
@@ -217,7 +217,7 @@ the pad, the turn, the walk and the height.
 | `0x8002ed1c` | 17 | 1 | landing_sound |  |
 | `0x80028090` | 17 | 3 | sub_80028090 | calls free_resource, EnterCriticalSection, PadInit, ExitCriticalSection |
 | `0x80017170` | 16 | 5 | angle_lerp |  |
-| `0x8002fddc` | 16 | 1 | sub_8002fddc |  |
+| `0x8002fddc` | 16 | 1 | item_eaten_first |  |
 | `0x8005d7bc` | 15 | 2 | has_item | points at inventory_a, points at inventory_b |
 | `0x80042b70` | 14 | 2 | sub_80042b70 | points at model_table |
 | `0x800279a4` | 13 | 14 | pad_read_latch | calls PadRead |

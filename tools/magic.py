@@ -12,7 +12,14 @@ running after it.
 magic A (`0x801b25ab`) -- unless the weapon's own magic is firing
 (`0x801b25b2`) or `0x801b25aa` is set; the square button's (`bind_map`)
 casts the button's spell (`0x801b25ac`), or uses its thing (`0x801b25ad`),
-or says it is gone (announce `0xa`).
+or says it is gone (announce `0xa`). **The thing** (`0x8002ff28`): with one
+or more of it in `inventory_a` it is eaten first by `item_consume` when
+`0x8002fddc` says it is one of the eaten -- the herbs and stones `0x68..0x6d`,
+the two fruits `0x6f`, `0x70`, the potions `0x77`, `0x78` (seventeen arms
+from `0x80011a78`) -- and then handed to `use_item` from `player_pos` and
+`player_pitch`, as the menu's "use" does; with none, "Nothing happens".
+`button_check()` runs that stretch (`0x8002febc..0x8002ff88`) of the
+game's own over the snapshots.
 
 **`cast_spell`** (`0x8002deec`): nothing while an action is pending
 (`0x801b25e9` not `0xff`). The cost is the record's `+0x16`, doubled by the
@@ -82,6 +89,14 @@ SPELL_TABLE = 0x801B77EC
 NONE = 0xFF
 
 PENDING_AT = (0x8002FF88, 0x80030010)     # player_turn's stretch
+BUTTON_AT = (0x8002FEBC, 0x8002FF88)      # and its square button's
+BIND_MAP = 0x80081880
+SPELL_B, ITEM_B = 0x801B25AC, 0x801B25AD
+INVENTORY_A = 0x800C85E8
+ITEM_CONSUME = 0x8001B254
+USE_ITEM = 0x8005CBE0
+PLAYER_PITCH = 0x801B2610
+EATS = frozenset(list(range(0x68, 0x6E)) + [0x6F, 0x70, 0x77, 0x78])   # 0x8002fddc
 TAIL_AT = (0x80031F0C, 0x8003202C)        # player_controller's
 
 # name: (address, bytes, signed)
@@ -622,6 +637,98 @@ def _stretch(cpu, start, end, limit=200000):
     cpu.r[29] = mipsrun.STACK
 
 
+def eats(thing):
+    """0x8002fddc: whether item_consume eats the thing before use_item has
+    it -- a switch of seventeen arms on thing - 0x68 (0x80011a78)."""
+    return thing in EATS
+
+
+def button_calls(spell, thing, held):
+    """player_turn's square button, once its edge is seen (0x8002fef8): the
+    button's spell cast; then its thing -- none held, "Nothing happens";
+    else eaten first if it is one item_consume eats, and used."""
+    calls = []
+    if spell != NONE:
+        calls.append(("cast", spell))
+    if thing == NONE:
+        return calls
+    if held == 0:
+        calls.append(("announce", 0xA))
+        return calls
+    if eats(thing):
+        calls.append(("consume", thing))
+    calls.append(("use", thing))
+    return calls
+
+
+def button(ram):
+    """The stretch at 0x8002febc: the button's edge -- bind_map in the
+    buttons and not in the last frame's -- and then button_calls."""
+    m = struct.unpack_from("<H", ram, BIND_MAP & MASK)[0]
+    if not rd(ram, "buttons") & m or rd(ram, "buttons_prev") & m:
+        return []
+    thing = ram[ITEM_B & MASK]
+    held = ram[(INVENTORY_A & MASK) + thing] if thing != NONE else 0
+    return button_calls(ram[SPELL_B & MASK], thing, held)
+
+
+def _vary_button(ram, rng):
+    """The square button's edge, its spell, its thing and the count of it."""
+    m = struct.unpack_from("<H", ram, BIND_MAP & MASK)[0]
+    wr(ram, "buttons", rng.choice((m, m, m | 0x40, 0, 0x40)))
+    wr(ram, "buttons_prev", rng.choice((0, 0, 0, m)))
+    ram[SPELL_B & MASK] = rng.choice((NONE, NONE, NONE, rng.randrange(0, 0x1F)))
+    thing = rng.choice((NONE, rng.randrange(0x65, 0x96), rng.choice(sorted(EATS)),
+                        rng.choice((0x6E, 0x71, 0x76, 0x80, 0x82, 0x88))))
+    ram[ITEM_B & MASK] = thing
+    if thing != NONE:
+        ram[(INVENTORY_A & MASK) + thing] = rng.choice((0, 1, 1, rng.randrange(1, 10)))
+
+
+def button_check(out=sys.stdout, per=60):
+    """The game's own stretch, cast_spell, item_consume and use_item stood in
+    for and logged, 0x8002fddc run, against button() over every snapshot."""
+    import random
+    import memcard
+    global ANNOUNCE
+    ANNOUNCE = ANNOUNCE or _announce()
+    rng = random.Random(0xB077)
+    ok = n = 0
+    first = None
+    ways = {}
+    for path in memcard._snapshots():
+        base = bytearray(open(path, "rb").read())
+        for _ in range(per):
+            ram = bytearray(base)
+            _vary_button(ram, rng)
+            got = []
+            cpu = _cpu(ram, got)
+            cpu.hooks[CAST_SPELL] = lambda c: got.append(("cast", c.r[4] & 0xFF))
+            cpu.hooks[ITEM_CONSUME] = lambda c: got.append(("consume", c.r[4] & 0xFF))
+
+            def use(c):
+                if (c.r[4], c.r[5]) == (PLAYER_POS, PLAYER_PITCH):
+                    got.append(("use", c.r[6] & 0xFF))
+                else:
+                    got.append(("use from", c.r[4], c.r[5], c.r[6]))
+            cpu.hooks[USE_ITEM] = use
+            _stretch(cpu, *BUTTON_AT)
+            want = button(ram)
+            key = " ".join(c[0] for c in want) or "nothing"
+            ways[key] = ways.get(key, 0) + 1
+            n += 1
+            if got == want:
+                ok += 1
+            elif first is None:
+                first = f"{os.path.basename(path)}: game {got} model {want}"
+    print(f"  the square button's thing, against the game's own player_turn stretch "
+          f"(0x8002febc): {ok} of {n} runs, the calls in order -- "
+          + ", ".join(f"{v} {k}" for k, v in sorted(ways.items())), file=out)
+    if first:
+        print(f"  first difference: {first}", file=out)
+    return ok == n
+
+
 def _vary(ram, rng):
     """A state for casting: the fields that decide, at random."""
     wr(ram, "pending", rng.choice((NONE, NONE, NONE, rng.randrange(0, 0x1F))))
@@ -957,12 +1064,18 @@ def export(out_dir, n=200):
     for i in range(n):
         ram = bytearray(base)
         _vary(ram, rng)
-        for what in ("cast", "action", "pending", "timers", "use"):
+        for what in ("cast", "action", "pending", "timers", "use", "button"):
             st = state_of(ram)
             before = _port(st)
             calls = []
-            sp = None
-            if what == "cast":
+            sp = args = None
+            if what == "button":
+                spell = rng.choice((NONE, NONE, rng.randrange(0, 0x1F)))
+                thing = rng.choice((NONE, rng.randrange(0x65, 0x96), rng.choice(sorted(EATS))))
+                held = rng.choice((0, 1, 3))
+                args = [spell, thing, held]
+                calls = button_calls(spell, thing, held)
+            elif what == "cast":
                 sp = rng.choice(list(range(0x1F)) + [0x36, 0x38, 0x40, 0x47, 0x4C, NONE])
                 cast_spell(st, sp, ram, calls)
             elif what == "action":
@@ -974,7 +1087,7 @@ def export(out_dir, n=200):
                 calls.append(["rest", 1 if use_tick(st, ram) else 0])
             else:
                 tail(st, calls)
-            rows.append({"what": what, "spell": sp, "before": before,
+            rows.append({"what": what, "spell": sp, "args": args, "before": before,
                          "after": _port(st), "calls": [list(c) for c in calls]})
     out = os.path.join(out_dir, "magiccheck.json")
     with open(out, "w") as fh:
@@ -987,5 +1100,6 @@ if __name__ == "__main__":
     if "--check" in sys.argv:
         a = check()
         b = attack_check()
-        sys.exit(0 if a and b else 1)
+        c = button_check()
+        sys.exit(0 if a and b and c else 1)
     print(__doc__)

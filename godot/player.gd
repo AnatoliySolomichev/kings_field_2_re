@@ -1290,18 +1290,114 @@ func _spell_records() -> Dictionary:
 # player_turn's buttons (0x8002fe1c): the action button's edge casts magic A
 # unless the weapon's own magic is firing (0x801b25b2, its shots left) or a
 # combination is under way (0x801b25aa); the square button's (bind_map) the
-# button's spell, or uses its thing (0x8002ff28). Then the pending action.
-# @orig game:0x8002fe1c player_turn  status:partial -- the casting buttons and the pending action; the button's thing is use_item's, not here
+# button's spell, or uses its thing (button_calls). Then the pending action.
+# @orig game:0x8002fe1c player_turn  status:partial -- the casting buttons, the button's thing and the pending action
 func _cast_buttons() -> void:
 	var st := _magic_state()
 	var calls := []
 	var recs := _spell_records()
 	if KFPad.hit(KFPad.ACTION) and int(wstate.get("shots", 0)) == 0 and int(combo["time"]) == 0:
 		cast_spell(st, spell_a, recs, calls)
-	if KFPad.hit(KFPad.MAP) and spell_b != 0xFF:
-		cast_spell(st, spell_b, recs, calls)
+	if KFPad.hit(KFPad.MAP):
+		var held := int(inventory.a[item_b]) if item_b >= 0 and item_b < inventory.a.size() else 0
+		var todo := button_calls(spell_b, item_b, held)
+		var thing := false
+		for c in todo:
+			if str(c[0]) == "cast":
+				cast_spell(st, int(c[1]), recs, calls)
+			else:
+				thing = true
+		if thing:
+			# the thing acts on the player itself: what the casts left, first
+			_magic_put(st, calls)
+			calls = []
+			for c in todo:
+				match str(c[0]):
+					"announce":
+						KFMessages.announce(int(c[1]))
+					"consume":
+						item_consume(int(c[1]))
+					"use":
+						var lt := get_node_or_null("../Loot")
+						if lt:
+							lt.use_item(int(c[1]))
+			st = _magic_state()
 	pending_tick(st, calls)
 	_magic_put(st, calls)
+
+
+# The square button's edge (0x8002fef8): the button's spell (0x801b25ac)
+# cast, and its thing (0x801b25ad) -- held, eaten first by item_consume when
+# eats() says so and then used (use_item from player_pos and player_pitch);
+# held none, "Nothing happens" (0xa). The calls in order: ["cast", spell],
+# ["announce", 0xa], ["consume", thing], ["use", thing].
+# @orig game:0x8002febc player_turn+0xa0  status:verified -- 1260 of 1260 runs of the game's own stretch over the snapshots, the calls in order (tools/magic.py button_check)
+static func button_calls(spell: int, thing: int, held: int) -> Array:
+	var out := []
+	if spell != 0xFF:
+		out.append(["cast", spell])
+	if thing == 0xFF:
+		return out
+	if held == 0:
+		out.append(["announce", 0xA])
+		return out
+	if eats(thing):
+		out.append(["consume", thing])
+	out.append(["use", thing])
+	return out
+
+
+# item_eaten_first (0x8002fddc): whether item_consume eats the thing before
+# use_item has it -- the herbs and stones 0x68..0x6d, the two fruits 0x6f and
+# 0x70 (whose arms are use_item's) and the potions 0x77 and 0x78, seventeen
+# arms from 0x80011a78; verdite and the crystals are use_item's alone.
+# @orig game:0x8002fddc item_eaten_first  status:verified -- through player_turn's stretch, 1260 of 1260 runs of the game's own (tools/magic.py)
+static func eats(thing: int) -> bool:
+	return (thing >= 0x68 and thing <= 0x6D) or thing == 0x6F or thing == 0x70 \
+		or thing == 0x77 or thing == 0x78
+
+
+# item_consume (0x8001b254): one of a thing out of inventory_a and its good --
+# the earth herb HP +50, the antidote the poison and HP +15, the herbal liquid
+# HP to the full, the dragon crystal HP and MP to the full, the blood stone
+# the paralysis off and the slowing held to 0x40, the moon stone MP +40, the
+# blue potion HP +100, the gold potion HP +200 and MP +100, each held to its
+# most; the fruits only counted down (use_item has their arms), a potion's
+# crystal flask back. Verdite, the crystals and a thing not held are left.
+# True when it ate.
+# @orig game:0x8001b254 item_consume  status:transcribed -- not ui_sound(9)
+func item_consume(id: int) -> bool:
+	if id == 0x6E or (id >= 0x71 and id <= 0x76) or int(inventory.a[id]) == 0:
+		return false
+	match id:
+		0x68:
+			hp += 0x32
+		0x69:
+			poison = 0
+			hp += 0xF
+		0x6A:
+			hp = hp_max
+		0x6B:
+			hp = hp_max
+			mp = int(character.get("mp_max", mp))
+		0x6C:                                       # the blood stone (0x8001b350)
+			if int(caps["paralysis"]) > 0:
+				caps["paralysis"] = 0
+			if int(caps["slow"]) >= 0x41:
+				caps["slow"] = 0x40
+		0x6D:
+			mp += 0x28
+			mp = mini(mp, int(character.get("mp_max", mp)))
+		0x77:
+			hp += 0x64
+		0x78:
+			hp += 0xC8
+			mp = mini(mp + 0x64, int(character.get("mp_max", mp + 0x64)))
+	hp = mini(hp, hp_max)
+	inventory.a[id] = int(inventory.a[id]) - 1
+	if id == 0x77 or id == 0x78:
+		inventory.a[0x76] = int(inventory.a[0x76]) + 1       # the crystal flask back
+	return true
 
 
 # pause_menu's end (0x8001a978): what "use magic" handed back, with 0x1000

@@ -913,9 +913,8 @@ each one is also in its function's marker, as `partial` and what differs:
   sparkles, in front of the eye -- of the weapons' magic, the sounds (every
   spell's effects are in now, the excellector's, triple fang's, dark
   slayer's, the moonlight swords' and `0x3c` the last; nothing has checked
-  them in play: `emu/bp28.lua`, PLAYTEST.md) -- and the button's thing
-  (`use_item` from
-  `0x8002ff28`). The equipment screen's MAGIC and BUTTON lines are in
+  them in play: `emu/bp28.lua`, PLAYTEST.md). The button's thing is in
+  (`0x8002ff28`, 1260 of 1260 runs of the game's own stretch). The equipment screen's MAGIC and BUTTON lines are in
   (light goes on the button: magic A lists the attacking spells alone); not
   their guide page or the spells' sound banks.
 

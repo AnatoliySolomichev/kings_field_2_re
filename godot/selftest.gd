@@ -1421,8 +1421,9 @@ func _status_tick() -> bool:
 
 
 # Casting, player.gd against tools/magic.py (whose model the game's own holds):
-# cast_spell, player_action's healing and protecting arms, the pending action
-# and the timers at the controller's end -- the fields after and the calls.
+# cast_spell, player_action's healing and protecting arms, the pending action,
+# the timers at the controller's end and the square button's thing -- the
+# fields after and the calls.
 func _casting() -> bool:
 	if not FileAccess.file_exists("res://magiccheck.json"):
 		print("casting: no cases to check against")
@@ -1448,6 +1449,9 @@ func _casting() -> bool:
 				script.pending_tick(st, calls)
 			"use":
 				calls.append(["rest", 1 if script.use_tick(st, recs) else 0])
+			"button":
+				var a: Array = _ints(r["args"])
+				calls = script.button_calls(int(a[0]), int(a[1]), int(a[2]))
 			_:
 				script.timers_tick(st, calls)
 		var want: Dictionary = _ints(r["after"])

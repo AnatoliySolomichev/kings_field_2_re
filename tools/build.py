@@ -232,7 +232,7 @@ def main(quick=False, only_check=False):
         ["player_take_hit:", "sub_80030e14:", "first difference"]))
     steps.append((["tools/magic.py", "--check"],
         "casting, against the game's own cast_spell, player_action, player_turn and the controller's end",
-        ["casting, against", "attacking arms", "first difference"]))
+        ["casting, against", "attacking arms", "square button", "first difference"]))
     steps.append((["tools/hit.py", "--check"],
         "a creature's hit, against the game's own actor_take_hit",
         ["actor_take_hit, against", "first difference"]))

@@ -4406,6 +4406,23 @@ above); `bind_map`'s edge
 casts the button's spell (`0x801b25ac`), or uses its thing (`0x801b25ad`), or
 announces `0xa` when there is none left.
 
+**The button's thing** (`0x8002ff28`): with one or more of it in
+`inventory_a`, `item_eaten_first` (`0x8002fddc`, seventeen arms from
+`0x80011a78`) says whether `item_consume` takes it first -- the herbs and
+stones `0x68..0x6d`, the two fruits `0x6f` and `0x70`, the potions `0x77` and
+`0x78`, but not verdite or the crystals -- and then `use_item(player_pos,
+player_pitch, thing)` has it, as when the menu closes on it. So a herb on the
+button is eaten on the spot, a key is tried on what is in front, the truth
+glass reads what it reads. **Checked against the game's own**: that stretch
+(`0x8002febc..0x8002ff88`) run over every snapshot with the edge, the spell,
+the thing and its count at random, `cast_spell`, `item_consume`, `use_item`
+and `announce` logged -- **1260 of 1260** runs give `tools/magic.py`'s calls
+in order. The menu's own way to `item_consume` (`menu_use_item`,
+`0x8001adc0`) asks it of every thing from `0x68` to `0x78` but on level 2
+(`level_loaded`, `0x8018fadd`) in the cells 10..13 across and 38..42 along,
+where the earth herb, the dragon crystal, the blood stone and the moon stone
+are kept for the level's own entry 2.
+
 **`cast_spell`** (`0x8002deec`) does nothing while an action is pending
 (`0x801b25e9` not `0xff`). The cost is `+0x16`, doubled by the groundal crown
 (head `0x26`), halved by orladin's mail (body `0x2e`); short of it, announce

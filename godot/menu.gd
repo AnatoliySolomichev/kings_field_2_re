@@ -2134,48 +2134,31 @@ func _step(press: int) -> void:
 				state = "equip_list"
 
 
-# The thing chosen: 104..120 are eaten (item_consume), then the menu closes
-# and use_item runs (godot/useitem.gd, through loot.gd).
-# @orig game:0x8001b254 item_consume  status:transcribed
+# menu_use_item's end (0x8001adc0): a thing of 0x68..0x78 goes to
+# item_consume (player.gd), which eats what it eats -- but on level 2 (the
+# level loaded, 0x8018fadd), in the cells 10..13 across and 38..42 along, the
+# earth herb, the dragon crystal, the blood stone and the moon stone are kept,
+# for the level's own entry 2 to have; then the menu closes and use_item runs
+# (godot/useitem.gd, through loot.gd).
+# @orig game:0x8001adc0 menu_use_item+0x33c  status:transcribed
 func _use(id: int) -> void:
-	var inv: KFItems = player.inventory
 	var eaten := false
-	if id >= 0x68 and id <= 0x78 and not (id == 0x6E or (id >= 0x71 and id <= 0x76)) \
-			and int(inv.a[id]) != 0:
-		eaten = true
-		match id:
-			0x68:
-				player.hp += 0x32
-			0x69:
-				player.poison = 0
-				player.hp += 0xF
-			0x6A:
-				player.hp = player.hp_max
-			0x6B:
-				player.hp = player.hp_max
-				player.mp = int(player.character.get("mp_max", player.mp))
-			0x6C:                                       # the blood stone (0x8001b350)
-				if int(player.caps["paralysis"]) > 0:
-					player.caps["paralysis"] = 0
-				if int(player.caps["slow"]) >= 0x41:
-					player.caps["slow"] = 0x40
-			0x6D:
-				player.mp += 0x28
-				player.mp = mini(player.mp, int(player.character.get("mp_max", player.mp)))
-			0x77:
-				player.hp += 0x64
-			0x78:
-				player.hp += 0xC8
-				player.mp = mini(player.mp + 0x64, int(player.character.get("mp_max", player.mp + 0x64)))
-		player.hp = mini(player.hp, player.hp_max)
-		inv.a[id] = int(inv.a[id]) - 1
-		if id == 0x77 or id == 0x78:
-			inv.a[0x76] = int(inv.a[0x76]) + 1       # the crystal flask back
+	if id >= 0x68 and id <= 0x78 and not _kept(id):
+		eaten = player.item_consume(id)
 	KFInfo.note("use: item %d%s" % [id, " eaten" if eaten else ""])
 	_close()
 	var lt := get_node_or_null("../../Loot")
 	if lt:
 		lt.use_item(id)
+
+
+# @port helper -- menu_use_item's level-2 test: the player's cell, rounded towards 0 as the sra after addiu 0x7ff does
+func _kept(id: int) -> bool:
+	if player._level() != 2 or not (id == 0x68 or id == 0x6B or id == 0x6C or id == 0x6D):
+		return false
+	var cx: int = (player.gx + 0x7FF if player.gx < 0 else player.gx) >> 11
+	var cz: int = (player.gz + 0x7FF if player.gz < 0 else player.gz) >> 11
+	return cx >= 0xA and cx < 0xE and cz >= 0x26 and cz < 0x2B
 
 
 # The BUTTON page's end (0x8001d734): set_spell_b with the row's spell, then
