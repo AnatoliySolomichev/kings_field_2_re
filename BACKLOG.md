@@ -833,11 +833,14 @@ each one is also in its function's marker, as `partial` and what differs:
   behind") -- untested by eye: the port's shaders compile only in a window.
 * **`give_item` and `take_item` call the level's own hook** after the count
   changes (`level_hooks+0x18`, `+0x2c`); `godot/items.gd` does not.
-* **The timers are not carried over a crossing.** `player.gd carry_over`
-  takes the pack, the figures, HP and MP, the meters, the poison and the
-  floor, not the bonus timers (`0x801b256a`, `256e`, `bonus_skills_timer`),
-  the curse, the dark or the light; the game keeps them all, being one
-  player block. Nothing compared it.
+* **The timers across a crossing -- fixed.** `player.gd carry_over` took the
+  pack, the figures, HP and MP, the meters, the poison and the floor, and
+  left the bonus timers, the curse, the dark and the light behind. The walk
+  says the change of level writes nothing of the player's block but the
+  place and `spawn_anywhere` (FORMATS.md, "What a change of level keeps"),
+  and the port carries every field it keeps now. What the game does that
+  the port cannot is the hundred-odd frames the load takes, through which
+  the player and the timers run on; the port's load is at once.
 * **`new_character` does much more than `KFLevels.fresh`**: the gold, the
   equipment slots, the place and the spells.
 * **The movie's skip.** `godot/cutscene.gd` uses `OPEN.EXE`'s rule for

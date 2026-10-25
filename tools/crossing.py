@@ -32,6 +32,15 @@ back. Each time the player's z jumps by 70 cells nine frames after the frame
 the model has them step into the crossing's rectangle -- the frames
 `level_load` spends reading the new grid off the disc -- by exactly the shift
 the model takes from the record; and the model fires nowhere else.
+
+**What the change keeps of the player: everything but the place.** Of the
+114 routines `object_trigger` and `level_load` reach (out/rdis/game.json),
+the only stores into the player's block (`0x801b24e0..0x801b2680`) are
+`world_shift`'s to `player_pos` and `level_load`'s to `spawn_anywhere`; one
+other routine builds an address in it, `0x801b25dc`, and only reads it
+(`player_check`). So the timers, the curse, the dark and the light, the
+bonuses, the cast pending, the swing and the meters go on across a
+crossing, which godot/player.gd's carry_over carries (CARRIED).
 """
 import os
 import struct
@@ -182,6 +191,77 @@ def check(out=sys.stdout, path=None):
     return ok == len(fired) and not stray and fired
 
 
+PLAYER_BLOCK = (0x801B24E0, 0x801B2680)    # the player's fields, 5.1 to player_velocity's end
+CHANGE_ROOTS = (0x80017C78, 0x80018358)    # object_trigger and level_load
+KEPT_WRITES = {0x801B24F2: "spawn_anywhere", 0x801B25F0: "player_pos x",
+               0x801B25F4: "player_pos y", 0x801B25F8: "player_pos z"}
+
+
+def player_writes(roots=CHANGE_ROOTS):
+    """What a change of level writes into the player's block, read off the
+    walk (out/rdis/game.json and the listings in out/asm/game): every routine
+    object_trigger and level_load reach, the stores into 0x801b24e0..
+    0x801b2680 the walk resolves, and -- since a store through a register
+    an addiu pointed into the block carries no address -- every routine that
+    builds such an address and whether it stores through that register.
+    ({address: [routines]}, [(routine, address, stored)], routines walked)."""
+    import glob
+    import json
+    import re
+    d = json.load(open(os.path.join(ROOT, "out", "rdis", "game.json")))
+    fns = {int(k, 16): v for k, v in d["functions"].items()}
+    seen, todo = set(), list(roots)
+    while todo:
+        a = todo.pop()
+        if a in seen or a not in fns:
+            continue
+        seen.add(a)
+        todo += [c["to"] for c in fns[a]["calls"]]
+    lo, hi = PLAYER_BLOCK
+    writes = {}
+    for a in seen:
+        for w in fns[a]["writes"]:
+            if lo <= w < hi:
+                writes.setdefault(w, []).append(fns[a]["name"])
+    files = {int(os.path.basename(f)[:8], 16): f
+             for f in glob.glob(os.path.join(ROOT, "out", "asm", "game", "*.s"))}
+    built = []
+    addr = re.compile(r"addiu\s+(\$\w+), \$\w+, -?0x[0-9a-f]+\s+; the address of \[0x([0-9a-f]+)\]")
+    for a in sorted(seen):
+        if a not in files:
+            continue
+        lines = [ln for ln in open(files[a]) if not ln.startswith(";")]
+        for i, ln in enumerate(lines):
+            m = addr.search(ln)
+            if not m or not lo <= int(m.group(2), 16) < hi:
+                continue
+            reg = re.escape(m.group(1))
+            store = re.compile(r"\bs[bhw]\s+\$\w+, -?0x[0-9a-f]+\(" + reg + r"\)")
+            built.append((fns[a]["name"], int(m.group(2), 16),
+                          any(store.search(x) for x in lines[i + 1:])))
+    return writes, built, len(seen)
+
+
+def player_check(out=sys.stdout):
+    """player_writes, held to what the port leaves out of carry_over: no
+    store into the player's block but the place and spawn_anywhere."""
+    if not os.path.exists(os.path.join(ROOT, "out", "rdis", "game.json")):
+        print("  no walk in out/rdis (python3 tools/rdis.py game --save)", file=out)
+        return True
+    writes, built, n = player_writes()
+    other = sorted(a for a in writes if a not in KEPT_WRITES)
+    through = [(r, a) for r, a, stored in built if stored and a not in KEPT_WRITES]
+    print(f"  of the {n} routines object_trigger and level_load reach, the stores "
+          f"into the player's block (0x801b24e0..0x801b2680) are "
+          + ", ".join(f"{KEPT_WRITES.get(a, hex(a))} ({', '.join(sorted(set(writes[a]))) })"
+                      for a in sorted(writes))
+          + f"; {len(built)} addresses built into it, "
+          f"{sum(1 for b in built if b[2])} stored through ({', '.join(sorted({b[0] for b in built if b[2]}))}) -- "
+          + ("nothing else, so a crossing keeps the rest" if not other and not through
+             else f"ALSO {[hex(a) for a in other]} {through}"), file=out)
+    return not other and not through
+
+
 def export(out_dir, lv):
     """crossNN.json for godot/crossing.gd: the level's crossing objects."""
     import json
@@ -193,7 +273,9 @@ def export(out_dir, lv):
 
 if __name__ == "__main__":
     if "--check" in sys.argv:
-        sys.exit(0 if check() else 1)
+        a = check()
+        b = player_check()
+        sys.exit(0 if a and b else 1)
     for lv in range(28):
         try:
             ts = triggers(lv)

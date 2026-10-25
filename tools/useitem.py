@@ -893,7 +893,7 @@ def outcome(item, calls, w):
                 "taken" if took else
                 f"banner {said[0]:#x}" if said and said[0] != NOTHING_HAPPENS else
                 "answered" if w["answer"] else "nothing")
-        return f"level {lv}'s own, {item:#x}: {what}"
+        return f"entry 2 of level {lv}, {item:#x}: {what}"
     if item == STATUE_THING:
         return "0x80: the 900 frames"
     if item in EATEN:

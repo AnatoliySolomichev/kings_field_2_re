@@ -330,24 +330,9 @@ func _ready() -> void:
 			rotation.y = float(facing) * TAU / 4096.0
 			_to_godot()
 	respawn = null
-	if arrive is Array:             # walked in from another level (crossing.gd)
+	if arrive is Dictionary:        # walked in from another level (crossing.gd)
 		flying = false
-		gx = int(arrive[0])
-		gy = int(arrive[1])
-		gz = int(arrive[2])
-		facing = int(arrive[3])
-		pitch = int(arrive[4])
-		vstate = int(arrive[5])
-		vvel = int(arrive[6])
-		fwd_speed = int(arrive[7])
-		stf_speed = int(arrive[8])
-		hp = int(arrive[9])
-		hp_max = int(arrive[10])
-		mp = int(arrive[11])
-		weapon_meter = int(arrive[12])
-		magic_meter = int(arrive[13])
-		poison = int(arrive[14])
-		layer = int(arrive[15])
+		_arrive(arrive)
 		rotation.y = float(facing) * TAU / 4096.0
 		_to_godot()
 	arrive = null
@@ -357,15 +342,27 @@ func _ready() -> void:
 	_refresh()
 
 
-# What a crossing takes over into the other level's world (crossing.gd): what
-# the crystal keeps -- the inventory, the gold, the character, what is worn
-# and wielded, the magic -- and where the player stands, shifted, facing,
-# looking, falling and walking, with HP, MP, the meters and the poison.
+# What a crossing takes over into the other level's world (crossing.gd):
+# every field of the player's block the port keeps (CARRIED) -- the game's
+# change of level writes none of them but the place (tools/crossing.py
+# player_writes) -- and where the player stands, shifted.
 # @port engine -- the player's state, kept across the change of world
 func carry_over(p: Vector3i) -> void:
-	carried = [inventory, gold, character, weapon_id, worn, [spell_a, spell_b, item_b]]
-	arrive = [p.x, p.y, p.z, facing, pitch, vstate, vvel, fwd_speed, stf_speed,
-		hp, hp_max, mp, weapon_meter, magic_meter, poison, layer]
+	var d := {"pos": [p.x, p.y, p.z]}
+	for n in CARRIED:
+		var v = get(n)
+		d[n] = v.duplicate(true) if v is Array or v is Dictionary else v
+	arrive = d
+
+
+# @port engine -- what carry_over kept, put back in the new world's player
+func _arrive(d: Dictionary) -> void:
+	for n in CARRIED:
+		set(n, d[n])
+	var p: Array = d["pos"]
+	gx = int(p[0])
+	gy = int(p[1])
+	gz = int(p[2])
 
 
 # A save, as save_restore put it back (KFCard.restore): where the player
@@ -2198,9 +2195,23 @@ func _dying() -> void:
 # spot, or [] for a new game's start.
 static var respawn = null
 # Where a crossing puts the player down in the next level's world, and how:
-# [x, y, z, facing, pitch, vertical state and velocity, speeds, HP, its
-# maximum, MP, the two meters, the poison, the floor (0x801b2644)].
+# {pos, and every name in CARRIED}.
 static var arrive = null
+# The fields of the player's block (0x801b24e0..0x801b2680) the port keeps,
+# by name -- the place aside, which the crossing shifts. A change of level
+# writes none of them in the game: of the 114 routines object_trigger and
+# level_load reach, the only stores into the block are world_shift's to
+# player_pos and level_load's to spawn_anywhere (tools/crossing.py
+# player_writes), so the timers, the curse, the dark and the light, the
+# bonuses, the pending cast, the swing and the rest go on as they were.
+const CARRIED := ["facing", "pitch", "pitch_rate", "vstate", "vvel", "step", "layer",
+	"fwd_speed", "stf_speed", "turn_rate", "bob_phase", "bob", "hp", "hp_max", "mp",
+	"weapon_meter", "magic_meter", "pstate", "push", "tilt", "tilt_vel", "crouch", "dip",
+	"flash", "flash_colour", "offense", "defence", "stat", "working", "worn", "spell_a",
+	"spell_b", "item_b", "weapon_id", "wstate", "combo", "character", "strong_hits",
+	"death_frames", "inventory", "gold", "damage_k", "poison", "resist", "curse", "dark",
+	"light", "guard", "shielded", "bonus", "pending", "shots", "shot_gap", "shot_delay",
+	"cast_off", "casting", "practice", "mp_hold", "magic_pause", "caps"]
 # What the player carries across that reload when the crystal revives them:
 # [the inventory, the gold, the character, the weapon, what is worn, the
 # magic and the button's].

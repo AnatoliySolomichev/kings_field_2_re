@@ -341,6 +341,9 @@ func _init() -> void:
 	if not _fades():
 		quit(1)
 		return
+	if not _carry():
+		quit(1)
+		return
 	if not _use_items():
 		quit(1)
 		return
@@ -2120,6 +2123,60 @@ func _fades() -> bool:
 	if bad > 0:
 		print("  first difference: " + first)
 	return bad == 0
+
+
+# A crossing's carry_over and the next world's _arrive, player.gd against
+# itself: every field of CARRIED set to a value of its own, carried over, and
+# found again in a new player, untouched by what the old one does after.
+func _carry() -> bool:
+	var script = load("res://player.gd")
+	var a = script.new()
+	var b = script.new()
+	var want := {}
+	var k := 0
+	for n in script.CARRIED:
+		k += 1
+		var v = a.get(n)
+		if v is Array:
+			v = (v as Array).map(func(x): return int(x) + k if (x is int) else x)
+		elif v is Dictionary:
+			var d: Dictionary = (v as Dictionary).duplicate(true)
+			for key in d:
+				if d[key] is int:
+					d[key] = int(d[key]) + k
+			v = d
+		elif v is int:
+			v = int(v) + 3 * k + 1
+		elif v is Vector3i:
+			v = Vector3i(k, -k, 2 * k)
+		elif v is KFItems:
+			v = KFItems.new()
+			(v as KFItems).a[0x68] = k
+		a.set(n, v)
+		want[n] = v.duplicate(true) if v is Array or v is Dictionary else v
+	a.carry_over(Vector3i(0x1F000, -0x3C00, 0x4000))
+	(a.tilt as Array)[0] = 999                  # the old world going on
+	(a.character as Dictionary)["exp"] = -1
+	b._arrive(script.arrive)
+	script.arrive = null
+	var ok := 0
+	var first := ""
+	for n in script.CARRIED:
+		var got = b.get(n)
+		var same: bool = got == want[n] if got is KFItems else str(got) == str(want[n])
+		if same:
+			ok += 1
+		elif first == "":
+			first = "%s: %s, carried %s" % [n, str(got), str(want[n])]
+	var placed: bool = b.gx == 0x1F000 and b.gy == -0x3C00 and b.gz == 0x4000
+	a.free()
+	b.free()
+	var n_all: int = script.CARRIED.size()
+	print("carry-over: %d of %d fields of the player's block carried across a crossing%s" % [
+		ok, n_all, ", and the place" if placed else "; the place NOT"])
+	if first != "":
+		print("  first difference: " + first)
+	return ok == n_all and placed
 
 
 # script_interpreter's calls, talk.gd against tools/talk.py: for each of

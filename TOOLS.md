@@ -1145,7 +1145,9 @@ python3 tools/level3d.py 0
 
 and the port walks from level 0 into level 4 and back (`godot/crossing.gd`).
 `python3 tools/crossing.py` lists every level's crossings; `--check` holds the
-reading to the crossings bp16 recorded.
+reading to the crossings bp16 recorded, and reads off the walk what a change
+of level writes into the player's block (`player_check`: the place and
+`spawn_anywhere`, nothing else, over the 114 routines it reaches).
 
 ### Running the game's own code
 

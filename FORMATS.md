@@ -5188,6 +5188,20 @@ arm over `crossNN.json` and, on a change, loads the other level's world on the
 trigger's frame and puts the player down shifted, with what they carry. The
 comparison (C) follows the game into the other level's world when it is built.
 
+**What a change of level keeps of the player: everything but the place.** Of
+the 114 routines `object_trigger` and `level_load` reach, the only stores
+into the player's block (`0x801b24e0..0x801b2680`) the walk resolves are
+`world_shift`'s three to `player_pos` and `level_load`'s to `spawn_anywhere`;
+the one other address built into the block, `0x801b25dc` (sub_80015240's,
+the sound's volume), is only read (`tools/crossing.py player_check`). The
+timers -- the bonuses at `0x801b256a`, `256e` and `bonus_skills_timer`, the
+refusal's `256c`, `2576` -- the curse, the dark and the light, the poison,
+the cast pending, the swing, the combination, the meters and the walk all go
+on as they were. The port carried only the pack, the figures, HP and MP, the
+meters, the poison and the floor until this was read; `player.gd`'s
+`carry_over` takes all sixty of the block's fields it keeps now (`CARRIED`;
+the self-test, 60 of 60 and the place).
+
 ### Identifying the loaded level (fallback)
 
 Walkability alone is useless — the levels whose grids carry no solid cells

@@ -186,7 +186,7 @@ def main(quick=False, only_check=False):
               "game's own gate arm", "game's own hidden-wall arm"]))
     steps.append((["tools/crossing.py", "--check"],
         "the crossings between levels, against what was played",
-        ["crossings the model makes"]))
+        ["crossings the model makes", "routines object_trigger"]))
     steps.append((["tools/mipsrun.py", "--check"],
         "the game's own code, run over a snapshot",
         ["exactly", "NOT"]))
