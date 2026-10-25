@@ -28,6 +28,17 @@ var player: Node
 var trig: Array = []
 var acc := 0.0
 var refused := {}                   # level -> true: not built, said once
+# warp_to's fades while they run (fade_frames): the screen's bytes still to
+# show, one a frame at 15 a second with the world held, then what follows --
+# "jump" (the plan carried out), "clear" (screen_fade(0xff)) or "" (none)
+var fades: Array = []
+var fade_then := ""
+var fade_plan := {}
+var fade_acc := 0.0
+# what a warp to another level leaves for the next scene's crossing to run:
+# the fades back and whether the screen is cleared after them
+static var fades_back: Array = []
+static var clear_back := false
 
 
 # @port data -- crossNN.json: this level's crossing objects, tools/crossing.py export
@@ -43,6 +54,10 @@ func _ready() -> void:
 			trig = d
 	if KFGame.block.is_empty() or int(KFGame.block[1]) != lv:
 		KFGame.block = own_block(lv, trig)
+	if not fades_back.is_empty() or clear_back:
+		_fade(fades_back, "clear" if clear_back else "")
+		fades_back = []
+		clear_back = false
 
 
 # The block a level is in hand as: what its own crossings that keep it ask
@@ -59,6 +74,9 @@ static func own_block(lv: int, ts: Array) -> Array:
 
 # @port engine -- the arm at the game's 15 frames a second, while nothing else holds the world
 func _process(dt: float) -> void:
+	if not fades.is_empty() or fade_then != "":
+		_fading(dt)
+		return
 	if player == null or trig.is_empty() or KFGame.modal or KFGame.follow:
 		return
 	acc = minf(acc + dt, 0.25)
@@ -118,25 +136,72 @@ func _cross(hit: Dictionary) -> void:
 	get_tree().change_scene_to_file(scene)
 
 
-# warp_to's level change, the plan KFUseItem.warp_plan made of it: on the
-# level in hand the player is put down where the record says and the
-# creatures may wake anywhere (spawn_anywhere); from another, that level's
-# world loaded and the player carried over to the place, as a crossing
-# carries them. Either way the facing and the pitch are the record's, the
-# player's state 0 and the view's tilt gone. The game fades to black and
-# back around it (fade_frames); the port does not.
-# @port engine -- warp_to's change of place or level, as _cross makes one
+# warp_to's level change, the plan KFUseItem.warp_plan made of it: first its
+# fade out (fade_frames(1, 0, 0x1000, 0x100): seventeen frames adding white
+# until the screen is white), the world held; then on the level in hand the
+# player is put down where the record says and the creatures may wake
+# anywhere (spawn_anywhere); from another, that level's world loaded and the
+# player carried over to the place, as a crossing carries them. Either way
+# the facing and the pitch are the record's, the player's state 0 and the
+# view's tilt gone; and then the fades back -- one frame white on the new
+# place, seventeen back to clear -- and screen_fade(0xff).
+# @port engine -- warp_to's fades, then its change of place or level, as _cross makes one
 func warp(plan: Dictionary) -> void:
 	if plan.is_empty() or player == null:
 		return
 	var lv := int(plan["level"])
-	var p: Array = plan["pos"]
-	var at := Vector3i(int(p[0]), int(p[1]), int(p[2]))
 	if not bool(plan["same"]):
 		var scene := "res://world%02d.tscn" % lv
 		if not ResourceLoader.exists(scene):
 			KFInfo.note("warp: level %d is not built (python3 tools/level3d.py %d)" % [lv, lv])
 			return
+	var out: Array = plan.get("out", [])
+	if out.is_empty():
+		_jump(plan)
+		return
+	fade_plan = plan
+	_fade([out], "jump")
+
+
+# The fades' runs, fade_frames' bytes a frame each, the world held, and then
+# `then`.
+# @port engine -- warp_to's fades started: the frames to show and what follows
+func _fade(runs: Array, then: String) -> void:
+	fades = []
+	for r in runs:
+		fades += KFGame.fade_frames(int(r[0]), int(r[1]), int(r[2]), int(r[3]))
+	fade_then = then
+	fade_acc = 0.0
+	KFGame.modal = true
+
+
+# @port engine -- a fade's frames at 15 a second, and what follows them
+func _fading(dt: float) -> void:
+	fade_acc = minf(fade_acc + dt, 0.25)
+	while fade_acc >= 1.0 / TICK_HZ:
+		fade_acc -= 1.0 / TICK_HZ
+		if not fades.is_empty():
+			var f: Array = fades.pop_front()
+			KFGame.screen_fade(int(f[0]), int(f[1]), int(f[2]), int(f[3]))
+			continue
+		var then := fade_then
+		fade_then = ""
+		KFGame.modal = false
+		match then:
+			"jump":
+				_jump(fade_plan)
+			"clear":
+				KFGame.screen_fade(0xFF, 0, 0, 0)
+		return
+
+
+# @port engine -- the player put down where warp_to's plan says, and its fades back
+func _jump(plan: Dictionary) -> void:
+	var lv := int(plan["level"])
+	var p: Array = plan["pos"]
+	var at := Vector3i(int(p[0]), int(p[1]), int(p[2]))
+	var back: Array = plan.get("back", [])
+	var clear := bool(plan.get("clear", false))
 	player.facing = int(plan["facing"])
 	player.pitch = int(plan["pitch"])
 	player.pstate = 0
@@ -154,7 +219,13 @@ func warp(plan: Dictionary) -> void:
 		var an := get_node_or_null("../Actors")
 		if an:
 			an.spawn_anywhere = true
+		if not back.is_empty() or clear:
+			_fade(back, "clear" if clear else "")
 		return
 	player.carry_over(at)
 	KFGame.level = lv
+	if not back.is_empty() or clear:
+		fades_back = back
+		clear_back = clear
+		KFGame.modal = true
 	get_tree().change_scene_to_file("res://world%02d.tscn" % lv)

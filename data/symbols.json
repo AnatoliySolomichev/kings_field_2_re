@@ -2726,7 +2726,7 @@
  "0x8003d624": {
   "name": "screen_fade",
   "kind": "code",
-  "evidence": "(mode, r, g, b): the death's fade, 0x82 with 0..0xff over frames 0x20..0x40 of state 0x11"
+  "evidence": "(mode, r, g, b): keeps them at 0x801aeafa..0x801aeafd, which screen_fade_draw draws and render_flags_reset puts back to 0xff every frame. The death's fade is 0x82 with 0..0xff over frames 0x20..0x40 of state 0x11 -- taking away, over the panel; warp_to's through fade_frames is 1 -- adding white, under it (tools/fade.py)"
  },
  "0x801b24f4": {
   "name": "magic_pause",
@@ -3306,7 +3306,7 @@
  "0x80046c00": {
   "name": "fade_frames",
   "kind": "code",
-  "evidence": "(mode, from, to, step): frames of the game -- screen_fade(mode, (s * s) >> 16 to 0xff for each of three), res_upload_spu, res_upload_vram, camera_pose, render_frame -- with s from `from` to `to` by `step`: warp_to's fade to black (1, 0, 0x1000, 0x100) and back (1, 0x1000, 0, -0x100)"
+  "evidence": "(mode, from, to, step): frames of the game -- screen_fade(mode, (s * s) >> 16 to 0xff for each of three), res_upload_spu, res_upload_vram, camera_pose, render_frame -- with s from `from` to `to` by `step`: warp_to's fade to white -- mode 1 adds -- (1, 0, 0x1000, 0x100) and back (1, 0x1000, 0, -0x100); tools/fade.py runs it, 40 of 40, and corrects the 'to black' this said"
  },
  "0x80019538": {
   "name": "res_upload_wait",
@@ -3322,5 +3322,15 @@
   "kind": "data",
   "name": "level_loaded",
   "evidence": "level_load writes pending_level here once the level is in (0x80018558), init_level_state zeroes it (0x800176e4); the map screens index level_map_rects by it (ui_draw_map, map_mark_seen) and menu_use_item tests it for 2 before keeping four things uneaten (0x8001add4)"
+ },
+ "0x8003d568": {
+  "kind": "code",
+  "name": "screen_fade_draw",
+  "evidence": "render_frame's seventeenth call: nothing while 0x801aeafa (screen_fade's mode) is 0xff; else prim_ft4_rect over (0, 0)-(0x140, 0xf0), u 0..0xf v 0xa0..0xaf, tpage 0x0c | (mode & 3) << 5, CLUT 0x7a8d, the colour 0x801aeafb..fd, semi-transparent, at depth 1 with the mode's bit 0x80 else 0x40. tools/fade.py runs it with screen_fade over every snapshot and reads the quad back from the ordering table, 840 of 840; the texture is index 0 and CLUT[0] 0xffff in 19 of 19 snapshots' VRAM"
+ },
+ "0x8003ccfc": {
+  "kind": "code",
+  "name": "prim_ft4_rect",
+  "evidence": "(x0, y0, x1, y1, u, v, w, h, semi, tpage, clut, r, g, b, depth): one POLY_FT4 out of current_draw_slot over the rectangle, the UVs u..u+w and v..v+h, code 0x2c, or 0x2e unless semi is 0xff, filed at ot_pointer + 4 * depth for a depth in 1..0x1fff (counted at 0x801aeb14). screen_fade_draw's quad is one (tools/fade.py, 840 of 840); overlay_plane_17..19 and 0x8003d64c, 0x8003d79c call it too"
  }
 }

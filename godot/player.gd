@@ -233,8 +233,8 @@ var combo_latch := 0
 var character := {}
 var strong_hits := 0
 # Dying (player state 0x11): the frames counted at 0x801b261e, and the fade
-# 0x8003d624 darkens the screen with; the inventory (inventory_a and _b,
-# KFItems), whose crystal (item 107) revives, and the gold (player_gold).
+# screen_fade (KFGame) takes the screen down with; the inventory (inventory_a
+# and _b, KFItems), whose crystal (item 107) revives, and the gold (player_gold).
 var death_frames := 0
 var fade := 0
 var inventory := KFItems.new()
@@ -607,6 +607,7 @@ func _process(dt: float) -> void:
 	# and last frame's. Here that happens once a *rendered* frame rather than
 	# once a game tick, which only matters to the edge detection.
 	KFPad.poll()
+	_screen()
 	# player_turn reads the attack button's edge once a game frame; the pad is
 	# read once a rendered frame here, so the edge is kept until a tick takes it.
 	if KFGame.modal:                  # object_give's own frames: nothing moves
@@ -672,6 +673,7 @@ func _ramp(speed: int, pos: bool, neg: bool, cap: int, decay := 3) -> int:
 
 # @orig game:0x80030fcc player_controller  status:partial -- one frame: the state's arm (_frame), then the poison at its end (_poison)
 func _tick(dir: Vector3) -> void:
+	_render_flags()
 	_frame(dir)
 	_poison()
 	_timers()
@@ -2165,7 +2167,7 @@ func _dying() -> void:
 		return
 	if death_frames < 0x41:
 		fade = (0xFF * ((death_frames - 0x20) << 7)) >> 12
-		_fade()
+		KFGame.screen_fade(0x82, fade, fade, fade)
 		return
 	var revive: bool = inventory.has_item(REVIVE_ITEM)
 	if revive:
@@ -2354,20 +2356,55 @@ func _tints(tints: Array) -> void:
 				(int(rec[4]) / n) & 0xFF)
 
 
-# @port engine -- the black the dying fades to, as a layer; its value is _dying's
-func _fade() -> void:
-	var layer := get_node_or_null("DeathFade")
+# screen_fade_draw's quad (KFGame.fade_quad) as Godot draws it, every
+# rendered frame: a rectangle over the view whose blend is the mode's -- mix
+# at a half, add, subtract, add a quarter -- under the panel's layer, or over
+# it for bit 0x80 (the dying's 0x82, which takes the screen to black; a warp's
+# 1, which adds white until it is white).
+# @port engine -- the screen's fade, as a layer over the view
+func _screen() -> void:
+	var q := KFGame.fade_quad(KFGame.screen)
+	var layer := get_node_or_null("ScreenFade") as CanvasLayer
+	if q.is_empty():
+		if layer:
+			layer.visible = false
+		return
 	if layer == null:
 		layer = CanvasLayer.new()
-		layer.name = "DeathFade"
-		layer.layer = 10
+		layer.name = "ScreenFade"
 		var r := ColorRect.new()
-		r.name = "Black"
+		r.name = "Quad"
 		r.set_anchors_preset(Control.PRESET_FULL_RECT)
 		r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		r.material = CanvasItemMaterial.new()
 		layer.add_child(r)
 		add_child(layer)
-	(layer.get_node("Black") as ColorRect).color = Color(0, 0, 0, float(fade) / 255.0)
+	layer.visible = true
+	layer.layer = 10 if bool(q["over"]) else 0
+	var rect := layer.get_node("Quad") as ColorRect
+	var mat := rect.material as CanvasItemMaterial
+	var five: Array = q["five"]
+	var c := Color(int(five[0]) / 31.0, int(five[1]) / 31.0, int(five[2]) / 31.0, 1.0)
+	match int(q["blend"]):
+		0:
+			mat.blend_mode = CanvasItemMaterial.BLEND_MODE_MIX
+			c.a = 0.5
+		1:
+			mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		2:
+			mat.blend_mode = CanvasItemMaterial.BLEND_MODE_SUB
+		3:
+			mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+			c.a = 0.25
+	rect.color = c
+
+
+# render_flags_reset (0x80034180), second in game_main's frame and so before
+# player_controller: of its eleven render flags, the one the port keeps --
+# screen_fade's mode back to 0xff, no fade.
+# @orig game:0x80034180 render_flags_reset  status:partial -- the fade's mode (0x801aeafa) alone; the other ten flags are not the port's
+func _render_flags() -> void:
+	KFGame.screen[0] = 0xFF
 
 
 # 0x8003078c: back to state 0 with both speeds and every view offset at 0.

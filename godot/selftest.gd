@@ -338,6 +338,9 @@ func _init() -> void:
 	if not _seals():
 		quit(1)
 		return
+	if not _fades():
+		quit(1)
+		return
 	if not _use_items():
 		quit(1)
 		return
@@ -2070,6 +2073,50 @@ func _seals() -> bool:
 		peds += 1
 	print("seals: %d of %d frames match tools/seals.py (%d seals, %d of Orladin's pedestals)" % [
 		n - bad, n, seals, peds])
+	if bad > 0:
+		print("  first difference: " + first)
+	return bad == 0
+
+
+# The screen's fade, game.gd against tools/fade.py (whose model the game's own
+# screen_fade, screen_fade_draw and fade_frames hold): warp_to's three runs of
+# fade_frames and the death's, frame by frame, and the quad's blend, depth
+# and colour for every mode.
+func _fades() -> bool:
+	if not FileAccess.file_exists("res://fadecheck.json"):
+		print("fades: no cases to check against")
+		return true
+	var d = JSON.parse_string(FileAccess.get_file_as_string("res://fadecheck.json"))
+	var n := 0
+	var bad := 0
+	var first := ""
+	for r in d["frames"]:
+		var a: Array = _ints(r["args"])
+		var got: Array = KFGame.fade_frames(int(a[0]), int(a[1]), int(a[2]), int(a[3]))
+		var want: Array = _ints(r["frames"])
+		n += want.size()
+		for i in want.size():
+			if i >= got.size() or str(got[i]) != str(want[i]):
+				bad += 1
+				if first == "":
+					first = "fade_frames%s frame %d: godot %s python %s" % [str(a), i,
+						str(got[i]) if i < got.size() else "none", str(want[i])]
+		if got.size() > want.size():
+			bad += got.size() - want.size()
+	for q in d["quads"]:
+		var c := int(q["c"])
+		var got := KFGame.fade_quad([int(q["mode"]), c, c, c])
+		var want := [int(q["blend"]), int(q["depth"]), int(q["five"])]
+		var have := [-1, -1, int(q["five"])] if got.is_empty() else [int(got["blend"]),
+			1 if bool(got["over"]) else 0x40, int(got["five"][0])]
+		n += 1
+		if have != want:
+			bad += 1
+			if first == "":
+				first = "quad mode 0x%x colour %d: godot %s python %s" % [int(q["mode"]), c,
+					str(have), str(want)]
+	print("fades: %d of %d frames and quads match tools/fade.py (whose model the game's own holds)" % [
+		n - bad, n])
 	if bad > 0:
 		print("  first difference: " + first)
 	return bad == 0

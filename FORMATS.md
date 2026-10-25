@@ -3253,7 +3253,9 @@ Records 0..11 are one place on each of levels 0..11 but 8 (level `0xff`),
 12 is level 27's and 13 level 24's. For a record below `0xc`, or `0xd`, a
 level of `0xff` returns at once; else **fade_frames** (`0x80046c00`: frames of
 the game with screen_fade at `(s * s) >> 16`, `s` from 0 to `0x1000` by
-`0x100`) to black and `actors_retire_marked`. Then the level is loaded
+`0x100`) to white -- mode 1 adds, below "The screen's fade" -- and
+`actors_retire_marked`. (This said "to black" until the quad was read: the
+death's fade takes away, the warp's adds.) Then the level is loaded
 (`res_upload_wait`, `level_load`, until `level_change_busy` is 0),
 **object_trigger** asked for the record's level -- `(L, L, L, ff, ff)` from
 another block, and on the one in hand only `(ff, ff, L, ff, ff)` and
@@ -3285,10 +3287,60 @@ model's calls, arguments and all, and its 21 fields.
 **In the port**: `godot/useitem.gd warp_plan` is what it leaves in the port's
 terms -- the block after the two triggers (a `ff` keeps the byte in hand, as
 the crossings' do), the level, the place, the facing, the pitch, the answer --
-55 of 55 plans as the model's in the self-test; `godot/crossing.gd warp` puts
-the player down there, on the level in hand with `spawn_anywhere`, or loads
-the other level's world and carries the player over as a crossing does. Not
-the fades, and not the two other callers' scenes.
+55 of 55 plans as the model's in the self-test, the fades' arguments among
+them; `godot/crossing.gd warp` runs the fade out, the world held, puts the
+player down there, on the level in hand with `spawn_anywhere`, or loads the
+other level's world and carries the player over as a crossing does, and runs
+the fades back there. Not the two other callers' scenes.
+
+### The screen's fade
+
+**`screen_fade(mode, r, g, b)`** (`0x8003d624`) only keeps its four bytes
+(`0x801aeafa..0x801aeafd`), and `render_flags_reset` (`0x80034180`, second in
+game_main's frame) puts the mode back to `0xff` every frame: whoever fades
+says so every frame. **`screen_fade_draw`** (`0x8003d568`, render_frame's
+seventeenth call) draws nothing for `0xff`, and otherwise one POLY_FT4 over
+the screen through **`prim_ft4_rect`** (`0x8003ccfc`):
+
+```
+corners   (0, 0) (0x140, 0) (0, 0xf0) (0x140, 0xf0)
+texture   u 0..0xf, v 0xa0..0xaf of the 4-bit page at x 768, CLUT 0x7a8d
+          (208, 490) -- every texel index 0, CLUT[0] 0xffff: white, STP set
+tpage     0x0c | (mode & 3) << 5: the blend -- 0 half and half, 1 adding,
+          2 taking away, 3 adding a quarter
+colour    (r, g, b), code 0x2e (semi-transparent)
+depth     1 with the mode's bit 0x80 -- over the panel -- else 0x40, under it
+```
+
+so the GPU puts `(31 * c) >> 7` of white, held to 31 each channel, onto the
+screen by the mode's blend. The death's fade (`0x82`, 0 to `0xff` over
+frames `0x20..0x40` of state `0x11`) takes the screen down to black over
+everything; **warp_to's (`1`) adds white under the panel** until the screen is
+white -- `fade_frames(1, 0, 0x1000, 0x100)`: v 0, 1, 4, 9 .. 225, `0xff`,
+white from the twelfth frame -- and after the move one frame at `0x1000` and
+seventeen back (`fade_frames(1, 0x1000, 0, -0x100)`), then `screen_fade(0xff,
+0, 0, 0)`. **`fade_frames(mode, from, to, step)`** runs those frames as frames
+of the game with nothing else in them -- screen_fade, `res_upload_spu`,
+`res_upload_vram`, `camera_pose`, `render_frame` -- s from `from` by `step`
+to `to`, both in: the world stands while the screen changes.
+
+**Checked against the game's own.** `tools/fade.py` runs GAME.EXE's
+`screen_fade` and `screen_fade_draw` after the menus' `frame_begin` over every
+snapshot, every blend with and without bit `0x80`, `0xff`, the colour at
+random, and reads the ordering table back: **840 of 840** quads are the
+model's -- corners, UVs, CLUT, page, colour, code and depth; the texture is
+index 0 and CLUT[0] `0xffff` in 19 of 19 snapshots' VRAM; and the game's
+`fade_frames` over `a1`, the four routines it calls logged with the bytes
+they find, **40 of 40** runs (433 frames), warp_to's three among them.
+
+**In the port**: `godot/game.gd` keeps the bytes (`KFGame.screen`,
+`screen_fade`), `fade_frames`' bytes and `fade_quad` -- the self-test holds
+them to `tools/fade.py`, 117 of 117 -- and `player.gd _screen` draws the quad
+every rendered frame as a rectangle with Godot's blend for the mode (mix at a
+half, add, subtract, add a quarter), on a layer under the panel or, for bit
+`0x80`, over it; `_render_flags` puts the mode back each tick. The dying
+fades with it now, by subtraction -- it laid a black rectangle at a rising
+alpha, a mix the game does not make.
 
 ### What Orladin's key opens: the seals and the pedestals
 
@@ -7848,7 +7900,8 @@ sprung to -0x400 by `spring_to` with 8 and 4 and moved by half again of its
 velocity -- the player ends on their back, looking up -- the head bob
 (`0x801b2650`) sinking the eye 0x1f4 a frame to 0x5dc, 100 above the feet,
 and the throw through `player_move` with its own gravity. From frame 0x20
-the screen fades over 0x20 frames (`0x8003d624`); at 0x41 every effect slot
+the screen fades over 0x20 frames (`screen_fade(0x82, ...)`, taking away --
+"The screen's fade"); at 0x41 every effect slot
 is cleared and `has_item(107)` decides: the crystal is taken and the player
 put back on level 0 at (0x1c800, -0x3a80, 0xc000) facing 0x2d5 with the HP
 and MP full (`0x8002b3a8`), or a new character is made (`new_character`) and

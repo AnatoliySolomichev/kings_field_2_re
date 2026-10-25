@@ -206,6 +206,9 @@ def main(quick=False, only_check=False):
     steps.append((["tools/seals.py", "--check"],
         "what Orladin's key opens, against the game's own arms",
         ["the seals", "Orladin's pedestals"]))
+    steps.append((["tools/fade.py", "--check"],
+        "the screen's fade, against the game's own screen_fade, its quad and fade_frames",
+        ["screen_fade_draw's quad", "fade_frames, the game's", "its texture", "first difference"]))
     steps.append((["tools/weapon.py", "--check"],
         "the creatures' HP and the player's weapon, against snapshots and bp25",
         ["awake creatures", "frames of the weapon", "blows landed", "the weapons' magic"]))

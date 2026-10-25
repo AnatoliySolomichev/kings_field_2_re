@@ -454,6 +454,22 @@ use_item makes it: **7600 of 7600** frames of the seals and **3240 of
 `export()` writes `sealcheck.json`, which `godot/selftest.gd` holds
 `loot.gd seal_step`, `bob_step` and `orladin_step` to (**975 of 975**).
 
+**`fade.py`** — the screen's fade: `screen_fade`, the quad
+`screen_fade_draw` files for it, and `fade_frames` (FORMATS.md, "The
+screen's fade").
+
+```
+python3 tools/fade.py                the model against the game's own
+python3 tools/fade.py --check        the same
+```
+
+It runs GAME.EXE's own `screen_fade` and `screen_fade_draw` after the menus'
+`frame_begin` over every snapshot (`mipsrun.frame`) and reads the quad back
+out of the ordering table (`tools/gpuframe.py`): **840 of 840**; the game's
+own `fade_frames`, its callees logged with the screen bytes, **40 of 40**
+runs; and the quad's texture in every snapshot's VRAM, 19 of 19.
+`export()` writes `fadecheck.json` for the self-test (`game.gd`, 117 of 117).
+
 **`savemap.py`** — what the game persists, field by field: 57 globals and the
 offset each occupies in a save, taken from the serialiser and its inverse and
 kept only where the two agree.

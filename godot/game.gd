@@ -83,6 +83,51 @@ static var level := -1
 # The level block in hand, 0x8018fad8's five bytes: the level second. A
 # crossing asks for another (crossing.gd).
 static var block: Array = []
+# screen_fade's four bytes (0x801aeafa..0x801aeafd): the mode -- 0xff none,
+# the low two bits the blend, bit 0x80 over the panel -- and the colour.
+# render_flags_reset puts the mode back to 0xff every frame of the game's, so
+# whoever fades says so every frame (player.gd's tick, crossing.gd's fades).
+static var screen := [0xFF, 0, 0, 0]
+
+
+# @orig game:0x8003d624 screen_fade  status:verified -- through screen_fade_draw, 840 of 840 quads of the game's own over every snapshot (tools/fade.py)
+static func screen_fade(mode: int, r: int, g: int, b: int) -> void:
+	screen = [mode & 0xFF, r & 0xFF, g & 0xFF, b & 0xFF]
+
+
+# fade_frames (0x80046c00), the screen's bytes of each of its frames: s from
+# `from` by `step` to `to`, both ends in, and v = (s * s) >> 16 held to 0xff
+# for all three colours. Its frames are the game's with nothing but the
+# drawing going on -- the caller holds the world while they run (KFGame.modal).
+# @orig game:0x80046c00 fade_frames  status:partial -- the screen's bytes, 40 of 40 runs of the game's own (tools/fade.py); the frames themselves are the caller's, the world held: not res_upload_spu or res_upload_vram
+static func fade_frames(mode: int, from: int, to: int, step: int) -> Array:
+	var out := []
+	var s := from
+	while true:
+		var v := mini(0xFF, (s * s) >> 16)
+		out.append([mode & 0xFF, v, v, v])
+		if s == to or out.size() > 0x200:
+			return out
+		s += step
+	return out
+
+
+# screen_fade_draw (0x8003d568), render_frame's seventeenth call: nothing for
+# a mode of 0xff; else a POLY_FT4 over the screen (prim_ft4_rect) of a white
+# texel (CLUT 0x7a8d's first, with the STP bit) under the colour, so (31 * c)
+# >> 7 of white held to 31 each channel, put on the screen by the mode's
+# blend -- 0 half and half, 1 adding, 2 taking away, 3 adding a quarter --
+# at depth 1 with bit 0x80, over the panel, else 0x40, under it.
+# {blend, five (the three 5-bit colours), over} or {}.
+# @orig game:0x8003d568 screen_fade_draw  status:verified -- 840 of 840 quads of the game's own over every snapshot, and its texture in 19 of 19 snapshots' VRAM (tools/fade.py)
+static func fade_quad(scr: Array) -> Dictionary:
+	var m := int(scr[0])
+	if m == 0xFF:
+		return {}
+	var five := []
+	for i in 3:
+		five.append(mini(31, (31 * int(scr[1 + i])) >> 7))
+	return {"blend": m & 3, "five": five, "over": (m & 0x80) != 0}
 
 
 # @port engine -- the level in hand: the one loaded, or the project's own

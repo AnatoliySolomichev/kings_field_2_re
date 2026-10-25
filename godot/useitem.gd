@@ -271,9 +271,12 @@ static func warp_answers(i: int) -> bool:
 # -(+6); record 0xd puts the pitch at 0 and the player 0x7d0 along rather
 # than 0x400, and the others ask object_trigger again for (-, -, -, +1, +2).
 # Below 0xc it answers. A byte the trigger leaves as - keeps the block's in
-# hand, as the crossings' do. `block` is the five bytes in hand; the plan:
-# {level, block, same, pos, facing, pitch, answer}.
-# @orig game:0x8005c864 warp_to  status:partial -- the place, the facing, the pitch, the block and the answer: tools/useitem.py warp_check, 280 of 280 runs of the game's own, the self-test this to it; not the fades (fade_frames), the tilt and the view's additions the new scene starts without, or 0x801b25ee
+# hand, as the crossings' do. And the fades: below 0xc, or 0xd, out to white
+# first (fade_frames(1, 0, 0x1000, 0x100)); but for 0xd, back after -- one
+# frame white and seventeen to clear -- and screen_fade(0xff). `block` is the
+# five bytes in hand; the plan: {level, block, same, pos, facing, pitch,
+# answer, out, back, clear}, out and back fade_frames' arguments.
+# @orig game:0x8005c864 warp_to  status:partial -- the place, the facing, the pitch, the block, the answer and the fades' arguments: tools/useitem.py warp_check, 280 of 280 runs of the game's own, the self-test this to it; not actors_retire_marked, the tilt and the view's additions the new scene starts without, or 0x801b25ee
 static func warp_plan(i: int, block: Array, pitch: int) -> Dictionary:
 	if i < 0 or i >= warps.size():
 		return {}
@@ -297,7 +300,10 @@ static func warp_plan(i: int, block: Array, pitch: int) -> Dictionary:
 	return {"level": int(b[1]), "block": b, "same": same,
 		"pos": [(int(rec[3]) << 11) + 0x400, -(int(rec[5]) << 7), z],
 		"facing": (-(int(rec[6]) | (int(rec[7]) << 8))) & 0xFFF, "pitch": pitch,
-		"answer": 1 if i < 0xC else 0}
+		"answer": 1 if i < 0xC else 0,
+		"out": [1, 0, 0x1000, 0x100] if i < 0xC or i == 0xD else [],
+		"back": [] if i == 0xD else [[1, 0x1000, 0x1000, 0], [1, 0x1000, 0, -0x100]],
+		"clear": i != 0xD}
 
 
 # The seven keys of the shared arm: each object find_object finds in turn has

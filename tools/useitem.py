@@ -971,8 +971,10 @@ def warp_plan(i, block, pitch):
     """What warp(i) leaves, in the port's terms: the block in hand after its
     object_trigger calls (an 0xff byte keeps the byte in hand, as the
     crossings' do), whether the level was the one in hand, the place, the
-    facing (0..0xfff), the pitch and the answer -- or {} for a record that
-    does nothing. `block` is the five bytes in hand."""
+    facing (0..0xfff), the pitch and the answer, the fade out and the fades
+    back (fade_frames' arguments, the step signed) and whether screen_fade
+    clears it after -- or {} for a record that does nothing. `block` is the
+    five bytes in hand."""
     f = {a: 0 for a, _n in WARP_FIELDS}
     f[PLAYER_ANGLES] = pitch & 0xFFFF
     calls = warp(f, i, block[0])
@@ -982,10 +984,17 @@ def warp_plan(i, block, pitch):
     for c in calls:
         if c[0] == "trigger":
             b = [cur if v == 0xFF else v for cur, v in zip(b, c[1:6])]
+    out, back, loaded = [], [], False
+    for c in calls:
+        if c[0] == "upload":
+            loaded = True
+        elif c[0] == "fade":
+            (back if loaded else out).append([c[1], c[2], c[3], s32(c[4])])
     return {"level": b[1], "block": b, "same": f[SPAWN_ANYWHERE] == 1,
             "pos": [s32(f[PLAYER_POS]), s32(f[PLAYER_POS + 4]), s32(f[PLAYER_POS + 8])],
             "facing": f[PLAYER_ANGLES + 2] & 0xFFF, "pitch": s16(f[PLAYER_ANGLES]),
-            "answer": f[ANSWER]}
+            "answer": f[ANSWER], "out": out[0] if out else [], "back": back,
+            "clear": ("screen_fade", 0xFF, 0, 0, 0) in calls}
 
 
 # --- for the port ---------------------------------------------------------------

@@ -576,8 +576,10 @@ Eating heals. Left, roughly in order:
   the figures, the keys, Silviera's key, Orladin's key, `0x80`'s 900 frames
   (FORMATS.md, "A thing used"), and the warp Ichrius' eye, wings and crown
   ask for (`warp_to`, FORMATS.md "The warp", 280 of 280 runs of the game's
-  own; the port without its fades, and not for `cutscene_step`'s record
-  `0xc` or `level_overlay_tick`'s `0xd`; `0x801b25ee`, which it sets, is read
+  own; its fades in the port too, the flash to white and back -- FORMATS.md
+  "The screen's fade", the game's own quad 840 of 840 and fade_frames 40 of
+  40 -- but not for `cutscene_step`'s record `0xc` or `level_overlay_tick`'s
+  `0xd`; `0x801b25ee`, which it sets, is read
   nowhere the walk finds). Left of it: block 6's two statues (`0x80` there runs a scene of the game's frames until a
   creature wakes); the level's own entry 2 (levels 1, 2, 4, 5, 7, 8, 17, 20,
   23, 25 and 27 have one) and give_item's and take_item's entries 6 and 11.

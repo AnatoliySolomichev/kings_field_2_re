@@ -215,14 +215,14 @@ the equipment tables, against a RAM snapshot           3264/3264, 2112/2112, 16/
                                                        player_recalc_stats 483 of
                                                        483 values over 21 snapshots
 the conversation hooks, two readings of one table      23 of 23
-how much of the game the port has (portmap progress)   46.6% of the game's own
-                                                       code (game 47.1%, open
+how much of the game the port has (portmap progress)   46.8% of the game's own
+                                                       code (game 47.2%, open
                                                        46.7%, end 0%; partial at
                                                        half, the library left out)
-the port against the game, function by function        818 of 818 placed: 476
-                                                       reproduce the game, 342 the
-                                                       port's own; 542 markers and
-                                                       1090 cited addresses, every
+the port against the game, function by function        826 of 826 placed: 480
+                                                       reproduce the game, 346 the
+                                                       port's own; 546 markers and
+                                                       1095 cited addresses, every
                                                        one resolving
 the object loader, against 13 snapshots                angles 4344/4352, scale and
                                                        position 4352/4352, opcode
@@ -337,6 +337,9 @@ the warp, against the game's own warp_to               280 of 280 runs, every
 Orladin's seals and pedestals, against the game's      7600 of 7600 frames of the
 own arms (tools/seals.py)                              seals, 3240 of 3240 of the
                                                        pedestals, every field
+the screen's fade, against the game's own              840 of 840 quads, 40 of 40
+screen_fade, screen_fade_draw and fade_frames          runs of fade_frames, the
+(tools/fade.py)                                        texture in 19 of 19 VRAMs
 casting, against the game's own cast_spell,            1260 of 1260 of each:
 player_action, player_turn and the controller's end    casts, actions, pending,
                                                        timers, the USE stretch,
@@ -389,7 +392,7 @@ effects 1494 of 1494 runs, 27656 of 27656 frames · aims 300 of 300 · volleys 2
 the run 150129 of 150129 frames
 player_take_hit 300 of 300 · the status 40 of 40 runs, 6312 of 6312 frames
 casting 1200 of 1200 · the attacking arms 240 of 240 · creature hits 400 of 400
-use_item 336 of 336 · warp_to 55 of 55 · seals 975 of 975
+use_item 336 of 336 · warp_to 55 of 55 · seals 975 of 975 · fades 117 of 117
 ```
 
 **Tell the two kinds apart.** Against a recording or a RAM snapshot — the

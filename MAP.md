@@ -20,7 +20,7 @@ handlers and whatever a pointer table reaches have to be.
 | --- | --- | --- | --- |
 | player | 213 | 23539 | 111 |
 | objects | 94 | 14706 | 70 |
-| render | 63 | 13950 | 44 |
+| render | 63 | 13950 | 46 |
 | library | 87 | 7591 | 59 |
 | effects | 31 | 7495 | 15 |
 | actors | 43 | 6668 | 31 |
@@ -394,7 +394,7 @@ everything drawn.
 | `0x80042eb0` | 175 | 1 | pose_blend | calls ScaleMatrix |
 | `0x80076168` | 163 | 4 | RotMatrix |  |
 | `0x800147e4` | 141 | 1 | sub_800147e4 |  |
-| `0x8003ccfc` | 114 | 6 | sub_8003ccfc | reads current_draw_slot, reads ot_pointer |
+| `0x8003ccfc` | 114 | 6 | prim_ft4_rect | reads current_draw_slot, reads ot_pointer |
 | `0x800277c0` | 91 | 7 | number_digits |  |
 | `0x800351fc` | 87 | 1 | texture_scroll_step | calls MoveImage |
 | `0x8003d79c` | 84 | 1 | sub_8003d79c |  |
@@ -408,7 +408,7 @@ everything drawn.
 | `0x80041d9c` | 51 | 1 | message_draw | calls hud_sprite; points at message_sprites |
 | `0x80040708` | 49 | 1 | view_bits_around | points at view_table |
 | `0x80042d70` | 49 | 1 | pose_start |  |
-| `0x8003d568` | 47 | 1 | sub_8003d568 |  |
+| `0x8003d568` | 47 | 1 | screen_fade_draw |  |
 | `0x80040830` | 40 | 1 | sub_80040830 | calls entry_extent, read_archive_entry; points at model_table |
 | `0x8003d41c` | 36 | 1 | overlay_plane_17 | reads camera_height |
 | `0x8003d38c` | 36 | 1 | overlay_plane_19 | reads depth_under_plane_19 |
