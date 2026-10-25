@@ -437,6 +437,23 @@ reproduces the model on **336 of 336** of its runs (`usecheck.json`).
 logged -- **280 of 280** runs give the model's calls and 21 fields; the port's
 `warp_plan` gives the model's plan on **55 of 55**.
 
+**`seals.py`** — what Orladin's key opens: the seals (opcode `0x17`), the
+thing they hand opcode `0x10`, and Orladin's pedestals (`0x1a`), FORMATS.md
+"What Orladin's key opens".
+
+```
+python3 tools/seals.py               every seal and pedestal, run by run
+python3 tools/seals.py --check       the counts alone
+```
+
+It runs GAME.EXE's own arms with `tools/mipsrun.py` over levels 14, 16 and
+17 as their own loader leaves them (`level_cpu`), each arm in slot order, the
+seal opened in play and before, the pedestal's key made in the gold ring as
+use_item makes it: **7600 of 7600** frames of the seals and **3240 of
+3240** of the pedestals, every field of every record in play and the sounds.
+`export()` writes `sealcheck.json`, which `godot/selftest.gd` holds
+`loot.gd seal_step`, `bob_step` and `orladin_step` to (**975 of 975**).
+
 **`savemap.py`** — what the game persists, field by field: 57 globals and the
 offset each occupies in a save, taken from the serialiser and its inverse and
 kept only where the two agree.

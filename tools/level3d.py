@@ -898,6 +898,7 @@ def build_objects_gltf(lv, out="out/godot"):
 
 
 LOOT_OPS = (6, 7)        # the small chest's lid and the big chest (tools/chests.py)
+SEAL_OPS = (0x17, 0x1A)  # Orladin's seals and pedestals, which fade away (tools/seals.py)
 ITEM_CLASS = 0x40        # what object_give hands over
 
 
@@ -905,14 +906,17 @@ def loot_slots(load):
     """The objects that are nodes of their own for godot/loot.gd: every chest
     (opcodes 6 and 7), every class-0x40 thing the game draws, and what the
     chests hide -- the slot each one's +0x3a names, hidden on their first
-    frame and shown when they open."""
+    frame and shown when they open -- and Orladin's seals and pedestals
+    (opcodes 0x17 and 0x1a), which go, with what a seal holds (+0x3a) and
+    the key it raises (+0x3c)."""
     out = set()
     for k, o in load.recs.items():
-        if o["op"] in LOOT_OPS:
+        if o["op"] in LOOT_OPS + SEAL_OPS:
             out.add(k)
-            inside = struct.unpack_from("<H", o["tail"], 2)[0]
-            if inside in load.recs and load.recs[inside]["cls"] == ITEM_CLASS:
-                out.add(inside)
+            for at in {6: (2,), 7: (2,), 0x17: (2, 4)}.get(o["op"], ()):
+                inside = struct.unpack_from("<H", o["tail"], at)[0]
+                if inside in load.recs and load.recs[inside]["cls"] == ITEM_CLASS:
+                    out.add(inside)
         elif o["cls"] == ITEM_CLASS and load.drawn(o):
             out.add(k)
     return out
@@ -1010,12 +1014,15 @@ def build_loot(lv, load, grid, look, prims_of, rows, slots):
                       quaternion(_rot3(rx, ry + 0x800, rz))))
         tr = load.rows[o["type"]]
         tail = o["tail"]
+        # what a chest or a seal hides as the loader left it: loot.gd runs
+        # the first frame, after the level's record
+        b0, lock = getattr(load, "loaded", {}).get(k, (o["b0"], tail[0]))
         rows.append({
             "slot": k, "cls": o["cls"], "op": o["op"], "type": o["type"],
             "x": o["x"], "y": o["y"], "z": o["z"], "angles": list(o["angles"]),
-            "b0": o["b0"], "b1": o.get("b1", 0x80),
-            "lock": tail[0], "inside": struct.unpack_from("<H", tail, 2)[0],
-            "trap": tail[4],
+            "b0": b0, "b1": o.get("b1", 0x80),
+            "lock": lock, "inside": struct.unpack_from("<H", tail, 2)[0],
+            "trap": tail[4], "tail": list(tail[:8]),
             "reach": struct.unpack_from("<H", tr, 6)[0],
             "top": struct.unpack_from("<H", tr, 8)[0],
             # object_give's row: +1 0x20 for gold, the flight's +0xc and +0xe
@@ -1042,17 +1049,22 @@ def build_loot(lv, load, grid, look, prims_of, rows, slots):
 
 
 PEDESTAL_OPS = (0x18,)
-PEDESTAL_KEYS = {0x101: 141}     # use_item's arm for Silviera's key asks for type 0x101
+# use_item's arms: Silviera's key asks for type 0x101, Orladin's for 0x102
+# (whose pedestals, opcode 0x1a, are loot.gd's rows: tools/seals.py)
+PEDESTAL_KEYS = {0x101: 141, 0x102: 0x88}
 
 
 def build_pedestals(lv, load, look, prims_of, rows, keys):
     """The pedestals (opcode 0x18), their rows for lootNN.json, and a hidden
-    node `qNNN` for each key one of them takes here -- Silviera's, 141, on a
-    type-0x101 pedestal -- which godot/loot.gd copies when the key is put
-    there. At the model's own size: object_use_state's init_object_record
-    leaves the scale 0x1000, where a drop's is doubled. Lit by class 0."""
+    node `qNNN` for each key a pedestal takes here -- Silviera's, 141, on a
+    type-0x101 pedestal, and Orladin's, 0x88, on a type-0x102 one (opcode
+    0x1a) -- which godot/loot.gd copies when the key is put there. At the
+    model's own size: object_use_state's init_object_record leaves the scale
+    0x1000, where a drop's is doubled. Lit by class 0."""
     items, wanted = [], set()
     for k, o in sorted(load.recs.items()):
+        if o["op"] == 0x1A and o["type"] in PEDESTAL_KEYS:
+            wanted.add(PEDESTAL_KEYS[o["type"]])
         if o["op"] not in PEDESTAL_OPS:
             continue
         tr = load.rows[o["type"]]
@@ -1678,6 +1690,11 @@ def project(lv, out="out/godot", start=(57, 4)):
     except Exception as e:
         print(f"chest cases skipped: {e}")
     try:
+        import seals
+        seals.export(out)
+    except Exception as e:
+        print(f"seal cases skipped: {e}")
+    try:
         import routines
         routines.export(out)
     except Exception as e:
@@ -1849,7 +1866,7 @@ def verify(out="out/godot"):
                             "fences:",
                             "creature run:",
                             "levels:", "use_item:", "warp_to:", "angles:",
-                            "scripts:", "damage:", "equipment:", "player_recalc_stats:", "knock-back:", "weapon:", "animation:", "effects:", "lift doors:", "chests:", "inscriptions:", "conversations:", "menus:", "routines:", "saves:", "level states:", "the run:", "player_take_hit:", "the status:", "casting:", "the attacking arms:", "creature hits:", "creature strikes:", "creature holds:", "FAIL", "  first",
+                            "scripts:", "damage:", "equipment:", "player_recalc_stats:", "knock-back:", "weapon:", "animation:", "effects:", "lift doors:", "chests:", "seals:", "inscriptions:", "conversations:", "menus:", "routines:", "saves:", "level states:", "the run:", "player_take_hit:", "the status:", "casting:", "the attacking arms:", "creature hits:", "creature strikes:", "creature holds:", "FAIL", "  first",
                             "  level case", "  angle (", "  script level",
                             "  hit ")):
             print("   " + line.strip())

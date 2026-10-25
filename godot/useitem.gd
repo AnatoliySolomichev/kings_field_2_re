@@ -330,7 +330,7 @@ static func _keys(w: Dictionary, item: int, c: KFCollision, calls: Array) -> voi
 # drop_count_gold, init_object_record, its type the key's and its +0x3c the
 # count -- the pedestal's +0x39 its place; anything else a 3 from key_test
 # "Wrong key!".
-# @orig game:0x8005d300 use_item+0x720  status:verified -- tools/useitem.py, the locks, the pedestals and wrong among 2800 runs of the game's own; in the port nothing yet acts on what it leaves (opcodes 0x17 and 0x1a are not in)
+# @orig game:0x8005d300 use_item+0x720  status:verified -- tools/useitem.py, the locks, the pedestals and wrong among 2800 runs of the game's own; what it leaves is loot.gd's seal_step and orladin_step, and loot.gd makes the key's object
 static func _orladin(w: Dictionary, item: int, c: KFCollision, calls: Array) -> void:
 	var k := 0
 	while true:

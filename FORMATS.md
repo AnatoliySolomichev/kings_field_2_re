@@ -3188,7 +3188,7 @@ find_object is always asked from the feet, `0x320` past the type's reach,
 | `0x80` | on block 6 the two statues (slots `0x5b` and `0x53`: a scene of the game's frames with their creatures, story bytes `0x801ba9ab`, `0x801ba9b0`); else taken, and **`bonus_skills_timer` (`0x801b2578`) 900 frames** -- five on every working skill, which player_recalc_stats reads |
 | Ichrius' eye, wings, crown (`0x82..0x84`) | **`warp_to`** (`0x8005c864`) with record 1, 6, 9 -- a warp to a fixed place of a level (below, "The warp") -- not on blocks `0x19` and `0x1b`, nor while a change to one is under way; ids `0x96..0xa1`, which nothing holds, the same with `item - 0x96` |
 | the seven keys | each object find_object finds in turn has the key tried on it (`key_test`): 1 the sound (`sound_key_fits`), 3 or 4 "Wrong key!" (7), else the next |
-| Orladin's key (`0x88`) | every object found: a type-`0xa2` lock that asks for it (`+0x38` `0x88`) becomes `0xfe` and the key is taken; a free type-`0x102` pedestal (`+0x38` `0xff`) holds the key's number, state 0, the key taken and **the key's own object made in the gold ring** (find_free_slot(`0x15e`, 10, drop_count_gold), init_object_record, its type `0x88`, `+0x3c` the count), the pedestal's `+0x39` its place; anything else a 3 from key_test "Wrong key!". Locks on levels 14, 16, 17 (opcode `0x17`), pedestals there too (opcode `0x1a`) |
+| Orladin's key (`0x88`) | every object found: a type-`0xa2` lock that asks for it (`+0x38` `0x88`) becomes `0xfe` and the key is taken; a free type-`0x102` pedestal (`+0x38` `0xff`) holds the key's number, state 0, the key taken and **the key's own object made in the gold ring** (find_free_slot(`0x15e`, 10, drop_count_gold), init_object_record, its type `0x88`, `+0x3c` the count), the pedestal's `+0x39` its place; anything else a 3 from key_test "Wrong key!". Seals on levels 14, 16, 17 (opcode `0x17`), pedestals there too (opcode `0x1a`): below, "What Orladin's key opens" |
 | Silviera's key (`0x8d`) | "Keys" above: the first object only |
 | the rest | nothing of its own |
 
@@ -3234,8 +3234,9 @@ it (`use_item`, `views`): the self-test holds it to 336 of the model's runs
 entry less `0x96`, as a sign's), which `tools/useitem.py` writes for the
 level's creatures, rectangles and slot 11. `player.gd` keeps the floor
 (`layer`), `actors.gd` and `ai.gd` a creature's (`floor`). Not in the port:
-the level's own entries 2, 6 and 11, the statues, and anything that acts on
-what Orladin's key leaves (opcodes `0x17` and `0x1a`, the key's own object).
+the level's own entries 2, 6 and 11 and the statues. What Orladin's key
+leaves -- the seals, the pedestals and the key's own object -- is the next
+section but one.
 
 ### The warp: warp_to
 
@@ -3288,6 +3289,100 @@ the crossings' do), the level, the place, the facing, the pitch, the answer --
 the player down there, on the level in hand with `spawn_anywhere`, or loads
 the other level's world and carries the player over as a crossing does. Not
 the fades, and not the two other callers' scenes.
+
+### What Orladin's key opens: the seals and the pedestals
+
+Levels 14, 16 and 17 have nineteen **seals** (type `0xa2`, opcode `0x17`)
+and eighteen **pedestals of Orladin's** (type `0x102`, opcode `0x1a`), and
+use_item's arm for the key leaves each to its own arm of
+`object_interpreter`.
+
+**A seal** (`0x8004847c`) holds two objects: its `+0x3a` names a thing
+(class `0x40`: a crystal, verdite, a fruit, another Orladin's key ...) and its
+`+0x3c` a model of Orladin's key placed `0x7530` below the floor. It switches
+on `+8` through eight arms (`0x8001244c`), its count the byte at `+0x40`:
+
+```
+state 0   +0x38 0xfe (an earlier visit's): opcode 0xff, +0 0, state 8 -- off.
+          Else the thing hidden (object_mode 0, then 3 with 0, the chests'
+          path at 0x80048b38), state 1
+state 1   +0x38 0xfe (use_item): the thing back (object_mode 1, the seal's
+          +0), the count 0, the key's +0x38 0, its height - 0x7530, its +0xe
+          -0xb4, state 2
+state 2   the count + 1: the key at the seal + fixed_madd((0, -0x200, 0),
+          (0, 0, 0), count * 0x1000 / 0x28), both turned by the seal's
+          angles (0x8009c2f4, 0x8009c2fc), its yaw + 0x100; at 0x28
+          object_sound(seal, row +0xf), the count 0, state 3
+state 3   the count + 1; at 0x15 state 4
+state 4   +0x10 0x400, +5 0x32 and +2's low bits 5 -- the seal's and the
+          key's -- state 5
+state 5   +0x10 + 0xc0 under 0x1000; then the key's opcode and type 0xff and
+          its +0 0, +0x10 0x1000, the seal's +0 0, the count 0, state 6
+state 6   the count + 1: under 0x20 the thing 0x30 higher; at 0x20 its
+          opcode 0x10, its +0x40 its height, state 7
+state 7   object_mode 2 (the thing free to take) and 3 with 0; the seal's
+          opcode 0xff, state 8
+```
+
+`+2`, `+5` and `+0x10` are how `render_walk` draws a record
+(`draw_model_plain`'s stack arguments `0x2c`, `0x24` and `0x28`): `+5` other
+than `0xff` names a second lighting class -- `tile_look`, 0x74 bytes each --
+which the model's own is blended towards by `+0x10` over `0x1000` (the light
+matrix, `0x800171b0`; the fog range and the background colour by
+`fixed_madd`), and `+2`'s bit 2 sends the model to `model_prims_semi`, the
+semi-transparent walker, with `+2 & 3` as the rate -- 1, adding. So the key
+rises into the seal turning for 0x28 frames, waits 0x15, the two fade
+towards class `0x32` for sixteen and are gone, and the thing lifts `0x5d0`
+in 31 frames.
+
+**Opcode `0x10`** (`0x8004b1d4`), which nothing places, is what the seal
+hands it: `+0x26` + `0x80` a frame and the height `+0x40` plus
+`game_sin(+0x26) >> 6` -- it turns, and bobs 64 up and down every 32
+frames, until it is taken. `object_mode` 0 hands a thing the same opcode when
+its `+0x39` is 0 -- no chest's contents in the game have one.
+
+**Orladin's pedestal** (`0x8004b000`) asks `object_use_state` with the key
+(slot 350 + its `+0x39`), `(0, -100, 300)`, `(0, 0, 64)` (`0x8009c328`,
+`0x8009c330`), 0 and 20 -- as Silviera's pedestal asks with its own two;
+`object_use_state` lays a key of type `0x88` on its side (`+0x24` `0x400`,
+`+0xe` `0x64`) and gives `0x85` a `+0xe` of `-0xdc` -- and on its answer
+the key's `+0x38` is 0 (it is never taken back), the object `+0x3b` names
+ORs `+0x3a` into its lock, and state 3; then state 3 sets the fade's bytes on
+both, state 4 adds `0x100` to both `+0x10` until `0xfff`, and state 5 makes
+both types `0xff`, state `0x63`. The pedestals' `+0x3a` is 3 and `+0x3b` a
+gate (type `0xb3`, opcode 2) whose lock is `0xfc`: with the bits it is
+`0xff`, which USE opens ("A gate"): one key, one gate. Level 14 has nine
+of them, 16 three and 17 six -- its 47, 51, 68, 86, 87 and 88 serve gates 10,
+8, 12, 15, 14 and 13.
+
+**Checked against the game's own.** `tools/seals.py` runs GAME.EXE's arms
+with `tools/mipsrun.py` over each level as its own `load_object_placement`
+leaves it: every seal from its first frame, opened a few frames on, and once
+opened from the start (an earlier visit) -- **7600 of 7600 frames**, 38 runs,
+every field of the seal, the thing and the key, and the sounds, the bob 84
+frames of each; every pedestal three times, the key made in the gold ring as
+use_item makes it (the game's `init_object_record`, the ring's place at
+random) -- **3240 of 3240 frames**, 54 runs, every field of the pedestal and
+the key, the gate's lock, the sounds. `object_mode`, `vec_rotate`,
+`fixed_madd`, `game_sin`, `object_use_state` and the levels' own entry 9
+(`jr $ra` on all three, for the key's opcode `0x70`) run as the game's.
+
+**In the port** (`godot/loot.gd`): the seals, what they hold and the keys
+below them, and Orladin's pedestals are rows of their own (`kNNN` nodes,
+`tools/level3d.py loot_slots`), stepped by `seal_step`, `bob_step` and
+`orladin_step` -- the self-test holds them to `tools/seals.py`, 975 of 975
+frames -- and use_item's key object is made in the gold ring from the `q136`
+node. **Not drawn: the fade** -- the port shows the seal and the key whole
+until they go, rather than semi-transparent and lit towards class `0x32`;
+nor the sound, nor `+0xe`.
+
+**Found with it, and fixed: a chest opened and left full hid its thing for
+good.** `tools/level3d.py` wrote what a chest holds as the first frame leaves
+it -- hidden -- and the port ran the first frame again; after a visit that
+opened the chest the record says `0xfe`, the lid's state 0 does not hide,
+and in the game the thing lies there to take, where the port kept it hidden.
+The rows carry the loader's `+0` and `+0x38` now (`objload.Load.loaded`),
+and `loot.gd` runs the first frame itself after the level's record.
 
 ### Status/records, and running the game's own code
 

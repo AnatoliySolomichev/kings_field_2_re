@@ -335,6 +335,9 @@ func _init() -> void:
 	if not _chests():
 		quit(1)
 		return
+	if not _seals():
+		quit(1)
+		return
 	if not _use_items():
 		quit(1)
 		return
@@ -1987,6 +1990,82 @@ func _chests() -> bool:
 					first = "pedestal %d frame %d: godot %s python %s" % [peds, i, str(got), str(w)]
 		peds += 1
 	print("chests: %d of %d frames match tools/chests.py (the lid, the big chest, %d flights of object_give, %d falls, %d keys tried on locks twice over, %d pedestals)" % [n - bad, n, flights, falls, keys, peds])
+	if bad > 0:
+		print("  first difference: " + first)
+	return bad == 0
+
+
+# Orladin's seals and pedestals, loot.gd against tools/seals.py, which the
+# game's own arms hold: a seal turned three ways, opened in play and opened
+# before, to the thing bobbing; a pedestal three ways, the key down, the fade
+# and gone.
+func _seals() -> bool:
+	if not FileAccess.file_exists("res://sealcheck.json"):
+		print("seals: no cases to check against")
+		return true
+	var doc = JSON.parse_string(FileAccess.get_file_as_string("res://sealcheck.json"))
+	var script = load("res://loot.gd")
+	var ints := func(a: Array) -> Array: return a.map(func(v): return int(v))
+	var rec := func(d: Dictionary) -> Dictionary:
+		var t: Array = ints.call(d["tail"])
+		var w := int(d["w40"])
+		return {"slot": int(d["slot"]), "state": int(d["state"]), "lock": int(t[0]),
+			"n": w & 0xFF, "base": w - 0x100000000 if w >= 0x80000000 else w,
+			"b0": int(d["b0"]), "b2": int(d["b2"]), "b5": int(d["b5"]), "op": int(d["op"]),
+			"type": int(d["type"]), "fade": int(d["fade"]),
+			"pos": Vector3i(int(d["pos"][0]), int(d["pos"][1]), int(d["pos"][2])),
+			"angles": ints.call(d["angles"]), "tail": t, "ring": int(t[1]),
+			"link": w & 0xFFFF, "b1": 0x80}
+	var n := 0
+	var bad := 0
+	var first := ""
+	var seals := 0
+	for c in doc["seals"]:
+		var sd: Dictionary = rec.call(c["seal"])
+		var a: Dictionary = rec.call(c["thing"])
+		var b: Dictionary = rec.call(c["key"])
+		var frames: Array = c["frames"]
+		for f in frames.size():
+			if f == int(c["opened_at"]):
+				sd["lock"] = 0xFE
+			if int(sd["op"]) == 0x17:
+				script.seal_step(sd, a, b, coll)
+			if int(a["op"]) == 0x10:
+				script.bob_step(a, coll)
+			var ap: Vector3i = a["pos"]
+			var bp: Vector3i = b["pos"]
+			var got := [int(sd["state"]), int(sd["n"]), int(sd["fade"]), int(sd["b0"]),
+				int(sd["b2"]), int(sd["b5"]), int(a["b0"]), int(a["lock"]), int(a["op"]), ap.y,
+				int(a["angles"][1]), int(a["base"]), bp.x, bp.y, bp.z, int(b["angles"][1]),
+				int(b["b0"]), int(b["b2"]), int(b["b5"]), int(b["type"]), int(b["lock"])]
+			n += 1
+			if got != ints.call(frames[f]):
+				bad += 1
+				if first == "":
+					first = "seal %d frame %d: godot %s python %s" % [seals, f, str(got), str(frames[f])]
+		seals += 1
+	var peds := 0
+	for c in doc["pedestals"]:
+		var pd: Dictionary = rec.call(c["pedestal"])
+		var key: Dictionary = rec.call(c["key"])
+		var gate := {"lock": 0xFC}
+		var frames: Array = c["frames"]
+		for f in frames.size():
+			script.orladin_step(pd, key, gate, coll)
+			var kp: Vector3i = key["pos"]
+			var got := [int(pd["state"]), int(pd["n"]), int(pd["fade"]), int(pd["b2"]),
+				int(pd["b5"]), int(pd["type"]), kp.x, kp.y, kp.z, int(key["angles"][0]),
+				int(key["angles"][1]), int(key["angles"][2]), int(key["op"]), int(key["b0"]),
+				int(key["b2"]), int(key["b5"]), int(key["type"]), int(key["lock"]),
+				int(key["fade"]), int(key["link"]), int(gate["lock"])]
+			n += 1
+			if got != ints.call(frames[f]):
+				bad += 1
+				if first == "":
+					first = "pedestal %d frame %d: godot %s python %s" % [peds, f, str(got), str(frames[f])]
+		peds += 1
+	print("seals: %d of %d frames match tools/seals.py (%d seals, %d of Orladin's pedestals)" % [
+		n - bad, n, seals, peds])
 	if bad > 0:
 		print("  first difference: " + first)
 	return bad == 0

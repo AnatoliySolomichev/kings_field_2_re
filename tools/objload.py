@@ -433,7 +433,18 @@ class Load:
         names, `object_mode(slot, 3, 0)` zeroes its +0xe, and the chest's own
         state becomes 1. That is 13 of the 18 objects on level 0 this used to
         call "taken in play", and the one on level 4.
+
+        **And Orladin's seals** (opcode 0x17, `0x8004847c`, levels 14, 16
+        and 17) take the same path for what they hold, or, opened on an
+        earlier visit (+0x38 0xfe), turn themselves off: the opcode 0xff, +0
+        0, state 8 (tools/seals.py).
+
+        What they hide is kept as the loader left it, in `loaded` (slot ->
+        +0, +0x38): godot/loot.gd runs that first frame itself, after the
+        level's record, which can say the chest was opened on an earlier
+        visit, and then nothing is hidden.
         """
+        self.loaded = {}
         for k in sorted(self.recs):
             r = self.recs[k]
             t = struct.unpack_from("<H", r["tail"], 2)[0]
@@ -442,9 +453,13 @@ class Load:
                     self.recs[t]["b0"] = 0
                     self.recs[t]["tail"][0] = 0
                 r["op"] = 0xFF
-            elif r["op"] in (6, 7) and r["tail"][0] != 0xFE:
+            elif r["op"] == 0x17 and r["tail"][0] == 0xFE:
+                r["op"], r["b0"], r["state"] = 0xFF, 0, 8
+            elif r["op"] in (6, 7, 0x17) and r["tail"][0] != 0xFE:
                 if t != 0xFFFF and t in self.recs:
-                    self.object_mode(self.recs[t], 0)
+                    held = self.recs[t]
+                    self.loaded.setdefault(t, (held["b0"], held["tail"][0]))
+                    self.object_mode(held, 0)
                 r["state"] = 1
         return self
 

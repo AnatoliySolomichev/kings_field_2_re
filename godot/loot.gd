@@ -35,6 +35,14 @@ extends Node
 # -- object_give, while the gate is at rest -- the key leaves, and the mask
 # with it.
 #
+# Orladin's key opens two things of its own on levels 14, 16 and 17
+# (tools/seals.py). A seal (opcode 0x17) holds a thing hidden and the key's
+# model far below the floor: opened, the key rises into it turning, the two
+# fade, and the thing lifts and bobs (opcode 0x10) until it is taken. Orladin's
+# pedestal (opcode 0x1a) takes the key -- its own object, made in the gold
+# ring -- down onto it, ORs its bits into its gate's lock, and the two fade
+# and are gone.
+#
 # @exe game
 
 const TICK_HZ := 15.0
@@ -72,6 +80,29 @@ const KEY_FRAMES := 20             # the arm's last argument to object_use_state
 const KEY_OP := 0x70               # the key on a pedestal: level_hooks+0x24, which on level 4 does nothing
 const AT_REST := 0x63
 const PEDESTAL := 0x101            # the pedestals Silviera's key is for
+const SEAL_OP := 0x17              # Orladin's seal (0x8004847c)
+const BOB_OP := 0x10               # what a seal lifts, turning and bobbing (0x8004b1d4)
+const ORLADIN_OP := 0x1A           # Orladin's pedestal (0x8004b000)
+const ORLADIN_KEY := 0x88
+const SEAL_FROM := [0, -0x200, 0]  # 0x8009c2f4: where the key rises from, turned by the seal
+const SEAL_TO := [0, 0, 0]         # 0x8009c2fc
+const SEAL_FRAMES := 0x28
+const SEAL_SPIN := 0x100           # the key's yaw a frame as it rises
+const SEAL_WAIT := 0x15
+const SEAL_RAISE := 0x7530         # the key brought up from below the floor
+const FADE_BITS := 5               # +2's low bits: semi-transparent, at rate 1
+const FADE_LIGHT := 0x32           # +5: the lighting class the model blends towards by +0x10
+const SEAL_FADE_FROM := 0x400
+const SEAL_FADE_STEP := 0xC0
+const RISE := 0x30                 # what the thing lifts a frame, for 0x1f frames
+const RISE_FRAMES := 0x20
+const BOB_TURN := 0x80
+const ORLADIN_START := [0, -100, 300]   # 0x8009c328: where the key is set down
+const ORLADIN_END := [0, 0, 64]         # 0x8009c330
+const ORLADIN_FADE := 0x100
+const ORLADIN_FADED := 0xFFF
+const GOLD_RING := 0x15E           # the key's own object: slot 350 + the pedestal's +0x39
+const GOLD_TYPE := 0x95            # object_mode 0 leaves gold's angles alone
 const PEDESTAL_KEYS := [0x86, 0x8D, 0x88]   # object_give's types that stand on a pedestal
 const WRONG_KEY := 7
 
@@ -173,6 +204,16 @@ func _ready() -> void:
 		r["counter"] = 0
 		r["skin"] = {}
 		r["pos"] = Vector3i(int(r["x"]), int(r["y"]), int(r["z"]))
+		if r.has("tail"):
+			r["tail"] = (r["tail"] as Array).map(func(v): return int(v))
+			r["ring"] = int(r["tail"][1])
+		# as the loader leaves every record: +0x40's word 0xffffffff (the
+		# count its low byte), +2 0, +5 0xff, +0x10 0
+		r["n"] = 0xFF
+		r["base"] = -1
+		r["b2"] = 0
+		r["b5"] = 0xFF
+		r["fade"] = 0
 		rows[int(r["slot"])] = r
 	slots = rows.keys()
 	slots.sort()
@@ -187,6 +228,27 @@ func _ready() -> void:
 	KFLevelState.apply_table(table, d, classes, _rand_fn())
 	KFLevelState.tables[lv] = table
 	take_stream(d)
+	_first_frame()
+
+
+# What object_interpreter's first pass does before anything is drawn, after
+# the level's record is applied: a chest's lid and a big chest hide what
+# they hold unless the record says they were opened, and a seal hides what it
+# holds or, opened, turns itself off -- each arm's state 0. The rest wait for
+# the frames _process runs.
+# @port engine -- the arms' state 0 before the first frame is drawn
+func _first_frame() -> void:
+	for k in slots:
+		var r: Dictionary = rows[k]
+		match int(r["op"]):
+			6:
+				lid_step(r, func(m: int, v: int) -> void: _mode(r, m, v))
+			7:
+				big_step(r, func(m: int, v: int) -> void: _mode(r, m, v))
+			SEAL_OP:
+				var t: Array = r["tail"]
+				seal_step(r, _rec(int(t[2]) | int(t[3]) << 8), _rec(int(t[4]) | int(t[5]) << 8),
+					player.coll)
 
 
 # The game's rand, for the reader's 0xf2: actors.gd's, which is the game's
@@ -300,7 +362,7 @@ func _exit_tree() -> void:
 		var op := int(r.get("op", old[2]))
 		var p: Vector3i = r["pos"]
 		table[k] = [typ, int(classes[typ]) if typ < classes.size() else int(old[1]), op,
-			p.x, p.y, p.z, int(r["angles"][1]) & 0xFFFF, int(r["lock"]), int(old[8]),
+			p.x, p.y, p.z, int(r["angles"][1]) & 0xFFFF, int(r["lock"]), int(r.get("ring", old[8])),
 			int(r["rest"]) if op == 0x62 else int(old[9])]
 	for pd in pedestals:
 		var e = table[int(pd["slot"])]
@@ -385,6 +447,20 @@ func _process(dt: float) -> void:
 			elif op >= 0x60 and op <= 0x62 and int(r["state"]) != 0x63:
 				var p: Vector3i = r["pos"]
 				fall_step(r, player.coll.surface(p.x, p.y, p.z))
+			elif op == SEAL_OP:
+				var t: Array = r["tail"]
+				seal_step(r, _rec(int(t[2]) | int(t[3]) << 8), _rec(int(t[4]) | int(t[5]) << 8),
+					player.coll)
+			elif op == BOB_OP:
+				bob_step(r, player.coll)
+			elif op == ORLADIN_OP:
+				var ring := int(r["ring"])
+				var key = rows.get(GOLD_RING + ring) if ring < 10 else null
+				# the gate is asked of only once a key is there
+				var gate := _gate_of(int(r["tail"][3])) if key != null else {"lock": 0}
+				if orladin_step(r, key, gate, player.coll):
+					KFInfo.note("pedestal: Orladin's key on slot %d, and the lock of slot %d is %d" % [
+						k, int(r["tail"][3]), int(gate["lock"])])
 		for pd in pedestals:
 			_pedestal(pd)
 	_draw()
@@ -539,23 +615,184 @@ static func approach_angle(a: int, b: int, step: int) -> int:
 	return n4 if n4 < b else b
 
 
-# object_mode (0x80044900) on what a chest holds: 0 takes it away, its +0
-# and +0x38 zeroed; 1 puts its +0 back; 2 makes its +0x38 0xff, so it can be
-# taken. Modes 3 and the big chest's 0xc8 write +0xe, which only the drawing
-# reads (the model's light), and the port leaves.
-# @orig game:0x80044900 object_mode  status:partial -- modes 0 to 2 for class 0x40; +0xe (mode 3) not carried
+# @port helper -- object_mode on the thing a chest's +0x3a names
 func _mode(chest: Dictionary, mode: int, value: int) -> void:
 	var r = rows.get(int(chest["inside"]))
-	if r == null:
-		return
+	if r != null:
+		thing_mode(r, mode, value)
+
+
+# object_mode (0x80044900) on a class-0x40 thing: 0 takes it away, its +0
+# and +0x38 zeroed, and -- but for gold -- its angles from +0x3a..+0x3c
+# again (a byte of 0xff leaves one alone, the rest << 6), with opcode 0x10
+# and its height at +0x40 when +0x39 is 0; 1 puts its +0 back; 2 makes its
+# +0x38 0xff, so it can be taken. Mode 3 and the big chest's 0xc8 write
+# +0xe, which only the drawing reads (the model's light), and the port
+# leaves. A row the port made at run time has no tail: its angles stay.
+# @orig game:0x80044900 object_mode  status:partial -- modes 0 to 2 for class 0x40; +0xe (mode 3) not carried; tools/seals.py's, which the seals' 7600 frames of the game's own hold
+static func thing_mode(r: Dictionary, mode: int, value: int) -> void:
 	match mode:
 		0:
 			r["b0"] = 0
 			r["lock"] = 0
+			if int(r["type"]) == GOLD_TYPE or not r.has("tail"):
+				return
+			var t: Array = r["tail"]
+			for i in 3:
+				if int(t[2 + i]) != 0xFF:
+					r["angles"][i] = (int(t[2 + i]) << 6) & 0xFFFF
+			if int(t[1]) == 0:
+				r["op"] = BOB_OP
+				r["base"] = (r["pos"] as Vector3i).y
 		1:
 			r["b0"] = value
 		2:
 			r["lock"] = FREE
+
+
+# A record a seal names, or one to write into when it names nothing the port
+# keeps (a thing with no model).
+# @port helper -- the row in `slot`, or a scratch one
+func _rec(slot: int) -> Dictionary:
+	if rows.has(slot):
+		return rows[slot]
+	return {"slot": slot, "type": GONE, "b0": 0, "lock": 0, "op": 0xFF, "pos": Vector3i.ZERO,
+		"angles": [0, 0, 0], "base": -1, "b2": 0, "b5": 0xFF, "fade": 0}
+
+
+# +2's low three bits 5 -- semi-transparent, rate 1 -- and +5 0x32, the
+# lighting class render_walk blends the model's towards by +0x10.
+# @port helper -- the fade's two bytes, as the seal and the pedestal set them
+static func _fade(r: Dictionary) -> void:
+	r["b2"] = (int(r["b2"]) & 0xF8) | FADE_BITS
+	r["b5"] = FADE_LIGHT
+
+
+# One frame of opcode 0x17's arm on a seal `s` (its +8 state, +0x38 lock,
+# +0x40 count), the thing `a` its +0x3a names and the key `b` its +0x3c
+# names. State 0: opened on an earlier visit (0xfe), the seal is off and
+# drawn no more; else the thing taken away (object_mode 0) and state 1, which
+# waits for use_item's 0xfe; then the thing put back, the key 0x7530 higher,
+# never to be taken (+0x38 0), and for 0x28 frames brought from 0x200 above
+# the seal down into it, turning 0x100 a frame (a sound at the end); 0x15
+# frames; both fade (+2, +5, the seal's +0x10 from 0x400 by 0xc0 to 0x1000)
+# and the key goes, the seal unseen; the thing lifts 0x30 a frame for 0x1f
+# frames, takes opcode 0x10 with its height at +0x40, and is free to take.
+# tools/seals.py seal_step.
+# @orig game:0x8004847c object_interpreter+0x146c  status:verified -- 7600 of 7600 frames of the game's own arm over levels 14, 16 and 17, every seal opened in play and before, every field of the seal, the thing and the key (tools/seals.py); not object_sound, nor the fade drawn (+2, +5, +0x10) or +0xe
+static func seal_step(s: Dictionary, a: Dictionary, b: Dictionary, c: KFCollision) -> void:
+	var st := int(s["state"])
+	if st == 0:
+		if int(s["lock"]) == OPENED:
+			s["op"] = 0xFF
+			s["b0"] = 0
+			s["state"] = 8
+		else:
+			thing_mode(a, 0, 0)
+			s["state"] = 1
+	elif st == 1:
+		if int(s["lock"]) == OPENED:
+			thing_mode(a, 1, int(s["b0"]))
+			s["n"] = 0
+			b["lock"] = 0
+			var q: Vector3i = b["pos"]
+			b["pos"] = Vector3i(q.x, q.y - SEAL_RAISE, q.z)
+			s["state"] = 2
+	elif st == 2:
+		var ang: Array = s["angles"]
+		var v: Array = KFWeapon.vec_rotate(c, int(ang[0]), int(ang[1]), int(ang[2]), SEAL_FROM)
+		var w: Array = KFWeapon.vec_rotate(c, int(ang[0]), int(ang[1]), int(ang[2]), SEAL_TO)
+		s["n"] = (int(s["n"]) + 1) & 0xFF
+		var t: int = (int(s["n"]) << 12) / SEAL_FRAMES
+		var p: Vector3i = s["pos"]
+		b["pos"] = Vector3i(lerp_i(int(v[0]), int(w[0]), t) + p.x,
+			lerp_i(int(v[1]), int(w[1]), t) + p.y, lerp_i(int(v[2]), int(w[2]), t) + p.z)
+		b["angles"][1] = (int(b["angles"][1]) + SEAL_SPIN) & 0xFFFF
+		if int(s["n"]) >= SEAL_FRAMES:
+			s["n"] = 0
+			s["state"] = 3
+	elif st == 3:
+		s["n"] = (int(s["n"]) + 1) & 0xFF
+		if int(s["n"]) >= SEAL_WAIT:
+			s["state"] = 4
+	elif st == 4:
+		s["fade"] = SEAL_FADE_FROM
+		_fade(s)
+		_fade(b)
+		s["state"] = 5
+	elif st == 5:
+		if int(s["fade"]) < 0x1000:
+			s["fade"] = (int(s["fade"]) + SEAL_FADE_STEP) & 0xFFFF
+		else:
+			b["op"] = 0xFF
+			b["b0"] = 0
+			b["type"] = GONE
+			s["fade"] = 0x1000
+			s["b0"] = 0
+			s["n"] = 0
+			s["state"] = 6
+	elif st == 6:
+		s["n"] = (int(s["n"]) + 1) & 0xFF
+		if int(s["n"]) < RISE_FRAMES:
+			var q: Vector3i = a["pos"]
+			a["pos"] = Vector3i(q.x, q.y - RISE, q.z)
+		else:
+			a["op"] = BOB_OP
+			a["base"] = (a["pos"] as Vector3i).y
+			s["state"] = 7
+	elif st == 7:
+		thing_mode(a, 2, 0)
+		s["op"] = 0xFF
+		s["state"] = 8
+
+
+# Opcode 0x10's arm, which nothing places and a seal hands what it held: the
+# yaw + 0x80 a frame and the height +0x40 plus game_sin(yaw) >> 6 -- it turns,
+# and bobs 64 up and down every 32 frames. tools/seals.py bob_step.
+# @orig game:0x8004b1d4 object_interpreter+0x41c4  status:verified -- in the seals' 7600 frames of the game's own, 84 or more a run (tools/seals.py)
+static func bob_step(r: Dictionary, c: KFCollision) -> void:
+	r["angles"][1] = (int(r["angles"][1]) + BOB_TURN) & 0xFFFF
+	var q: Vector3i = r["pos"]
+	r["pos"] = Vector3i(q.x, int(r["base"]) + (c.game_sin(KFWeapon.s16(int(r["angles"][1]))) >> 6), q.z)
+
+
+# One frame of opcode 0x1a's arm on Orladin's pedestal `p` (+8, +0x38, its
+# count, +0x39 the key's place in the gold ring), the key there (null while
+# +0x39 names none) and `target`, the object its +0x3b names: object_use_state
+# brings the key down from ORLADIN_START to ORLADIN_END in twenty frames, and
+# on its answer the key's +0x38 is 0 -- it stays -- the target's lock takes
+# +0x3a, and state 3: both fade (+2, +5), +0x10 by 0x100 to 0xfff, and both
+# go (their types 0xff, state 0x63). True on the frame the lock is set.
+# tools/seals.py pedestal_step.
+# @orig game:0x8004b000 object_interpreter+0x3ff0  status:verified -- 3240 of 3240 frames of the game's own arm and object_use_state over levels 14, 16 and 17, every pedestal three times, the key in the ring at random, every field of the pedestal and the key and the gate's lock (tools/seals.py); not the fade drawn (+2, +5, +0x10)
+static func orladin_step(p: Dictionary, key, target: Dictionary, c: KFCollision) -> bool:
+	var hit := false
+	if key != null and use_state(p, key, c, ORLADIN_START, ORLADIN_END):
+		key["lock"] = 0
+		target["lock"] = int(target["lock"]) | int(p["tail"][2])
+		p["state"] = 3
+		hit = true
+	var st := int(p["state"])
+	if st == 3:
+		_fade(p)
+		if key != null:
+			_fade(key)
+		p["state"] = 4
+	elif st == 4:
+		p["fade"] = (int(p["fade"]) + ORLADIN_FADE) & 0xFFFF
+		if key != null:
+			key["fade"] = (int(key["fade"]) + ORLADIN_FADE) & 0xFFFF
+		if int(p["fade"]) >= ORLADIN_FADED:
+			p["fade"] = ORLADIN_FADED
+			if key != null:
+				key["fade"] = ORLADIN_FADED
+			p["state"] = 5
+	elif st == 5:
+		p["type"] = GONE
+		if key != null:
+			key["type"] = GONE
+		p["state"] = AT_REST
+	return hit
 
 
 # One frame of opcode 6's arm on d (state, angles, vel, lock); `mode` is
@@ -775,14 +1012,18 @@ func use_item(id: int) -> void:
 	counters[0x15E] = int(w["drops"])
 	for k in objs.size():
 		var o = objs[k]
-		if o == null or before[k] == null:
+		if o == null:
+			continue
+		if o.get("made", false):
+			_new_key(k, int(o["type"]), int(o["lock"]), int(o["h3c"]))
+			KFInfo.note("use: Orladin's key's own object made in slot %d" % k)
+			continue
+		if before[k] == null:
 			continue
 		for f in ["lock", "state", "b39"]:
 			if int(o[f]) != int(before[k][f]):
 				_write_view(k, o)
 				break
-		if o.get("made", false):
-			KFInfo.note("use: Orladin's key's object in slot %d is not made in the port" % k)
 	var recalc := false
 	var warp := {}
 	for call in calls:
@@ -849,6 +1090,8 @@ func views() -> Array:
 		out[k]["lock"] = int(r.get("lock", 0xFF))
 		out[k]["state"] = int(r.get("state", 0))
 		out[k]["h3c"] = int(r.get("count", 0))
+		if r.has("ring"):
+			out[k]["b39"] = int(r["ring"])
 	var dn := get_node_or_null("../Doors")
 	if dn:
 		for d in dn.doors + dn.lifts + dn.gates + dn.walls:
@@ -889,6 +1132,8 @@ func _write_view(k: int, o: Dictionary) -> void:
 	if rows.has(k):
 		rows[k]["lock"] = int(o["lock"])
 		rows[k]["state"] = int(o["state"])
+		if rows[k].has("ring"):
+			rows[k]["ring"] = int(o["b39"])
 		return
 	var dn := get_node_or_null("../Doors")
 	if dn:
@@ -961,28 +1206,36 @@ func _put_key(pd: Dictionary, item: int) -> void:
 			break
 	if made < 0:
 		return
-	if rows.has(made):
-		var old = rows[made].get("node")
+	pd["ring"] = made - KEY_RING
+	_new_key(made, item, 0, 0)
+
+
+# A key's own object in `slot` -- init_object_record's, its type the key's,
+# +0x38 `lock`, +0x3c `count` -- a copy of the key's hidden qNNN node; what
+# was in the slot before goes. object_use_state places it.
+# @port helper -- the row and the node of a key put on a pedestal
+func _new_key(slot: int, item: int, lock: int, count: int) -> void:
+	if rows.has(slot):
+		var old = rows[slot].get("node")
 		if old:
 			(old as Node).queue_free()
-		slots.erase(made)
-	pd["ring"] = made - KEY_RING
+		slots.erase(slot)
 	var tp: Dictionary = key_templates.get(item, {})
 	var t: Dictionary = tp.get("row", {})
-	var r := {"slot": made, "cls": 0x40, "type": item, "kind": int(t.get("kind", 0)),
+	var r := {"slot": slot, "cls": 0x40, "type": item, "kind": int(t.get("kind", 0)),
 		"reach": int(t.get("reach", 0)), "top": int(t.get("top", 0)),
-		"c": int(t.get("c", 0)), "e": int(t.get("e", 0)), "lock": 0, "b0": 0,
+		"c": int(t.get("c", 0)), "e": int(t.get("e", 0)), "lock": lock, "b0": 0,
 		"b1": 0x80, "inside": 0, "op": 0xFF, "state": 0, "vel": 0, "rest": 0,
 		"angles": [0, 0, 0], "skin": {}, "model": 0, "link": 0, "pos": Vector3i.ZERO,
-		"node": null}
+		"count": count, "n": 0xFF, "base": -1, "b2": 0, "b5": 0xFF, "fade": 0, "node": null}
 	var tn = tp.get("node")
 	if tn:
 		var nd := (tn as Node3D).duplicate() as Node3D
-		nd.name = "k%03d" % made
+		nd.name = "k%03d" % slot
 		(tn as Node3D).get_parent().add_child(nd)
 		r["node"] = nd
-	rows[made] = r
-	slots.append(made)
+	rows[slot] = r
+	slots.append(slot)
 	slots.sort()
 
 
@@ -1007,17 +1260,19 @@ static func pedestal_step(p: Dictionary, key, gate: Dictionary, c: KFCollision) 
 	return true
 
 
-# object_use_state (0x80046914) as the pedestal's arm calls it, with
-# (0x8009c318, 0x8009c320, 0, 20). At state 0 with a lock other than 0xff the
+# object_use_state (0x80046914) as the pedestals' arms call it, with their
+# two vectors -- Silviera's (0x8009c318, 0x8009c320), Orladin's (0x8009c328,
+# 0x8009c330) -- and 0 and 20. At state 0 with a lock other than 0xff the
 # key is set up -- init_object_record, opcode 0x70, the pedestal's +0, +1
-# 0x80, the pedestal's slot at its +0x40 and its yaw -- the count 19 if the
-# key's +0x38 is not 0, else 0, and state 1; and in the same call, as at
-# state 1, the count goes up and the key stands at the pedestal plus
-# fixed_madd from KEY_START to KEY_END, both turned by the pedestal's angles,
-# count / 20 of the way. At 20 the key's +0x38 is 0xff, free to take, the
-# state 0x63, and the answer true.
-# @orig game:0x80046914 object_use_state  status:verified -- with the pedestal's arguments: the same 72 frames of the game's own code, and silv2's end; not the sound (0x12)
-static func use_state(p: Dictionary, key: Dictionary, c: KFCollision) -> bool:
+# 0x80, the pedestal's slot at its +0x40 and its yaw, Orladin's key (0x88)
+# lying on its side (+0x24 0x400) -- the count 19 if the key's +0x38 is not
+# 0, else 0, and state 1; and in the same call, as at state 1, the count goes
+# up and the key stands at the pedestal plus fixed_madd from `from` to `to`,
+# both turned by the pedestal's angles, count / 20 of the way. At 20 the
+# key's +0x38 is 0xff, free to take, the state 0x63, and the answer true.
+# @orig game:0x80046914 object_use_state  status:verified -- with the pedestals' arguments: 72 frames of the game's own code with Silviera's, and silv2's end; 3240 with Orladin's (tools/seals.py); not the sound (0x12), nor +0xe
+static func use_state(p: Dictionary, key: Dictionary, c: KFCollision,
+		from: Array = KEY_START, to: Array = KEY_END) -> bool:
 	if int(p["state"]) == 0:
 		if int(p["lock"]) == FREE:
 			return false
@@ -1027,17 +1282,21 @@ static func use_state(p: Dictionary, key: Dictionary, c: KFCollision) -> bool:
 		key["b0"] = int(p["b0"])
 		key["b1"] = 0x80
 		key["link"] = int(p["slot"])
-		key["angles"] = [0, int(p["angles"][1]), 0]
+		key["angles"] = [0x400 if int(key["type"]) == ORLADIN_KEY else 0, int(p["angles"][1]), 0]
+		key["b2"] = 0
+		key["b5"] = 0xFF
+		key["fade"] = 0
 	if int(p["state"]) != 1:
 		return false
 	p["n"] = (int(p["n"]) + 1) & 0xFF
 	var t: int = (int(p["n"]) << 12) / KEY_FRAMES
 	var ang: Array = p["angles"]
-	var a: Array = KFWeapon.vec_rotate(c, int(ang[0]), int(ang[1]), int(ang[2]), KEY_START)
-	var b: Array = KFWeapon.vec_rotate(c, int(ang[0]), int(ang[1]), int(ang[2]), KEY_END)
-	key["pos"] = Vector3i(lerp_i(int(a[0]), int(b[0]), t) + int(p["x"]),
-		lerp_i(int(a[1]), int(b[1]), t) + int(p["y"]),
-		lerp_i(int(a[2]), int(b[2]), t) + int(p["z"]))
+	var a: Array = KFWeapon.vec_rotate(c, int(ang[0]), int(ang[1]), int(ang[2]), from)
+	var b: Array = KFWeapon.vec_rotate(c, int(ang[0]), int(ang[1]), int(ang[2]), to)
+	var at: Vector3i = p["pos"] if p.has("pos") else Vector3i(int(p["x"]), int(p["y"]), int(p["z"]))
+	key["pos"] = Vector3i(lerp_i(int(a[0]), int(b[0]), t) + at.x,
+		lerp_i(int(a[1]), int(b[1]), t) + at.y,
+		lerp_i(int(a[2]), int(b[2]), t) + at.z)
 	if int(p["n"]) < KEY_FRAMES:
 		return false
 	key["lock"] = FREE

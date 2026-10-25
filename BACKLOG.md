@@ -580,10 +580,14 @@ Eating heals. Left, roughly in order:
   `0xc` or `level_overlay_tick`'s `0xd`; `0x801b25ee`, which it sets, is read
   nowhere the walk finds). Left of it: block 6's two statues (`0x80` there runs a scene of the game's frames until a
   creature wakes); the level's own entry 2 (levels 1, 2, 4, 5, 7, 8, 17, 20,
-  23, 25 and 27 have one) and give_item's and take_item's entries 6 and 11;
-  and what acts on Orladin's key's work -- opcodes `0x17` (the locks, eight
-  states) and `0x1a` (the pedestals, object_use_state) and the key's own
-  object in the gold ring, which the port does not make. No recording has a
+  23, 25 and 27 have one) and give_item's and take_item's entries 6 and 11.
+  What Orladin's key opens is in (FORMATS.md, "What Orladin's key opens"):
+  the seals (opcode `0x17`) and what they lift (`0x10`), the pedestals
+  (`0x1a`) and the key's own object in the gold ring, held to the game's own
+  arms (`tools/seals.py`, 7600 of 7600 and 3240 of 3240 frames) -- but for
+  their fade, which the port does not draw: `+2`'s semi-transparency and the
+  lighting class `0x32` the model is blended towards by `+0x10`
+  (`draw_model_plain`); no recording has a seal in it (PLAYTEST.md). No recording has a
   thing used yet: `emu/bp20.lua` logs the thing, the place, the floor, the
   page and the answer now (PLAYTEST.md);
 * the chosen thing's model turning in the lists (`0x80025be8`), and the
@@ -921,6 +925,15 @@ empty cell carries it, and the tools and the port answered nothing there;
 cell -- everything in an empty cell is under the floor. A bolt flying into
 one showed it (FORMATS.md, "Shape 255 is the void"); nothing the player does
 reaches one, so no number changed.
+
+**Found later, and fixed: a chest opened and left full hid its thing on
+the next visit.** The rows `tools/level3d.py` wrote for what a chest holds
+were the first frame's -- hidden -- and the port ran that frame again; a
+chest the level's record says was opened hides nothing in the game, so its
+thing lay there to take, and the port kept it hidden. The rows carry the
+loader's `+0` and `+0x38` now, and `loot.gd` runs the first frame after the
+record (FORMATS.md, "What Orladin's key opens"). Orladin's seals take the
+same path.
 
 **Found later, and fixed: a death reloaded the level in hand.** The game
 loads level 0 after a death either way -- `level_state_writer(0, ...)` at
