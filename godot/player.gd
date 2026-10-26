@@ -181,6 +181,9 @@ var magic_meter := 5000
 # velocity (0x801b2674); the landing's crouch (0x801b2654) and the view's nod
 # while falling (0x801b2628); the flash's length (0x801b265a).
 var pstate := 0
+# 0x801b25ee: warp_to sets it 1 for a record below 0xc; the levels' entry 3
+# read it at the warp's arrival and clear it once the player steps out
+var warped := 0
 var push := [0, 0, 0]
 var tilt := [0, 0, 0]
 var tilt_vel := [0, 0, 0]
@@ -1558,8 +1561,8 @@ static func hit_shield(worn: Array, attacks: Array, rnd: Callable) -> Array:
 	return a
 
 
-# @port helper -- a hit: the player's fields into take_hit and back, then apply_damage
-func _hit(attacks: Array, effect: int, scale: int, pct: int, at: Vector3i) -> void:
+# @port helper -- a hit: the player's fields into take_hit and back, then apply_damage (from `at`, or from no point)
+func _hit(attacks: Array, effect: int, scale: int, pct: int, at: Vector3i, has_at := true) -> void:
 	var st := {"worn": worn, "guard": guard, "shielded": shielded, "resist": resist,
 		"mp": mp, "mp_max": int(character.get("mp_max", 30)), "poison": poison,
 		"curse_lv": curse[0], "curse_t": curse[1], "dark_t": dark[1],
@@ -1577,7 +1580,7 @@ func _hit(attacks: Array, effect: int, scale: int, pct: int, at: Vector3i) -> vo
 	caps["slow"] = int(st["slow"])
 	if st.has("recalced"):
 		_take_recalc(st["recalced"])
-	_apply_damage(dmg, true, at, effect)
+	_apply_damage(dmg, has_at, at, effect)
 
 
 # @port helper -- the BIOS's rand, 0..0x7fff
@@ -2211,7 +2214,7 @@ const CARRIED := ["facing", "pitch", "pitch_rate", "vstate", "vvel", "step", "la
 	"spell_b", "item_b", "weapon_id", "wstate", "combo", "character", "strong_hits",
 	"death_frames", "inventory", "gold", "damage_k", "poison", "resist", "curse", "dark",
 	"light", "guard", "shielded", "bonus", "pending", "shots", "shot_gap", "shot_delay",
-	"cast_off", "casting", "practice", "mp_hold", "magic_pause", "caps"]
+	"cast_off", "casting", "practice", "mp_hold", "magic_pause", "caps", "warped"]
 # What the player carries across that reload when the crystal revives them:
 # [the inventory, the gold, the character, the weapon, what is worn, the
 # magic and the button's].

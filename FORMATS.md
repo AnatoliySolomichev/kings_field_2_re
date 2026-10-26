@@ -2833,7 +2833,8 @@ frames, the state, counter, scale, `+1` and the three cells' tile, shape and
   stands there having arrived by a warp (`0x801b25ee`, which the warp routine
   `0x8005c864` sets); level 0's does the same strip at (9,55), and its case 0
   also wakes three creatures and changes four objects once two story bytes
-  (`0x801ba98e`, `0x801ba98f`) say so. Not in the port.
+  (`0x801ba98e`, `0x801ba98f`) say so. In the port now: "The trigger
+  rectangles: opcode 0xe1 and entry 3", below.
 
 ### Chests, and picking things up
 
@@ -3269,7 +3270,8 @@ and nothing more; the others fade back (`fade_frames(1, 0x1000, 0x1000, 0)`,
 `res_wait`, `fade_frames(1, 0x1000, 0, -0x100)`, `screen_fade(0xff, 0, 0,
 0)`) and ask object_trigger for `(ff, ff, ff, +1, +2)` -- the place's sound
 banks, as the block's bytes 3 and 4 are for a crossing (level 4's `13, 15`).
-Below `0xc`: `0x801b25ee` 1 (written here and read nowhere the walk finds),
+Below `0xc`: `0x801b25ee` 1 (which the walk found no reader of: the levels'
+own entry 3 read it -- "The trigger rectangles", below),
 `use_answer` 1 and the stats. Last `view_tilt` 0.
 
 `use_item` asks it for Ichrius' eye, wings and crown: **record 1, level 1's
@@ -3651,6 +3653,69 @@ the things', a view byte into the things', and `stamp_rect` into the cells.
 Not in the port: the look's routines, the bytes it does not keep (`+2`,
 `+5`, `+0x10`, the scale, the markers' `+0x3c..+0x3e`), the static objects'
 view byte (the level's one mesh) and level 17's thing in the ring.
+
+### The trigger rectangles: opcode 0xe1 and entry 3
+
+**Opcode `0xe1`** (`0x8004a868`) is a rectangle of cells -- the record's
+`+0x14 >> 11`, `+0x1c >> 11`, `+0x38` by `+0x39`, and `+0x18` the height
+`player_in_rect` asks the player's to be near (not under `+0x18 - 0xc80`, not
+over `+0x18 + 0x800`). While the player stands in it, unless `+0x40` says it
+has fired, by `+0x3a & 0xf`: 0 the level's own **entry 3** (`level_hooks +
+0xc`) with the record, 1 `object_signal(+0x3b)`, 2 story flag `0xa7 + +0x3b`
+set to `+0x3c`; with `+0x3a`'s bit 7 clear it sets `+0x40` first and fires
+once, and stepping out clears it. The game has fifty, on fourteen levels,
+every one of mode 0 and 34 of them every frame: what they do is the levels'
+own code, switched on the record's `+0x3b`:
+
+* **`10`, the warp's arrival** (levels 0..7 and 9..11): a rectangle of the
+  level's own around the cell `warp_to` puts the player in, and **the byte
+  `0x801b25ee`**, which `warp_to` sets: in that rectangle having warped,
+  three cells laid from one template; in the record's but out of that one,
+  from the other, and the byte cleared. Which of the two templates is the
+  open way and which the shut one is not read yet (a look in the game would
+  say: PLAYTEST.md).
+* **gates**: level 2's 44 -- back to `0x9a` (0, unless flag `0x12`) or open
+  (1); level 4's 115 moved to the trigger's x less `0x400` (0, unless flag
+  `0x19`) or plus `0x3ff` (1), by which side it was crossed from.
+* **level 0's clock**: once flag 6 is 1 and flag 7 is 0 (entry 4's arms 2
+  and 4), the three men held and the objects that stand for them shown or
+  hidden -- as entry 5 does for the same flags -- then the arrival.
+* **level 6**: six by two cells at (58, 53) from one template or the other by
+  whether the feet wear `0x4b` (`0x801b25d8`, equip_armour's slot 3).
+* **level 9's bridge**: object 58 drawn and a hit from it
+  (`effect_hurt_player`, the sound when the player is thrown) until flags
+  `0x7b..0x7e` set flag `0x35`; then lifted over sixteen frames of the game
+  (`+0x10` up to `0xfff`, `+5` `0x32`, `+2` 5 -- the fade, "What Orladin's
+  key opens") and gone. With flag `0x34`, slot 2 held and object 249 shown
+  once the player is out of the rectangle at (54, 15).
+* **level 14's burning floor** (`0x62` at the record's height + `0xc80`,
+  `0x63` anywhere in it): `player_take_hit` with effect 3 and nothing else.
+* **level 17**: flag `0x51` (0); with item `0x38` held, armour `0x39` for it
+  in the light (put on in slot 4 if `0x38` was) (1); the seals' burns, a hit
+  of effect `0x40` for each of flags `0x4e..0x50` clear (`0x61`), and one of
+  effect `0x43` at the player (`0x63`).
+* **level 26**: flag `0x5e` (0); flag `0x61` set (1) or cleared (2), and the
+  stats again.
+
+**Checked against the game's own.** `tools/triggers.py --check` runs
+GAME.EXE's own arm for every one of the fifty with `tools/mipsrun.py`
+(`object_arm`) over its level as the loader leaves it, the level's entry 3
+out of its overlay, the player in and about the rectangle at random heights,
+`+0x40`, the flags, the pack, the warp's byte, what is worn and the player's
+state at random, `stamp_rect`, `player_take_hit`, `effect_hurt_player`,
+`sound_cue_at`, the light, `equip_armour`, the frames and the levels' item
+hooks logged: **1500 of 1500** runs leave the model's calls and all of RAM but
+the stack.
+
+**In the port**: `godot/triggers.gd` is the same over the same addresses
+(the self-test 200 of 200 against the model), and `loot.gd _triggers` runs
+it every frame of the game for the level's `0xe1` records over the port's
+bytes (`_bytes`, `_bytes_back`, as entry 5 does), acting out the stamps,
+the hits (`player._hit`, from no point when the game gives none) and the
+hurt (`effects.gd hurt_player`), the armour and the stats; `player.warped`
+is `0x801b25ee`, set by `crossing.gd`'s warp below record `0xc` and carried
+across a crossing. Not in the port: the light's and level 9's frames, the
+sound, and objects shown or hidden among the static ones.
 
 ### Status/records, and running the game's own code
 

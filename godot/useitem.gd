@@ -405,7 +405,7 @@ static func warp_answers(i: int) -> bool:
 # frame white and seventeen to clear -- and screen_fade(0xff). `block` is the
 # five bytes in hand; the plan: {level, block, same, pos, facing, pitch,
 # answer, out, back, clear}, out and back fade_frames' arguments.
-# @orig game:0x8005c864 warp_to  status:partial -- the place, the facing, the pitch, the block, the answer and the fades' arguments: tools/useitem.py warp_check, 280 of 280 runs of the game's own, the self-test this to it; not actors_retire_marked, the tilt and the view's additions the new scene starts without, or 0x801b25ee
+# @orig game:0x8005c864 warp_to  status:partial -- the place, the facing, the pitch, the block, the answer and the fades' arguments: tools/useitem.py warp_check, 280 of 280 runs of the game's own, the self-test this to it; not actors_retire_marked, the tilt and the view's additions the new scene starts without; 0x801b25ee is set by crossing.gd from the answer
 static func warp_plan(i: int, block: Array, pitch: int) -> Dictionary:
 	if i < 0 or i >= warps.size():
 		return {}

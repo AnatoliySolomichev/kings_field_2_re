@@ -127,6 +127,8 @@ var resume := 0                    # where object_interact goes on after it
 var talking := {}                  # script_interpreter's call while it runs (KFTalk)
 var talk_walks := true             # object_interact's call goes on to the objects; use_item's does not
 var gifts := []                    # the things a level's entry 4 gave, for object_give once the call ends
+var triggers := []                 # the slots of opcode 0xe1, the rectangles that run the level's entry 3
+var fired := {}                    # slot -> a trigger's +0x40: fired, until the player steps out
 # What was opened, taken, dropped and set down goes where the game keeps it,
 # the level's stream (KFLevelState): out of it when the level loads, into the
 # level's table when it is left. The epoch this scene was made in, so that one
@@ -191,6 +193,8 @@ func _ready() -> void:
 		pedestals.append(pd)
 	for f in doc.get("find", []):
 		finds[int(f[0])] = (f as Array).map(func(v): return int(v))
+		if f.size() > 10 and int(f[10]) == KFTriggers.OP:
+			triggers.append(int(f[0]))
 	for row in doc["rows"]:
 		var r := {}
 		for key in row:
@@ -242,24 +246,33 @@ func _come_in() -> void:
 	_first_frame()
 
 
-# The level's own entry 5 (KFLevelIn.entry5) as it comes in: the bytes it
-# reads, out of the port -- the story flags, the pack, the figures,
-# drop_count_gold, the creatures' +0, +3 and +9 and every object's view --
-# and what it wrote, back: the flags, the pack, the categories, floors and
-# states into actors.gd, an object's lock, state and +0x39 into what keeps
-# it, its type (0xff, gone) into the find rows and the things', its view
-# byte +0 into the things' -- and stamp_rect into the cells. Not acted: the
-# levels' routines that change their look (4, 6 and 26), the bytes the port
-# does not keep (+2, +5, +0x10, the scale, +0x3c..+0x3e of the markers), an
-# object switched by +0 among the static ones (the level's one mesh), and
-# the thing level 17 makes in the ring.
+# The level's own entry 5 (KFLevelIn.entry5) as it comes in, over the
+# bytes _bytes takes out of the port, and what it wrote put back (_bytes_back)
+# and its stamp_rect acted out. Not acted: the levels' routines that change
+# their look (4, 6 and 26), the bytes the port does not keep (+2, +5,
+# +0x10, the scale, +0x3c..+0x3e of the markers), an object switched by +0
+# among the static ones (the level's one mesh), and the thing level 17 makes
+# in the ring.
 # @port engine -- the bytes handed to KFLevelIn.entry5 and its writes put back
 func _level_in() -> void:
 	var lv: int = player._level()
 	KFTalk.load_level(lv)
+	var w := _bytes()
+	KFLevelIn.entry5(lv, w["m"])
+	var n := _bytes_back(w)
+	_act(w["m"]["calls"])
+	KFInfo.note("level in: entry 5 of level %d, %d bytes written, %s" % [lv, n,
+		str(w["m"]["calls"])])
+
+
+# What the levels' own code reads, out of the port, at the game's addresses
+# (KFLevelIn's {"mem", "calls"}): the story flags, the pack, the figures,
+# drop_count_gold, the warp's byte (0x801b25ee), the player's place and
+# state, what is worn, the creatures' +0, +3 and +9 and every object's view.
+# @port engine -- the port's fields as the game's bytes
+func _bytes() -> Dictionary:
 	var ch: Dictionary = player.character
 	var m := {"mem": {}, "calls": []}
-	var mem: Dictionary = m["mem"]
 	for k in KFTalk.FLAG_COUNT:
 		KFLevelIn.wr(m, KFLevelIn.F(k), int(KFTalk.flags[k]))
 	var inv: KFItems = player.inventory
@@ -272,6 +285,13 @@ func _level_in() -> void:
 		KFLevelIn.wr(m, KFLevelIn.SKILLS + 2 * k, int(grow[k]), 2)
 	KFLevelIn.wr(m, KFLevelIn.PLAYER_LEVEL, int(ch.get("level", 1)))
 	KFLevelIn.wr(m, KFLevelIn.DROP_COUNT, int(counters[0x15E]), 2)
+	KFLevelIn.wr(m, KFTriggers.WARPED, int(player.warped))
+	KFLevelIn.wr(m, KFTriggers.PLAYER_POS, player.gx, 4)
+	KFLevelIn.wr(m, KFTriggers.PLAYER_POS + 4, player.gy, 4)
+	KFLevelIn.wr(m, KFTriggers.PLAYER_POS + 8, player.gz, 4)
+	KFLevelIn.wr(m, KFTriggers.PLAYER_STATE, int(player.pstate))
+	for slot in 7:
+		KFLevelIn.wr(m, 0x801B25D4 + slot, int(player.worn[slot]))
 	var an := get_node_or_null("../Actors")
 	var list: Array = an.get("actors") if an != null and an.get("actors") != null else []
 	for k in 200:
@@ -300,8 +320,24 @@ func _level_in() -> void:
 		KFLevelIn.wr(m, KFLevelIn.O(k, 0x3C), int(o["h3c"]))
 		KFLevelIn.wr(m, KFLevelIn.O(k, 0x3D), int(o["b3d"]))
 		KFLevelIn.wr(m, KFLevelIn.O(k, 0x3F), int(o["b3f"]))
-	var before := mem.duplicate()
-	KFLevelIn.entry5(lv, m)
+		KFLevelIn.wr(m, KFLevelIn.O(k, 0x40), int(fired.get(k, o["b40"])))
+	return {"m": m, "before": (m["mem"] as Dictionary).duplicate(), "objs": objs, "list": list}
+
+
+# What the levels' own code wrote, back where the port keeps it: the flags,
+# the pack, the warp's byte, the creatures' categories, floors and states
+# (actors.gd), an object's lock, state and +0x39 (_write_view), its type --
+# 0xff gone -- into the find rows and the things', its view byte into the
+# things', a trigger's +0x40, an object's place (a gate moved), and
+# drop_count_gold. The number of bytes it changed.
+# @port engine -- the game's bytes back into the port's fields
+func _bytes_back(w: Dictionary) -> int:
+	var m: Dictionary = w["m"]
+	var mem: Dictionary = m["mem"]
+	var before: Dictionary = w["before"]
+	var objs: Array = w["objs"]
+	var list: Array = w["list"]
+	var inv: KFItems = player.inventory
 	var changed := []
 	for a in mem:
 		if not before.has(a) or int(before[a]) != int(mem[a]):
@@ -314,9 +350,11 @@ func _level_in() -> void:
 			inv.a[a - KFLevelIn.INV_A] = int(mem[a])
 		elif a >= KFLevelIn.INV_B and a < KFLevelIn.INV_B + 0x96:
 			inv.b[a - KFLevelIn.INV_B] = int(mem[a])
+		elif a == KFTriggers.WARPED:
+			player.warped = int(mem[a])
 		elif a >= KFLevelIn.ACTORS and a < KFLevelIn.A(200):
-			var k: int = (int(a) - KFLevelIn.ACTORS) / KFLevelIn.ASTRIDE
-			var off: int = (int(a) - KFLevelIn.ACTORS) % KFLevelIn.ASTRIDE
+			var k: int = (a - KFLevelIn.ACTORS) / KFLevelIn.ASTRIDE
+			var off: int = (a - KFLevelIn.ACTORS) % KFLevelIn.ASTRIDE
 			if k < list.size() and list[k] != null:
 				match off:
 					0:
@@ -332,7 +370,7 @@ func _level_in() -> void:
 	for k in touched:
 		var o = objs[k]
 		if o == null:
-			KFInfo.note("level in: slot %d made, not in the port" % k)
+			KFInfo.note("bytes: slot %d made, not in the port" % k)
 			continue
 		var typ: int = KFLevelIn.rd(m, KFLevelIn.O(k, 6), 2)
 		var b0: int = KFLevelIn.rd(m, KFLevelIn.O(k))
@@ -341,22 +379,104 @@ func _level_in() -> void:
 		o["lock"] = KFLevelIn.rd(m, KFLevelIn.O(k, 0x38))
 		o["b39"] = KFLevelIn.rd(m, KFLevelIn.O(k, 0x39))
 		_write_view(k, o)
+		fired[k] = KFLevelIn.rd(m, KFLevelIn.O(k, 0x40))
+		var x: int = KFTriggers.s32(KFLevelIn.rd(m, KFLevelIn.O(k, 0x14), 4))
+		if x != int(o["x"]):
+			_move_x(k, x)
 		if finds.has(k):
 			finds[k][2] = typ
 		if rows.has(k):
 			if typ == 0xFF:
 				rows[k]["type"] = GONE
 			rows[k]["b0"] = b0
+	var an := get_node_or_null("../Actors")
 	if an != null and an.has_method("refresh"):
 		an.refresh()
-	for call in m["calls"]:
-		if str(call[0]) == "stamp":
-			var dn := get_node_or_null("../Doors")
-			if dn:
-				dn.stamp_rect(int(call[1]), int(call[2]), int(call[3]), int(call[4]),
-					int(call[5]), int(call[6]), int(call[7]), int(call[8]), int(call[9]))
-	KFInfo.note("level in: entry 5 of level %d, %d bytes written, %s" % [lv, changed.size(),
-		str(m["calls"])])
+	return changed.size()
+
+
+# An object's x moved by the levels' own code (level 4's gate 115, which its
+# entry 3 puts on the side the player crossed from): the find row, a door's
+# or a gate's place (doors.gd) and the thing's.
+# @port helper -- an object's +0x14 where the port keeps it
+func _move_x(k: int, x: int) -> void:
+	if finds.has(k):
+		finds[k][3] = x
+	if rows.has(k):
+		var p: Vector3i = rows[k]["pos"]
+		rows[k]["pos"] = Vector3i(x, p.y, p.z)
+	var dn := get_node_or_null("../Doors")
+	if dn:
+		for d in dn.doors + dn.lifts + dn.gates + dn.walls:
+			if int(d["slot"]) == k:
+				d["x"] = x
+
+
+# The calls the levels' own code makes that the port acts out: stamp_rect
+# into the cells (doors.gd), player_take_hit and effect_hurt_player on the
+# player, the armour put on, the stats, a banner. Not acted: the light's and
+# the scenes' frames (0x8005d948, render_frame), the sounds, the looks'
+# routines, give_item's and take_item's level hooks.
+# @port engine -- the levels' calls acted out
+func _act(calls: Array) -> void:
+	var recalc := false
+	for call in calls:
+		match str(call[0]):
+			"stamp":
+				var dn := get_node_or_null("../Doors")
+				if dn:
+					dn.stamp_rect(int(call[1]), int(call[2]), int(call[3]), int(call[4]),
+						int(call[5]), int(call[6]), int(call[7]), int(call[8]), int(call[9]))
+			"hit":
+				var at := Vector3i(player.gx, player.gy, player.gz)
+				player._hit([int(call[1]), int(call[2]), int(call[3]), int(call[5]), int(call[6]),
+					int(call[7]), int(call[8]), int(call[9])], int(call[4]), int(call[10]),
+					int(call[11]), at, int(call[12]) != 0)
+			"hurt":
+				var fx := get_node_or_null("../Effects")
+				var k: int = (int(call[1]) - KFLevelIn.OBJECTS) / KFLevelIn.OSTRIDE
+				var o = views()[k] if k >= 0 and k < 396 else null
+				if fx and o != null and fx.has_method("hurt_player"):
+					fx.hurt_player(Vector3i(int(o["x"]), int(o["y"]), int(o["z"])), int(call[2]),
+						int(call[3]), int(call[4]), int(call[5]),
+						[int(call[6]), int(call[7]), int(call[8])], int(call[9]),
+						[int(call[10]), int(call[11]), int(call[12]), int(call[13]), int(call[14])],
+						int(call[15]), int(call[16]))
+			"equip_armour":
+				player.equip_armour(int(call[1]), int(call[2]))
+			"recalc":
+				recalc = true
+			"announce":
+				KFMessages.announce(int(call[1]))
+	if recalc:
+		player.recalc_stats()
+
+
+# Opcode 0xe1 for every trigger rectangle, a frame of object_interpreter's
+# (KFTriggers.arm): the player out of its rectangle clears its +0x40 at
+# once; in it and not yet fired, the arm runs over the port's bytes and what
+# it wrote goes back.
+# @port engine -- the triggers' arm a frame at a time over the port's bytes
+func _triggers() -> void:
+	if triggers.is_empty():
+		return
+	var lv: int = player._level()
+	for k in triggers:
+		var f: Array = finds[k]
+		var inside := KFObjects.player_in_rect(player.gx, player.gz, int(f[3]) >> 11,
+			int(f[5]) >> 11, int(f[11]), int(f[12]), player.gy, int(f[4]))
+		if not inside:
+			fired[k] = 0
+			continue
+		if int(fired.get(k, 0)):
+			continue
+		KFTalk.load_level(lv)
+		var w := _bytes()
+		KFTriggers.arm(lv, w["m"], k)
+		_bytes_back(w)
+		_act(w["m"]["calls"])
+		if not (w["m"]["calls"] as Array).is_empty():
+			KFInfo.note("trigger: slot %d, %s" % [k, str(w["m"]["calls"])])
 
 
 # What object_interpreter's first pass does before anything is drawn, after
@@ -595,6 +715,7 @@ func _process(dt: float) -> void:
 						k, int(r["tail"][3]), int(gate["lock"])])
 		for pd in pedestals:
 			_pedestal(pd)
+		_triggers()
 	_draw()
 
 

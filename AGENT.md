@@ -219,10 +219,10 @@ how much of the game the port has (portmap progress)   47.0% of the game's own
                                                        code (game 47.4%, open
                                                        46.7%, end 0%; partial at
                                                        half, the library left out)
-the port against the game, function by function        855 of 855 placed: 490
-                                                       reproduce the game, 365 the
-                                                       port's own; 557 markers and
-                                                       1116 cited addresses, every
+the port against the game, function by function        870 of 870 placed: 493
+                                                       reproduce the game, 377 the
+                                                       port's own; 560 markers and
+                                                       1125 cited addresses, every
                                                        one resolving
 the object loader, against 13 snapshots                angles 4344/4352, scale and
                                                        position 4352/4352, opcode
@@ -344,6 +344,9 @@ level's own entry 4 (tools/hooks.py)                   flags, pack, categories,
 what a level does as it comes in, against every       1120 of 1120 runs, all of
 level's own entry 5 (tools/levelin.py); the            RAM but the stack; 21 of
 creatures' categories against the snapshots            21 snapshots, 1167 slots
+the trigger rectangles, against the game's own        1500 of 1500 runs, all of
+opcode 0xe1 and every level's entry 3                  RAM but the stack; fifty
+(tools/triggers.py)                                    records on 14 levels
 the warp, against the game's own warp_to               280 of 280 runs, every
                                                        record, calls and fields
 what a change of level writes of the player, off       4 stores in 114 routines:
@@ -406,8 +409,8 @@ effects 1494 of 1494 runs, 27656 of 27656 frames · aims 300 of 300 · volleys 2
 the run 150129 of 150129 frames
 player_take_hit 300 of 300 · the status 40 of 40 runs, 6312 of 6312 frames
 casting 1200 of 1200 · the attacking arms 240 of 240 · creature hits 400 of 400
-use_item 624 of 624 · conversation hooks 360 of 360 · entry 5 168 of 168 · warp_to 55 of 55 · seals 975 of 975 · fades 117 of 117
-carry-over 60 of 60 fields and the place
+use_item 624 of 624 · conversation hooks 360 of 360 · entry 5 168 of 168 · triggers 200 of 200 · warp_to 55 of 55 · seals 975 of 975 · fades 117 of 117
+carry-over 61 of 61 fields and the place
 ```
 
 **Tell the two kinds apart.** Against a recording or a RAM snapshot — the

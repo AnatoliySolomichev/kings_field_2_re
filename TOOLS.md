@@ -481,6 +481,23 @@ entry 5 run over each snapshot's own flags and pack gives its categories,
 168** runs (`levelincheck.json`: the bytes read, the calls, the bytes
 written).
 
+**`triggers.py`** — the trigger rectangles: opcode `0xe1` and every level's
+entry 3 (FORMATS.md, "The trigger rectangles").
+
+```
+python3 tools/triggers.py            every level's 0xe1 records
+python3 tools/triggers.py --check    the model against the game's own arm and
+                                     the overlays' own entry 3
+python3 tools/triggers.py --export D triggercheck.json into D, for the self-test
+```
+
+`--check` runs GAME.EXE's own arm for each of the fifty records
+(`mipsrun.object_arm`) over its level, the level's entry 3 out of its
+overlay, the player in and about the rectangle and the flags, pack, warp
+byte, worn things and state at random: **1500 of 1500** runs leave the
+model's calls and all of RAM but the stack. `godot/triggers.gd` reproduces
+the model on **200 of 200** runs (`triggercheck.json`).
+
 **`seals.py`** — what Orladin's key opens: the seals (opcode `0x17`), the
 thing they hand opcode `0x10`, and Orladin's pedestals (`0x1a`), FORMATS.md
 "What Orladin's key opens".

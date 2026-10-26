@@ -205,6 +205,8 @@ func _jump(plan: Dictionary) -> void:
 	player.facing = int(plan["facing"])
 	player.pitch = int(plan["pitch"])
 	player.pstate = 0
+	if int(plan.get("answer", 0)):
+		player.warped = 1                # 0x801b25ee, below record 0xc
 	player.tilt = [0, 0, 0]
 	player.tilt_vel = [0, 0, 0]
 	KFGame.block = (plan["block"] as Array).map(func(v): return int(v))

@@ -210,6 +210,9 @@ def main(quick=False, only_check=False):
     steps.append((["tools/levelin.py", "--check"],
         "what a level does as it comes in, against every level's own entry 5 and the snapshots",
         ["entry 5, against", ": model ", "] differ"]))
+    steps.append((["tools/triggers.py", "--check"],
+        "the trigger rectangles, against the game's own opcode 0xe1 and every level's entry 3",
+        ["opcode 0xe1 and entry 3, against", ": calls:", "(actor", "(object", "(flag"]))
     steps.append((["tools/seals.py", "--check"],
         "what Orladin's key opens, against the game's own arms",
         ["the seals", "Orladin's pedestals"]))
