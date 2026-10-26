@@ -347,6 +347,9 @@ func _init() -> void:
 	if not _use_items():
 		quit(1)
 		return
+	if not _hooks():
+		quit(1)
+		return
 	if not _inscriptions():
 		quit(1)
 		return
@@ -2638,6 +2641,73 @@ func _use_items() -> bool:
 				str(c["block"]), str(got), str(c["want"])])
 	print("warp_to: %d of %d plans match tools/useitem.py" % [wok, ws.size()])
 	return ok == cases.size() and wok == ws.size()
+
+
+# The levels' own entry 4, godot/talk.gd's hook against the runs
+# tools/hooks.py made of its model, which every level's overlay holds: the
+# calls in order and every field the arm writes.
+func _hooks() -> bool:
+	if not FileAccess.file_exists("res://hookcheck.json"):
+		print("conversation hooks: no cases to check against")
+		return true
+	var doc = JSON.parse_string(FileAccess.get_file_as_string("res://hookcheck.json"))
+	var names: Array = doc["fields"]
+	var ok := 0
+	var told := false
+	var cases: Array = doc["cases"]
+	for c in cases:
+		var cw: Dictionary = c["world"]
+		var want: Dictionary = c["want"]
+		var w := {}
+		for k in ["flags", "cats", "floors", "skills", "spells"]:
+			w[k] = (cw[k] as Array).map(func(v): return int(v))
+		for k in ["answer", "weapon", "minutes", "exp", "chosen", "buttons", "bind_use"]:
+			w[k] = int(cw[k])
+		var inv := KFItems.new()
+		for i in KFItems.COUNT:
+			inv.a[i] = int(cw["inv_a"][i])
+			inv.b[i] = int(cw["inv_b"][i])
+		w["inv"] = inv
+		var objs := []
+		objs.resize(396)
+		for row in cw["objects"]:
+			var o := {}
+			for i in names.size():
+				o["lock" if str(names[i]) == "b38" else str(names[i])] = int(row[i])
+			objs[int(row[0])] = o
+		w["objects"] = objs
+		var calls := KFTalk.hook(int(c["level"]), int(c["arm"]), w)
+		var why := ""
+		if JSON.stringify(_norm(calls)) != JSON.stringify(_norm(want["calls"])):
+			why = "calls %s, python %s" % [str(calls), str(want["calls"])]
+		else:
+			var got := {"flags": w["flags"], "cats": w["cats"], "floors": w["floors"],
+				"skills": w["skills"], "spells": w["spells"], "answer": w["answer"],
+				"buttons": w["buttons"], "inv_a": Array(inv.a).slice(0, 0x96),
+				"inv_b": Array(inv.b).slice(0, 0x96)}
+			for f in got:
+				var exp = want.get(f, cw[f])
+				if JSON.stringify(_norm(got[f])) != JSON.stringify(_norm(exp)):
+					why = "%s %s, python %s" % [f, str(got[f]), str(exp)]
+					break
+			if why == "":
+				for row in want.get("objects", cw["objects"]):
+					var o = w["objects"][int(row[0])]
+					for i in names.size():
+						var key: String = "lock" if str(names[i]) == "b38" else str(names[i])
+						if o == null or int(o[key]) != int(row[i]):
+							why = "object %d %s, python %d" % [int(row[0]), key, int(row[i])]
+							break
+					if why != "":
+						break
+		if why == "":
+			ok += 1
+		elif not told:
+			told = true
+			print("  first difference: level %d, arm %d: %s" % [int(c["level"]), int(c["arm"]), why])
+	print("conversation hooks: %d of %d runs of the levels' entry 4 match tools/hooks.py -- calls, flags, pack, categories, skills, spells and objects" % [
+		ok, cases.size()])
+	return ok == cases.size()
 
 
 # @port helper -- a case's world, as KFUseItem.run takes it

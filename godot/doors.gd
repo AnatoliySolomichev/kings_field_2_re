@@ -704,6 +704,56 @@ func _stamp(d: Dictionary, shift: int) -> void:
 	player.coll.fence = fence
 
 
+# stamp_rect (0x800445b8) as a level's own code asks it, any mask: a w x h
+# block of layer-1 cells from (sx, sz) to (dx, dz), turned by (-(angle >> 10))
+# & 3 quarter turns, the fields the mask picks of those the port's cells keep
+# -- 2 the height, 4 the rotation (added to by the turn), 8 the shape, 0x20
+# the fence; nothing unless b0 & 2, or when sx, dx or w is 0xff.
+# @orig game:0x800445b8 stamp_rect  status:partial -- the height, the rotation, the shape and the fence; not the tile (mask 1) nor +9's bits 0x3f and 0x80 (0x10, 0x40), which the port's cells do not keep, so the level's look is not redrawn
+func stamp_rect(b0: int, sx: int, sz: int, dx: int, dz: int, w: int, h: int, ang: int,
+		mask: int) -> void:
+	if sx == 0xFF or dx == 0xFF or w == 0xFF or not (b0 & 2):
+		return
+	var rot := (-(KFWeapon.s16(ang) >> 10)) & 3
+	var step := 1
+	var row := 80
+	if rot == 1:
+		step = -80
+		row = 1
+		dz += w - 1
+	elif rot == 2:
+		step = -1
+		row = -80
+		dx += w - 1
+		dz += h - 1
+	elif rot == 3:
+		step = 80
+		row = -1
+		dx += h - 1
+	var cells: PackedInt32Array = player.coll.cells
+	var fence: PackedByteArray = player.coll.fence
+	var src := sz * 80 + sx
+	var dst := dz * 80 + dx
+	for _r in h:
+		var s := src
+		var o := dst
+		for _c in w:
+			if mask & 2:
+				cells[o * 6 + 5] = cells[s * 6 + 5]
+			if mask & 4:
+				cells[o * 6 + 4] = (cells[s * 6 + 4] + rot) & 3
+			if mask & 8:
+				cells[o * 6 + 3] = cells[s * 6 + 3]
+			if mask & 0x20 and not fence.is_empty():
+				fence[o] = (fence[o] & 1) | (fence[s] & 2)
+			s += 1
+			o += step
+		src += 80
+		dst += row
+	player.coll.cells = cells
+	player.coll.fence = fence
+
+
 # facing_test (0x80016a2c): is `b` within `tol` of `a`, either way round.
 # @orig game:0x80016a2c facing_test  status:transcribed
 static func _facing(a: int, b: int, tol: int) -> bool:

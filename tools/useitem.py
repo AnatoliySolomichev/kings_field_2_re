@@ -385,6 +385,16 @@ def warp_answers(i):
     return i < 0xC
 
 
+def skill_unlock(w, calls, k):
+    """skill_unlock (0x80029f1c), run: each spell it unlocks says so
+    (announce 3) and answers (0x80029fb0)."""
+    import levelup
+    st = {"grow": w["skills"], "spells": w["spells"]}
+    for b in levelup.skill_unlock(st, k, w["flags"], _skill_data()):
+        calls.append(("announce", b))
+        w["answer"] = 1
+
+
 # --- the routine ----------------------------------------------------------------
 
 def use_item(w, item):
@@ -406,13 +416,7 @@ def use_item(w, item):
         calls.append(("recalc",))
 
     def unlock(k):
-        # skill_unlock (0x80029f1c), run: each spell it unlocks says so
-        # (announce 3) and answers (0x80029fb0)
-        import levelup
-        st = {"grow": w["skills"], "spells": w["spells"]}
-        for b in levelup.skill_unlock(st, k, w["flags"], _skill_data()):
-            say(b)
-            answer()
+        skill_unlock(w, calls, k)
 
     if item == TRUTH_GLASS:
         c = sight(w, 0x1F40, 0x1F4, 0x1F4)

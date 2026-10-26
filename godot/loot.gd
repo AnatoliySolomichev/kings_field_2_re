@@ -126,6 +126,7 @@ var reading = null                 # the document up, load_entry's frames
 var resume := 0                    # where object_interact goes on after it
 var talking := {}                  # script_interpreter's call while it runs (KFTalk)
 var talk_walks := true             # object_interact's call goes on to the objects; use_item's does not
+var gifts := []                    # the things a level's entry 4 gave, for object_give once the call ends
 # What was opened, taken, dropped and set down goes where the game keeps it,
 # the level's stream (KFLevelState): out of it when the level loads, into the
 # level's table when it is left. The epoch this scene was made in, so that one
@@ -431,6 +432,9 @@ func _process(dt: float) -> void:
 			if not give_step(give, p & KFPad.binding[KFPad.USE] if not KFPad.binding.is_empty() else 0, p != 0):
 				_give_done()
 		_draw()
+		return
+	if not gifts.is_empty() and not KFGame.modal:
+		_gift(int(gifts.pop_front()))
 		return
 	if KFPad.hit(KFPad.USE) and not KFGame.modal:
 		_interact(0)
@@ -959,8 +963,7 @@ func _talk_next() -> void:
 	var lv: int = player._level()
 	var doc = get_node_or_null("../UI/Document")
 	while true:
-		var entry := KFTalk.advance(talking,
-			func(x: int) -> void: KFTalk.hook(lv, x, player.inventory))
+		var entry := KFTalk.advance(talking, func(x: int) -> void: _hook(lv, x))
 		if entry < 0:
 			break
 		if doc != null and doc.open_path("res://talk/%d.png" % entry):
@@ -983,6 +986,119 @@ func _talk_next() -> void:
 	player.clear_movement()
 	if talk_walks:
 		_interact(0, true)
+
+
+# What 0xf4 calls, the level's own entry 4 (KFTalk.hook), for the call in
+# hand: the world as the arm reads it, out of the port, and what it did,
+# back -- the flags and the pack in place, the creatures' categories and
+# floors into actors.gd, the locks and states into what keeps them, the
+# skills and the spells into the character -- and its calls acted out:
+# stamp_rect into the cells (doors.gd), the equipment, the stats, a banner,
+# and a thing given (object_give) once the call is over, where the game runs
+# its frames inside the call. Not acted: the light's frames (0x8005d948,
+# 0x8003da10), the pack's chooser (the port answers nothing chosen),
+# sound_key_fits, an object switched off or on by +0 (the port draws the
+# static objects as one mesh); the play clock, which the port does not keep,
+# is 0.
+# @port engine -- the world handed to KFTalk.hook and its calls acted out
+func _hook(lv: int, a: int) -> void:
+	KFTalk.load_level(lv)                  # the story flags, sized
+	var ch: Dictionary = player.character
+	var objs := views()
+	var before := []
+	for o in objs:
+		before.append(null if o == null else (o as Dictionary).duplicate())
+	var an := get_node_or_null("../Actors")
+	var list: Array = an.get("actors") if an != null and an.get("actors") != null else []
+	var cats := []
+	var floors := []
+	for k in 200:
+		var c = list[k] if k < list.size() else null
+		cats.append(0xFF if c == null else int(c["cat"]))
+		floors.append(0 if c == null else int(c.get("floor", 0)))
+	var w := {"flags": KFTalk.flags, "inv": player.inventory, "cats": cats.duplicate(),
+		"floors": floors.duplicate(), "objects": objs, "skills": ch.get("grow", [0, 0, 0, 0, 0]),
+		"spells": ch.get("spells", []), "answer": 0, "weapon": int(player.weapon_id),
+		"minutes": 0, "exp": int(ch.get("exp", 0)), "chosen": -1, "buttons": 0, "bind_use": 0}
+	var calls := KFTalk.hook(lv, a, w)
+	for k in list.size():
+		if list[k] == null:
+			continue
+		if int(w["cats"][k]) != int(cats[k]):
+			list[k]["cat"] = int(w["cats"][k])
+		if int(w["floors"][k]) != int(floors[k]):
+			list[k]["floor"] = int(w["floors"][k])
+	for k in objs.size():
+		var o = objs[k]
+		if o == null or before[k] == null:
+			continue
+		for f in ["lock", "state", "b39"]:
+			if int(o[f]) != int(before[k][f]):
+				_write_view(k, o)
+				break
+	var recalc := false
+	for call in calls:
+		match str(call[0]):
+			"give":
+				gifts.append(int(call[1]))
+			"stamp":
+				var dn := get_node_or_null("../Doors")
+				if dn:
+					dn.stamp_rect(int(call[1]), int(call[2]), int(call[3]), int(call[4]),
+						int(call[5]), int(call[6]), int(call[7]), int(call[8]), int(call[9]))
+			"equip_weapon":
+				player.equip_weapon(int(call[1]))
+			"equip_armour":
+				player.equip_armour(int(call[1]), int(call[2]))
+			"recalc":
+				recalc = true
+			"announce":
+				KFMessages.announce(int(call[1]))
+	if recalc:
+		player.recalc_stats()
+	KFInfo.note("talk: level %d's entry 4, arm %d: %s" % [lv, a, str(calls)])
+
+
+# object_give(0, t) (0x8005db30) for a level's gift: a new object of type t
+# in the gold ring -- find_free_slot(0x15e, 10, drop_count_gold) --  +0 2,
+# opcode 0xff, +0x38 0xff, its angles 0, at the player's place 0x400 up and
+# 0x400 out along the view's yaw less 0xc00 (here the facing); then the
+# flight to the eye as any thing's (_give), and the thing left lying where it
+# was made if it is put back.
+# @orig game:0x8005db30 object_give  status:partial -- the new object's set-up (a0 0); the model is the type's drop template when the level has one; the view's yaw (0x801aec5e) taken as the facing
+func _gift(t: int) -> void:
+	var made := free_slot(0x15E, int(counters[0x15E]))
+	if made < 0:
+		return
+	counters[0x15E] = (int(counters[0x15E]) + 1) & 0xFFFF
+	if rows.has(made):
+		var old = rows[made].get("node")
+		if old:
+			(old as Node).queue_free()
+		slots.erase(made)
+	var c: KFCollision = player.coll
+	var yaw := (int(player.facing) - 0xC00) & 0xFFF
+	var tr: Dictionary = templates[t]["row"] if templates.has(t) else {}
+	var r := {"slot": made, "cls": 0x40, "type": t, "kind": int(tr.get("kind", 0)),
+		"count": int(counters[0x15E]), "reach": int(tr.get("reach", 0)), "top": int(tr.get("top", 0)),
+		"c": int(tr.get("c", 0)), "e": int(tr.get("e", 0)), "lock": FREE, "b0": 2, "b1": 0x80,
+		"inside": 0, "op": 0xFF, "state": 0, "vel": 0, "rest": 0, "angles": [0, 0, 0],
+		"skin": {}, "model": 0,
+		"pos": Vector3i(player.gx + ((c.game_cos(yaw) << 10) >> 12), player.gy - 0x400,
+			player.gz + ((c.game_sin(yaw) << 10) >> 12))}
+	r["node"] = null
+	if templates.has(t) and templates[t]["node"]:
+		var tn: Node3D = templates[t]["node"]
+		var nd := tn.duplicate() as Node3D
+		nd.name = "k%03d" % made
+		tn.get_parent().add_child(nd)
+		r["node"] = nd
+	rows[made] = r
+	slots.append(made)
+	slots.sort()
+	KFInfo.note("gift: type %d made in slot %d" % [t, made])
+	if not _give(r, -2):
+		KFInfo.note("gift: type %d not given" % t)
 
 
 # use_item (0x8005cbe0) for the thing `id` (godot/useitem.gd): the world
@@ -1582,7 +1698,7 @@ func _give_done() -> void:
 	player.view_pitch = -1
 	player._view()
 	player.clear_movement()
-	if not taken:
+	if not taken and resume >= 0:         # a level's gift resumes nothing
 		_interact(resume, true)
 
 

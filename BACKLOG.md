@@ -587,12 +587,19 @@ Eating heals. Left, roughly in order:
   which then talks, and level 2's opens its gate through `object_signal`),
   but for what opcodes `0x53` and `0xa7` then do with level 5's objects and
   level 7's pedestal -- and give_item's and take_item's entries 6 and 11.
-  **Level 2's own conversation hook (entry 4) is not in the port**
-  (`talk.gd hook` has level 0's arms alone), so there the caretaker never
-  names the thing it wants and nothing reaches its entry 2 in play; nor the
-  levels' entry 5, which `level_load` runs as each level comes in and which
-  puts back what a give changed (level 1's eight categories and door 71's
-  lock by flag `0xa`, level 0's three men by flag `0x1e`).
+  Every level's conversation hook (entry 4, 45 arms) is in (FORMATS.md,
+  "What a conversation makes happen", 2400 of 2400 runs of the overlays'
+  own), but for what the port does not act out: the light's frames
+  (`0x8005d948`, `0x8003da10`) of levels 6, 8 and 17, level 3's pack chooser
+  (`0x80021d94`, `ui_panel` mode `0xc`; the port answers nothing chosen),
+  level 0's play clock (not kept by the port), objects switched by `+0` or
+  their scale (level 5's opcode-`0x56` ones and level 17's 63, drawn in the
+  level's one mesh), the tile a `stamp_rect` copies, and object_give's frames
+  inside the conversation's call (the port flies the thing after it). Not in
+  the port either: the levels' entry 5, which `level_load` runs as each level
+  comes in and which puts back what a give changed (level 1's eight
+  categories and door 71's lock by flag `0xa`, level 0's three men by flag
+  `0x1e`).
   What Orladin's key opens is in (FORMATS.md, "What Orladin's key opens"):
   the seals (opcode `0x17`) and what they lift (`0x10`), the pedestals
   (`0x1a`) and the key's own object in the gold ring, held to the game's own

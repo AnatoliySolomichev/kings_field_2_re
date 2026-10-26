@@ -925,10 +925,13 @@ def loot_slots(load):
 def droppable(lv, load):
     """The types a creature on level `lv` can leave when it dies: the gold
     (0x95), what each category-1 creature was placed with (its +0xb), and the
-    thing each kind's dying behaviour names at its +0xc (tools/ai.py drops)."""
+    thing each kind's dying behaviour names at its +0xc (tools/ai.py drops);
+    and what the level's own entry 4 gives (tools/hooks.py GIVES), whose
+    object_give makes it the same way."""
     import actors as act
     import ai
-    out = {0x95}
+    import hooks
+    out = {0x95} | set(hooks.GIVES.get(lv, ()))
     for a in act.table(lv):
         if a and a["cat"] == 1 and a["b6"] != 0xFF:
             out.add(a["b6"])
@@ -1830,6 +1833,11 @@ def project(lv, out="out/godot", start=(57, 4)):
         useitem.export(out, lv)
     except Exception as e:                       # no snapshot, no use_item cases
         print(f"use_item cases skipped: {e}")
+    try:
+        import hooks
+        hooks.export(out)
+    except Exception as e:                       # no snapshot, no hook cases
+        print(f"conversation hook cases skipped: {e}")
     print(f"godot project in {out}/ — player starts in cell ({cx},{cz})")
 
 
@@ -1873,7 +1881,7 @@ def verify(out="out/godot"):
         if line.startswith(("loaded:", "movement:", "steps:", "creature steps:",
                             "fences:",
                             "creature run:",
-                            "levels:", "use_item:", "warp_to:", "angles:",
+                            "levels:", "use_item:", "warp_to:", "conversation hooks:", "angles:",
                             "scripts:", "damage:", "equipment:", "player_recalc_stats:", "knock-back:", "weapon:", "animation:", "effects:", "lift doors:", "chests:", "seals:", "fades:", "carry-over:", "inscriptions:", "conversations:", "menus:", "routines:", "saves:", "level states:", "the run:", "player_take_hit:", "the status:", "casting:", "the attacking arms:", "creature hits:", "creature strikes:", "creature holds:", "FAIL", "  first",
                             "  level case", "  angle (", "  script level",
                             "  hit ")):

@@ -3513,9 +3513,8 @@ anything: **280 of 280** runs, all 396 records (4094 of them changed). The
 port's `useitem.gd level_use` holds to the model in the self-test (624 of
 624). What follows the record's change is not all in the port: level 7's
 pedestal is opcode `0xa7` and level 5's objects opcode `0x53`, neither of
-which the port runs; level 2's own entry 4 -- which names the next thing --
-is not in the port's conversations either (`talk.gd hook` has level 0's
-alone), so there the caretaker never asks.
+which the port runs. Level 2's own entry 4, which names the next thing, is
+in the port's conversations now (below, "What a conversation makes happen").
 
 **In the port**: `useitem.gd level_use` hands the herb and the four things
 over -- `spot_taken` over the awake creatures `loot.gd _awake` lists (with
@@ -3524,6 +3523,73 @@ view (`+0x3f` now among them, `tools/level3d.py find_rows`) -- and `loot.gd
 use_item` writes the categories back into `actors.gd` and starts the
 creature's conversation (`_talk`, one call, which does not go on to walk the
 objects as object_interact's does).
+
+### What a conversation makes happen: entry 4, run
+
+`0xf4 a` calls the level's own **entry 4** (`level_hooks + 0x10`) with the
+creature and `a` (`script_interpreter+0x1b8`; section 9, "A quest, end to
+end", and `tools/quest.py` say which conversation asks which arm). Fifteen
+levels have one, 45 arms between them, read off the overlays whole
+(`tools/hooks.py` has the table):
+
+* **story flags** -- most arms set one, some only once (`if flags[k] == 0`),
+  and some ask the pack first: level 0's arm 0 is `flags[3]` = the three
+  pieces of Ichrius and the sword held, arm 1 trades them (the four taken,
+  `use_answer`, and `equip_weapon(0xff)` if the sword is in hand), arm 5 the
+  pieces alone; level 3's `0x7c`, level 4's `0x84`.
+* **`object_give(0, t)`** -- a thing handed over, made in the gold ring in
+  front of the player and flown to the eye as a chest's: levels 1 (`0x74`,
+  `0x72`), 2 (`0x56`, `0x52`), 3 (the thing `flags[0x72]` names), 4 (`0x7b`,
+  `0x5f`), 5 (Ichrius' eye `0x82` for varde's key, `0x60`, `0x66`), 6
+  (`0x80`, `0x83`, `0xa`), 10 (`0x90`) and 17 -- Orladin's five pieces of
+  armour (`0x29`, `0x31`, `0x46`, `0x4f`, `0x3c`), each put on as it is given
+  (`equip_armour` in slots 0..4).
+* **the creatures' categories** -- level 0's arm 2 (slot 1 held, slot 2 up),
+  4's slot 8, 8's slot 1, 17's slot 56 (and its `+3` 0).
+* **the world** -- level 1's arm 0 `stamp_rect(2, 0x4e, 0, 0x1b, 0x11, 1, 7,
+  0, 0x2f)`, a strip of seven cells at (27, 17) from the block at (78, 0);
+  level 5's arm 0 switches off every object of opcode `0x56` (type 301,
+  seventeen of them: scale 0, `+0x38` 0, `+0` 0, opcode `0xff`); level 17's
+  arm 0 sets object 63's `+0` to 2 and `+0x3f` to `0xff`; level 26's
+  `object_signal(0xf2)` and the key's sound.
+* **the spells** -- level 6's arm 4 (the lesson in Varde's wood) unlocks
+  `0x38`, `0x3a`, `0x3c`, `0x3e`, `0x40` and `0x4c` and sets flag 39, level
+  8's arm 0 `0x36`, `0x37` and `0x42..0x4b` and flag 45 -- which
+  `equip_weapon` unlocks again from the flags; both run the light's frames
+  first (`0x8005d948(0x200, ...)`, a colour moved over frames of the game,
+  and back). Level 17's arm 1 adds `0x1e` to skill 4, with no bound, and
+  `skill_unlock(4)`.
+* **level 0's clock** -- arm 2 keeps the play clock's minute
+  (`play_minutes % 60`) in `flags[4]` and `(player_exp % 10000) / 100` in
+  `flags[5]`; arm 4 sets `flags[6]` once either has moved out of the ten
+  above it.
+* **level 3's chooser** -- arm 1 is a frame without the panel and the pack's
+  chooser (`0x80021d94`, `ui_panel` mode `0xc`): nothing chosen,
+  `flags[0x72]` `0x68`; else the thing chosen, which arm 2 then gives.
+
+**Checked against the game's own.** `tools/hooks.py --check` runs every
+level's entry 4 out of its overlay with `tools/mipsrun.py` over the level as
+its own loader leaves it, every arm and one past, the flags, the pack, the
+categories, the skills, the spells, the clock, the experience, the weapon
+and the chooser's answer at random, and `object_give`, `stamp_rect`, the
+equipment, the light, `0x8003da10`, `render_frame_bare`, the chooser,
+`sound_key_fits`, the stats, `announce` and take_item's entry 11 logged:
+**2400 of 2400** runs give the model's calls in order, its flags, pack,
+categories, the creatures' `+3`, skills, spells, answer and buttons, and all
+396 object records byte for byte (`has_item`, `take_item`, `skill_unlock`
+and `object_signal` run as the game's).
+
+**In the port**: `talk.gd hook` is every arm, over a world `loot.gd _hook`
+hands it -- the self-test holds it to the model, 360 of 360 -- and `_hook`
+acts its calls out: `stamp_rect` into the collision cells (`doors.gd
+stamp_rect`, which keeps the height, the rotation, the shape and the fence,
+not the tile), the equipment, the stats, the banners, the categories, and
+each thing given made in the gold ring (`_gift`) and flown to the eye once
+the conversation's call is over -- the game runs object_give's frames inside
+the call, between its lines. Not in the port: the light's frames, the
+chooser (the port answers nothing chosen), level 0's clock (the port keeps
+none: 0), and an object switched off or on by its `+0` or scale (level 5's
+seventeen and level 17's 63 are in the level's one mesh).
 
 ### Status/records, and running the game's own code
 

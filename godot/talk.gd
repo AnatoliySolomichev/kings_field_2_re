@@ -25,6 +25,8 @@ class_name KFTalk
 # @exe game
 
 const NO_SERVICE := 0xFF
+const SPELLS_6 := [0x38, 0x3A, 0x3C, 0x3E, 0x40, 0x4C]   # level 6's lesson unlocks these
+const SPELLS_8 := [0x36, 0x37, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B]   # and level 8's these
 const LINE_OPS := [0xF1, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE]
 const FLAG_COUNT := 0x100
 
@@ -195,21 +197,205 @@ static func night(level: int, scene: int, hp: int, hp_max: int, mp: int, mp_max:
 
 
 # What 0xf4 calls: the level's own entry 4 (level_hooks + 0x10), which lives
-# in the level's overlay. Level 0's arms 0, 1 and 5, as tools/quest.py reads
-# them -- whether the player holds the three pieces of Ichrius (130, 131, 132)
-# and the sword (2), and the trade.
-# @orig game:0x8005c4c0 script_interpreter+0x1b8  status:partial -- 0xf4's call into the level's entry 4; level 0's overlay arms 0, 1 and 5 written out here (tools/quest.py); arms 2 and 4 read the play clock (0x801b2588, 0x801b24e4) and are not, nor arm 1's unequipping
-static func hook(level: int, a: int, inv: KFItems) -> void:
-	if level != 0 or inv == null:
-		return
-	var pieces := inv.has_item(130) and inv.has_item(131) and inv.has_item(132)
-	match a:
+# in the level's overlay -- every level's arms, as tools/hooks.py reads them
+# and holds them to the overlays' own code. `w` is the world as the arm reads
+# it -- flags (story_flags), inv (KFItems), cats and floors (the creatures'
+# +0 and +3), objects (the views use_item takes, by slot), skills, spells,
+# answer, weapon (equipped_weapon), minutes (play_minutes), exp (player_exp),
+# chosen (the pack chooser's answer), buttons and bind_use -- and changes as
+# RAM would; the calls are what the arm makes beyond what it runs, for the
+# caller to act out: ["give", type] (object_give), ["stamp", b0, sx, sz, dx,
+# dz, w, h, angle, mask] (stamp_rect), ["equip_weapon", id], ["equip_armour",
+# id, slot], ["light", ...] (0x8005d948), ["da10", ...], ["bare"]
+# (render_frame_bare), ["choose"] (0x80021d94), ["sound_key_fits"],
+# ["recalc"], ["announce", code], ["hook", "take"].
+# @orig game:0x8005c4c0 script_interpreter+0x1b8  status:verified -- 0xf4's call into the level's entry 4; the fifteen levels' 45 arms out of their overlays, written out here as tools/hooks.py, which the overlays' own code holds (2400 of 2400 runs), the self-test this to it
+static func hook(level: int, a: int, w: Dictionary) -> Array:
+	var calls := []
+	var f: Array = w["flags"]
+	var inv: KFItems = w["inv"]
+	var exp32 := int(w["exp"]) & 0xFFFFFFFF          # player_exp, a signed word
+	if exp32 >= 0x80000000:
+		exp32 -= 0x100000000
+	match level:
 		0:
-			flags[3] = 1 if pieces and inv.has_item(2) else 0
+			var pieces := inv.has_item(0x82) and inv.has_item(0x83) and inv.has_item(0x84)
+			match a:
+				0:
+					f[3] = 1 if pieces and inv.has_item(2) else 0
+				1:
+					if pieces and inv.has_item(2):
+						f[1] = 1
+						w["answer"] = 1
+						for id in [0x82, 0x83, 0x84, 2]:
+							_take(inv, id, calls)
+						if int(w["weapon"]) == 2:
+							calls.append(["equip_weapon", 0xFF])
+				2:
+					w["cats"][1] = 8
+					w["cats"][2] = 1
+					f[2] = 1
+					f[4] = posmod(int(w["minutes"]), 60) & 0xFF
+					f[5] = (exp32 % 10000) / 100 & 0xFF
+				4:
+					var mins := posmod(int(w["minutes"]), 60)
+					if mins < int(f[4]) or mins >= int(f[4]) + 10:
+						f[6] = 1
+					var e := (exp32 % 10000) / 100
+					if e < int(f[5]) or e >= int(f[5]) + 10:
+						f[6] = 1
+				5:
+					f[1] = 1 if pieces else 0
 		1:
-			if pieces and inv.has_item(2):
-				flags[1] = 1
-				for id in [130, 131, 132, 2]:
-					inv.take_item(id)
+			match a:
+				0:
+					if int(f[0xD]) == 0:
+						f[0xD] = 1
+						calls.append(["stamp", 2, 0x4E, 0, 0x1B, 0x11, 1, 7, 0, 0x2F])
+				1:
+					calls.append(["give", 0x74])
+				2:
+					calls.append(["give", 0x72])
+		2:
+			if a >= 0 and a < 4:
+				f[0x10] = [0x68, 0x6C, 0x6D, 0x6B][a]
+			elif a == 4:
+				calls.append(["give", 0x56])
+			elif a == 5:
+				calls.append(["give", 0x52])
+		3:
+			match a:
+				0:
+					f[0x77] = 1 if inv.has_item(0x7C) else 0
+				1:
+					calls.append(["bare"])
+					calls.append(["choose"])
+					var got := int(w["chosen"])
+					w["buttons"] = ~int(w["bind_use"]) & 0xFFFF
+					if got < 0:
+						f[0x74] = 0
+						f[0x72] = 0x68
+					else:
+						f[0x75] = 0
+						f[0x74] = 1
+						f[0x72] = got & 0xFF
+				2:
+					calls.append(["give", int(f[0x72])])
+		4:
+			match a:
+				0, 1:
+					var k := 0x17 if a == 0 else 0x18
+					if int(f[k]) != 1:
+						f[k] = 1
+						calls.append(["give", 0x7B if a == 0 else 0x5F])
+				2:
+					if inv.has_item(0x84):
+						f[0x1A] = 1
+				3:
+					w["cats"][8] = 8
+				4:
+					f[0x16] = 1
 		5:
-			flags[1] = 1 if pieces else 0
+			match a:
+				0:
+					for o in w["objects"]:
+						if o != null and int(o["op"]) == 0x56:
+							o["scale"] = 0
+							o["lock"] = 0
+							o["b0"] = 0
+							o["op"] = 0xFF
+					if inv.has_item(0x66):
+						_take(inv, 0x66, calls)
+					calls.append(["give", 0x82])
+					f[0x1E] = 1
+				1:
+					if int(f[0x1D]) == 0:
+						calls.append(["give", 0x60])
+						f[0x1D] = 1
+				2:
+					calls.append(["give", 0x66])
+		6:
+			match a:
+				0:
+					f[0x22] = 1
+				1:
+					calls.append(["give", 0x80])
+				2:
+					f[0x21] = 1
+				3:
+					calls.append(["give", 0x83])
+					f[0x24] = 1
+				4:
+					calls.append(["light", 0x200, 0, 0, 0, 0x80, 0xC8, 0x80])
+					calls.append(["light", 0x200, 0x80, 0xC8, 0x80, 0, 0, 0])
+					calls.append(["da10", 0, 0, 0, 0, 1])
+					f[0x27] = 1
+					for s in SPELLS_6:
+						w["spells"][s] = 1
+				5:
+					calls.append(["give", 0xA])
+		7:
+			if a == 0:
+				f[0x2A] = 1
+		8:
+			match a:
+				0:
+					calls.append(["light", 0x200, 0, 0, 0, 0x80, 0xC8, 0x80])
+					calls.append(["light", 0x200, 0x80, 0xC8, 0x80, 0, 0, 0])
+					f[0x2D] = 1
+					for s in SPELLS_8:
+						w["spells"][s] = 1
+				1:
+					f[0x2E] = 1
+					w["cats"][1] = 8
+		9:
+			if a == 0 or a == 1:
+				f[0x33 + a] = 1
+		10:
+			if a == 0:
+				calls.append(["give", 0x90])
+			elif a == 1 and int(f[0x39]) == 0:
+				f[0x39] = 1
+		13:
+			if a == 0 and int(f[0x42]) == 0:
+				f[0x42] = 1
+				f[0x43] = 0
+		17:
+			if a == 0 and int(f[0x52]) != 1:
+				f[0x52] = 1
+				var things := [0x29, 0x31, 0x46, 0x4F, 0x3C]
+				for slot in things.size():
+					calls.append(["give", things[slot]])
+					calls.append(["equip_armour", things[slot], slot])
+				var o = w["objects"][63]
+				if o != null:
+					o["b0"] = 2
+					o["b3f"] = 0xFF
+			elif a == 1 and int(f[0x53]) == 1:
+				f[0x53] = 2
+				calls.append(["light", 0x200, 0, 0, 0, 0xC8, 0xC8, 0xC8])
+				calls.append(["light", 0x200, 0xC8, 0xC8, 0xC8, 0, 0, 0])
+				w["skills"][4] = (int(w["skills"][4]) + 0x1E) & 0xFFFF
+				var st := {"grow": w["skills"], "spells": w["spells"]}
+				for b in KFLevels.skill_unlock(st, 4, f):     # run: each spell it unlocks says so and answers
+					calls.append(["announce", int(b)])
+					w["answer"] = 1
+				calls.append(["recalc"])
+				w["cats"][56] = 8
+				w["floors"][56] = 0
+		22:
+			if a == 0 or a == 1:
+				f[0x5B + a] = 1
+		26:
+			if a == 0 and int(f[0x60]) == 0:
+				f[0x60] = 1
+				KFUseItem.object_signal(w, 0xF2)
+				calls.append(["sound_key_fits"])
+	return calls
+
+
+# take_item on the pack, and the level's entry 11 when one was taken.
+# @port helper -- KFItems.take_item, which is the game's, and the hook it calls logged
+static func _take(inv: KFItems, item: int, calls: Array) -> void:
+	if inv.take_item(item):
+		calls.append(["hook", "take"])

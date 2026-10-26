@@ -447,6 +447,21 @@ listens and the fields it asks the id, its neighbour or anything: **280 of
 logged -- **280 of 280** runs give the model's calls and 21 fields; the port's
 `warp_plan` gives the model's plan on **55 of 55**.
 
+**`hooks.py`** — what a conversation's `0xf4` runs: every level's entry 4,
+45 arms on fifteen levels (FORMATS.md, "What a conversation makes happen").
+
+```
+python3 tools/hooks.py --check       the model against the overlays' own entry 4
+python3 tools/hooks.py --export D    hookcheck.json into D, for the self-test
+```
+
+`--check` runs each level's entry 4 out of its overlay over the level as its
+loader leaves it, every arm and one past, the flags, pack, categories,
+skills, spells, clock, experience, weapon and the chooser's answer at
+random, what it calls beyond what it runs logged: **2400 of 2400** runs give
+the model's calls, fields and all 396 object records. `godot/talk.gd hook`
+reproduces the model on **360 of 360** of its runs (`hookcheck.json`).
+
 **`seals.py`** — what Orladin's key opens: the seals (opcode `0x17`), the
 thing they hand opcode `0x10`, and Orladin's pedestals (`0x1a`), FORMATS.md
 "What Orladin's key opens".

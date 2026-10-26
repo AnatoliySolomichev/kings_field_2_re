@@ -337,6 +337,10 @@ every level (tools/useitem.py)                         answer, pack, figures,
                                                        things handed to levels
                                                        1's and 2's creatures;
                                                        object_signal 280 of 280
+what a conversation's 0xf4 runs, against every        2400 of 2400 runs: calls,
+level's own entry 4 (tools/hooks.py)                   flags, pack, categories,
+                                                       skills, spells and 396
+                                                       object records; 45 arms
 the warp, against the game's own warp_to               280 of 280 runs, every
                                                        record, calls and fields
 what a change of level writes of the player, off       4 stores in 114 routines:
@@ -399,7 +403,7 @@ effects 1494 of 1494 runs, 27656 of 27656 frames · aims 300 of 300 · volleys 2
 the run 150129 of 150129 frames
 player_take_hit 300 of 300 · the status 40 of 40 runs, 6312 of 6312 frames
 casting 1200 of 1200 · the attacking arms 240 of 240 · creature hits 400 of 400
-use_item 624 of 624 · warp_to 55 of 55 · seals 975 of 975 · fades 117 of 117
+use_item 624 of 624 · conversation hooks 360 of 360 · warp_to 55 of 55 · seals 975 of 975 · fades 117 of 117
 carry-over 60 of 60 fields and the place
 ```
 

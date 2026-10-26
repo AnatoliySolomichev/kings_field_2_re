@@ -204,6 +204,9 @@ def main(quick=False, only_check=False):
         "a thing used and the warp, against the game's own use_item and warp_to",
         ["use_item, against", "  level ", "object_signal, against", "the warp, against",
          "  record "]))
+    steps.append((["tools/hooks.py", "--check"],
+        "what a conversation's 0xf4 runs, against every level's own entry 4",
+        ["entry 4, against", ": model "]))
     steps.append((["tools/seals.py", "--check"],
         "what Orladin's key opens, against the game's own arms",
         ["the seals", "Orladin's pedestals"]))
