@@ -3332,5 +3332,10 @@
   "kind": "code",
   "name": "prim_ft4_rect",
   "evidence": "(x0, y0, x1, y1, u, v, w, h, semi, tpage, clut, r, g, b, depth): one POLY_FT4 out of current_draw_slot over the rectangle, the UVs u..u+w and v..v+h, code 0x2c, or 0x2e unless semi is 0xff, filed at ot_pointer + 4 * depth for a depth in 1..0x1fff (counted at 0x801aeb14). screen_fade_draw's quad is one (tools/fade.py, 840 of 840); overlay_plane_17..19 and 0x8003d64c, 0x8003d79c call it too"
+ },
+ "0x800463bc": {
+  "name": "object_signal",
+  "kind": "code",
+  "evidence": "(id) -> hands an id to all 396 objects by their opcode (+4): a door's (0..5, 0x1b) lock +0x38 -- an id in 0x96..0xc6 turns over the lock that is it with bit 0 off, else the lock that is it 0xc8 and up becomes 0xff and below that the door's +8 goes 0 -> 1, lifted too from 0x64; 0x51's +0x3d and 0x52/0x55/0x5a's +0x3f turn +0x38 between 0 and 0xff; 0x54/0xa2/0xa3's +0x38 lifted; 0x56's +0x3a turns +0x39; 0x58's +0x39 and 0x59's and 0x5f's +0x38 start the object (+8 1). Level 2's entry 2 hands it 0x9a once a thing is given (gate 44's lock), opcode 0xe1's trigger and level 26's entry 5 call it. tools/useitem.py signal_check: 280 of 280 runs of the game's own, all 396 records"
  }
 }

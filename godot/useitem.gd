@@ -24,13 +24,16 @@ class_name KFUseItem
 #   objects                          396 slots: null, or the record's fields
 #                                    (OBJECT_FIELDS, the lock +0x38 as "lock")
 #   creatures                        the awake ones: [slot, +0xe, +0x28, x, y,
-#                                    z, model (+1), floor (+3)]
+#                                    z, model (+1), floor (+3), radius (+0x1c),
+#                                    height (+0x1e), leader (+0x22), lift (+0x26)]
+#   cats                             the 200 creatures' categories (+0)
+#   skip_mask, cur_index             actor_skip_mask, current_actor_index
 #
 # run() returns the calls it makes beyond what it runs, in order, for the
 # caller to act out: ["announce", code], ["load_entry", 6, entry],
 # ["sound_key_fits"], ["recalc"], ["put_key", slot, item], ["hook", "use" |
 # "give" | "take"] (the level's entries 2, 6 and 11), ["warp", record],
-# ["clear"].
+# ["talk", slot] (script_interpreter for the creature), ["clear"].
 #
 # @exe game
 
@@ -74,11 +77,22 @@ const FULL := 0xB                             # give_item's own "can't carry"
 const NEW_SPELL := 3
 
 const OBJECT_FIELDS := ["slot", "type", "cls", "b0", "op", "state", "x", "y", "z", "yaw",
-	"height", "reach", "top", "lock", "b39", "h3a", "h3c", "b40", "b3d", "clk"]
-const LEVEL_USE := [5, 7, 20, 23, 25, 27]     # the levels whose entry 2 is read
+	"height", "reach", "top", "lock", "b39", "h3a", "h3c", "b40", "b3d", "b3f", "clk"]
+const LEVEL_USE := [1, 2, 5, 7, 20, 23, 25, 27]   # the levels whose entry 2 is read
 const HAND_KEY := 0x85                        # levels 7's and 23's own keys, for their own pedestals
 const STONE_KEY := 0x86
 const NO_USE := 0x23                          # the banner levels 7, 25 and 27 raise for 0x85
+const BLOOD_HERB := 0x7F                      # level 1's: to the creature in slot 20
+const LEVEL1_ASKED := 0xA                     # story flag 0xa, 0x801ba992: given
+const LEVEL1_TAKER := 20
+const LEVEL1_DOOR := 71                       # the door whose lock 0xc8 the herb lifts
+const LEVEL1_CATS := {22: 8, 39: 1}           # held, and up: the slots the herb moves
+const LEVEL2_WANTED := 0x10                   # story byte 0x801ba998: the thing slot 4 wants
+const LEVEL2_TAKER := 4
+const LEVEL2_STAGE := {0x68: 1, 0x6C: 2, 0x6D: 3, 0x6B: 4}   # the byte after each is given
+const LEVEL2_SIGNAL := 0x9A                   # object_signal's id: gate 44's lock
+const GIVE_R := 0x578                         # actor_spot_taken from the feet: radius,
+const GIVE_OWN := 0x6A4                       # and the point's height
 
 static var warps: Array = []                  # warp_to's fourteen records
 
@@ -95,7 +109,7 @@ static func load_from(path := "res://useitem.json") -> bool:
 
 
 # The routine: the arm, then the level's entry 2 (level_use), the banner, the stop.
-# @orig game:0x8005cbe0 use_item  status:partial -- every arm but block 6's two statues (their scene runs frames of the game until the creature wakes; here the thing goes on as when none is found); tools/useitem.py 2800 of 2800 runs of the game's own over every level, the self-test this to it; the level's own entry 2 is in for levels 5, 7, 20, 23, 25 and 27 (level_use), and logged for the rest, as entries 6 and 11 are
+# @orig game:0x8005cbe0 use_item  status:partial -- every arm but block 6's two statues (their scene runs frames of the game until the creature wakes; here the thing goes on as when none is found); tools/useitem.py 2800 of 2800 runs of the game's own over every level, the self-test this to it; the level's own entry 2 is in for levels 1, 2, 5, 7, 20, 23, 25 and 27 (level_use), and logged for the rest, as entries 6 and 11 are
 # @orig game:0x8005d60c use_item+0xa2c  status:verified -- the eaten things' arm: answered, item_consume has eaten them
 # @orig game:0x8005d748 use_item+0xb68  status:verified -- the tail: the level's entry 2, "Nothing happens", clear_movement_state
 static func run(w: Dictionary, item: int, c: KFCollision) -> Array:
@@ -144,7 +158,14 @@ static func run(w: Dictionary, item: int, c: KFCollision) -> Array:
 #   23  0x86 as 7's 0x85, on a type-0x13f pedestal, no facing asked, and with
 #       nothing found nothing said
 #   25, 27  0x85: answered, banner 0x23
-# @orig game:0x8005d75c use_item+0xb7c  status:verified -- the call of the level's entry 2 (level_hooks + 8); levels 5, 7, 20, 23, 25 and 27's own entries, out of their overlays, written out here as tools/useitem.py level_use, which the overlays' own code holds inside 2800 of 2800 runs of the game's use_item; the other levels' logged
+#   1   0x7f to the creature actor_spot_taken finds from the feet (0x578 by
+#       0x6a4), when it is slot 20 and flag 0xa is 0: taken, the flag 1,
+#       its conversation, door 71's lock 0xc8 to 0xff, slot 22's category
+#       8 and 39's 1, answered
+#   2   0x68, 0x6c, 0x6d or 0x6b while story byte 0x10 names it, to slot 4
+#       the same way: the byte 1, 2, 3 or 4, taken, its conversation,
+#       object_signal(0x9a) -- gate 44's lock turned over -- answered
+# @orig game:0x8005d75c use_item+0xb7c  status:verified -- the call of the level's entry 2 (level_hooks + 8); levels 1, 2, 5, 7, 20, 23, 25 and 27's own entries, out of their overlays, written out here as tools/useitem.py level_use, which the overlays' own code holds inside 2800 of 2800 runs of the game's use_item; the other levels' logged
 static func level_use(w: Dictionary, item: int, c: KFCollision, calls: Array) -> void:
 	var lv := int(w.get("overlay", w["block"]))
 	if not (lv in LEVEL_USE):
@@ -152,7 +173,30 @@ static func level_use(w: Dictionary, item: int, c: KFCollision, calls: Array) ->
 		return
 	var flags: Array = w["flags"]
 	var inv: KFItems = w["inv"]
+	var pos: Array = w["pos"]
 	match lv:
+		1:
+			if item != BLOOD_HERB or int(flags[LEVEL1_ASKED]) != 0 \
+					or spot_taken(w, int(pos[0]), int(pos[1]), int(pos[2]), GIVE_R, GIVE_OWN, c) != LEVEL1_TAKER:
+				return
+			_take(w, item, calls)
+			flags[LEVEL1_ASKED] = 1           # set in the call's delay slot: before it talks
+			calls.append(["talk", LEVEL1_TAKER])
+			var door = w["objects"][LEVEL1_DOOR]
+			if door != null and int(door["lock"]) == 0xC8:
+				door["lock"] = 0xFF
+			for k in LEVEL1_CATS:
+				w["cats"][k] = LEVEL1_CATS[k]
+			w["answer"] = 1
+		2:
+			if not LEVEL2_STAGE.has(item) or int(flags[LEVEL2_WANTED]) != item \
+					or spot_taken(w, int(pos[0]), int(pos[1]), int(pos[2]), GIVE_R, GIVE_OWN, c) != LEVEL2_TAKER:
+				return
+			flags[LEVEL2_WANTED] = LEVEL2_STAGE[item]
+			_take(w, item, calls)
+			calls.append(["talk", LEVEL2_TAKER])
+			object_signal(w, LEVEL2_SIGNAL)
+			w["answer"] = 1
 		25, 27:
 			if item == HAND_KEY:
 				w["answer"] = 1
@@ -490,6 +534,83 @@ static func _silviera(w: Dictionary, item: int, c: KFCollision, calls: Array) ->
 	elif LOOT.key_test(o, "lock", item) == 3:
 		calls.append(["announce", WRONG_KEY])
 		w["answer"] = 1
+
+
+# actor_spot_taken (0x8004d644) over the world's creatures, as the levels'
+# entry 2 asks it: the first awake one (current_actor left out -- the
+# world's list has none of it), not dying (+0xe 3), whose flags share no bit
+# with actor_skip_mask, in range of the point at its radius + r, its height
+# as the top and `own` as the point's; a follower (flag 0x10) +0x26 higher,
+# and skipped when its +0x22 is current_actor_index. The slot, or -1.
+# @orig game:0x8004d644 actor_spot_taken  status:verified -- as the levels' entry 2 asks it from use_item: tools/useitem.py, among 2800 runs of the game's own, the self-test this to it; not the creatures a model's vertex places (flag 0x400000)
+static func spot_taken(w: Dictionary, x: int, y: int, z: int, r: int, own: int, c: KFCollision) -> int:
+	var mask := int(w.get("skip_mask", 4))
+	for a in w["creatures"]:
+		if int(a[1]) == 3 or int(a[2]) & mask:
+			continue
+		var ay := int(a[4])
+		if int(a[2]) & 0x10:
+			if int(a[10]) == int(w.get("cur_index", 200)):
+				continue
+			ay += int(a[11])
+		if c.in_range(int(a[3]), ay, int(a[5]), x, y, z, int(a[8]) + r, int(a[9]), own) >= 0:
+			return int(a[0])
+	return -1
+
+
+# object_signal (0x800463bc): `sig` handed to every object by its opcode --
+# a door's (0..5, 0x1b) lock: an id in 0x96..0xc6 turns over the lock that
+# is it with bit 0 off (odd opens, even shuts); else the lock that is it,
+# 0xc8 and up lifted to 0xff, below that the door started (+8 1 from 0)
+# and from 0x64 lifted too. 0x51's +0x3d and 0x52's, 0x55's and 0x5a's +0x3f
+# turn +0x38 between 0 and 0xff; 0x54's, 0xa2's and 0xa3's +0x38 lifted;
+# 0x56's +0x3a turns +0x39; 0x58's +0x39 starts it and turns +0x38 between 0
+# and 1; 0x59's +0x38 starts it; 0x5f's +0x38 starts it and turns +0x3f. An id
+# of 0xff is none.
+# @orig game:0x800463bc object_signal  status:verified -- tools/useitem.py signal_check, 280 of 280 runs of the game's own over every level, all 396 records; through level 2's entry 2 among 2800 runs of use_item, the self-test this to it
+static func object_signal(w: Dictionary, sig: int) -> void:
+	sig &= 0xFF
+	if sig == 0xFF:
+		return
+	var turned := ((sig + 0x6A) & 0xFF) < 0x31
+	for o in w["objects"]:
+		if o == null:
+			continue
+		var op := int(o["op"])
+		if op <= 5 or op == 0x1B:
+			if turned:
+				if int(o["lock"]) & 0xFE == sig:
+					o["lock"] = int(o["lock"]) ^ 1
+			elif int(o["lock"]) == sig:
+				if sig >= 0xC8:
+					o["lock"] = 0xFF
+				elif int(o["state"]) == 0:
+					o["state"] = 1
+					if sig >= 0x64:
+						o["lock"] = 0xFF
+		elif op == 0x51:
+			if int(o["b3d"]) == sig:
+				o["lock"] = 0xFF if int(o["lock"]) == 0 else 0
+		elif op == 0x52 or op == 0x55 or op == 0x5A:
+			if int(o.get("b3f", 0xFF)) == sig:
+				o["lock"] = 0xFF if int(o["lock"]) == 0 else 0
+		elif op == 0x54 or op == 0xA2 or op == 0xA3:
+			if int(o["lock"]) == sig:
+				o["lock"] = 0xFF
+		elif op == 0x56:
+			if int(o["h3a"]) & 0xFF == sig:
+				o["b39"] = 0xFF if int(o["b39"]) == 0 else 0
+		elif op == 0x58:
+			if int(o["b39"]) == sig:
+				o["state"] = 1
+				o["lock"] = 1 if int(o["lock"]) == 0 else 0
+		elif op == 0x59:
+			if int(o["lock"]) == sig:
+				o["state"] = 1
+		elif op == 0x5F:
+			if int(o["lock"]) == sig:
+				o["state"] = 1
+				o["b3f"] = 1 if int(o.get("b3f", 0xFF)) == 0 else 0
 
 
 # take_item on the pack, and the level's entry 11 when one was taken.

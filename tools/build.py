@@ -202,7 +202,8 @@ def main(quick=False, only_check=False):
               "game's own pedestal arm"]))
     steps.append((["tools/useitem.py", "--check"],
         "a thing used and the warp, against the game's own use_item and warp_to",
-        ["use_item, against", "  level ", "the warp, against", "  record "]))
+        ["use_item, against", "  level ", "object_signal, against", "the warp, against",
+         "  record "]))
     steps.append((["tools/seals.py", "--check"],
         "what Orladin's key opens, against the game's own arms",
         ["the seals", "Orladin's pedestals"]))

@@ -60,6 +60,27 @@ the rest                   nothing of its own
 find_object is always asked from the feet, 0x320 past the type's reach, 0x6a4
 as the point's height, within 0x200 of the facing.
 
+**The level's own entry 2** (`level_use`) is read for levels 1, 2, 5, 7, 20,
+23, 25 and 27. Levels 1 and 2 hand a thing to a creature: `actor_spot_taken`
+from the feet at 0x578 by 0x6a4 must answer their slot --
+
+```
+level 1   the blood herb (0x7f) to slot 20 while story flag 0xa is 0: taken,
+          the flag 1, script_interpreter for the creature (its conversation,
+          one call), door 71's lock (cell (35,43)) 0xc8 lifted to 0xff,
+          slot 22's category 8 -- held, never woken -- and slot 39's 1: two
+          of model 6, at home in (66,52) and in (34,43) by the door
+level 2   the earth herb (0x68), the blood stone (0x6c), the moon stone
+          (0x6d) and the dragon crystal (0x6b), in that order, to slot 4,
+          each while story byte 0x10 (0x801ba998) names it: the byte 1, 2, 3
+          or 4, the thing taken, script_interpreter, and object_signal(0x9a)
+          -- gate 44's lock (cell (9,40)) 0x9a turned to 0x9b, which opens
+          it, and back; the conversation's own hook (entry 4) names the next
+```
+
+**`object_signal(id)`** (0x800463bc) hands an id to every object by its
+opcode (`object_signal` below); `signal_check` holds it to the game's own.
+
 **How it is held to the game.** `check()` runs GAME.EXE's own `use_item` with
 `tools/mipsrun.py` over every level -- the level's objects as its own
 `load_object_placement` leaves them (`mipsrun.level_cpu`), the creatures of the
@@ -71,12 +92,15 @@ sub_8004d3c4, player_in_rect, take_item, give_item, skill_unlock (which
 answers too when it unlocks a spell, 0x80029fb0), find_free_slot and
 init_object_record run; what it calls beyond them is stood in for and logged,
 in order -- announce, load_entry, sound_key_fits, player_recalc_stats,
-pedestal_put_key, clear_movement_state, the level's own entries (by where they
-return to) and warp_to, the warp, whose answer the stand-in gives as the
+pedestal_put_key, clear_movement_state, script_interpreter (the creature it is
+handed), the level's own entries (by where they return to; the entry 2 of the
+levels read here runs out of their overlays, actor_spot_taken and
+object_signal as the game's) and warp_to, the warp, whose answer the stand-in gives as the
 routine does (0x8005c938, 0x8005cb94: none for a record whose level is 0xff,
 else 1 for those below 0xc). The model must give the same log, the same
 answer, the same pack, skills, stat 36, 0x801b2530, 0x801b2578, spells and
-story flags, and the same 396 object records byte for byte: 2800 of 2800. Not run: the thing 0x80 on block 6
+story flags, the creatures' categories (+0 of all 200) and the same 396 object
+records byte for byte: 2800 of 2800. Not run: the thing 0x80 on block 6
 (the statues' scene runs frames of the game, actor_tick_driver and
 render_frame, until the creature wakes).
 """
@@ -110,6 +134,8 @@ OBJECTS, STRIDE, COUNT = 0x80191A5C, 0x44, 0x18C
 TYPES = 0x8018FB3C
 ACTORS, ACTOR_STRIDE, ACTOR_N = 0x80185DA8, 0x88, 200
 CURRENT_ACTOR = 0x8018FAB4
+CUR_INDEX = 0x8018FAC0           # current_actor_index: the pass leaves it at 200
+SKIP_MASK = 0x8018FAA8           # actor_skip_mask: 4 through player_controller
 MASK = 0x1FFFFF
 
 ANNOUNCE = 0x80041EEC
@@ -118,6 +144,7 @@ SOUND_KEY_FITS = 0x8005BD34
 RECALC = 0x80029500
 PUT_KEY = 0x8005C7E8
 CLEAR_MOVEMENT = 0x8002B6F0
+SCRIPT = 0x8005C308              # script_interpreter, a creature's conversation
 WARP = 0x8005C864
 WARP_TABLE = 0x800130F0          # warp_to's records, eight bytes each
 
@@ -180,6 +207,8 @@ def world_of(ram):
          "drops": u16(DROP_COUNT),
          "spells": [u8(SPELL_TABLE + 24 * i) for i in range(96)],
          "flags": list(ram[FLAGS & MASK:(FLAGS & MASK) + 0x100]),
+         "skip_mask": u8(SKIP_MASK), "cur_index": i32(CUR_INDEX),
+         "cats": [u8(ACTORS + ACTOR_STRIDE * k) for k in range(ACTOR_N)],
          "objects": [], "creatures": []}
     for k in range(COUNT):
         r = OBJECTS + STRIDE * k
@@ -191,7 +220,8 @@ def world_of(ram):
             "z": i32(r + 0x1C), "yaw": s16(u16(r + 0x26)), "b38": u8(r + 0x38),
             "b39": u8(r + 0x39), "h3a": u16(r + 0x3A), "h3c": u16(r + 0x3C),
             "b40": u8(r + 0x40), "cls": u8(row), "reach": u16(row + 6),
-            "top": u16(row + 8), "b3d": u8(r + 0x3D), "clk": u16(r + 0xA)})
+            "top": u16(row + 8), "b3d": u8(r + 0x3D), "b3f": u8(r + 0x3F),
+            "clk": u16(r + 0xA)})
     cur = struct.unpack_from("<I", ram, CURRENT_ACTOR & MASK)[0]
     for k in range(ACTOR_N):
         a = ACTORS + ACTOR_STRIDE * k
@@ -200,7 +230,8 @@ def world_of(ram):
         w["creatures"].append({
             "slot": k, "e": u8(a + 0xE), "flags": struct.unpack_from("<I", ram, (a + 0x28) & MASK)[0],
             "x": i32(a + 0x2C), "y": i32(a + 0x30), "z": i32(a + 0x34),
-            "model": u8(a + 1), "floor": u8(a + 3)})
+            "model": u8(a + 1), "floor": u8(a + 3), "radius": u16(a + 0x1C),
+            "height": u16(a + 0x1E), "lead": s16(u16(a + 0x22)), "lift": s16(u16(a + 0x26))})
     return w
 
 
@@ -524,10 +555,96 @@ def use_item(w, item):
     return calls
 
 
-LEVEL_USE = (5, 7, 20, 23, 25, 27)     # the levels whose entry 2 is read here
+LEVEL_USE = (1, 2, 5, 7, 20, 23, 25, 27)   # the levels whose entry 2 is read here
 HAND_KEY = 0x85                        # the levels' own keys on their own pedestals
 STONE_KEY = 0x86
 NO_USE = 0x23                          # the banner levels 7, 25 and 27 raise for 0x85
+BLOOD_HERB = 0x7F                      # what level 1's creature in slot 20 takes
+LEVEL1_ASKED, LEVEL1_TAKER = 0xA, 20   # story flag 0xa (0x801ba992): it has
+LEVEL1_DOOR = 71                       # the door whose lock 0xc8 the herb lifts
+LEVEL1_CATS = {22: 8, 39: 1}           # the two slots the herb moves: held, up
+LEVEL2_WANTED, LEVEL2_TAKER = 0x10, 4  # story byte 0x801ba998: the thing slot 4 wants
+LEVEL2_STAGE = {0x68: 1, 0x6C: 2, 0x6D: 3, 0x6B: 4}   # the byte after each is given
+LEVEL2_SIGNAL = 0x9A                   # object_signal's id: gate 44's lock
+GIVE_R, GIVE_OWN = 0x578, 0x6A4        # actor_spot_taken from the feet: r, own height
+VERTEX_PLACED = 0x400000               # a creature a model's vertex places
+
+
+def spot_taken(w, x, y, z, r, own):
+    """actor_spot_taken (0x8004d644): the slot of the first awake creature
+    (the world's creatures are the +9 == 1 ones less current_actor), not
+    dying (+0xe 3), whose flags share no bit with actor_skip_mask, in
+    in_range of (x, y, z) at its radius + r, its height as the top and `own`
+    as the point's -- a follower (flag 0x10) +0x26 higher, and skipped when
+    its +0x22 is current_actor_index; or -1."""
+    import movement
+    for c in w["creatures"]:
+        if c["e"] == 3 or c["flags"] & w["skip_mask"]:
+            continue
+        cy = c["y"]
+        if c["flags"] & 0x10:
+            if c["lead"] == w["cur_index"]:
+                continue
+            cy += c["lift"]
+        elif c["flags"] & VERTEX_PLACED:
+            raise ValueError("a creature a model's vertex places is not modelled")
+        if movement.in_range((c["x"], cy, c["z"]), x, y, z, c["radius"] + r,
+                             c["height"], own) != -1:
+            return c["slot"]
+    return -1
+
+
+def object_signal(w, sig):
+    """object_signal (0x800463bc): `sig` handed to every object, each by its
+    opcode -- a door's (0..5, 0x1b) lock: for an id in 0x96..0xc6 the lock
+    with bit 0 off is turned over (odd opens, even shuts), else the lock
+    itself, 0xc8 and up lifted (0xff), below it the door started (+8 1 from
+    0) and from 0x64 lifted too; 0x51's +0x3d, 0x52's, 0x55's and 0x5a's
+    +0x3f turn +0x38 between 0 and 0xff; 0x54's, 0xa2's and 0xa3's +0x38
+    lifted; 0x56's +0x3a turns +0x39; 0x58's +0x39 starts it and turns +0x38
+    between 0 and 1; 0x59's +0x38 starts it; 0x5f's +0x38 starts it and turns
+    +0x3f between 0 and 1. 0xff is no id."""
+    sig &= 0xFF
+    if sig == 0xFF:
+        return
+    toggled = ((sig + 0x6A) & 0xFF) < 0x31
+    zero_ff = lambda v: 0xFF if v == 0 else 0      # noqa: E731
+    for o in w["objects"]:
+        op = o["op"]
+        if op <= 5 or op == 0x1B:
+            if toggled:
+                if o["b38"] & 0xFE == sig:
+                    o["b38"] ^= 1
+            elif o["b38"] == sig:
+                if sig >= 0xC8:
+                    o["b38"] = 0xFF
+                elif o["state"] == 0:
+                    o["state"] = 1
+                    if sig >= 0x64:
+                        o["b38"] = 0xFF
+        elif op == 0x51:
+            if o["b3d"] == sig:
+                o["b38"] = zero_ff(o["b38"])
+        elif op in (0x52, 0x55, 0x5A):
+            if o["b3f"] == sig:
+                o["b38"] = zero_ff(o["b38"])
+        elif op in (0x54, 0xA2, 0xA3):
+            if o["b38"] == sig:
+                o["b38"] = 0xFF
+        elif op == 0x56:
+            if o["h3a"] & 0xFF == sig:
+                o["b39"] = zero_ff(o["b39"])
+        elif op == 0x58:
+            if o["b39"] == sig:
+                o["state"] = 1
+                o["b38"] = 1 if o["b38"] == 0 else 0
+        elif op == 0x59:
+            if o["b38"] == sig:
+                o["state"] = 1
+        elif op == 0x5F:
+            if o["b38"] == sig:
+                o["state"] = 1
+                o["b3f"] = 1 if o["b3f"] == 0 else 0
 
 
 def level_use(w, item, calls):
@@ -544,7 +661,32 @@ def level_use(w, item, calls):
 
     def first():
         return find_object(w, 0, 0x320, 0x6A4, 0x200)
-    if lv in (25, 27):
+
+    def given(slot):
+        # actor_spot_taken from the feet: the creature that takes it
+        k = spot_taken(w, w["pos"][0], w["pos"][1], w["pos"][2], GIVE_R, GIVE_OWN)
+        return k != -1 and k == slot
+    if lv == 1:
+        if item != BLOOD_HERB or flags[LEVEL1_ASKED] != 0 or not given(LEVEL1_TAKER):
+            return
+        take_item(w, calls, item)
+        flags[LEVEL1_ASKED] = 1           # in the call's delay slot: before it talks
+        calls.append(("talk", LEVEL1_TAKER))
+        door = w["objects"][LEVEL1_DOOR]
+        if door["b38"] == 0xC8:
+            door["b38"] = 0xFF
+        for k, v in LEVEL1_CATS.items():
+            w["cats"][k] = v
+        answer()
+    elif lv == 2:
+        if item not in LEVEL2_STAGE or flags[LEVEL2_WANTED] != item or not given(LEVEL2_TAKER):
+            return
+        flags[LEVEL2_WANTED] = LEVEL2_STAGE[item]
+        take_item(w, calls, item)
+        calls.append(("talk", LEVEL2_TAKER))
+        object_signal(w, LEVEL2_SIGNAL)
+        answer()
+    elif lv in (25, 27):
         if item == HAND_KEY:
             answer()
             calls.append(("announce", NO_USE))
@@ -623,6 +765,9 @@ def write_back(ram, w):
         ram[r + 0x38] = o["b38"]
         ram[r + 0x39] = o["b39"]
         struct.pack_into("<H", ram, r + 0x3C, o["h3c"])
+        ram[r + 0x3F] = o["b3f"]
+    for k, v in enumerate(w["cats"]):
+        ram[(ACTORS + ACTOR_STRIDE * k) & MASK] = v
 
 
 def game_run(cpu, item):
@@ -650,6 +795,7 @@ def game_run(cpu, item):
         PUT_KEY: lambda c: calls.append(("put_key", (c.r[4] - OBJECTS) // STRIDE, c.r[5])),
         CLEAR_MOVEMENT: lambda c: calls.append(("clear",)),
         WARP: warp,
+        SCRIPT: lambda c: calls.append(("talk", (c.r[4] - ACTORS) // ACTOR_STRIDE)),
     }
     for n in (2, 6, 11):
         if n == 2 and getattr(cpu, "level", None) in LEVEL_USE:
@@ -694,7 +840,8 @@ def _targets(w, lv=None):
 
 ARMS = ([TRUTH_GLASS, FLASK, VERDITE, POWER_FRUIT, WISE_FRUIT, STATUE_THING, ORLADIN_KEY,
          SILVIERA_KEY] + list(CRYSTALS) + list(EATEN) + list(ICHRIUS) + list(KEYS)
-        + [0x66, 0x79, 0x7B, 0x8F, 0x95, 0x97, 0xA1, 0x20, 0xA2, HAND_KEY, STONE_KEY, 0x7E])
+        + [0x66, 0x79, 0x7B, 0x8F, 0x95, 0x97, 0xA1, 0x20, 0xA2, HAND_KEY, STONE_KEY, 0x7E,
+           0x7F])
 
 
 def cases(lv, n, rng, snap="a1"):
@@ -711,6 +858,10 @@ def cases(lv, n, rng, snap="a1"):
         kinds += ["rect 20"] * 2
     if lv in (25, 27):
         kinds += ["the level's thing"]
+    if lv in (1, 2):
+        import actors
+        homes = actors.table(lv)
+        kinds += ["the taker"] * 24
     kinds += [k for k in ("own pedestal", "0x53") if k in targets] * 2
     for _ in range(n):
         cpu = mipsrun.CPU(ram0)
@@ -757,6 +908,37 @@ def cases(lv, n, rng, snap="a1"):
             item = HAND_KEY
             x, y, z = w0["pos"]
             fac = rng.randrange(0x1000)
+        elif kind == "the taker":
+            # the creature the level hands its thing to, up beside the player
+            # -- and now and then another slot up on the same spot
+            slot = LEVEL1_TAKER if lv == 1 else LEVEL2_TAKER
+            if lv == 1:
+                item = BLOOD_HERB if rng.random() < 0.8 else rng.choice(ARMS)
+            else:
+                item = rng.choice(list(LEVEL2_STAGE)) if rng.random() < 0.85 else rng.choice(ARMS)
+            h = homes[slot]
+            cx, cy, cz = h["x"], h["y"], h["z"]
+            radius = rng.choice((h["radius"], h["radius"], 0x2EE, rng.randrange(0x400)))
+            reach = radius + GIVE_R + 0x300
+            a = rng.randrange(0x1000)
+            near = rng.random() < 0.7
+            d = rng.randrange(radius + GIVE_R if near else reach)
+            x = cx + ((movement.game_cos(a) * d) >> 12)
+            z = cz + ((movement.game_sin(a) * d) >> 12)
+            y = cy + (rng.randrange(-0x300, 0x300) if near else rng.randrange(-0x900, 0x900))
+            fac = rng.randrange(0x1000)
+            for k in [slot] + ([rng.choice((2, 3, 10, 30, 0))] if rng.random() < 0.25 else []):
+                ac = ACTORS + ACTOR_STRIDE * k
+                _put(cpu, ac + 9, 1, 1 if rng.random() < 0.85 else rng.choice((0, 2)))
+                _put(cpu, ac + 0xE, 1, rng.choice((0, 0, 0, 1, 3)))
+                _put(cpu, ac + 0x28, 4, rng.choice((0, 0, 0, 4, 0x10, 0x14, 0x20000)))
+                _put(cpu, ac + 0x2C, 4, cx + rng.randrange(-0x40, 0x40))
+                _put(cpu, ac + 0x30, 4, cy)
+                _put(cpu, ac + 0x34, 4, cz + rng.randrange(-0x40, 0x40))
+                _put(cpu, ac + 0x1C, 2, radius)
+                _put(cpu, ac + 0x1E, 2, rng.choice((h["height"], 0x5DC, rng.randrange(0x800))))
+                _put(cpu, ac + 0x22, 2, rng.choice((-1, 3, 0xC8)))
+                _put(cpu, ac + 0x26, 2, rng.randrange(-0x200, 0x200))
         elif kind == "rect 20":
             item = 0x7E if rng.random() < 0.8 else rng.choice(ARMS)
             inside = rng.random() < 0.8          # its rectangle, or about it
@@ -830,9 +1012,30 @@ def cases(lv, n, rng, snap="a1"):
             if lv == 5 and p["op"] == 0x53:
                 r = OBJECTS + STRIDE * p["slot"]
                 _put(cpu, r + 0xA, 2, rng.choice((0, 0, 0x800, 0xFFF, 0x1000)))
-        if item in (FLASK, ORLADIN_KEY, SILVIERA_KEY, HAND_KEY, STONE_KEY, 0x66, 0x7E) \
-                and rng.random() < 0.7:
+        if item in (FLASK, ORLADIN_KEY, SILVIERA_KEY, HAND_KEY, STONE_KEY, 0x66, 0x7E,
+                    BLOOD_HERB) and rng.random() < 0.7:
             _put(cpu, INV_A + item, 1, rng.choice((1, 2)))
+        if lv in (1, 2):
+            # what the two levels' entry 2 asks: the flag, the byte that names
+            # the thing, the door's and the gate's locks, actor_skip_mask and
+            # current_actor_index; no creature a vertex places, which
+            # spot_taken does not model
+            _put(cpu, FLAGS + LEVEL1_ASKED, 1, rng.choice((0, 0, 1)))
+            _put(cpu, FLAGS + LEVEL2_WANTED, 1, item if rng.random() < 0.6 else
+                 rng.choice(list(LEVEL2_STAGE) + [0, 1, 2, 3, 4]))
+            r = OBJECTS + STRIDE * (LEVEL1_DOOR if lv == 1 else 44)
+            _put(cpu, r + 0x38, 1, rng.choice((0xC8, 0xC8, 0xFF, 0x23) if lv == 1 else
+                                              (0x9A, 0x9A, 0x9B, 0xFF, 0x9C)))
+            _put(cpu, r + 8, 2, rng.choice((0, 0, 0x14)))
+            _put(cpu, SKIP_MASK, 1, rng.choice((4, 4, 4, 0, 0x10)))
+            _put(cpu, CUR_INDEX, 4, rng.choice((0xC8, 0xC8, 3)))
+            for k in range(ACTOR_N):
+                ac = ACTORS + ACTOR_STRIDE * k
+                f = cpu.rd(ac + 0x28, 4)
+                if f & VERTEX_PLACED:
+                    _put(cpu, ac + 0x28, 4, f & ~VERTEX_PLACED)
+                if rng.random() < 0.05:
+                    _put(cpu, ac, 1, rng.choice((0, 1, 2, 8, 0xFF)))
         if kind == "lock" and rng.random() < 0.5:
             r = OBJECTS + STRIDE * o["slot"]
             _put(cpu, r + 0x38, 1, rng.choice((item, item, 0xFE, rng.randrange(0x87, 0x91))))
@@ -849,7 +1052,7 @@ def cases(lv, n, rng, snap="a1"):
 
 
 FIELDS = ("answer", "inv_a", "inv_b", "skills", "stat36", "wis", "b578", "drops",
-          "spells", "flags")
+          "spells", "flags", "cats")
 
 
 def outcome(item, calls, w):
@@ -885,6 +1088,10 @@ def outcome(item, calls, w):
             return "the figures: raised, a spell unlocked"
         return "the figures: raised" if w["answer"] else "the figures: at their most"
     lv = w.get("overlay")
+    if (lv, item) in ((1, BLOOD_HERB),) or (lv == 2 and item in LEVEL2_STAGE):
+        talk = [c[1] for c in calls if c[0] == "talk"]
+        return (f"entry 2 of level {lv}, {item:#x}: given to slot {talk[0]}" if talk else
+                f"entry 2 of level {lv}, {item:#x}: not given")
     if lv in LEVEL_USE and item in (HAND_KEY, STONE_KEY, 0x66, 0x7E):
         took = ("hook", "take") in calls
         said = [c[1] for c in calls if c[0] == "announce"]
@@ -952,8 +1159,66 @@ def check(out=sys.stdout, per_level=100, seed=7, levels=range(28), verbose=False
     for what in sorted(seen):
         print(f"  {seen[what]:4d}  {what}", file=out)
     print(f"use_item, against the game's own over {len(list(levels))} levels: "
-          f"{ok} of {n} runs agree -- calls, answer, pack, figures and all 396 "
-          f"object records", file=out)
+          f"{ok} of {n} runs agree -- calls, answer, pack, figures, categories and all "
+          f"396 object records", file=out)
+    return ok == n
+
+
+# --- object_signal ----------------------------------------------------------
+
+SIGNAL = 0x800463BC
+SIGNAL_OPS = (0, 1, 2, 3, 4, 5, 0x1B, 0x51, 0x52, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A,
+              0x5F, 0xA2, 0xA3, 6, 0x17, 0x53, 0xFF)
+
+
+def signal_check(out=sys.stdout, per_level=10, seed=17):
+    """object_signal against the game's own (0x800463bc), run over every
+    level as its own load_object_placement leaves it: the id drawn from the
+    toggled range (0x96..0xc6), the doors' (0x64..0xc7, 0xc8 up), anything
+    and 0xff; a fifth of the records given an opcode that listens and their
+    +8, +0x38, +0x39, +0x3a, +0x3d and +0x3f the id, its neighbour or
+    anything -- all 396 records byte for byte."""
+    import mipsrun
+    rng = random.Random(seed)
+    ok = n = changed = 0
+    for lv in range(28):
+        base = mipsrun.level_cpu(lv)
+        ram0 = bytes(base.ram)
+        for _ in range(per_level):
+            cpu = mipsrun.CPU(ram0)
+            cpu.hooks.update(base.hooks)
+            sig = rng.choice((rng.randrange(0x96, 0xC7), rng.randrange(0x64, 0xC8),
+                              rng.randrange(0xC8, 0xFF), rng.randrange(0x100), 0xFF))
+            for k in range(COUNT):
+                if rng.random() >= 0.2:
+                    continue
+                r = OBJECTS + STRIDE * k
+                _put(cpu, r + 4, 1, rng.choice(SIGNAL_OPS))
+                _put(cpu, r + 8, 2, rng.choice((0, 0, 1, 0x14)))
+                for off in (0x38, 0x39, 0x3A, 0x3D, 0x3F):
+                    _put(cpu, r + off, 1, rng.choice((sig, sig, sig ^ 1, 0, 0xFF,
+                                                      rng.randrange(0x100))))
+            ram = bytes(cpu.ram)
+            w = world_of(ram)
+            object_signal(w, sig)
+            mine = bytearray(ram)
+            write_back(mine, w)
+            cpu.call(SIGNAL, sig)
+            lo, hi = OBJECTS & MASK, (OBJECTS & MASK) + STRIDE * COUNT
+            n += 1
+            if bytes(mine[lo:hi]) == bytes(cpu.ram[lo:hi]):
+                ok += 1
+                changed += sum(1 for i in range(lo, hi, STRIDE)
+                               if ram[i:i + STRIDE] != cpu.ram[i:i + STRIDE])
+            elif ok == n - 1:
+                for i in range(lo, hi):
+                    if mine[i] != cpu.ram[i]:
+                        k, off = divmod(i - lo, STRIDE)
+                        print(f"  level {lv}, id {sig:#x}: object {k} +{off:#x}: model "
+                              f"{mine[i]:#x}, game {cpu.ram[i]:#x}", file=out)
+                        break
+    print(f"object_signal, against the game's own over 28 levels: {ok} of {n} runs agree "
+          f"-- all {COUNT} records, {changed} of them changed", file=out)
     return ok == n
 
 
@@ -1141,8 +1406,10 @@ def warp_plan(i, block, pitch):
 
 # The fields of an object the port's copy (godot/useitem.gd) reads, in order.
 OBJECT_FIELDS = ("slot", "type", "cls", "b0", "op", "state", "x", "y", "z", "yaw",
-                 "height", "reach", "top", "b38", "b39", "h3a", "h3c", "b40", "b3d", "clk")
-CREATURE_FIELDS = ("slot", "e", "flags", "x", "y", "z", "model", "floor")
+                 "height", "reach", "top", "b38", "b39", "h3a", "h3c", "b40", "b3d", "b3f",
+                 "clk")
+CREATURE_FIELDS = ("slot", "e", "flags", "x", "y", "z", "model", "floor", "radius", "height",
+                   "lead", "lift")
 
 
 def compact(w):
@@ -1161,9 +1428,9 @@ def compact(w):
                 o["cls"] == AREA_CLASS or o["slot"] == 0xB or ring:
             objs.append([o[f] for f in OBJECT_FIELDS])
     out = {k: w[k] for k in ("pitch", "facing", "layer", "block", "busy", "pending",
-                             "stat36", "wis", "b578", "drops")}
+                             "stat36", "wis", "b578", "drops", "skip_mask", "cur_index")}
     out["overlay"] = w.get("overlay", w["block"])
-    for k in ("pos", "skills", "spells", "inv_a", "inv_b", "flags"):
+    for k in ("pos", "skills", "spells", "inv_a", "inv_b", "flags", "cats"):
         out[k] = list(w[k])
     out["objects"] = objs
     out["creatures"] = [[c[f] for f in CREATURE_FIELDS] for c in w["creatures"]]
@@ -1223,7 +1490,7 @@ def export(out_dir, lv=0, per_level=12, seed=11):
             after = compact(w)
             row["want"] = {"calls": [list(c) for c in calls], "answer": w["answer"]}
             for f in ("inv_a", "inv_b", "skills", "stat36", "wis", "b578", "drops",
-                      "spells", "flags", "objects"):
+                      "spells", "flags", "cats", "objects"):
                 if after[f] != row["world"][f]:
                     row["want"][f] = after[f]
             rows.append(row)
@@ -1251,6 +1518,7 @@ def main():
         return
     if "--check" in a or not a:
         good = check(verbose="-v" in a)
+        good = signal_check() and good
         good = warp_check() and good
         sys.exit(0 if good else 1)
 

@@ -125,6 +125,7 @@ var press := 0                     # a press latched for its next frame
 var reading = null                 # the document up, load_entry's frames
 var resume := 0                    # where object_interact goes on after it
 var talking := {}                  # script_interpreter's call while it runs (KFTalk)
+var talk_walks := true             # object_interact's call goes on to the objects; use_item's does not
 # What was opened, taken, dropped and set down goes where the game keeps it,
 # the level's stream (KFLevelState): out of it when the level loads, into the
 # level's table when it is left. The epoch this scene was made in, so that one
@@ -397,7 +398,8 @@ func _process(dt: float) -> void:
 			return
 		KFGame.modal = false
 		player.clear_movement()
-		_interact(0, true)
+		if talk_walks:
+			_interact(0, true)
 		return
 	if not talking.is_empty():
 		var doc = get_node_or_null("../UI/Document")
@@ -934,21 +936,24 @@ func _read(r: Dictionary, at: int) -> bool:
 
 # script_interpreter for the talker: its conversation (escript.json, by the
 # actor's kind, the entity), one call (KFTalk). False when it has none, and
-# object_interact goes straight on to the objects.
+# object_interact goes straight on to the objects. `walks` false for a call
+# use_item's level entry makes, after which nothing walks the objects.
 # @orig game:0x8005e3a4 object_interact+0xd4  status:transcribed -- the call of script_interpreter, after the talker test
-func _talk(a: Dictionary) -> bool:
+func _talk(a: Dictionary, walks := true) -> bool:
 	var lv: int = player._level()
 	var sc := KFTalk.script_for(lv, int(a["kind"]))
 	if sc.is_empty():
 		return false
 	talking = KFTalk.begin(lv, int(a["kind"]), sc, int(a["model"]))
+	talk_walks = walks
 	KFGame.modal = true
 	_talk_next()
 	return true
 
 
 # The call's next line through load_entry (TALK.T, talk/N.png), or its end:
-# then the object walk from the first object, as object_interact goes on.
+# then the object walk from the first object, as object_interact goes on
+# (not after use_item's call, which goes back to use_item).
 # @port engine -- the lines of a call shown one after another through document.gd
 func _talk_next() -> void:
 	var lv: int = player._level()
@@ -976,16 +981,20 @@ func _talk_next() -> void:
 			return
 	KFGame.modal = false
 	player.clear_movement()
-	_interact(0, true)
+	if talk_walks:
+		_interact(0, true)
 
 
 # use_item (0x8005cbe0) for the thing `id` (godot/useitem.gd): the world
 # as the routine reads it, out of the port -- the player, the block, the
 # pack and the figures, every object as it is now (views) and the awake
-# creatures -- the routine over it, and what it did, back: the locks, states
-# and places it wrote into whatever keeps them, then its calls acted out.
-# The level's own entries are not in the port, nor an object made for
-# Orladin's key; the warp goes to crossing.gd.
+# creatures and their categories -- the routine over it, and what it did,
+# back: the locks, states and places it wrote into whatever keeps them, the
+# categories into actors.gd, then its calls acted out: a creature handed a
+# thing talks (script_interpreter, one call). actor_skip_mask is 4 there
+# (player_controller's, 0x80031004) and current_actor_index 200, as
+# actor_tick_driver's pass leaves it (0x80053040), current_actor none
+# (actor_select(0)). The warp goes to crossing.gd.
 # @port engine -- the world handed to KFUseItem.run and its calls acted out
 func use_item(id: int) -> void:
 	var c: KFCollision = player.coll
@@ -1005,8 +1014,18 @@ func use_item(id: int) -> void:
 		"wis": int(ch.get("wis", 0)), "b578": int(player.bonus[2]),
 		"drops": int(counters[0x15E]), "spells": ch.get("spells", []),
 		"flags": KFTalk.flags, "objects": objs, "creatures": _awake(),
-		"overlay": player._level()}
+		"overlay": player._level(), "skip_mask": 4, "cur_index": 200}
+	var an := get_node_or_null("../Actors")
+	var list: Array = an.get("actors") if an != null and an.get("actors") != null else []
+	var cats := []
+	for k in 200:
+		cats.append(0xFF if k >= list.size() or list[k] == null else int(list[k]["cat"]))
+	w["cats"] = cats.duplicate()
 	var calls := KFUseItem.run(w, id, c)
+	for k in list.size():
+		if list[k] != null and int(w["cats"][k]) != int(cats[k]):
+			list[k]["cat"] = int(w["cats"][k])
+			KFInfo.note("use: creature %d now of category %d" % [k, int(w["cats"][k])])
 	ch["stat36"] = int(w["stat36"])
 	ch["wis"] = int(w["wis"])
 	player.bonus[2] = int(w["b578"])
@@ -1050,6 +1069,11 @@ func use_item(id: int) -> void:
 					else [player._level(), player._level(), player._level(), player._level(),
 						player._level()], int(player.pitch))
 				KFInfo.note("use: item %d, warp record %d: %s" % [id, int(call[1]), str(warp)])
+			"talk":
+				var k := int(call[1])
+				if k < list.size() and list[k] != null:
+					_talk(list[k], false)
+				KFInfo.note("use: item %d handed to creature %d" % [id, k])
 			"clear":
 				player.clear_movement()
 	if recalc:
@@ -1077,14 +1101,16 @@ func views() -> Array:
 			"b39": int(f[12]) if f.size() > 12 else 0xFF, "h3a": int(f[13]) if f.size() > 13 else 0xFFFF,
 			"h3c": 0, "b0": int(f[14]) if f.size() > 14 else 0,
 			"b40": int(f[15]) if f.size() > 15 else 0xFF,
-			"b3d": int(f[16]) if f.size() > 16 else 0xFF, "clk": 0}
+			"b3d": int(f[16]) if f.size() > 16 else 0xFF,
+			"b3f": int(f[17]) if f.size() > 17 else 0xFF, "clk": 0}
 	for k in rows:
 		var r: Dictionary = rows[k]
 		var p: Vector3i = r["pos"]
 		if out[k] == null:
 			out[k] = {"slot": k, "cls": int(r["cls"]), "reach": int(r["reach"]),
 				"top": int(r["top"]), "yaw": 0, "height": 0, "op": int(r.get("op", 0xFF)),
-				"b39": 0xFF, "h3a": 0xFFFF, "b0": 0, "b40": 0xFF, "b3d": 0xFF, "clk": 0}
+				"b39": 0xFF, "h3a": 0xFFFF, "b0": 0, "b40": 0xFF, "b3d": 0xFF, "b3f": 0xFF,
+				"clk": 0}
 		out[k]["type"] = int(r["type"])
 		out[k]["x"] = p.x
 		out[k]["y"] = p.y
@@ -1121,8 +1147,8 @@ func views() -> Array:
 
 # What use_item wrote of an object, into what keeps it: a pedestal's lock,
 # state and place in the ring, a chest's or a thing's lock and state, a
-# door's, a lift's, a gate's or a wall's lock (doors.gd), and for an object
-# the port does not move, its held lock.
+# door's, a lift's, a gate's or a wall's lock and state (doors.gd), and for
+# an object the port does not move, its held lock.
 # @port helper -- a world row's lock, state and +0x39 back where the port keeps them
 func _write_view(k: int, o: Dictionary) -> void:
 	for pd in pedestals:
@@ -1142,15 +1168,18 @@ func _write_view(k: int, o: Dictionary) -> void:
 		for d in dn.doors + dn.lifts + dn.gates + dn.walls:
 			if int(d["slot"]) == k:
 				dn._set_lock(d, int(o["lock"]))
+				d["state"] = int(o["state"])
 				return
 	var g := _gate_of(k)
 	g["lock"] = int(o["lock"])
 	g["state"] = int(o["state"])
 
 
-# The awake creatures as use_item's truth glass looks at them: [slot, +0xe,
-# +0x28, x, y, z, its model (+1), the floor it stands on (+3)].
-# @port helper -- actors.gd's awake creatures, as sub_8004d3c4's list
+# The awake creatures as use_item's truth glass and the levels' entry 2 look
+# at them: [slot, +0xe, +0x28, x, y, z, its model (+1), the floor it stands
+# on (+3), radius (+0x1c), height (+0x1e), a follower's leader (+0x22), the
+# height a follower stands above it (+0x26)].
+# @port helper -- actors.gd's awake creatures, as sub_8004d3c4's and actor_spot_taken's list
 func _awake() -> Array:
 	var out := []
 	var an := get_node_or_null("../Actors")
@@ -1162,7 +1191,8 @@ func _awake() -> Array:
 		if a == null or int(a.get("st", 0)) != 1:
 			continue
 		out.append([k, int(a.get("op", 0)), int(a.get("eflags", 0)), int(a["px"]), int(a["py"]),
-			int(a["pz"]), int(a.get("model", 0)), int(a.get("floor", 0))])
+			int(a["pz"]), int(a.get("model", 0)), int(a.get("floor", 0)), int(a.get("radius", 0)),
+			int(a.get("height", 0)), int(a.get("leader", -1)), int(a.get("h", 0))])
 	return out
 
 

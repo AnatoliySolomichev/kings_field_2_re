@@ -421,17 +421,25 @@ python3 tools/useitem.py --export D  useitem.json, usecheck.json and the truth
 level (`level_cpu`: the level's objects as its own loader leaves them), the
 player put in front of the fountains, locks, pedestals, the class-0xe2
 rectangles, slot 11 and the creatures, the thing, pack, skills, spells, floors
-and counts at random -- levels 5, 7, 20, 23, 25 and 27 running their own
+and counts at random -- levels 1, 2, 5, 7, 20, 23, 25 and 27 running their own
 entry 2 out of their overlays (`level_use`), the player stood where those
-ask -- : **2800 of 2800** runs give the model's calls in order,
-its answer, the pack, the figures, the spells, the flags and all 396 object
+ask, beside levels 1's and 2's creatures put up at random -- : **2800 of
+2800** runs give the model's calls in order,
+its answer, the pack, the figures, the spells, the flags, the 200 creatures'
+categories and all 396 object
 records byte for byte, and it prints how many went down each arm's ways. What
 use_item calls beyond what it runs -- announce, load_entry, sound_key_fits,
-player_recalc_stats, pedestal_put_key, the level's entries, the warp,
-clear_movement_state -- is stood in for and logged; find_object, key_test,
-sub_8004d3c4, player_in_rect, take_item, give_item, skill_unlock,
-find_free_slot and init_object_record run as the game's. `godot/useitem.gd`
-reproduces the model on **336 of 336** of its runs (`usecheck.json`).
+player_recalc_stats, pedestal_put_key, script_interpreter, the level's
+entries, the warp, clear_movement_state -- is stood in for and logged;
+find_object, key_test, sub_8004d3c4, player_in_rect, take_item, give_item,
+skill_unlock, find_free_slot, init_object_record, actor_spot_taken and
+object_signal run as the game's. `godot/useitem.gd`
+reproduces the model on **624 of 624** of its runs (`usecheck.json`).
+
+`--check` also holds `object_signal` (`0x800463bc`, `signal_check`) to the
+game's own over every level, a fifth of the records given an opcode that
+listens and the fields it asks the id, its neighbour or anything: **280 of
+280** runs, all 396 records.
 
 `--check` also runs the warp, `warp_to` (`0x8005c864`), the game's own over
 `a1`: every record from its own block and from others, its fields at random,

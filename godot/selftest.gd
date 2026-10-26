@@ -2600,7 +2600,8 @@ func _use_items() -> bool:
 			var inv: KFItems = w["inv"]
 			var got := {"inv_a": Array(inv.a).slice(0, 0x96), "inv_b": Array(inv.b).slice(0, 0x96),
 				"skills": w["skills"], "stat36": w["stat36"], "wis": w["wis"], "b578": w["b578"],
-				"drops": w["drops"], "spells": w["spells"], "flags": (w["flags"] as Array).slice(0, 0x100)}
+				"drops": w["drops"], "spells": w["spells"], "flags": (w["flags"] as Array).slice(0, 0x100),
+				"cats": w["cats"]}
 			for f in got:
 				var exp = want.get(f, cw[f])
 				if JSON.stringify(_norm(got[f])) != JSON.stringify(_norm(exp)):
@@ -2642,11 +2643,12 @@ func _use_items() -> bool:
 # @port helper -- a case's world, as KFUseItem.run takes it
 func _use_world(cw: Dictionary, names: Array) -> Dictionary:
 	var w := {}
-	for k in ["pitch", "facing", "layer", "block", "busy", "pending", "stat36", "wis", "b578", "drops"]:
+	for k in ["pitch", "facing", "layer", "block", "busy", "pending", "stat36", "wis", "b578", "drops",
+			"skip_mask", "cur_index"]:
 		w[k] = int(cw[k])
 	w["overlay"] = int(cw.get("overlay", cw["block"]))
 	w["pos"] = (cw["pos"] as Array).map(func(v): return int(v))
-	for k in ["skills", "spells", "flags"]:
+	for k in ["skills", "spells", "flags", "cats"]:
 		w[k] = (cw[k] as Array).map(func(v): return int(v))
 	var inv := KFItems.new()
 	for i in KFItems.COUNT:

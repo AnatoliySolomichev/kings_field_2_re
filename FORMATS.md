@@ -3234,7 +3234,8 @@ it (`use_item`, `views`): the self-test holds it to 336 of the model's runs
 entry less `0x96`, as a sign's), which `tools/useitem.py` writes for the
 level's creatures, rectangles and slot 11. `player.gd` keeps the floor
 (`layer`), `actors.gd` and `ai.gd` a creature's (`floor`). Not in the port:
-the level's own entries 2, 6 and 11 and the statues. What Orladin's key
+the level's own entries 6 and 11, entry 2 of levels 4, 8 and 17, and the
+statues. What Orladin's key
 leaves -- the seals, the pedestals and the key's own object -- is the next
 section but one.
 
@@ -3440,7 +3441,7 @@ and `loot.gd` runs the first frame itself after the level's record.
 
 Whatever its arm did, use_item ends by handing the level's own code -- entry
 2, `level_hooks + 8` -- `player_pos`, `player_pitch` and the thing
-(`0x8005d75c`). Levels 1, 2, 4, 5, 7, 8, 17, 20, 23, 25 and 27 have one; six
+(`0x8005d75c`). Levels 1, 2, 4, 5, 7, 8, 17, 20, 23, 25 and 27 have one; eight
 of them are read:
 
 | level | the thing | what its entry 2 does |
@@ -3450,26 +3451,79 @@ of them are read:
 | 20 | fairy fossil (`0x7e`) | in cells `0x26..0x28` by `0x10..0x11`: with the moonlight sword (`0x7d`) held and story flag `0x56` 0 -- the flag 1, `0x57` 0, the fossil taken, answered; without the sword and the flag 0 -- banner `0x10`, answered |
 | 23 | key of the corridor (`0x86`) | as level 7's, on a type-`0x13f` pedestal (slots 88, 89, 92, 93, opcode `0x18`, Silviera's kind -- two pairs, gates of type `0xae` that want both), no facing asked, and nothing said when nothing is found |
 | 25, 27 | ichrius' key (`0x85`) | answered, banner `0x23` |
+| 1 | blood herb (`0x7f`) | to the creature `actor_spot_taken` finds from the feet -- `0x578` past its radius, `0x6a4` as the point's height -- when it is slot 20 and story flag `0xa` (`0x801ba992`) is 0: taken, the flag 1, `script_interpreter` for the creature (one call of its conversation, which now starts at its label 0, "With this medicine, my son will certainly recover!"), door 71's lock (cell (35,43)) `0xc8` to `0xff`, slot 22's category (`+0`) 8 and slot 39's 1, answered |
+| 2 | earth herb (`0x68`), blood stone (`0x6c`), moon stone (`0x6d`), dragon crystal (`0x6b`) | each while story byte `0x10` (`0x801ba998`) names it, to slot 4 the same way: the byte 1, 2, 3 or 4, the thing taken, `script_interpreter`, **`object_signal(0x9a)`**, answered |
 
-And `menu_use_item` keeps level 2's four things uneaten for its entry 2
-("Casting", above): the earth herb, the dragon crystal, the blood stone and
-the moon stone, each while story byte `0x801ba998` names it, go to the
-creature in slot 4 -- `actor_spot_taken` from the feet at `0x578` by
-`0x6a4`, the thing taken, `script_interpreter` for the creature, the byte to
-1, 2, 3 or 4 and `0x800463bc(0x9a)`. Level 1's hands the blood herb (`0x7f`)
-to slot 20 the same way, and 4, 8 and 17 run scenes of their own; none of
-those five is modelled or in the port yet.
+Slot 22 and slot 39 of level 1 are both model 6, at home in (66,52) and in
+(34,43) beside door 71: **category 8 is held** -- it never wakes ("The state
+machine on +9") -- so with the herb given the one stops appearing and the
+other appears. The lasting form is the level's entry 5, which `level_load`
+and `enter_current_level` call once a level is in (`0x800188f0`,
+`0x80017a88`): level 1's sets eight slots' categories and door 71's lock by
+flag `0xa` every time the level loads -- not in the port yet. **This is where
+a category 8 comes from**, which section 17 could not find in GAME.EXE:
+level 0's entry 5 writes 1 into slot 0 and 8 into slots 1 and 2 -- the three
+men, entities 9, 10 and 11 -- while story flag `0x1e` (`0x801ba9a6`) is 0
+(`0x801e8df0..0x801e8e04`), so the two men by the house that are 1 on the
+disc are 8 in memory.
+
+Level 2's slot 4 is the caretaker of the lake (kind 7): its conversation
+asks for each thing in turn through the level's entry 4 (`f4 0..3` set the
+byte to `0x68`, `0x6c`, `0x6d`, `0x6b`), and `menu_use_item` keeps the four
+uneaten in cells 10..13 by 38..42 ("Casting", above) so that they reach
+entry 2. **`object_signal(id)`** (`0x800463bc`) hands an id to all 396
+objects, each by its opcode:
+
+```
+0..5, 0x1b     a door's lock +0x38: an id in 0x96..0xc6 turns over the lock
+               that is it with bit 0 off (odd opens, even shuts -- "A gate");
+               else the lock that is it: 0xc8 and up becomes 0xff, below
+               that the door's +8 goes from 0 to 1, and from 0x64 the lock
+               0xff too
+0x51           its +0x3d is it: +0x38 between 0 and 0xff (the traps above)
+0x52 0x55 0x5a its +0x3f is it: the same
+0x54 0xa2 0xa3 its +0x38 is it: 0xff
+0x56           its +0x3a is it: +0x39 between 0 and 0xff
+0x58           its +0x39 is it: +8 1, +0x38 between 0 and 1
+0x59           its +0x38 is it: +8 1
+0x5f           its +0x38 is it: +8 1, +0x3f between 0 and 1
+```
+
+Level 2's `0x9a` finds gate 44 (cell (9,40), type `0xaa`) alone: its lock
+`0x9a` turns to `0x9b`, odd, and the gate opens for good -- and the next
+thing given turns it back to `0x9a`, which shuts it, the third opens it
+again: one give in two leaves the gate open, as the caretaker's lines say
+("I will open the gate if ...").
 
 **Checked against the game's own.** `tools/useitem.py`'s 2800 runs of
-GAME.EXE's own `use_item` run those six levels' own entry 2 out of their
+GAME.EXE's own `use_item` run those eight levels' own entry 2 out of their
 overlays instead of logging it, the player stood before the pedestals, the
-opcode-`0x53` objects and in level 20's rectangle, the flags, the clocks and
-the sword at random: **2800 of 2800** still give the model's calls, answer,
-pack, flags and all 396 object records -- the key put on both levels'
-pedestals, the fossil taken, both banners. The port's `useitem.gd level_use`
-holds to the model in the self-test (552 of 552). What follows the record's
-change is not all in the port: level 7's pedestal is opcode `0xa7` and level
-5's objects opcode `0x53`, neither of which the port runs.
+opcode-`0x53` objects, in level 20's rectangle and beside levels 1's and 2's
+creatures (put up at random -- state, `+0xe`, flags, radius, height, a
+follower's leader and lift -- with now and then another slot on the same
+spot), the flags, the byte, the clocks, the locks, `actor_skip_mask`,
+`current_actor_index` and the sword at random: **2800 of 2800** still give the
+model's calls (`script_interpreter` stood in and logged with its creature),
+answer, pack, flags, all 200 creatures' categories and all 396 object
+records -- the key put on both levels' pedestals, the fossil taken, both
+banners, the herb given 23 times and level 2's four things 24 times; and
+`signal_check` runs the game's `object_signal` over every level, a fifth of
+the records given a listening opcode and fields of the id, its neighbour or
+anything: **280 of 280** runs, all 396 records (4094 of them changed). The
+port's `useitem.gd level_use` holds to the model in the self-test (624 of
+624). What follows the record's change is not all in the port: level 7's
+pedestal is opcode `0xa7` and level 5's objects opcode `0x53`, neither of
+which the port runs; level 2's own entry 4 -- which names the next thing --
+is not in the port's conversations either (`talk.gd hook` has level 0's
+alone), so there the caretaker never asks.
+
+**In the port**: `useitem.gd level_use` hands the herb and the four things
+over -- `spot_taken` over the awake creatures `loot.gd _awake` lists (with
+their radius, height, leader and lift), `object_signal` over every object's
+view (`+0x3f` now among them, `tools/level3d.py find_rows`) -- and `loot.gd
+use_item` writes the categories back into `actors.gd` and starts the
+creature's conversation (`_talk`, one call, which does not go on to walk the
+objects as object_interact's does).
 
 ### Status/records, and running the game's own code
 
@@ -6546,6 +6600,9 @@ to the unit — heights on sloping cells included, through the ported floor quer
 in `tools/collision.py`. The one difference is the category of the two men by
 the house: 1 on the disc, 8 in memory. No store in `GAME.EXE` writes a literal 8
 into an actor, so something computes it; `emu/bp19.lua` now watches both bytes.
+*Found since:* the level's own code writes it -- level 0's entry 5, as the
+level loads, puts 8 into slots 1 and 2 while story flag `0x1e` is 0
+(FORMATS.md, "The levels' own use of a thing: entry 2").
 
 Across the 28 levels the disc uses categories 0 and 1 almost everywhere, 2 on
 levels 15, 17, 25 and 27, and 3 on level 3. None carries 5 or 8.

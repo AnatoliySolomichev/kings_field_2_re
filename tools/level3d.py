@@ -1107,7 +1107,8 @@ def find_rows(load):
     halfword at +0x3a, which with the rest are what level_state_write reads of
     a slot (godot/levelstate.gd's table); then the record's +0 and +0x40 as
     the loader leaves them, which use_item's truth glass asks (godot/useitem.gd),
-    and +0x3d, the thing level 5's own entry 2 asks an opcode-0x53 object for."""
+    +0x3d, the thing level 5's own entry 2 asks an opcode-0x53 object for, and
+    +0x3f, which object_signal asks of opcodes 0x52, 0x55 and 0x5a."""
     out = []
     for k, o in sorted(load.recs.items()):
         tr = load.rows[o["type"]]
@@ -1115,7 +1116,7 @@ def find_rows(load):
                     o["height"], struct.unpack_from("<H", tr, 6)[0],
                     struct.unpack_from("<H", tr, 8)[0], o["op"], o["tail"][0],
                     o["tail"][1], struct.unpack_from("<H", bytes(o["tail"]), 2)[0],
-                    o["b0"], o["tail"][8], o["tail"][5]])
+                    o["b0"], o["tail"][8], o["tail"][5], o["tail"][7]])
     return out
 
 
