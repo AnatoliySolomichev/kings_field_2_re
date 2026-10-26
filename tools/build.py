@@ -146,7 +146,7 @@ def main(quick=False, only_check=False):
         ["match RAM", "reproduced", "player_recalc_stats over"]))
     steps.append((["tools/actors.py", "0", "--check"],
         "the creatures of level 0, against a RAM snapshot",
-        ["of 200", "match", "slots"]))
+        ["of 200", "match", "slots", "categories differ"]))
     steps.append((["tools/levelmap.py", "--check"],
         "the level maps, against the floor they should cover",
         ["open cells covered"]))
@@ -207,6 +207,9 @@ def main(quick=False, only_check=False):
     steps.append((["tools/hooks.py", "--check"],
         "what a conversation's 0xf4 runs, against every level's own entry 4",
         ["entry 4, against", ": model "]))
+    steps.append((["tools/levelin.py", "--check"],
+        "what a level does as it comes in, against every level's own entry 5 and the snapshots",
+        ["entry 5, against", ": model ", "] differ"]))
     steps.append((["tools/seals.py", "--check"],
         "what Orladin's key opens, against the game's own arms",
         ["the seals", "Orladin's pedestals"]))

@@ -595,11 +595,13 @@ Eating heals. Left, roughly in order:
   level 0's play clock (not kept by the port), objects switched by `+0` or
   their scale (level 5's opcode-`0x56` ones and level 17's 63, drawn in the
   level's one mesh), the tile a `stamp_rect` copies, and object_give's frames
-  inside the conversation's call (the port flies the thing after it). Not in
-  the port either: the levels' entry 5, which `level_load` runs as each level
-  comes in and which puts back what a give changed (level 1's eight
-  categories and door 71's lock by flag `0xa`, level 0's three men by flag
-  `0x1e`).
+  inside the conversation's call (the port flies the thing after it). The
+  levels' entry 5, which `level_load` runs as each level comes in, is in
+  (FORMATS.md, "What a level does as it comes in", 1120 of 1120 runs and 21
+  of 21 snapshots' categories), but for the looks' routines of levels 4, 6
+  and 26 (`0x801e83a4`, `0x801e83a8`, `0x801e8390`, tables of `0x8008xxxx`:
+  not read), the bytes the port does not keep, the static objects' view byte
+  and level 17's thing of type `0x8f` in the ring.
   What Orladin's key opens is in (FORMATS.md, "What Orladin's key opens"):
   the seals (opcode `0x17`) and what they lift (`0x10`), the pedestals
   (`0x1a`) and the key's own object in the gold ring, held to the game's own

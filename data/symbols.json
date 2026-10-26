@@ -3337,5 +3337,10 @@
   "name": "object_signal",
   "kind": "code",
   "evidence": "(id) -> hands an id to all 396 objects by their opcode (+4): a door's (0..5, 0x1b) lock +0x38 -- an id in 0x96..0xc6 turns over the lock that is it with bit 0 off, else the lock that is it 0xc8 and up becomes 0xff and below that the door's +8 goes 0 -> 1, lifted too from 0x64; 0x51's +0x3d and 0x52/0x55/0x5a's +0x3f turn +0x38 between 0 and 0xff; 0x54/0xa2/0xa3's +0x38 lifted; 0x56's +0x3a turns +0x39; 0x58's +0x39 and 0x59's and 0x5f's +0x38 start the object (+8 1). Level 2's entry 2 hands it 0x9a once a thing is given (gate 44's lock), opcode 0xe1's trigger and level 26's entry 5 call it. tools/useitem.py signal_check: 280 of 280 runs of the game's own, all 396 records"
+ },
+ "0x800466e8": {
+  "name": "key_test_all",
+  "kind": "code",
+  "evidence": "(key) -> key_test (0x80046608) with the key on all 396 objects, from object_table on; 0xff is no key. Levels 9's and 26's entry 5 hand it 0xf1 as the level comes in (a flag says the key's lock is open: every lock that asks it lifted). tools/levelin.py, against the overlays' own code: 1120 of 1120 runs"
  }
 }

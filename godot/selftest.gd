@@ -350,6 +350,9 @@ func _init() -> void:
 	if not _hooks():
 		quit(1)
 		return
+	if not _level_ins():
+		quit(1)
+		return
 	if not _inscriptions():
 		quit(1)
 		return
@@ -2706,6 +2709,51 @@ func _hooks() -> bool:
 			told = true
 			print("  first difference: level %d, arm %d: %s" % [int(c["level"]), int(c["arm"]), why])
 	print("conversation hooks: %d of %d runs of the levels' entry 4 match tools/hooks.py -- calls, flags, pack, categories, skills, spells and objects" % [
+		ok, cases.size()])
+	return ok == cases.size()
+
+
+# The levels' own entry 5, godot/levelin.gd against the runs tools/levelin.py
+# made of its model, which every level's overlay holds: from the bytes the
+# model read, the same calls and the same bytes written, and none besides.
+func _level_ins() -> bool:
+	if not FileAccess.file_exists("res://levelincheck.json"):
+		print("entry 5: no cases to check against")
+		return true
+	var doc = JSON.parse_string(FileAccess.get_file_as_string("res://levelincheck.json"))
+	var ok := 0
+	var told := false
+	var cases: Array = doc["cases"]
+	for c in cases:
+		var m := {"mem": {}, "calls": []}
+		var known := {}
+		for p in c["read"]:
+			m["mem"][int(p[0])] = int(p[1])
+			known[int(p[0])] = true
+		var before: Dictionary = (m["mem"] as Dictionary).duplicate()
+		KFLevelIn.entry5(int(c["level"]), m)
+		var why := ""
+		if JSON.stringify(_norm(m["calls"])) != JSON.stringify(_norm(c["calls"])):
+			why = "calls %s, python %s" % [str(m["calls"]), str(c["calls"])]
+		else:
+			var want := {}
+			for p in c["wrote"]:
+				want[int(p[0])] = int(p[1])
+			for a in want:
+				if int(m["mem"].get(a, -1)) != int(want[a]):
+					why = "0x%x: %d, python %d" % [a, int(m["mem"].get(a, -1)), int(want[a])]
+					break
+			if why == "":
+				for a in m["mem"]:
+					if not want.has(a) and int(m["mem"][a]) != int(before.get(a, -1)):
+						why = "0x%x written, python did not" % int(a)
+						break
+		if why == "":
+			ok += 1
+		elif not told:
+			told = true
+			print("  first difference: level %d: %s" % [int(c["level"]), why])
+	print("entry 5: %d of %d runs of the levels' own entry 5 match tools/levelin.py -- the calls and every byte written" % [
 		ok, cases.size()])
 	return ok == cases.size()
 

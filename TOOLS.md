@@ -462,6 +462,25 @@ random, what it calls beyond what it runs logged: **2400 of 2400** runs give
 the model's calls, fields and all 396 object records. `godot/talk.gd hook`
 reproduces the model on **360 of 360** of its runs (`hookcheck.json`).
 
+**`levelin.py`** — what a level does as it comes in: every level's entry 5
+(FORMATS.md, "What a level does as it comes in").
+
+```
+python3 tools/levelin.py --check     the model against the overlays' own entry 5,
+                                     and the categories against every snapshot
+python3 tools/levelin.py --export D  levelincheck.json into D, for the self-test
+```
+
+The model is the overlays' stores at the game's own addresses (`Mem.rd`,
+`Mem.wr`). `--check` runs each level's entry 5 out of its overlay over the
+level as its loader leaves it, the flags, pack, figures, level, drop count
+and the objects' bytes it asks at random: **1120 of 1120** runs leave the
+model's calls and all of RAM but the stack; and the disc's actor table with
+entry 5 run over each snapshot's own flags and pack gives its categories,
+**21 of 21** snapshots. `godot/levelin.gd` reproduces the model on **168 of
+168** runs (`levelincheck.json`: the bytes read, the calls, the bytes
+written).
+
 **`seals.py`** — what Orladin's key opens: the seals (opcode `0x17`), the
 thing they hand opcode `0x10`, and Orladin's pedestals (`0x1a`), FORMATS.md
 "What Orladin's key opens".

@@ -1636,7 +1636,8 @@ def project(lv, out="out/godot", start=(57, 4)):
                  "doors.gd", "sky.gd", "hud.gd", "compass.gd", "ai.gd",
                  "weapon.gd", "anim.gd", "effects.gd", "held.gd",
                  "loot.gd", "messages.gd", "document.gd", "talk.gd", "info.gd", "menu.gd",
-                 "crossing.gd", "card.gd", "levelstate.gd", "loadscreen.gd", "useitem.gd"):
+                 "crossing.gd", "card.gd", "levelstate.gd", "loadscreen.gd", "useitem.gd",
+                 "levelin.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening
@@ -1838,6 +1839,11 @@ def project(lv, out="out/godot", start=(57, 4)):
         hooks.export(out)
     except Exception as e:                       # no snapshot, no hook cases
         print(f"conversation hook cases skipped: {e}")
+    try:
+        import levelin
+        levelin.export(out)
+    except Exception as e:                       # no snapshot, no entry 5 cases
+        print(f"entry 5 cases skipped: {e}")
     print(f"godot project in {out}/ — player starts in cell ({cx},{cz})")
 
 
@@ -1881,7 +1887,7 @@ def verify(out="out/godot"):
         if line.startswith(("loaded:", "movement:", "steps:", "creature steps:",
                             "fences:",
                             "creature run:",
-                            "levels:", "use_item:", "warp_to:", "conversation hooks:", "angles:",
+                            "levels:", "use_item:", "warp_to:", "conversation hooks:", "entry 5:", "angles:",
                             "scripts:", "damage:", "equipment:", "player_recalc_stats:", "knock-back:", "weapon:", "animation:", "effects:", "lift doors:", "chests:", "seals:", "fades:", "carry-over:", "inscriptions:", "conversations:", "menus:", "routines:", "saves:", "level states:", "the run:", "player_take_hit:", "the status:", "casting:", "the attacking arms:", "creature hits:", "creature strikes:", "creature holds:", "FAIL", "  first",
                             "  level case", "  angle (", "  script level",
                             "  hit ")):

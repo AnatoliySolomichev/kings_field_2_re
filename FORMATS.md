@@ -3457,15 +3457,9 @@ of them are read:
 Slot 22 and slot 39 of level 1 are both model 6, at home in (66,52) and in
 (34,43) beside door 71: **category 8 is held** -- it never wakes ("The state
 machine on +9") -- so with the herb given the one stops appearing and the
-other appears. The lasting form is the level's entry 5, which `level_load`
-and `enter_current_level` call once a level is in (`0x800188f0`,
-`0x80017a88`): level 1's sets eight slots' categories and door 71's lock by
-flag `0xa` every time the level loads -- not in the port yet. **This is where
-a category 8 comes from**, which section 17 could not find in GAME.EXE:
-level 0's entry 5 writes 1 into slot 0 and 8 into slots 1 and 2 -- the three
-men, entities 9, 10 and 11 -- while story flag `0x1e` (`0x801ba9a6`) is 0
-(`0x801e8df0..0x801e8e04`), so the two men by the house that are 1 on the
-disc are 8 in memory.
+other appears. The lasting form is the level's entry 5 (below, "What a
+level does as it comes in"): level 1's sets eight slots' categories and door
+71's lock by flag `0xa` every time the level loads.
 
 Level 2's slot 4 is the caretaker of the lake (kind 7): its conversation
 asks for each thing in turn through the level's entry 4 (`f4 0..3` set the
@@ -3590,6 +3584,73 @@ the call, between its lines. Not in the port: the light's frames, the
 chooser (the port answers nothing chosen), level 0's clock (the port keeps
 none: 0), and an object switched off or on by its `+0` or scale (level 5's
 seventeen and level 17's 63 are in the level's one mesh).
+
+### What a level does as it comes in: entry 5
+
+`level_load` (`0x800188f0`) and `enter_current_level` (`0x80017a88`) call
+the level's own **entry 5** (`level_hooks + 0x14`) once the level and its
+record are in, after `0x80061918`. It is the story put back into the world,
+as stores at fixed addresses under conditions on the story flags, the pack
+and a few of the objects' own bytes:
+
+* **who is there** -- an actor's category (`+0`): 8 is held, never woken,
+  1 up. Level 0's three men (slots 0, 1, 2) stand one at a time by flags
+  `0x1e`, `0x2`, `0x6` and `0x7`; level 1's eight by `0xa` (the blood herb)
+  and `0x20`; level 6's 71 slots from 4 on by `0x23` and `0x32`; level 10's
+  29 by `0x39`, `0x3a` and the level last come into; levels 2, 4, 8, 9, 13,
+  14, 15, 17, 19 and 22 one to five each. Level 13's slot 30 is also gone
+  (`+9` 3).
+* **what is unlocked** -- a lock (`+0x38`) that is `0xc8` lifted to `0xff`
+  (level 0's 70, 33, 116 by flag `0x16`; level 1's door 71 by `0xa`), level
+  12's three by the values `0x64..0x66`, level 4's 74 under `0xfd`; level 2's
+  gate 44 open for good by flag `0x12` or back to `0x9a`.
+* **what is there at all** -- a type (`+6`) of `0xff`, gone: levels 2, 4, 9,
+  13, 14, 15 and 26, a few objects at a time; and a view byte (`+0`, 0 not
+  drawn, 2 drawn), often with the bytes `+0x3c`/`+0x3e` of a pair beside it
+  (level 0's 214/177, 111/182, 62, 195 and 172; levels 6, 9, 10, 11, 17, 19
+  and 22). Level 5's flag `0x1e` switches its
+  seventeen opcode-`0x56` objects off as its entry 4 does.
+* **the cells** -- `stamp_rect` on levels 1 (the strip at (27, 17), open by
+  flag `0xd`), 10, 14, 16, 17 and 20.
+* **the rest** -- story flags set from others (level 5's `0x20` from `0xa`,
+  level 8's `0x2f..0x31` from the pack, level 6's `0x26` when stat 36 and
+  all five skills are at `0x32`), `key_test_all` (`0x800466e8`: key_test
+  with one key on all 396 objects; levels 9 and 26, key `0xf1`),
+  `object_signal(0xf2)` (26), level 17's thing of type `0x8f` made in the
+  gold ring at Orladin's portrait (slot 11) by flag `0x53`, and levels 4's,
+  6's and 26's own routines that change the look (`0x801e83a4`,
+  `0x801e83a8`, `0x801e8390`, with tables of the overlay and `0x8008xxxx`).
+
+And every level writes its own number into **story flag `0x85`**
+(`0x801baa0d`) last: the level last come into, which level 10's reads to
+tell a return from itself.
+
+**This is where a category 8 comes from**, which section 17 could not find
+in GAME.EXE: level 0's entry 5 writes 1 into slot 0 and 8 into slots 1 and 2
+while flag `0x1e` is 0, and level 4's 8 into slot 26 while flag `0x19` is.
+
+**Checked against the game's own, and against the snapshots.**
+`tools/levelin.py --check` runs every level's entry 5 out of its overlay
+with `tools/mipsrun.py`, over the level as its own loader leaves it, the
+flags, the pack, the figures, the player's level, `drop_count_gold` and the
+objects' bytes it asks at random, `stamp_rect` and the look's routines
+logged: **1120 of 1120** runs leave the model's calls and all of RAM but the
+stack (25, 22, 27, 40 different outcomes on levels 0, 1, 5, 26). And over
+the snapshots: the disc's actor table with the level's entry 5 run over the
+snapshot's own flags and pack gives every snapshot's categories, **21 of 21**
+snapshots, 1167 slots -- the two of level 0 and the one of level 4 the disc
+alone gets wrong among them.
+
+**In the port**: `godot/levelin.gd` is the same code over the same addresses
+(`KFLevelIn.entry5`, the self-test 168 of 168 against the model), and
+`loot.gd _level_in` runs it as the scene comes in, after the record, before
+the first frame: the bytes from the port's fields, and back the flags, the
+pack, the categories, floors and states into `actors.gd`, an object's lock,
+state and `+0x39` into what keeps it, a type of `0xff` into the find rows and
+the things', a view byte into the things', and `stamp_rect` into the cells.
+Not in the port: the look's routines, the bytes it does not keep (`+2`,
+`+5`, `+0x10`, the scale, the markers' `+0x3c..+0x3e`), the static objects'
+view byte (the level's one mesh) and level 17's thing in the ring.
 
 ### Status/records, and running the game's own code
 
@@ -6668,7 +6729,8 @@ the house: 1 on the disc, 8 in memory. No store in `GAME.EXE` writes a literal 8
 into an actor, so something computes it; `emu/bp19.lua` now watches both bytes.
 *Found since:* the level's own code writes it -- level 0's entry 5, as the
 level loads, puts 8 into slots 1 and 2 while story flag `0x1e` is 0
-(FORMATS.md, "The levels' own use of a thing: entry 2").
+("What a level does as it comes in: entry 5"); with it, every snapshot's
+categories are the disc's, 21 of 21.
 
 Across the 28 levels the disc uses categories 0 and 1 almost everywhere, 2 on
 levels 15, 17, 25 and 27, and 3 on level 3. None carries 5 or 8.

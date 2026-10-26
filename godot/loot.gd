@@ -230,7 +230,133 @@ func _ready() -> void:
 	KFLevelState.apply_table(table, d, classes, _rand_fn())
 	KFLevelState.tables[lv] = table
 	take_stream(d)
+	call_deferred("_come_in")
+
+
+# The level in, as level_load ends it: the level's own entry 5 once every
+# node has its record (the creatures, the doors), then object_interpreter's
+# first pass.
+# @port engine -- entry 5, then the first frame, once the scene's nodes are ready
+func _come_in() -> void:
+	_level_in()
 	_first_frame()
+
+
+# The level's own entry 5 (KFLevelIn.entry5) as it comes in: the bytes it
+# reads, out of the port -- the story flags, the pack, the figures,
+# drop_count_gold, the creatures' +0, +3 and +9 and every object's view --
+# and what it wrote, back: the flags, the pack, the categories, floors and
+# states into actors.gd, an object's lock, state and +0x39 into what keeps
+# it, its type (0xff, gone) into the find rows and the things', its view
+# byte +0 into the things' -- and stamp_rect into the cells. Not acted: the
+# levels' routines that change their look (4, 6 and 26), the bytes the port
+# does not keep (+2, +5, +0x10, the scale, +0x3c..+0x3e of the markers), an
+# object switched by +0 among the static ones (the level's one mesh), and
+# the thing level 17 makes in the ring.
+# @port engine -- the bytes handed to KFLevelIn.entry5 and its writes put back
+func _level_in() -> void:
+	var lv: int = player._level()
+	KFTalk.load_level(lv)
+	var ch: Dictionary = player.character
+	var m := {"mem": {}, "calls": []}
+	var mem: Dictionary = m["mem"]
+	for k in KFTalk.FLAG_COUNT:
+		KFLevelIn.wr(m, KFLevelIn.F(k), int(KFTalk.flags[k]))
+	var inv: KFItems = player.inventory
+	for i in 0x96:
+		KFLevelIn.wr(m, KFLevelIn.INV_A + i, int(inv.a[i]))
+		KFLevelIn.wr(m, KFLevelIn.INV_B + i, int(inv.b[i]))
+	KFLevelIn.wr(m, KFLevelIn.STAT36, int(ch.get("stat36", 20)), 2)
+	var grow: Array = ch.get("grow", [0, 0, 0, 0, 0])
+	for k in 5:
+		KFLevelIn.wr(m, KFLevelIn.SKILLS + 2 * k, int(grow[k]), 2)
+	KFLevelIn.wr(m, KFLevelIn.PLAYER_LEVEL, int(ch.get("level", 1)))
+	KFLevelIn.wr(m, KFLevelIn.DROP_COUNT, int(counters[0x15E]), 2)
+	var an := get_node_or_null("../Actors")
+	var list: Array = an.get("actors") if an != null and an.get("actors") != null else []
+	for k in 200:
+		var c = list[k] if k < list.size() else null
+		KFLevelIn.wr(m, KFLevelIn.A(k), 0xFF if c == null else int(c["cat"]))
+		KFLevelIn.wr(m, KFLevelIn.A(k, 3), 0 if c == null else int(c.get("floor", 0)))
+		KFLevelIn.wr(m, KFLevelIn.A(k, 9), 0 if c == null else int(c["st"]))
+	var objs := views()
+	for k in objs.size():
+		var o = objs[k]
+		if o == null:
+			KFLevelIn.wr(m, KFLevelIn.O(k, 6), 0xFF, 2)
+			continue
+		KFLevelIn.wr(m, KFLevelIn.O(k), int(o["b0"]))
+		KFLevelIn.wr(m, KFLevelIn.O(k, 4), int(o["op"]))
+		KFLevelIn.wr(m, KFLevelIn.O(k, 5), 0xFF)
+		KFLevelIn.wr(m, KFLevelIn.O(k, 6), int(o["type"]), 2)
+		KFLevelIn.wr(m, KFLevelIn.O(k, 8), int(o["state"]), 2)
+		KFLevelIn.wr(m, KFLevelIn.O(k, 0x14), int(o["x"]), 4)
+		KFLevelIn.wr(m, KFLevelIn.O(k, 0x18), int(o["y"]), 4)
+		KFLevelIn.wr(m, KFLevelIn.O(k, 0x1C), int(o["z"]), 4)
+		KFLevelIn.wr(m, KFLevelIn.O(k, 0x26), int(o["yaw"]), 2)
+		KFLevelIn.wr(m, KFLevelIn.O(k, 0x38), int(o["lock"]))
+		KFLevelIn.wr(m, KFLevelIn.O(k, 0x39), int(o["b39"]))
+		KFLevelIn.wr(m, KFLevelIn.O(k, 0x3A), int(o["h3a"]), 2)
+		KFLevelIn.wr(m, KFLevelIn.O(k, 0x3C), int(o["h3c"]))
+		KFLevelIn.wr(m, KFLevelIn.O(k, 0x3D), int(o["b3d"]))
+		KFLevelIn.wr(m, KFLevelIn.O(k, 0x3F), int(o["b3f"]))
+	var before := mem.duplicate()
+	KFLevelIn.entry5(lv, m)
+	var changed := []
+	for a in mem:
+		if not before.has(a) or int(before[a]) != int(mem[a]):
+			changed.append(int(a))
+	var touched := {}
+	for a: int in changed:
+		if a >= KFLevelIn.FLAGS and a < KFLevelIn.FLAGS + KFTalk.FLAG_COUNT:
+			KFTalk.flags[a - KFLevelIn.FLAGS] = int(mem[a])
+		elif a >= KFLevelIn.INV_A and a < KFLevelIn.INV_A + 0x96:
+			inv.a[a - KFLevelIn.INV_A] = int(mem[a])
+		elif a >= KFLevelIn.INV_B and a < KFLevelIn.INV_B + 0x96:
+			inv.b[a - KFLevelIn.INV_B] = int(mem[a])
+		elif a >= KFLevelIn.ACTORS and a < KFLevelIn.A(200):
+			var k: int = (int(a) - KFLevelIn.ACTORS) / KFLevelIn.ASTRIDE
+			var off: int = (int(a) - KFLevelIn.ACTORS) % KFLevelIn.ASTRIDE
+			if k < list.size() and list[k] != null:
+				match off:
+					0:
+						list[k]["cat"] = int(mem[a])
+					3:
+						list[k]["floor"] = int(mem[a])
+					9:
+						list[k]["st"] = int(mem[a])
+		elif a >= KFLevelIn.OBJECTS and a < KFLevelIn.O(KFLevelIn.COUNT):
+			touched[(a - KFLevelIn.OBJECTS) / KFLevelIn.OSTRIDE] = true
+		elif a >= KFLevelIn.DROP_COUNT and a < KFLevelIn.DROP_COUNT + 2:
+			counters[0x15E] = KFLevelIn.rd(m, KFLevelIn.DROP_COUNT, 2)
+	for k in touched:
+		var o = objs[k]
+		if o == null:
+			KFInfo.note("level in: slot %d made, not in the port" % k)
+			continue
+		var typ: int = KFLevelIn.rd(m, KFLevelIn.O(k, 6), 2)
+		var b0: int = KFLevelIn.rd(m, KFLevelIn.O(k))
+		o["op"] = KFLevelIn.rd(m, KFLevelIn.O(k, 4))
+		o["state"] = KFLevelIn.rd(m, KFLevelIn.O(k, 8), 2)
+		o["lock"] = KFLevelIn.rd(m, KFLevelIn.O(k, 0x38))
+		o["b39"] = KFLevelIn.rd(m, KFLevelIn.O(k, 0x39))
+		_write_view(k, o)
+		if finds.has(k):
+			finds[k][2] = typ
+		if rows.has(k):
+			if typ == 0xFF:
+				rows[k]["type"] = GONE
+			rows[k]["b0"] = b0
+	if an != null and an.has_method("refresh"):
+		an.refresh()
+	for call in m["calls"]:
+		if str(call[0]) == "stamp":
+			var dn := get_node_or_null("../Doors")
+			if dn:
+				dn.stamp_rect(int(call[1]), int(call[2]), int(call[3]), int(call[4]),
+					int(call[5]), int(call[6]), int(call[7]), int(call[8]), int(call[9]))
+	KFInfo.note("level in: entry 5 of level %d, %d bytes written, %s" % [lv, changed.size(),
+		str(m["calls"])])
 
 
 # What object_interpreter's first pass does before anything is drawn, after

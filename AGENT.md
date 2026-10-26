@@ -215,14 +215,14 @@ the equipment tables, against a RAM snapshot           3264/3264, 2112/2112, 16/
                                                        player_recalc_stats 483 of
                                                        483 values over 21 snapshots
 the conversation hooks, two readings of one table      23 of 23
-how much of the game the port has (portmap progress)   46.9% of the game's own
+how much of the game the port has (portmap progress)   47.0% of the game's own
                                                        code (game 47.4%, open
                                                        46.7%, end 0%; partial at
                                                        half, the library left out)
-the port against the game, function by function        831 of 831 placed: 483
-                                                       reproduce the game, 348 the
-                                                       port's own; 549 markers and
-                                                       1102 cited addresses, every
+the port against the game, function by function        855 of 855 placed: 490
+                                                       reproduce the game, 365 the
+                                                       port's own; 557 markers and
+                                                       1116 cited addresses, every
                                                        one resolving
 the object loader, against 13 snapshots                angles 4344/4352, scale and
                                                        position 4352/4352, opcode
@@ -341,6 +341,9 @@ what a conversation's 0xf4 runs, against every        2400 of 2400 runs: calls,
 level's own entry 4 (tools/hooks.py)                   flags, pack, categories,
                                                        skills, spells and 396
                                                        object records; 45 arms
+what a level does as it comes in, against every       1120 of 1120 runs, all of
+level's own entry 5 (tools/levelin.py); the            RAM but the stack; 21 of
+creatures' categories against the snapshots            21 snapshots, 1167 slots
 the warp, against the game's own warp_to               280 of 280 runs, every
                                                        record, calls and fields
 what a change of level writes of the player, off       4 stores in 114 routines:
@@ -403,7 +406,7 @@ effects 1494 of 1494 runs, 27656 of 27656 frames · aims 300 of 300 · volleys 2
 the run 150129 of 150129 frames
 player_take_hit 300 of 300 · the status 40 of 40 runs, 6312 of 6312 frames
 casting 1200 of 1200 · the attacking arms 240 of 240 · creature hits 400 of 400
-use_item 624 of 624 · conversation hooks 360 of 360 · warp_to 55 of 55 · seals 975 of 975 · fades 117 of 117
+use_item 624 of 624 · conversation hooks 360 of 360 · entry 5 168 of 168 · warp_to 55 of 55 · seals 975 of 975 · fades 117 of 117
 carry-over 60 of 60 fields and the place
 ```
 

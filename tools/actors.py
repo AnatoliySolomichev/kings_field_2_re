@@ -37,8 +37,9 @@ and 0x8004b560 stands it at home: x and z from the cell and the fine offsets,
 y from `collide_at_cell` (0x80033b8c) on the chosen floor, plus the height.
 Against a RAM snapshot of level 0 that reproduces all 58 slots, positions and
 heights to the unit, and every field but one: the two men by the house are
-category 1 on the disc and 8 in memory, changed after loading by something not
-yet found.
+category 1 on the disc and 8 in memory, changed after loading -- by the
+level's own entry 5, found since (tools/levelin.py: with it, every snapshot's
+categories, 21 of 21).
 
 When they appear
 ----------------
@@ -409,6 +410,18 @@ def check(lv=0, path=SNAP_RAM):
                       f"{struct.unpack_from('<3i', s, 0x2C)}")
     print(f"level {lv}: {seen} slots, {homes} of them at home; "
           f"differences: {dict(bad) or 'none'}")
+    if bad.get("cat"):
+        # the category the level's own entry 5 leaves, over the snapshot's flags
+        import levelin
+        m = levelin.Mem(ram)
+        for a in table(lv):
+            if a:
+                m.wr(levelin.A(a["slot"]), a["cat"])
+        levelin.entry5(lv, m)
+        left = sum(1 for a in table(lv) if a and m.ram[levelin.A(a["slot"]) & 0x1FFFFF]
+                   != ram[levelin.A(a["slot"]) & 0x1FFFFF])
+        print(f"  with the level's own entry 5 run over the snapshot's flags "
+              f"(tools/levelin.py): {left} categories differ")
     return bad
 
 
