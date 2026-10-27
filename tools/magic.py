@@ -896,6 +896,144 @@ def attack_check(out=sys.stdout, per=40):
     return ok == n
 
 
+# --- player_turn whole ----------------------------------------------------------
+
+SPELL_A = 0x801B25AB
+WEAPON_SHOTS = 0x801B25B2
+BIND_ATTACK, BIND_ACTION = 0x80081870, 0x80081874
+HELD_RECORD = 0x801B2594         # held_item_record: the weapon's 0x2c-byte record
+COMBO_BUTTONS = 0x8009C3CC       # gp+0x1b8: the combination's table, written each frame
+COMBO_END, COMBO_TIME = 0xFFFF, 0x14
+SWING_START, WEAPON_MAY_CAST = 0x8002C040, 0x8002CFE0
+PLAYER_TURN = 0x8002FE1C
+
+
+def turn(st, ram, calls, may):
+    """player_turn (0x8002fe1c) whole, a frame, on magic's fields `st` over
+    `ram` (copied: the table it writes is read back): the combination's
+    table at gp+0x1b8 -- bind_use, bind_attack, bind_action, 0xffff; the
+    action button's edge casts magic A (0x801b25ab) unless the weapon's shots
+    are under way or a combination is; the square button (button); the
+    pending action (pending); the USE stretch (use_tick), after which, with
+    USE held, nothing more; then the combination -- a press of one of the
+    three, the weapon's record's +0x24 not 0, weapon_may_cast(1) (`may`,
+    logged), its +4 not 0xff and the press the table's next: on to the next,
+    its end a swing at once, else 0x14 frames to the next press; the first
+    only with both meters full; anything else ends it -- and last a swing on
+    the attack button's edge with no pause and no combination under way."""
+    ram = bytearray(ram)
+    h = lambda a: struct.unpack_from("<H", ram, a & MASK)[0]       # noqa: E731
+    use, attack, action = h(BIND_USE), h(BIND_ATTACK), h(BIND_ACTION)
+    struct.pack_into("<4H", ram, COMBO_BUTTONS & MASK, use, attack, action, COMBO_END)
+    st["combo_table"] = [use, attack, action, COMBO_END]
+    b, p = st["buttons"], st["buttons_prev"]
+    if ram[WEAPON_SHOTS & MASK] == 0 and b & action and not p & action and st["b25aa"] == 0:
+        calls.append(("cast", ram[SPELL_A & MASK]))
+    calls.extend(button(ram))
+    pending(st, calls)
+    if not use_tick(st, ram):
+        return
+    mask = use | attack | action
+    rec = struct.unpack_from("<I", ram, HELD_RECORD & MASK)[0]
+    if b & mask and not p & mask and h(rec + 0x24):
+        calls.append(("may_cast", 1))
+        nxt = st["b258c"]
+        if may and ram[(rec + 4) & MASK] != 0xFF and b & h(nxt) and \
+                (nxt != COMBO_BUTTONS or (st["weapon_meter"] == 0x1388 and st["meter"] == 0x1388)):
+            st["b258c"] = (nxt + 2) & 0xFFFFFFFF
+            if h(nxt + 2) == COMBO_END:
+                calls.append(("swing",))
+                return
+            st["b25aa"] = COMBO_TIME
+        else:
+            st["b25aa"] = 0
+    if st["swing_pause"] == 0 and st["b25aa"] == 0 and b & attack and not p & attack:
+        calls.append(("swing",))
+
+
+def _vary_turn(ram, rng):
+    """The rest player_turn decides by: the buttons among the bound ones,
+    the weapon's shots, the combination's time and place, the weapon's
+    record's +4 and +0x24, magic A."""
+    h = lambda a: struct.unpack_from("<H", ram, a & MASK)[0]       # noqa: E731
+    use, attack, action = h(BIND_USE), h(BIND_ACTION - 4), h(BIND_ACTION)
+    m = h(BIND_MAP)
+    bits = (use, attack, action, m, 0x40)
+    wr(ram, "buttons", sum(x for x in bits if rng.random() < 0.4) & 0xFFFF)
+    wr(ram, "buttons_prev", sum(x for x in bits if rng.random() < 0.25) & 0xFFFF)
+    ram[WEAPON_SHOTS & MASK] = rng.choice((0, 0, 0, 2))
+    ram[SPELL_A & MASK] = rng.choice((NONE, rng.randrange(0, 0x1F)))
+    wr(ram, "b25aa", rng.choice((0, 0, 1, 2, COMBO_TIME)))
+    wr(ram, "b258c", COMBO_BUTTONS + 2 * rng.choice((0, 0, 1, 2, 3)))
+    wr(ram, "swing_pause", rng.choice((0, 0, 1, 0x3C)))
+    rec = struct.unpack_from("<I", ram, HELD_RECORD & MASK)[0]
+    if rec & 0x80000000:
+        ram[(rec + 4) & MASK] = rng.choice((0, 3, 0xFF))
+        struct.pack_into("<H", ram, (rec + 0x24) & MASK, rng.choice((0, 1, 0x40)))
+
+
+def turn_check(out=sys.stdout, per=60):
+    """player_turn whole against the game's own over every snapshot:
+    cast_spell, item_consume, use_item, player_action, weapon_may_cast (its
+    answer drawn) and swing_start stood in for and logged, the rest --
+    item_eaten_first, meter_gain -- run as the game's; the calls in order,
+    magic's fields, the combination's place and the table it writes."""
+    import random
+    import memcard
+    global ANNOUNCE
+    ANNOUNCE = ANNOUNCE or _announce()
+    rng = random.Random(0x7E2)
+    ok = n = 0
+    first = None
+    ways = {}
+    for path in memcard._snapshots():
+        base = bytearray(open(path, "rb").read())
+        for _ in range(per):
+            ram = bytearray(base)
+            _vary(ram, rng)
+            _vary_button(ram, rng)
+            _vary_turn(ram, rng)
+            may = rng.choice((0, 1, 1))
+            got = []
+            cpu = _cpu(ram, got)
+            cpu.hooks[CAST_SPELL] = lambda c: got.append(("cast", c.r[4] & 0xFF))
+            cpu.hooks[ITEM_CONSUME] = lambda c: got.append(("consume", c.r[4] & 0xFF))
+            cpu.hooks[SWING_START] = lambda c: got.append(("swing",))
+
+            def may_cast(c, may=may):
+                got.append(("may_cast", c.r[4]))
+                return may
+            cpu.hooks[WEAPON_MAY_CAST] = may_cast
+
+            def use(c):
+                if (c.r[4], c.r[5]) == (PLAYER_POS, PLAYER_PITCH):
+                    got.append(("use", c.r[6] & 0xFF))
+                else:
+                    got.append(("use from", c.r[4], c.r[5], c.r[6]))
+            cpu.hooks[USE_ITEM] = use
+            cpu.call(PLAYER_TURN)
+            st = state_of(ram)
+            want = []
+            turn(st, ram, want, may)
+            g = state_of(cpu.ram)
+            g["combo_table"] = list(struct.unpack_from("<4H", cpu.ram, COMBO_BUTTONS & MASK))
+            bad = _same(g, st)
+            key = " ".join(sorted({c[0] for c in want})) or "nothing"
+            ways[key] = ways.get(key, 0) + 1
+            n += 1
+            if not bad and got == want:
+                ok += 1
+            elif first is None:
+                first = (f"{os.path.basename(path)}: fields {bad} game {[g[k] for k in bad]} "
+                         f"model {[st[k] for k in bad]}; calls game {got} model {want}")
+    print(f"player_turn whole, against the game's own: {ok} of {n} frames over every snapshot "
+          f"-- the calls in order, the fields, the combination's place and table; "
+          f"{len(ways)} different sets of calls", file=out)
+    if first:
+        print(f"  first difference: {first[:1500]}", file=out)
+    return ok == n
+
+
 # player_action's switch (0x800117e8, 77 arms): the attacking arms, the
 # healing and protecting ones, and the 35 that go straight to the end
 # (0x8002ce84) -- as does anything past 0x4c.
@@ -1184,7 +1322,9 @@ def export(out_dir, n=200):
 
 if __name__ == "__main__":
     if "--whole" in sys.argv:
-        sys.exit(0 if whole_check() else 1)
+        a = whole_check()
+        b = turn_check()
+        sys.exit(0 if a and b else 1)
     if "--check" in sys.argv:
         a = check()
         b = attack_check()

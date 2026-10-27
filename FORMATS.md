@@ -4947,6 +4947,26 @@ the rest one.
 to `0x1e` are the 31 spells in table order and `0x36` to `0x4c` the weapons'
 magic. While shots remain the delay starts again at the interval.
 
+**`player_turn` whole** (`0x8002fe1c`), the controller's first call each
+frame, in order: the combination's table at `gp+0x1b8` (`0x8009c3cc`) --
+bind_use, bind_attack, bind_action, `0xffff`, written every frame; the action
+button's edge casts magic A (`0x801b25ab`) while the weapon's shots
+(`0x801b25b2`) and the combination's time (`0x801b25aa`) are 0; the square
+button (above); the pending action; the USE stretch (below), after which,
+with USE held, it returns. Then the combination (`0x800302d4`): a fresh press
+of one of the three, the weapon record's `+0x24` not 0, `weapon_may_cast(1)`,
+its `+4` not `0xff` and the press the table's next (the first only with both
+meters at 5000) -- the place moves on, its end (`0xffff`) a swing at once,
+else `0x14` frames to the next; anything else ends it (time 0). Last, a swing
+(`swing_start`) on the attack button's edge with no pause and no
+combination under way. `tools/magic.py turn_check` runs the game's own
+whole over every snapshot -- cast_spell, item_consume, use_item,
+player_action, weapon_may_cast (its answer drawn) and swing_start logged,
+item_eaten_first and meter_gain run as the game's: **1260 of 1260** frames
+make the model's calls in order and leave its fields, the combination's
+place and table. In the port `player.gd _player_turn` is the routine:
+`_cast_buttons`, `_use` and the combination (`KFWeapon.combo`).
+
 **`skill_practice`** (`0x8002a10c`): for each skill k whose bit the record's
 group has, `+3` is added to the count at `0x801b250a + 2k`; at 400 the count
 is 0 again and the skill one higher -- 999 at most, announce `0x12 + k` below

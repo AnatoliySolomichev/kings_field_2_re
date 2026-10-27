@@ -1301,11 +1301,37 @@ func _spell_records() -> Dictionary:
 	return {}
 
 
-# player_turn's buttons (0x8002fe1c): the action button's edge casts magic A
-# unless the weapon's own magic is firing (0x801b25b2, its shots left) or a
+# player_turn (0x8002fe1c), the controller's first call each frame: the
+# combination's table (bind_use, bind_attack, bind_action -- _combo_buttons),
+# the casting buttons and the pending action (_cast_buttons), the USE stretch
+# (_use), and unless USE is held the combination and a swing on the attack
+# button's edge when the pause after the last blow is over and no
+# combination is under way (KFWeapon.combo). swing_start starts nothing with
+# no weapon in hand or while paralysed (0x801b2568); following the emulator,
+# the swing is the game's (ghost.gd).
+# @orig game:0x8002fe1c player_turn  status:verified -- whole, tools/magic.py turn_check: 1260 of 1260 frames of the game's own over every snapshot, the calls in order (cast_spell, item_consume, use_item, player_action, weapon_may_cast, swing_start), magic's fields, the combination's place and table; its stretches are the functions it calls here, each with its own marker
+func _player_turn() -> void:
+	_cast_buttons()
+	var rest := _use()
+	if rest and weapon_id < KFWeapon.records.size() and not KFGame.follow:
+		var rec: PackedByteArray = KFWeapon.records[weapon_id]
+		var full := int(wstate["meter"]) == KFWeapon.FULL and magic_meter == KFWeapon.FULL
+		var may := KFWeapon.may_cast(weapon_id, rec, 1, character.get("spells", []), stat, working)
+		var ph := KFWeapon.combo(combo, rec, combo_latch, attack_latch, _combo_buttons(), may, full,
+			int(wstate["pause"]))
+		if ph >= 0 and int(caps["paralysis"]) == 0:
+			KFWeapon.start(wstate, rec, magic_meter, ph)
+			if ph == 1:
+				KFInfo.note("player: the combination -- the weapon's second swing")
+	attack_latch = false
+	combo_latch = 0
+
+
+# player_turn's buttons (0x8002fe1c on): the action button's edge casts magic
+# A unless the weapon's own magic is firing (0x801b25b2, its shots left) or a
 # combination is under way (0x801b25aa); the square button's (bind_map) the
 # button's spell, or uses its thing (button_calls). Then the pending action.
-# @orig game:0x8002fe1c player_turn  status:partial -- the casting buttons, the button's thing and the pending action
+# @port helper -- the casting buttons and the pending action on the player's fields, as _player_turn runs them
 func _cast_buttons() -> void:
 	var st := _magic_state()
 	var calls := []
@@ -1647,26 +1673,7 @@ func _frame(dir: Vector3) -> void:
 	if guard != 0:
 		speed_cap >>= 1
 		turn_cap >>= 1
-	_cast_buttons()
-	var rest := _use()
-	# player_turn's tail (0x80030298): the combination, then a swing on the
-	# attack button's edge when the pause after the last blow is over and no
-	# combination is under way -- never while USE is held, when player_turn
-	# has returned already. swing_start starts nothing with no weapon in hand
-	# or while paralysed (0x801b2568); following the emulator, the swing is
-	# the game's (ghost.gd)
-	if rest and weapon_id < KFWeapon.records.size() and not KFGame.follow:
-		var rec: PackedByteArray = KFWeapon.records[weapon_id]
-		var full := int(wstate["meter"]) == KFWeapon.FULL and magic_meter == KFWeapon.FULL
-		var may := KFWeapon.may_cast(weapon_id, rec, 1, character.get("spells", []), stat, working)
-		var ph := KFWeapon.combo(combo, rec, combo_latch, attack_latch, _combo_buttons(), may, full,
-			int(wstate["pause"]))
-		if ph >= 0 and int(caps["paralysis"]) == 0:
-			KFWeapon.start(wstate, rec, magic_meter, ph)
-			if ph == 1:
-				KFInfo.note("player: the combination -- the weapon's second swing")
-	attack_latch = false
-	combo_latch = 0
+	_player_turn()
 	var cap := SPEED_MAX_RUN if Input.is_key_pressed(KEY_SHIFT) else speed_cap
 	# The controller's own order, off its call list: player_turn (the button
 	# edges), player_look (the turn and the pitch), player_walk (the speeds),

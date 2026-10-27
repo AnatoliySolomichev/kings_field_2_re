@@ -670,7 +670,7 @@ self-test. FORMATS.md, "What a hit leaves behind".
 
 ```
 python3 tools/magic.py --check      against the game's own code
-python3 tools/magic.py --whole      player_action whole: every action, against the game's own
+python3 tools/magic.py --whole      player_action and player_turn whole, against the game's own
 ```
 
 `cast_spell`, `skill_practice`, `player_action`'s healing and protecting
@@ -686,7 +686,9 @@ creatures, the routines it calls stood in for: 840 of 840; `export_attacks`
 writes `attackcheck.json`. `--whole` (`whole_check`) runs the game's own
 `player_action` for every action, 0..0x4c and four past it, over every
 snapshot -- the attacking arms, the healing ones and the 35 that do nothing
-(all of RAM as it was but the stack): 3402 of 3402. FORMATS.md, "Casting".
+(all of RAM as it was but the stack): 3402 of 3402; and `turn_check` the
+game's own `player_turn` whole, the pieces above put together in order
+(`turn`): 1260 of 1260 frames. FORMATS.md, "Casting".
 
 **`hit.py`** — a creature takes a hit.
 

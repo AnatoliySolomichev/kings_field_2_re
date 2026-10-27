@@ -218,12 +218,12 @@ the equipment tables, against a RAM snapshot           3264/3264, 2112/2112, 16/
                                                        player_recalc_stats 483 of
                                                        483 values over 21 snapshots
 the conversation hooks, two readings of one table      23 of 23
-how much of the game the port has (portmap progress)   48.0% of the game's own
-                                                       code (game 48.5%, open
+how much of the game the port has (portmap progress)   48.3% of the game's own
+                                                       code (game 48.8%, open
                                                        46.7%, end 0%; partial at
                                                        half, the library left out)
-the port against the game, function by function        892 of 892 placed: 499
-                                                       reproduce the game, 393 the
+the port against the game, function by function        893 of 893 placed: 499
+                                                       reproduce the game, 394 the
                                                        port's own; 566 markers and
                                                        1136 cited addresses, every
                                                        one resolving
@@ -333,6 +333,9 @@ player_action (aim, creature in sight, spawns)         spawn and argument
 player_action whole, every action against the game's   1512 of 1512 attacking,
 own (tools/magic.py --whole)                           252 of 252 healing, 1638
                                                        of 1638 doing nothing
+player_turn whole, against the game's own             1260 of 1260 frames, the
+(tools/magic.py --whole, turn_check)                   calls in order and the
+                                                       fields
 a thing used, against the game's own use_item over     2800 of 2800 runs: calls,
 every level (tools/useitem.py)                         answer, pack, figures,
                                                        categories and 396 object
