@@ -586,7 +586,10 @@ Eating heals. Left, roughly in order:
   use of a thing", 2800 of 2800; levels 1 and 2 hand a thing to a creature,
   which then talks, and level 2's opens its gate through `object_signal`),
   but for what opcodes `0x53` and `0xa7` then do with level 5's objects and
-  level 7's pedestal -- and give_item's and take_item's entries 6 and 11.
+  level 7's pedestal. give_item's and take_item's entries 6 and 11 are in
+  (FORMATS.md, "A thing into the pack", 1680 of 1680 runs of the game's
+  own); who reads level 2's flag `0x11`, which its entry 6 sets for the
+  aquarian boots, is not found.
   Every level's conversation hook (entry 4, 45 arms) is in (FORMATS.md,
   "What a conversation makes happen", 2400 of 2400 runs of the overlays'
   own), but for what the port does not act out: the light's frames

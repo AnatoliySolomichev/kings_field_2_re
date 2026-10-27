@@ -3235,8 +3235,9 @@ it (`use_item`, `views`): the self-test holds it to 336 of the model's runs
 entry less `0x96`, as a sign's), which `tools/useitem.py` writes for the
 level's creatures, rectangles and slot 11. `player.gd` keeps the floor
 (`layer`), `actors.gd` and `ai.gd` a creature's (`floor`). Not in the port:
-the level's own entries 6 and 11, entry 2 of levels 4, 8 and 17, and the
-statues. What Orladin's key
+entry 2 of levels 4, 8 and 17, and the statues; the levels' entries 6 and 11,
+which give_item and take_item call, are in KFItems (below, "A thing into the
+pack"). What Orladin's key
 leaves -- the seals, the pedestals and the key's own object -- is the next
 section but one.
 
@@ -3716,6 +3717,53 @@ hurt (`effects.gd hurt_player`), the armour and the stats; `player.warped`
 is `0x801b25ee`, set by `crossing.gd`'s warp below record `0xc` and carried
 across a crossing. Not in the port: the light's and level 9's frames, the
 sound, and objects shown or hidden among the static ones.
+
+### A thing into the pack: give_item, take_item, entries 6 and 11
+
+**`give_item(id)`** (`0x8005d898`) puts one more into the first of the two
+arrays under 99 and then calls the level's own **entry 6** (`level_hooks +
+0x18`), answering 0; with both at 99 it raises banner `0xb`, answers 1 and
+calls nothing. **`take_item(id)`** (`0x8005d7f8`) takes one from the first
+that has one and calls **entry 11** (`level_hooks + 0x2c`), answering 0; with
+none, 1. So whatever puts a thing in the pack -- a chest's lid
+(object_give), a thing a conversation hands over, the flask filled, the
+excellector grown (`sub_8002a210`) -- runs the level's entry 6 after.
+
+Entry 11 is `jr $ra` on all 28 levels, and entry 6 on all but three. Those
+ask the pack, not the thing given:
+
+| level | held | story flag |
+|---|---|---|
+| 0 | the excellector as found (0), Ichrius' key (`0x85`), Leon's note (`0x64`) | 7 = 1 |
+| 2 | the aquarian boots (`0x4b`) | `0x11` = 1 |
+| 6 | Ichrius' wings (`0x83`) | `0x24` = 1 |
+
+Level 0's flag 7 is the last link of the chain entry 5 reads for the three
+men by the house (`0x1e`, 2, 6, 7: with it all three held and the objects
+that stand for them gone) and the one entry 3's clock waits on being 0; it
+is set by whichever of the three arrives last, or by anything given after,
+and never once the excellector has grown past its first form. Level 6's
+`0x24` is set by the conversation's arm 3 too as it hands the wings over,
+and level 9's entry 5 reads it (with `0x27`, flag `0x32`). Who reads level
+2's `0x11` is not found yet: no conversation's guard and no level's code
+the tools have walked.
+
+**Checked against the game's own.** `tools/givetake.py --check` runs
+GAME.EXE's own give_item and take_item with `tools/mipsrun.py` over every
+level as its loader leaves it, the overlay in so that the `jalr` reaches the
+level's own entries 6 and 11 (and those the game's has_item), the thing,
+both arrays' counts of it and of the five things asked (0, 98, 99 and any),
+and the three flags at random, `announce` logged: **1680 of 1680** runs
+give the model's answer, calls and all of RAM but the stack -- 754 given,
+79 refused, 791 taken, 56 with none to take.
+
+**In the port**: `KFItems.give_item` runs the level's entry 6
+(`KFLevelIn.entry6`) over the pack as the game's bytes, the flag back into
+`KFTalk.flags`, for the level `KFItems.level` names -- loot.gd sets it as
+the scene comes in, as level_load points `level_hooks` at the overlay; the
+self-test holds it to the model (`give and take`). `triggers.gd`'s give and
+take over the bytes (level 17's entry 3, whose entries 6 and 11 are empty)
+still only log the hooks.
 
 ### Status/records, and running the game's own code
 

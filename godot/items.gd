@@ -31,6 +31,10 @@ var b: PackedByteArray = _empty()
 # The banner give_item raises when there is nowhere to put the item. The caller
 # decides what to do with it; the game calls announce(0xb).
 var last_message := -1
+# The level whose own code give_item and take_item call after (level_hooks,
+# which level_load points at the level's overlay): loot.gd sets it as the
+# scene comes in. -1, none -- the self-test's packs.
+static var level := -1
 
 
 # reset_story_flags' tail (0x8005eacc), at a new game and at a death with no
@@ -63,7 +67,9 @@ func has_item(id: int) -> bool:
 	return a[id] != 0 or b[id] != 0
 
 
-# @orig game:0x8005d7f8 take_item  status:partial -- not the level's hook it calls after (level_hooks+0x2c)
+# take_item: true where the game answers 0. The level's entry 11, which it
+# calls after (level_hooks + 0x2c), is `jr $ra` on all 28 levels.
+# @orig game:0x8005d7f8 take_item  status:verified -- tools/givetake.py, 1680 of 1680 runs of the game's own give_item and take_item with every level's entries 6 and 11 out of its overlay (the answer, the calls, all of RAM but the stack), the self-test this to it
 func take_item(id: int) -> bool:
 	if id < 0 or id >= COUNT:
 		return false
@@ -76,18 +82,40 @@ func take_item(id: int) -> bool:
 	return false
 
 
-# @orig game:0x8005d898 give_item  status:partial -- not the level's hook it calls after (level_hooks+0x18)
+# give_item: true where the game answers 0, and the level's entry 6 run
+# (_entry6); both arrays at 99, false and the banner, and no hook.
+# @orig game:0x8005d898 give_item  status:verified -- tools/givetake.py, 1680 of 1680 runs of the game's own give_item and take_item with every level's entries 6 and 11 out of its overlay (the answer, the calls, all of RAM but the stack), the self-test this to it
 func give_item(id: int) -> bool:
 	if id < 0 or id >= COUNT:
 		return false
 	if a[id] < CAP:
 		a[id] = a[id] + 1
+		_entry6()
 		return true
 	if b[id] < CAP:
 		b[id] = b[id] + 1
+		_entry6()
 		return true
 	last_message = FULL_MESSAGE
 	return false
+
+
+# give_item's call of the level's entry 6 (KFLevelIn.entry6) over the pack as
+# the game's bytes, and the story flags it set put back.
+# @port engine -- the pack as the game's bytes for the level's entry 6, its flags back into KFTalk's
+func _entry6() -> void:
+	if level < 0:
+		return
+	KFTalk.load_level(level)               # the story flags, sized
+	var m := {"mem": {}, "calls": []}
+	for i in COUNT:
+		KFLevelIn.wr(m, KFLevelIn.INV_A + i, a[i])
+		KFLevelIn.wr(m, KFLevelIn.INV_B + i, b[i])
+	KFLevelIn.entry6(level, m)
+	var mem: Dictionary = m["mem"]
+	for k in KFTalk.FLAG_COUNT:
+		if mem.has(KFLevelIn.F(k)):
+			KFTalk.flags[k] = int(mem[KFLevelIn.F(k)])
 
 
 # @port helper -- both arrays' count of one id, for the readouts

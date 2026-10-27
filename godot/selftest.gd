@@ -356,6 +356,9 @@ func _init() -> void:
 	if not _trigger_runs():
 		quit(1)
 		return
+	if not _give_takes():
+		quit(1)
+		return
 	if not _inscriptions():
 		quit(1)
 		return
@@ -2757,6 +2760,64 @@ func _level_ins() -> bool:
 			told = true
 			print("  first difference: level %d: %s" % [int(c["level"]), why])
 	print("entry 5: %d of %d runs of the levels' own entry 5 match tools/levelin.py -- the calls and every byte written" % [
+		ok, cases.size()])
+	return ok == cases.size()
+
+
+# give_item and take_item with the level's own entry 6, godot/items.gd
+# (KFItems, KFLevelIn.entry6 through KFItems.level) against the runs
+# tools/givetake.py made of its model, which the game's own and every level's
+# overlay hold: from the bytes the model read, the same answer, the same
+# banner, and the pack and the story flags as the model left them.
+func _give_takes() -> bool:
+	if not FileAccess.file_exists("res://givetakecheck.json"):
+		print("give and take: no cases to check against")
+		return true
+	var doc = JSON.parse_string(FileAccess.get_file_as_string("res://givetakecheck.json"))
+	KFTalk.load_level(0)
+	var keep: Array = KFTalk.flags.duplicate()
+	var ok := 0
+	var told := false
+	var cases: Array = doc["cases"]
+	for c in cases:
+		var inv := KFItems.new()
+		KFTalk.flags.fill(0)
+		var want := {}
+		for p in c["read"]:
+			want[int(p[0])] = int(p[1])
+		for i in KFItems.COUNT:
+			inv.a[i] = int(want.get(KFLevelIn.INV_A + i, 0))
+			inv.b[i] = int(want.get(KFLevelIn.INV_B + i, 0))
+		for p in c["wrote"]:
+			want[int(p[0])] = int(p[1])
+		KFItems.level = int(c["level"])
+		var item := int(c["item"])
+		var got: bool = inv.give_item(item) if str(c["op"]) == "give" else inv.take_item(item)
+		KFItems.level = -1
+		var why := ""
+		if got != (int(c["answer"]) == 0):
+			why = "answered %s, python %d" % [str(got), int(c["answer"])]
+		elif (inv.last_message == KFItems.FULL_MESSAGE) != ((c["calls"] as Array).size() > 0):
+			why = "banner %d, python %s" % [inv.last_message, str(c["calls"])]
+		else:
+			for i in KFItems.COUNT:
+				var wa := int(want.get(KFLevelIn.INV_A + i, 0))
+				var wb := int(want.get(KFLevelIn.INV_B + i, 0))
+				if int(inv.a[i]) != wa or int(inv.b[i]) != wb:
+					why = "item %d: %d, %d, python %d, %d" % [i, inv.a[i], inv.b[i], wa, wb]
+					break
+			for k in KFTalk.FLAG_COUNT:
+				if why == "" and int(KFTalk.flags[k]) != int(want.get(KFLevelIn.F(k), 0)):
+					why = "flag 0x%x: %d, python %d" % [k, int(KFTalk.flags[k]),
+						int(want.get(KFLevelIn.F(k), 0))]
+		if why == "":
+			ok += 1
+		elif not told:
+			told = true
+			print("  first difference: level %d, %s 0x%x: %s" % [int(c["level"]), str(c["op"]), item, why])
+	for k in KFTalk.FLAG_COUNT:
+		KFTalk.flags[k] = keep[k]
+	print("give and take: %d of %d runs of give_item and take_item with the levels' own entry 6 match tools/givetake.py -- the answer, the banner, the pack and the flags" % [
 		ok, cases.size()])
 	return ok == cases.size()
 

@@ -498,6 +498,24 @@ byte, worn things and state at random: **1500 of 1500** runs leave the
 model's calls and all of RAM but the stack. `godot/triggers.gd` reproduces
 the model on **200 of 200** runs (`triggercheck.json`).
 
+**`givetake.py`** — a thing into the pack and out of it: give_item and
+take_item whole, with every level's entries 6 and 11 (FORMATS.md, "A thing
+into the pack").
+
+```
+python3 tools/givetake.py            what each level's entry 6 does, and where
+python3 tools/givetake.py --check    the model against the game's own give_item
+                                     and take_item and the overlays' entries
+python3 tools/givetake.py --export D givetakecheck.json into D, for the self-test
+```
+
+`--check` runs GAME.EXE's own give_item and take_item over every level with
+its overlay in, the thing, both arrays' counts and the three flags entry 6
+sets at random: **1680 of 1680** runs give the model's answer, calls and all
+of RAM but the stack. `godot/items.gd` (`KFItems`, through
+`KFLevelIn.entry6`) reproduces the model on **224 of 224** runs
+(`givetakecheck.json`).
+
 **`seals.py`** — what Orladin's key opens: the seals (opcode `0x17`), the
 thing they hand opcode `0x10`, and Orladin's pedestals (`0x1a`), FORMATS.md
 "What Orladin's key opens".

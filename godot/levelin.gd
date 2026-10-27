@@ -526,3 +526,23 @@ static func _level17(m: Dictionary) -> void:
 			wr(m, O(k, 0x1C), rd(m, O(11, 0x1C), 4), 4)
 	wr(m, F(0x54), 1)
 	wr(m, F(LAST_LEVEL), 0x11)
+
+
+# The level's entry 6, which give_item calls once a thing is in the pack: on
+# three levels a story flag by what is held, whatever the thing was -- level
+# 0's 7 for the excellector as found (0), Ichrius' key (0x85) and Leon's note
+# (0x64), level 2's 0x11 for the aquarian boots (0x4b), level 6's 0x24 for
+# Ichrius' wings (0x83); the rest return at once, as every level's entry 11,
+# take_item's, does.
+# @orig game:0x8005d918 give_item+0x80  status:verified -- the call of the level's entry 6 (level_hooks + 0x18); every level's own entry 6 out of its overlay, written out here as tools/givetake.py, which the game's own give_item and take_item with the overlays' entries 6 and 11 hold (1680 of 1680 runs, all of RAM but the stack), the self-test this to it
+static func entry6(lv: int, m: Dictionary) -> void:
+	match lv:
+		0:
+			if has_item(m, 0) > 0 and has_item(m, 0x85) > 0 and has_item(m, 0x64) > 0:
+				wr(m, F(7), 1)
+		2:
+			if has_item(m, 0x4B) > 0:
+				wr(m, F(0x11), 1)
+		6:
+			if has_item(m, 0x83) > 0:
+				wr(m, F(0x24), 1)

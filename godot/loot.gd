@@ -229,6 +229,7 @@ func _ready() -> void:
 	made_epoch = KFLevelState.epoch
 	var lv: int = player._level()
 	level = lv
+	KFItems.level = lv                     # give_item's entry 6 is this level's
 	var d := KFLevelState.decoded(lv)
 	var table := KFLevelState.fresh_table(finds)
 	KFLevelState.apply_table(table, d, classes, _rand_fn())
@@ -416,7 +417,10 @@ func _move_x(k: int, x: int) -> void:
 # into the cells (doors.gd), player_take_hit and effect_hurt_player on the
 # player, the armour put on, the stats, a banner. Not acted: the light's and
 # the scenes' frames (0x8005d948, render_frame), the sounds, the looks'
-# routines, give_item's and take_item's level hooks.
+# routines, and give_item's and take_item's level hooks, logged ["hook", ..]
+# where the bytes were changed -- level 17's entry 3 alone gives and takes
+# that way, and its entries 6 and 11 are empty (tools/givetake.py); a thing
+# given through KFItems runs its level's entry 6 there.
 # @port engine -- the levels' calls acted out
 func _act(calls: Array) -> void:
 	var recalc := false
