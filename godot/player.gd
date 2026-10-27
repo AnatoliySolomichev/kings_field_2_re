@@ -376,7 +376,7 @@ func _arrive(d: Dictionary) -> void:
 # equip_weapon takes the weapon up again, its meter at 0, and recalculates the
 # stats; and the magic meter is game_main's block_zero of the player block,
 # which nothing restores.
-# @orig game:0x8005ffd0 save_restore  status:partial -- the player's fields the port keeps; the curse and the timers (0x801b255e..0x801b2578), 0x801b24ec, 0x801b2522, 0x801b250a..0x801b2512, 0x801b2514, 0x801b24f1, the panel's bytes and the minutes are read and not used
+# @orig game:0x8005ffd0 save_restore  status:partial -- the player's fields the port keeps; the curse and the timers (0x801b255e..0x801b2578), 0x801b2522, 0x801b250a..0x801b2512, 0x801b2514, 0x801b24f1, the panel's bytes and the minutes are read and not used
 # @orig game:0x80028f90 save_loaded_fixup  status:partial -- the clearing (sub_80028e9c), equip_weapon and the stats; not equip_armour(0xff, 0xff), the three bonus timers' effects respawned (effect_spawn), set_spell_a/b's resources or the control scheme
 func take_save(f: Dictionary) -> void:
 	flying = false
@@ -400,7 +400,7 @@ func take_save(f: Dictionary) -> void:
 		"level": KFCard.num(f, "level"), "hp_max": hp_max,
 		"mp_max": KFCard.num(f, "mp_max"), "stat36": KFCard.num(f, "stat36"),
 		"grow": KFCard.halves(f, "skills"), "wis": KFCard.num(f, "wis"),
-		"spells": spells}
+		"spells": spells, "excel": KFCard.num(f, "b24ec", true)}
 	var inv: PackedByteArray = f["inventory"]
 	inventory = KFItems.new()
 	inventory.a = inv.slice(0, KFItems.COUNT)
@@ -1925,7 +1925,7 @@ func _blow(rec: PackedByteArray, strength: int, push_back: bool) -> void:
 			strong_hits = 0
 			character["stat36"] = mini(int(character["stat36"]) + 1, 999)
 			recalc_stats()
-	_award(int(r.get("exp", 0)))
+	_award(r)
 
 
 # What an effect's hit on a creature leaves the player (actor_take_hit's calls
@@ -1940,22 +1940,29 @@ func spell_struck(out: Dictionary, kind: int) -> void:
 			var calls := []
 			skill_practice(st, recs[kind], calls)
 			_magic_put(st, calls)
-	_award(int(out.get("exp", 0)))
+	_award(out)
 
 
-# award_exp (0x8002a310) through levelup.gd, and its banners and the stats.
-# @port helper -- the experience a creature's death gives, with its banners and the stats
-func _award(exp: int) -> void:
-	if exp > 0:
-		var r := {"exp": exp}
+# award_exp (0x8002a310) through levelup.gd, as actor_take_hit calls it when
+# a creature dies of the player's blow or spell ("award" in what the hit
+# leaves, the experience 0 or not): the pack and the weapon in hand for the
+# excellector's growth, its equip_weapon, the banners and the stats.
+# @port helper -- the experience a creature's death gives, with the excellector, its banners and the stats
+func _award(r: Dictionary) -> void:
+	if bool(r.get("award", false)):
 		var before := int(character["level"])
-		character = KFLevels.award(character, int(r["exp"]), KFTalk.flags)
+		character = KFLevels.award(character, int(r.get("exp", 0)), KFTalk.flags, inventory,
+			weapon_id)
 		hp_max = int(character["hp_max"])
+		var to := int(character["equip"])
+		if to >= 0:
+			equip_weapon(to)                     # the excellector grown in hand
 		for b in character.get("banners", []):
-			KFMessages.announce(int(b))          # "level up", "new spell"
-		character.erase("banners")
+			KFMessages.announce(int(b))          # "grown", "level up", "new spell"
+		for k in ["banners", "equip", "rolls"]:
+			character.erase(k)
 		recalc_stats()
-		KFInfo.note("player: %d experience, %d of %d, level %d" % [int(r["exp"]),
+		KFInfo.note("player: %d experience, %d of %d, level %d" % [int(r.get("exp", 0)),
 			int(character["exp"]), int(character["exp_next"]), int(character["level"])])
 		if int(character["level"]) != before:
 			KFInfo.note("player: level %d, HP max %d" % [int(character["level"]), hp_max])

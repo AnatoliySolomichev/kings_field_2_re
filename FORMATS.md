@@ -3727,7 +3727,7 @@ calls nothing. **`take_item(id)`** (`0x8005d7f8`) takes one from the first
 that has one and calls **entry 11** (`level_hooks + 0x2c`), answering 0; with
 none, 1. So whatever puts a thing in the pack -- a chest's lid
 (object_give), a thing a conversation hands over, the flask filled, the
-excellector grown (`sub_8002a210`) -- runs the level's entry 6 after.
+excellector grown (`excellector_grow`) -- runs the level's entry 6 after.
 
 Entry 11 is `jr $ra` on all 28 levels, and entry 6 on all but three. Those
 ask the pack, not the thing given:
@@ -5104,26 +5104,65 @@ type table and the spell table. Found by taking the first thirty-six bytes of
 the live table out of a RAM snapshot and searching every file on the disc for
 them; one hit.
 
-Checked against every snapshot in `out/snap`: **13 of 13** hold the HP maximum,
+Checked against every snapshot in `out/snap`: **20 of 20** hold the HP maximum,
 the MP maximum and the next threshold their level's record says, and `+0x36`
 holds the running sum of the third column — 20 at level 1, 21 at level 2.
 
 Five more figures grow by a coin toss rather than by the table: the halfwords
-at `0x801b2518` to `0x801b2520`. For each one **that is not already zero**,
-`rand() < 0x6665` adds one — about four times in five. That is the only place
-levelling uses `rand`, and it is why two characters at the same level are not
-the same character. Everything is then clamped to 999.
+at `0x801b2518` to `0x801b2520`. **From the fifth down**, for each one **that
+is not already zero**, `rand() < 0x6665` adds one — about four times in five.
+That is the only place levelling uses `rand`, and it is why two characters at
+the same level are not the same character. Everything is then clamped to 999,
+and `skill_unlock` runs for each skill from the fifth down. (The model rolled
+from the first up until the game's own was run with a sequence of answers:
+the order decides which skill a roll goes to.)
 
-Above level 99 the table runs out and the routine extrapolates by the
-*difference between its last two records* (`0x8002a45c`): each further level
-repeats the last step, for ever. In an ordinary game it never runs, because
-record 98 asks for 1000000 experience and the total is capped at 999999.
+Above level 99 the table runs out and the routine goes on by the difference
+between record 98 and **record 99** (`0x8002a45c`; `0x8009f5b8` is the table
+plus 99 records) — the twelve bytes after the table, zero on the disc and in
+every snapshot. So each level past 99 takes 999 off both maxima (wrapping as
+the halfwords they are), adds nothing to `+0x36` and a million less to the
+threshold. *Withdrawn:* this said the step was the difference between the
+last two records, "repeating the last step, for ever" — the table was read one
+record short, and the game's own award_exp, run past the table (77 runs), says
+otherwise. In an ordinary game none of it runs, because record 98 asks for
+1000000 experience and the total is capped at 999999.
 
-`tools/levelup.py` reads the table off the disc and carries the model;
-`godot/levelup.gd` is the same machine in the port, checked against it on 40 of
-40 cases with the rolled stats held at zero on both sides — the game's `rand`
-is not reproduced there, and comparing two different random sequences would
-say nothing.
+**The excellector grows here.** `excellector_grow` (`0x8002a210`) is called
+with the experience added and not yet capped. While the pack holds the
+excellector in its first or second form (items 0 and 1), **`excellector_mark`**
+(`0x801b24ec`, -1 from new_character, in the save) is the experience it counts
+from: the first award takes the experience then, and once the experience is
+more than **13000** (`0x32c8`) past it, the one in hand (equipped weapon 0 or
+1) is exchanged for the next form (`equip_weapon(w + 1)`), the second form in
+the pack for the third and the first for the second (take_item, give_item --
+the level's entries 11 and 6 with them, "A thing into the pack"), banner 4,
+and the mark -1 again, so the next 13000 count from the next award. Holding
+neither, the mark is -1. Both forms held grow both at once; with the third
+form's arrays full, give_item's banner `0xb` and the second form is gone. The
+snapshots: the 13 before any award hold -1, the 8 after the first kill 11 --
+its experience (`tools/levelup.py`'s `check_excellector`, consistent, not a
+proof). award_exp is called by `actor_take_hit` (`0x8004cb9c`) as a creature
+dies of the player's blow or spell, with the kind's `+0x1e` as an s16 --
+whatever it is, 0 too.
+
+**Checked against the game's own.** `tools/levelup.py --game` runs GAME.EXE's
+own award_exp with `tools/mipsrun.py` over every level as its loader leaves
+it -- excellector_grow, skill_unlock, has_item, take_item, give_item and the
+level's entries 6 and 11 running as the game's -- with the figures, the level
+(to `0xff`, past the table), the skills, the spells, the story flags, the
+pack, the weapon in hand, the mark and the award at random, `rand` answering
+a sequence and announce, equip_weapon and player_recalc_stats logged: **840
+of 840** runs make the model's calls, draw as many rolls and leave the same
+RAM, all of it but the stack -- 11 357 levels, 77 runs past the table, 1491
+spells unlocked, the excellector grown 376 times (130 in hand, 27 with no room).
+
+`tools/levelup.py` reads the table off the disc and carries the model
+(award_exp at the game's addresses, and `award` over a dict of the figures);
+`godot/levelup.gd` is the same machine in the port, checked against it on 60
+of 60 cases with the rolls given -- the game's `rand` is not reproduced there,
+so the port's own levelling draws Godot's -- and `player.gd _award` acts its
+equip_weapon, banners and stats as the creature dies.
 
 ### What a hit takes off
 

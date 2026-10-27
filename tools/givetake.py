@@ -33,7 +33,7 @@ level 6   Ichrius' wings (0x83) held: story flag 0x24 = 1 -- which the
 Whatever the thing given was: the hook asks the pack, not the id. So on
 level 0 the flag is set by the last of the three to arrive, or by anything
 given after, and never once the excellector has grown past its first form
-(0 is taken for 1, `sub_8002a210`).
+(0 is taken for 1, `excellector_grow`).
 
 **How it is held to the game.** `check()` runs GAME.EXE's own give_item and
 take_item with `tools/mipsrun.py` over every level as its own loader leaves

@@ -208,21 +208,24 @@ Do not report a step as complete without 1, 4 and 5.
 
 ```
 the collision, against the game's own answers          8075 of 8078
-the level table, against the snapshots                 13 of 13
+the level table, against the snapshots                 20 of 20
+award_exp and the excellector's growth, against the    840 of 840 runs, the calls,
+game's own over every level (tools/levelup.py --game)  the rolls and all of RAM
+                                                       but the stack
 the movement, against the watchpoint                   48 of 48, 15 of 15
 the conversations, against what was played             44 of 44
 the equipment tables, against a RAM snapshot           3264/3264, 2112/2112, 16/16;
                                                        player_recalc_stats 483 of
                                                        483 values over 21 snapshots
 the conversation hooks, two readings of one table      23 of 23
-how much of the game the port has (portmap progress)   47.0% of the game's own
-                                                       code (game 47.5%, open
+how much of the game the port has (portmap progress)   47.1% of the game's own
+                                                       code (game 47.6%, open
                                                        46.7%, end 0%; partial at
                                                        half, the library left out)
-the port against the game, function by function        873 of 873 placed: 494
-                                                       reproduce the game, 379 the
-                                                       port's own; 561 markers and
-                                                       1125 cited addresses, every
+the port against the game, function by function        876 of 876 placed: 495
+                                                       reproduce the game, 381 the
+                                                       port's own; 562 markers and
+                                                       1131 cited addresses, every
                                                        one resolving
 the object loader, against 13 snapshots                angles 4344/4352, scale and
                                                        position 4352/4352, opcode
@@ -397,7 +400,7 @@ and in the Godot self-test:
 ```
 movement 690 of 690 · steps 750 of 750 · creature steps 384 of 384
 creature runs 480 of 480 twice
-levels 40 of 40 · angles 400 of 400
+levels 60 of 60 · angles 400 of 400
 conversations 43 of 43, and 25 of 25 steps the emulator recorded
 damage 6 of 6 · knock-back 2484 of 2484 · weapon 12020 of 12020
 fences 600 of 600 · animation 540 of 540

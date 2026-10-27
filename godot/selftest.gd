@@ -3192,10 +3192,12 @@ func _angles() -> bool:
 	return bad_a == 0
 
 
-# The levelling, against the cases tools/levelup.py wrote beside the table. The
-# rolled stats are held at zero on both sides, because the game's rand is not
-# reproduced here -- so what is compared is the part that is the same every
-# time, which is everything the table decides.
+# The levelling, against the cases tools/levelup.py wrote beside the table,
+# whose model the game's own award_exp holds: the rolls the game's rand would
+# answer given in place of Godot's, the pack's excellector and the things the
+# levels' entry 6 asks, the weapon in hand and the level -- the figures, the
+# skills, the spells, the flags, the pack, the excellector's word, the
+# banners in order, the weapon to equip and the rolls drawn.
 func _levels() -> bool:
 	if not FileAccess.file_exists("res://levelcheck.json"):
 		print("levels: no cases to check against")
@@ -3205,19 +3207,51 @@ func _levels() -> bool:
 	if typeof(cases) != TYPE_ARRAY:
 		print("levels: levelcheck.json is not a list")
 		return false
+	KFTalk.load_level(0)
+	var keep: Array = KFTalk.flags.duplicate()
 	var bad_l := 0
+	var grown := 0
 	for c in cases:
+		var st: Dictionary = c["state"]
+		var inv := KFItems.new()
+		for k in st["pack"]:
+			inv.a[int(k)] = int(st["pack"][k][0])
+			inv.b[int(k)] = int(st["pack"][k][1])
+		for k in KFTalk.FLAG_COUNT:
+			KFTalk.flags[k] = int(c["flags"][k])
+		KFItems.level = int(c["level"])
 		var got := KFLevels.award({
-			"exp": int(c["exp"]), "exp_next": int(c["exp_next"]),
-			"level": int(c["level"]), "hp_max": int(c["hp_max"]),
-			"mp_max": int(c["mp_max"]), "stat36": int(c["stat36"]),
-			"grow": [0, 0, 0, 0, 0]}, int(c["award"]))
-		for k in ["level", "hp_max", "mp_max", "stat36", "exp", "exp_next"]:
-			if int(got[k]) != int(c["want"][k]):
-				bad_l += 1
-				print("  level case %s: %s is %d, python says %d" % [
-					str(c["award"]), k, int(got[k]), int(c["want"][k])])
+			"exp": int(st["exp"]), "exp_next": int(st["exp_next"]),
+			"level": int(st["level"]), "hp_max": int(st["hp_max"]),
+			"mp_max": int(st["mp_max"]), "stat36": int(st["stat36"]),
+			"grow": _ints(st["grow"]), "spells": _ints(st["spells"]),
+			"excel": int(st["excel"])}, int(c["award"]), KFTalk.flags, inv,
+			int(st["weapon"]), _ints(c["rolls"]))
+		KFItems.level = -1
+		var want: Dictionary = c["want"]
+		var why := ""
+		for k in ["level", "hp_max", "mp_max", "stat36", "exp", "exp_next", "excel", "equip",
+				"rolls"]:
+			if int(got[k]) != int(want[k]):
+				why = "%s is %d, python says %d" % [k, int(got[k]), int(want[k])]
 				break
-	print("levels: %d of %d cases match tools/levelup.py exactly" % [
-		cases.size() - bad_l, cases.size()])
+		for k in ["grow", "spells", "banners"]:
+			if why == "" and str(_ints(got[k])) != str(_ints(want[k])):
+				why = "%s is %s, python says %s" % [k, str(got[k]), str(want[k])]
+		if why == "" and str(_ints(KFTalk.flags)) != str(_ints(want["flags"])):
+			why = "the story flags differ"
+		for k in want["pack"]:
+			if why == "" and [int(inv.a[int(k)]), int(inv.b[int(k)])] != _ints(want["pack"][k]):
+				why = "item %s is %d, %d, python says %s" % [k, inv.a[int(k)], inv.b[int(k)],
+					str(want["pack"][k])]
+		if why != "":
+			bad_l += 1
+			if bad_l == 1:
+				print("  level case %s: %s" % [str(c["award"]), why])
+		elif (_ints(want["banners"]) as Array).has(KFLevels.GROWN):
+			grown += 1
+	for k in KFTalk.FLAG_COUNT:
+		KFTalk.flags[k] = keep[k]
+	print("levels: %d of %d cases match tools/levelup.py exactly (the excellector grown in %d), whose award_exp the game's own holds" % [
+		cases.size() - bad_l, cases.size(), grown])
 	return bad_l == 0

@@ -136,7 +136,10 @@ def main(quick=False, only_check=False):
     steps.append((["tools/collision.py"], "the collision, against the game's own answers",
         ["reproduced"]))
     steps.append((["tools/levelup.py"], "the level table, against the snapshots",
-        ["snapshots match", "snapshots have unlocked"]))
+        ["snapshots match", "snapshots have unlocked", "excellector's word"]))
+    steps.append((["tools/levelup.py", "--game"],
+        "award_exp and the excellector's growth, against the game's own over every level",
+        ["award_exp, against", "levels taken", "model "]))
     steps.append((["tools/movement.py", "bp15"], "the movement, against the watchpoint",
         ["of 48", "of 15"]))
     steps.append((["tools/escript.py", "check"], "the conversations, against what was played",

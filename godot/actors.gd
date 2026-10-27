@@ -514,6 +514,7 @@ func take_hit_flags(k: int, dmg: int, strength: int, flags: int, point) -> Dicti
 		if left <= 0:
 			if hp != 0 and s7 == 0x40:
 				out["exp"] = int(kind["exp"])
+				out["award"] = true               # award_exp, 0 or not (0x8004cb9c)
 			if int(a.get("model", 0)) < 0x2B:
 				if KFTalk.flags.size() < KFTalk.FLAG_COUNT:
 					KFTalk.flags.resize(KFTalk.FLAG_COUNT)

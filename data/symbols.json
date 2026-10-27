@@ -3342,5 +3342,15 @@
   "name": "key_test_all",
   "kind": "code",
   "evidence": "(key) -> key_test (0x80046608) with the key on all 396 objects, from object_table on; 0xff is no key. Levels 9's and 26's entry 5 hand it 0xf1 as the level comes in (a flag says the key's lock is open: every lock that asks it lifted). tools/levelin.py, against the overlays' own code: 1120 of 1120 runs"
+ },
+ "0x8002a210": {
+  "name": "excellector_grow",
+  "kind": "code",
+  "evidence": "award_exp calls it with the experience added and not yet capped. With item 0 or 1 (the excellector's first two forms) held: excellector_mark -1 takes player_exp; else once player_exp passes the mark + 0x32c8 (13000), equip_weapon(equipped_weapon + 1) if that is 0 or 1, item 1 taken for 2 and item 0 for 1 (take_item, give_item), announce(4), the mark -1. Holding neither, the mark -1. tools/levelup.py --game, 840 of 840 runs of the game's own award_exp, 376 growths"
+ },
+ "0x801b24ec": {
+  "name": "excellector_mark",
+  "kind": "data",
+  "evidence": "s32: the experience excellector_grow counts the excellector's 13000 from; new_character writes -1 (0x8002b49c), excellector_grow takes player_exp into it on the first award with the excellector held and -1 after a growth or without it; save_serialise and save_restore keep it (+0x56bc). Every snapshot before an award holds -1, every one after the first kill 11, that award's experience (8 of 8)"
  }
 }

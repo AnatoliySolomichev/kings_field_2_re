@@ -395,6 +395,7 @@ python3 tools/itemtext.py 104 png    write the image out to read by eye
 python3 tools/levelup.py            the table, and the model checked
 python3 tools/levelup.py 1 5000     what level 1 becomes after 5000 experience
 python3 tools/levelup.py --table    all 99 levels
+python3 tools/levelup.py --game     the model against the game's own award_exp
 python3 tools/levelup.py --godot    write it out for the port
 ```
 
@@ -405,8 +406,13 @@ the end of the image, and it comes off the disc: `FDAT.T` entry 97 at offset
 12592. Found by searching every file for the first thirty-six bytes of the live
 table.
 
-Checked: **13 of 13** RAM snapshots hold what their level's record says, and
-`godot/levelup.gd` reproduces the Python model on **40 of 40** cases.
+Checked: **20 of 20** RAM snapshots hold what their level's record says, 21
+of 21 the excellector's mark (`0x801b24ec`) excellector_grow leaves; `--game`
+runs GAME.EXE's own award_exp over every level -- excellector_grow,
+skill_unlock, give_item and take_item with the level's entries running as
+the game's, rand answering a sequence -- **840 of 840** runs the model's
+calls, rolls and all of RAM but the stack; and `godot/levelup.gd` reproduces
+the model on **60 of 60** cases, the rolls given (`levelcheck.json`).
 
 **`useitem.py`** — a thing used: `use_item` (`0x8005cbe0`) whole, every arm
 of its 61 (FORMATS.md, "A thing used").
