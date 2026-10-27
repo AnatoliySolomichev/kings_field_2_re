@@ -3766,8 +3766,66 @@ self-test against the model, `entry 1`), and `loot.gd _tick` runs it every
 frame of the game after the triggers, over the port's bytes (`_bytes` now
 carries the creatures' places and the view's yaw, `_bytes_back` an object's
 `+0x3f`). Not in the port: level 0's flicker (object 158's `+0x10` and the
-word are not kept, nor drawn), and what level 2's seventeen do with their
-state -- opcode `0x5f`'s arm is not run yet.
+word are not kept, nor drawn). What level 2's seventeen do with their state
+is the next section.
+
+### Level 2's lake: opcode 0x5f and the switch (entry 9)
+
+**Opcode `0x5f`** (`object_interpreter+0x20a8`, `0x800490b8`) is a pair of
+templates and a place. Put in state 1 -- by `object_signal` with its lock
+(which turns its `+0x3f` over), or by the level's own code -- it lays a
+stamp_rect of `+0x3d` by `+0x3e` cells from the template at (`+0x3b +
++0x3d`, `+0x3c`) to (`+0x39`, `+0x3a`), turned by its yaw, mask `0x2d` (the
+tile, the rotation, the shape, the fence), and goes to state 2 if `+0x3f` is
+0, 3 if it is 1, or stays; state 2 lays the template at `+0x3b` itself and
+ends (`0x63`), state 3 ends. So `+0x3f` 0 leaves the first template laid and 1
+the second. Twenty in the game: level 2's objects 100..116 (type `0x122`,
+locks `0xc8..0xd8`, two cells deep, from the templates in rows 76 and 78)
+and level 17's 5, 80 and 81.
+
+**Level 2's switch** is object 82 (type `0x12e`, cell (5, 40)): the loader
+gives it no arm, and the level's own loader hook (entry 8, `level_hooks +
+0x20`) makes it opcode `0xa6`, state 1 and `+0x40` `0xff` -- and opcode
+`0xa6` is one of the 191 object_interpreter sends to the level's **entry 9**
+(`level_hooks + 0x24`). Level 2's entry 9, for opcode `0xa6` alone: state 1
+-- object_sound with its type row's `+0xf`, `+1` the lock less 1 (5 for lock
+0), `+0xa` 0, state 2; state 2 -- `+0xa` up by `0x80` a frame, at `0x1000`
+`0xfff` and state 3; state 3 -- the position `(+1 + 1) mod 6`, and for each
+of the seventeen a word of the overlay's (`0x801e8f80`, a bit a position):
+set, a stone whose lock is still its own (`0xc8 + i`) and `+0x3f` not 0 gets
+`+0x3f` 0 and state 1; clear, a stone whose `+0x3f` is not 1 gets 1 and state
+1; then `+0x40` `0xff`, state 0; state 4 -- `+1` and state 3 at once.
+
+The switch's lock is 0 as placed, position 0 (only stone 100 on its first
+template), and 3 once the caretaker of the lake (slot 4) is dead -- the
+level's creature-death hook (entry 19) sets flag `0x15`, the lock 3 and state
+1, and entry 5 does the same by the flag on every later visit: position 3,
+stones 100, 101, 102, 104, 105 and 106 on their first templates. The level's
+entry 1 (above) lays every stone's second template while the aquarian boots
+are off and sets the switch going again (state 4) when they go on.
+`tools/lake.py` prints the seventeen, where they lay, from where, and their
+template in each position.
+
+**Checked against the game's own.** `tools/lake.py --check` runs GAME.EXE's
+own arm (`mipsrun.object_arm`) for every one of the twenty from every state,
+their `+0x3f`, templates and yaw at random, and for the switch --
+object_interpreter's escape into level 2's entry 9 out of its overlay --
+from every state with its lock, `+1`, `+0xa`, `+0x40` and the seventeen's
+locks, `+0x3f` and states at random, stamp_rect and object_sound logged:
+**672 of 672** runs leave the model's calls and all of RAM but the stack.
+And the loader: with levels 2's and 7's entry 8 read (`objload.level_hook`),
+`tools/objload.py` has **4838 of 4838** records as the game's own
+load_object_placement leaves them.
+
+**In the port**: `godot/lake.gd` is the same over the same addresses (the
+self-test against the model, `the lake`); `loot.gd _lake` runs every lake
+slot in slot order on a frame any of them is moving, over the port's bytes
+-- the switch's `+1` and `+0xa`, the stones' `+0x3c`, `+0x3e` and `+0x3f`
+kept with the held objects now, the loader's state in the find rows -- and
+lays the stamps (`doors.gd stamp_rect`). Not in the port: the switch's
+sound, and the creature-death hook that turns it (entry 19, not read for any
+level); level 7's entry 9 (the pedestal, opcode `0xa7`, with
+object_use_state and opcode `0xe8`) is not read into the port either.
 
 ### A thing into the pack: give_item, take_item, entries 6 and 11
 
@@ -6821,10 +6879,13 @@ level_cpu` puts a level into a snapshot's RAM as `level_load` would -- its
 grid at `0x801d4464`, its 32 type rows at `0x8019175c`, its overlay at
 `0x801e8308`, entry `3n + 1` where `level_load` reads it (`0x801c17a4`) --
 and runs `load_object_placement` itself over the placement block. Over all
-28 levels: **4836 of 4838** records are the model's, type, opcode, `+0`,
-`+1`, `+3`, place, angles, scale, `+0xc` and `+0x38..+0x3f`; the other two
-are records the loader hands to the level's own hook (classes `0xa6` on
-level 2 and `0xa7` on level 7, which it gives their class as the opcode); and
+28 levels: **4838 of 4838** records are the model's, type, opcode, `+0`,
+`+1`, `+3`, place, angles, scale, `+0xc` and `+0x38..+0x3f` -- two of them
+through the level's own hook (entry 8, `level_hooks + 0x20`), which is `jr
+$ra` on 26 levels and gives a class-`0xa6` record on level 2 (its lake's
+switch) the opcode `0xa6`, state 1 and `+0x40` `0xff`, and a class-`0xa7`
+one on level 7 the opcode `0xa7` (until `objload.level_hook` read them, the
+two that differed); and
 **0 of 1 792 000** grid bytes differ (`python3 tools/objload.py --check`).
 It found one thing wrong: a big chest (class 7) that the loader takes away
 puts back the cell's tile from its type row's **`+0xc`** -- the byte it

@@ -80,10 +80,10 @@ type id. `tools/level3d.py` now places 294 of level 0's 347 objects.
 
 **Held to the game's own loader on all 28 levels** (FORMATS.md, the end of
 "The first frame does more"): `tools/mipsrun.py` loads each level into a
-snapshot by `load_object_placement` itself, and `tools/objload.py` is 4836 of
-4838 records and every grid byte of it -- the two left are the level hooks'
-(classes 0xa6, 0xa7). What the hooks (`level_hooks + 0x20`) do at load is
-the one part of the loader not modelled.
+snapshot by `load_object_placement` itself, and `tools/objload.py` is 4838 of
+4838 records and every grid byte of it -- the level hooks (`level_hooks +
+0x20`, entry 8) included now: levels 2's and 7's own (classes 0xa6, 0xa7),
+the rest `jr $ra`.
 
 **Withdrawn: "height is not in the record at all."** It is, at offset 12, a
 signed 16-bit measured from the terrain, and `y = -128 * cell[+6] + h`
@@ -591,10 +591,14 @@ Eating heals. Left, roughly in order:
   own); who reads level 2's flag `0x11`, which its entry 6 sets for the
   aquarian boots, is not found. Every level's entry 1, the frame's tick, is
   in (FORMATS.md, "What a level does every frame", 1680 of 1680 runs) but
-  for level 0's flicker (object 158's `+0x10`, not kept) and what level 2's
-  seventeen opcode-`0x5f` objects do with the state it gives them: opcode
-  `0x5f`'s arm (`0x800490b8`, a stamp_rect by `+0x3f`) and the lake's switch
-  (opcode `0xa6`, level 2's entry 9) are not in the port.
+  for level 0's flicker (object 158's `+0x10`, not kept). Level 2's lake --
+  opcode `0x5f`'s arm and the switch, its entry 9 -- is in (FORMATS.md,
+  "Level 2's lake", 672 of 672 runs) but for the switch's sound; what turns
+  the switch, the caretaker's death (entry 19, a creature-death hook that 13
+  levels have, `0x80050874`), is not read, nor is level 7's entry 9 (the
+  pedestal for Ichrius' key, opcode `0xa7`, object_use_state with the
+  overlay's two vectors, then every opcode-`0xe8` object's `+1` `0x81` and
+  `+0x40` 0) or opcode `0xe8`'s arm (`0x8004a66c`).
   Every level's conversation hook (entry 4, 45 arms) is in (FORMATS.md,
   "What a conversation makes happen", 2400 of 2400 runs of the overlays'
   own), but for what the port does not act out: the light's frames

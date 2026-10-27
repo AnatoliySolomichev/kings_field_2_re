@@ -219,6 +219,9 @@ def main(quick=False, only_check=False):
     steps.append((["tools/ticks.py", "--check"],
         "what a level does every frame, against every level's own entry 1",
         ["entry 1, against", ": rolls", "(actor", "(object", "(flag"]))
+    steps.append((["tools/lake.py", "--check"],
+        "level 2's lake, against the game's own opcode 0x5f and the level's entry 9",
+        ["opcode 0x5f and level 2's entry 9, against", "stamps laid", "  level "]))
     steps.append((["tools/givetake.py", "--check"],
         "a thing into the pack and out, against the game's own give_item, take_item and every level's entries 6 and 11",
         ["give_item and take_item, against", ": model "]))

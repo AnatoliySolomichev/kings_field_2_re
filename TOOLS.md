@@ -520,6 +520,23 @@ lake's objects and the rest it reads at random, rand answering a sequence:
 the stack. `godot/ticks.gd` reproduces the model on **120 of 120** runs
 (`tickcheck.json`).
 
+**`lake.py`** — level 2's lake: opcode `0x5f`'s stamp switches and the
+switch over them (opcode `0xa6`, the level's entry 9), FORMATS.md "Level 2's
+lake".
+
+```
+python3 tools/lake.py                the seventeen stones and the six positions
+python3 tools/lake.py --check        the model against the game's own arms
+python3 tools/lake.py --export D     lakecheck.json and lake.json into D
+```
+
+`--check` runs GAME.EXE's own arm for each of the twenty opcode-`0x5f`
+objects and the switch (object_interpreter's escape into level 2's entry 9
+out of its overlay) from every state, the bytes they read at random: **672
+of 672** runs leave the model's calls and all of RAM but the stack.
+`godot/lake.gd` reproduces the model on **168 of 168** runs (`lakecheck.json`);
+`lake.json` is the seventeen words the switch reads, for the port.
+
 **`givetake.py`** — a thing into the pack and out of it: give_item and
 take_item whole, with every level's entries 6 and 11 (FORMATS.md, "A thing
 into the pack").

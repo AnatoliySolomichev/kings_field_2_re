@@ -62,9 +62,12 @@ had no doors in it:
 object whose slot it carries and turns itself off, so a class-9 record is
 never seen with its opcode and what it names is never seen drawn.
 
-**What is not here.** 200 classes go to the level overlay's own hook
-(`level_hooks + 0x20`), which is the level's code and not GAME.EXE's; those
-records are left as the common part made them, and `hooked` lists them.
+**The level's own hook.** 200 classes go to the level overlay's own hook
+(`level_hooks + 0x20`, entry 8), which is the level's code and not
+GAME.EXE's; `hooked` lists those records. Twenty-six levels' is `jr $ra`;
+`level_hook` is levels 2's and 7's (a class-0xa6 record opcode 0xa6, state 1
+and +0x40 0xff; a class-0xa7 one opcode 0xa7), and with it `game_check` has
+every record the game's own loader leaves.
 Classes 0x1f, 0x16 and 0x12 put a frame count into +0x40, and class 0xe3
 tests the player's cell -- runtime, both, and left out of the check.
 """
@@ -414,6 +417,20 @@ class Load:
             pass
         else:
             self.hooked.append(r["slot"])
+            self.level_hook(r)
+
+    def level_hook(self, r):
+        """The level's own entry 8 (`level_hooks + 0x20`), which the loader
+        hands a record of the 200 classes it has no arm for: `jr $ra` on 26
+        levels. Level 2's makes a class-0xa6 record its lake's switch --
+        opcode 0xa6, state 1 (it lays its pattern as the level comes in),
+        +0x40 0xff -- and level 7's a class-0xa7 one opcode 0xa7, the
+        pedestal Ichrius' key goes on."""
+        if self.lv == 2 and r["cls"] == 0xA6:
+            r["op"], r["state"] = 0xA6, 1
+            r["tail"][8] = 0xFF
+        elif self.lv == 7 and r["cls"] == 0xA7:
+            r["op"] = 0xA7
 
     def first_frame(self):
         """What `object_interpreter` does to the table on its first pass.
@@ -593,8 +610,8 @@ def game_check(out=sys.stdout, snap="a1"):
     overlay and entry 3n + 1 put in (level_cpu) -- against this model: each
     record's type, opcode, +0, +1, +3, position, angles, scale, +0xc and
     +0x38..+0x3f, and every byte of the grid. The records the loader hands
-    to the level's own hook (+0x20) are left as the common part made them
-    here, and what the hook does to them is counted apart."""
+    to the level's own hook (+0x20) are run through `level_hook`, levels 2's
+    and 7's own; what they still differ in is counted apart."""
     import mipsrun
     if not os.path.exists(os.path.join(ROOT, "out", "snap", snap + ".ram")):
         return True

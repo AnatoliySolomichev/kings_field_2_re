@@ -128,6 +128,8 @@ var talking := {}                  # script_interpreter's call while it runs (KF
 var talk_walks := true             # object_interact's call goes on to the objects; use_item's does not
 var gifts := []                    # the things a level's entry 4 gave, for object_give once the call ends
 var triggers := []                 # the slots of opcode 0xe1, the rectangles that run the level's entry 3
+var lake := []                     # the slots of opcodes 0x5f and 0xa6: level 2's lake (godot/lake.gd)
+var lake_words := []               # the seventeen words level 2's switch reads (lake.json)
 var fired := {}                    # slot -> a trigger's +0x40: fired, until the player steps out
 # What was opened, taken, dropped and set down goes where the game keeps it,
 # the level's stream (KFLevelState): out of it when the level loads, into the
@@ -195,6 +197,10 @@ func _ready() -> void:
 		finds[int(f[0])] = (f as Array).map(func(v): return int(v))
 		if f.size() > 10 and int(f[10]) == KFTriggers.OP:
 			triggers.append(int(f[0]))
+		if f.size() > 10 and int(f[10]) in [KFLake.OP_STAMP, KFLake.OP_SWITCH]:
+			lake.append(int(f[0]))
+	if not lake.is_empty():
+		lake_words = _lake_words()
 	for row in doc["rows"]:
 		var r := {}
 		for key in row:
@@ -327,6 +333,10 @@ func _bytes() -> Dictionary:
 		KFLevelIn.wr(m, KFLevelIn.O(k, 0x3C), int(o["h3c"]))
 		KFLevelIn.wr(m, KFLevelIn.O(k, 0x3D), int(o["b3d"]))
 		KFLevelIn.wr(m, KFLevelIn.O(k, 0x3F), int(o["b3f"]))
+		if o.has("b1"):
+			KFLevelIn.wr(m, KFLevelIn.O(k, 1), int(o["b1"]))
+			KFLevelIn.wr(m, KFLevelIn.O(k, 0xA), int(o["ha"]), 2)
+			KFLevelIn.wr(m, KFLevelIn.O(k, 0x3E), int(o["b3e"]))
 		KFLevelIn.wr(m, KFLevelIn.O(k, 0x40), int(fired.get(k, o["b40"])))
 	return {"m": m, "before": (m["mem"] as Dictionary).duplicate(), "objs": objs, "list": list}
 
@@ -386,6 +396,9 @@ func _bytes_back(w: Dictionary) -> int:
 		o["lock"] = KFLevelIn.rd(m, KFLevelIn.O(k, 0x38))
 		o["b39"] = KFLevelIn.rd(m, KFLevelIn.O(k, 0x39))
 		o["b3f"] = KFLevelIn.rd(m, KFLevelIn.O(k, 0x3F))
+		if o.has("b1"):
+			o["b1"] = KFLevelIn.rd(m, KFLevelIn.O(k, 1))
+			o["ha"] = KFLevelIn.rd(m, KFLevelIn.O(k, 0xA), 2)
 		_write_view(k, o)
 		fired[k] = KFLevelIn.rd(m, KFLevelIn.O(k, 0x40))
 		var x: int = KFTriggers.s32(KFLevelIn.rd(m, KFLevelIn.O(k, 0x14), 4))
@@ -490,13 +503,53 @@ func _triggers() -> void:
 			KFInfo.note("trigger: slot %d, %s" % [k, str(w["m"]["calls"])])
 
 
+# @port data -- lake.json's seventeen words, which tools/lake.py reads off level 2's overlay
+func _lake_words() -> Array:
+	if not FileAccess.file_exists("res://lake.json"):
+		return []
+	var d = JSON.parse_string(FileAccess.get_file_as_string("res://lake.json"))
+	if typeof(d) != TYPE_DICTIONARY:
+		return []
+	return (d.get("patterns", []) as Array).map(func(v): return int(v))
+
+
+# Opcode 0x5f's arm and the switch's (level 2's entry 9) for the lake's
+# slots, a frame of object_interpreter's: once any is moving, every one in
+# slot order over the port's bytes -- so the stones the switch sets off run
+# in the same frame, as they do in the game -- and what they wrote put back,
+# the stamps laid (doors.gd stamp_rect). Not the switch's sound.
+# @port engine -- the lake's arms a frame at a time over the port's bytes
+func _lake() -> void:
+	if lake.is_empty():
+		return
+	var objs := views()
+	var moving := false
+	for k in lake:
+		var o = objs[k]
+		if o != null and int(o["state"]) >= 1 and int(o["state"]) <= 4:
+			moving = true
+	if not moving:
+		return
+	var lv: int = player._level()
+	KFTalk.load_level(lv)
+	var w := _bytes()
+	for i in lake_words.size():
+		KFLevelIn.wr(w["m"], KFLake.PATTERNS + 4 * i, int(lake_words[i]), 4)
+	for k in lake:
+		KFLake.arm(lv, w["m"], k)
+	_bytes_back(w)
+	_act(w["m"]["calls"])
+	var laid: Array = (w["m"]["calls"] as Array).filter(func(c): return str(c[0]) == "stamp")
+	if not laid.is_empty():
+		KFInfo.note("lake: %d stamps laid" % laid.size())
+
+
 # level_overlay_tick's call of the level's own entry 1 (KFTicks.entry1), a
 # frame of the game at a time, over the bytes _bytes takes out of the port,
 # and what it wrote put back: the creatures' categories, states and floors,
 # the flags, level 2's lake (the switch's state and +0x40, the seventeen's
-# state and +0x3f -- kept, but their opcode 0x5f, which lays the cells, is
-# not run yet). Level 0's object 158 +0x10 and the word at 0x8009c21c are
-# not kept, so its flicker does not run.
+# state and +0x3f, which _lake then lays). Level 0's object 158 +0x10 and the
+# word at 0x8009c21c are not kept, so its flicker does not run.
 # @port engine -- the level's entry 1 a frame at a time over the port's bytes
 func _tick() -> void:
 	var lv: int = player._level()
@@ -752,6 +805,7 @@ func _process(dt: float) -> void:
 						k, int(r["tail"][3]), int(gate["lock"])])
 		for pd in pedestals:
 			_pedestal(pd)
+		_lake()
 		_triggers()
 		_tick()
 	_draw()
@@ -1503,7 +1557,11 @@ func views() -> Array:
 			"h3c": 0, "b0": int(f[14]) if f.size() > 14 else 0,
 			"b40": int(f[15]) if f.size() > 15 else 0xFF,
 			"b3d": int(f[16]) if f.size() > 16 else 0xFF,
-			"b3f": int(f[17]) if f.size() > 17 else 0xFF, "clk": 0}
+			"b3f": int(f[17]) if f.size() > 17 else 0xFF, "clk": 0,
+			"b1": 0x80, "ha": 0, "b3e": int(f[20]) if f.size() > 20 else 0xFF}
+		if f.size() > 19:
+			out[k]["state"] = int(f[18])
+			out[k]["h3c"] = int(f[19])
 	for k in rows:
 		var r: Dictionary = rows[k]
 		var p: Vector3i = r["pos"]
@@ -1543,8 +1601,9 @@ func views() -> Array:
 		out[k]["op"] = int(held_locks[k]["op"])
 		out[k]["state"] = int(held_locks[k]["state"])
 		out[k]["lock"] = int(held_locks[k]["lock"])
-		if held_locks[k].has("b3f"):
-			out[k]["b3f"] = int(held_locks[k]["b3f"])
+		for key in ["b3f", "b1", "ha"]:
+			if held_locks[k].has(key):
+				out[k][key] = int(held_locks[k][key])
 	return out
 
 
@@ -1577,6 +1636,9 @@ func _write_view(k: int, o: Dictionary) -> void:
 	g["lock"] = int(o["lock"])
 	g["state"] = int(o["state"])
 	g["b3f"] = int(o.get("b3f", 0xFF))
+	if o.has("b1"):
+		g["b1"] = int(o["b1"])
+		g["ha"] = int(o["ha"])
 
 
 # The awake creatures as use_item's truth glass and the levels' entry 2 look
@@ -1773,7 +1835,8 @@ func _gate_of(slot: int) -> Dictionary:
 				return d
 	if not held_locks.has(slot):
 		var f: Array = finds.get(slot, [])
-		held_locks[slot] = {"op": int(f[10]) if f.size() > 11 else 0xFF, "state": 0,
+		held_locks[slot] = {"op": int(f[10]) if f.size() > 11 else 0xFF,
+			"state": int(f[18]) if f.size() > 18 else 0,
 			"lock": int(f[11]) if f.size() > 11 else 0xFF}
 	return held_locks[slot]
 

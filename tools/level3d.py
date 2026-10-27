@@ -1111,7 +1111,10 @@ def find_rows(load):
     a slot (godot/levelstate.gd's table); then the record's +0 and +0x40 as
     the loader leaves them, which use_item's truth glass asks (godot/useitem.gd),
     +0x3d, the thing level 5's own entry 2 asks an opcode-0x53 object for, and
-    +0x3f, which object_signal asks of opcodes 0x52, 0x55 and 0x5a."""
+    +0x3f, which object_signal asks of opcodes 0x52, 0x55 and 0x5a; then the
+    state (+8) the loader leaves -- level 2's switch starts at 1 -- and +0x3c
+    and +0x3e, the template's z and the stamp's depth of opcode 0x5f
+    (godot/lake.gd)."""
     out = []
     for k, o in sorted(load.recs.items()):
         tr = load.rows[o["type"]]
@@ -1119,7 +1122,8 @@ def find_rows(load):
                     o["height"], struct.unpack_from("<H", tr, 6)[0],
                     struct.unpack_from("<H", tr, 8)[0], o["op"], o["tail"][0],
                     o["tail"][1], struct.unpack_from("<H", bytes(o["tail"]), 2)[0],
-                    o["b0"], o["tail"][8], o["tail"][5], o["tail"][7]])
+                    o["b0"], o["tail"][8], o["tail"][5], o["tail"][7],
+                    o.get("state", 0), o["tail"][4], o["tail"][6]])
     return out
 
 
@@ -1637,7 +1641,7 @@ def project(lv, out="out/godot", start=(57, 4)):
                  "weapon.gd", "anim.gd", "effects.gd", "held.gd",
                  "loot.gd", "messages.gd", "document.gd", "talk.gd", "info.gd", "menu.gd",
                  "crossing.gd", "card.gd", "levelstate.gd", "loadscreen.gd", "useitem.gd",
-                 "levelin.gd", "triggers.gd", "ticks.gd"):
+                 "levelin.gd", "triggers.gd", "ticks.gd", "lake.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening
@@ -1859,6 +1863,11 @@ def project(lv, out="out/godot", start=(57, 4)):
         ticks.export(out)
     except Exception as e:                       # no snapshot, no entry 1 cases
         print(f"entry 1 cases skipped: {e}")
+    try:
+        import lake
+        lake.export(out)
+    except Exception as e:                       # no snapshot, no lake cases
+        print(f"lake cases skipped: {e}")
     print(f"godot project in {out}/ — player starts in cell ({cx},{cz})")
 
 
@@ -1902,7 +1911,7 @@ def verify(out="out/godot"):
         if line.startswith(("loaded:", "movement:", "steps:", "creature steps:",
                             "fences:",
                             "creature run:",
-                            "levels:", "use_item:", "warp_to:", "conversation hooks:", "entry 5:", "triggers:", "give and take:", "entry 1:", "angles:",
+                            "levels:", "use_item:", "warp_to:", "conversation hooks:", "entry 5:", "triggers:", "give and take:", "entry 1:", "the lake:", "angles:",
                             "scripts:", "damage:", "equipment:", "player_recalc_stats:", "knock-back:", "weapon:", "animation:", "effects:", "lift doors:", "chests:", "seals:", "fades:", "carry-over:", "inscriptions:", "conversations:", "menus:", "routines:", "saves:", "level states:", "the run:", "player_take_hit:", "the status:", "casting:", "the attacking arms:", "creature hits:", "creature strikes:", "creature holds:", "FAIL", "  first",
                             "  level case", "  angle (", "  script level",
                             "  hit ")):

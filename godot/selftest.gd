@@ -362,6 +362,9 @@ func _init() -> void:
 	if not _ticks():
 		quit(1)
 		return
+	if not _lake_runs():
+		quit(1)
+		return
 	if not _inscriptions():
 		quit(1)
 		return
@@ -2763,6 +2766,50 @@ func _level_ins() -> bool:
 			told = true
 			print("  first difference: level %d: %s" % [int(c["level"]), why])
 	print("entry 5: %d of %d runs of the levels' own entry 5 match tools/levelin.py -- the calls and every byte written" % [
+		ok, cases.size()])
+	return ok == cases.size()
+
+
+# Level 2's lake, godot/lake.gd (opcode 0x5f's arm and the switch, level
+# 2's entry 9) against the runs tools/lake.py made of its model, which the
+# game's own arms and the overlay hold: from the bytes the model read, the
+# same calls and the same bytes written, and none besides.
+func _lake_runs() -> bool:
+	if not FileAccess.file_exists("res://lakecheck.json"):
+		print("the lake: no cases to check against")
+		return true
+	var doc = JSON.parse_string(FileAccess.get_file_as_string("res://lakecheck.json"))
+	var ok := 0
+	var told := false
+	var cases: Array = doc["cases"]
+	for c in cases:
+		var m := {"mem": {}, "calls": []}
+		for p in c["read"]:
+			m["mem"][int(p[0])] = int(p[1])
+		var before: Dictionary = (m["mem"] as Dictionary).duplicate()
+		KFLake.arm(int(c["level"]), m, int(c["slot"]))
+		var why := ""
+		if JSON.stringify(_norm(m["calls"])) != JSON.stringify(_norm(c["calls"])):
+			why = "calls %s, python %s" % [str(m["calls"]), str(c["calls"])]
+		else:
+			var want := {}
+			for p in c["wrote"]:
+				want[int(p[0])] = int(p[1])
+			for a in want:
+				if int(m["mem"].get(a, -1)) != int(want[a]):
+					why = "0x%x: %d, python %d" % [a, int(m["mem"].get(a, -1)), int(want[a])]
+					break
+			if why == "":
+				for a in m["mem"]:
+					if not want.has(a) and int(m["mem"][a]) != int(before.get(a, -1)):
+						why = "0x%x written, python did not" % int(a)
+						break
+		if why == "":
+			ok += 1
+		elif not told:
+			told = true
+			print("  first difference: level %d, slot %d: %s" % [int(c["level"]), int(c["slot"]), why])
+	print("the lake: %d of %d runs of opcode 0x5f and level 2's entry 9 match tools/lake.py -- the calls and every byte written" % [
 		ok, cases.size()])
 	return ok == cases.size()
 
