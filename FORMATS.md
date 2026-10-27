@@ -5037,6 +5037,17 @@ creatures: **840 of 840 casts** -- every spawn's point, velocity and
 argument, the creature woken, and the state left (`tools/magic.py
 attack_check`). The effects these spawn are not in the port yet.
 
+**And whole.** The switch's 77 arms off its table: 36 attacking, 6 healing
+and protecting, and 35 (`3`, `0xa`, `0xe`, `0x12`, `0x16`, `0x18`, `0x1d`,
+`0x1f..0x35`) sharing the routine's end, `0x8002ce84`, as does anything past
+`0x4c`. `tools/magic.py whole_check` runs the game's own `player_action` for
+every action `0..0x4c` and four past the bound over every snapshot: **1512
+of 1512** attacking casts as `attack_check` holds them, **252 of 252**
+healing and protecting as `check` does, and **1638 of 1638** of the rest
+making no call and leaving all of RAM as it was but the stack. In the port
+`player.gd _action` is the switch, into `player_action` (the healing arms)
+and `_attack`.
+
 **The fire ball** (kind 0), the first of these effects in the machine.
 Spawned as a particle (`sub_80053be4`: model 9 -- `model_table[0x31]` -- mode
 5, scale 0x1000), `+0xe` 0x40, its sound (`sub_800532d4`), a life of 0x32,

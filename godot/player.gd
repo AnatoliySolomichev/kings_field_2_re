@@ -1224,10 +1224,22 @@ func _magic_put(st: Dictionary, calls: Array) -> void:
 					fx.call("spawn", int(c[1]), int(c[2]), int(c[3]), pt,
 						[null, c[5]])
 			"action":
-				var more := []
-				player_action(st, int(c[1]), more)
-				_magic_put(st, more)
-				_attack(int(c[1]))
+				_action(st, int(c[1]))
+
+
+# player_action (0x8002c30c), what an action -- a spell cast, a weapon's
+# shot, the pending action's turn -- becomes: the switch on it (77 arms,
+# 0x800117e8) into the healing and protecting arms (player_action, on the
+# magic state; their effects, timers and stats), the attacking ones
+# (_attack), and for the other 35 and anything past 0x4c, nothing.
+# @orig game:0x8002c30c player_action  status:verified -- every action 0..0x4c and four past the bound against the game's own over every snapshot (tools/magic.py whole_check: 1512 of 1512 attacking, 252 of 252 healing and protecting, 1638 of 1638 doing nothing); its table's 77 arms are 36, 6 and 35 to the end; the arms are the functions below and their own markers
+func _action(st: Dictionary, action: int) -> void:
+	if action >= 0x4D:
+		return
+	var more := []
+	player_action(st, action, more)
+	_magic_put(st, more)
+	_attack(action)
 
 
 # player_action's attacking arms on the player: the view, the place, the cast

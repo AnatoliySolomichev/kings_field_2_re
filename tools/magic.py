@@ -896,6 +896,92 @@ def attack_check(out=sys.stdout, per=40):
     return ok == n
 
 
+# player_action's switch (0x800117e8, 77 arms): the attacking arms, the
+# healing and protecting ones, and the 35 that go straight to the end
+# (0x8002ce84) -- as does anything past 0x4c.
+HEALS = tuple(sorted(set(TIMED) | set(SPAWN_ONLY)))
+EMPTY = tuple(a for a in range(0x4D) if a not in ATTACKS and a not in HEALS)
+PAST = (0x4D, 0x4E, 0x80, 0xFF)
+
+
+def table_check(out=sys.stdout):
+    """player_action's 77 arms off its table: every action that does
+    something is an attacking or a healing one, and the rest share one
+    target, the routine's end."""
+    import mips
+    e = mips.load("game")
+    tab = [struct.unpack("<I", e.bytes(0x800117E8 + 4 * i, 4))[0] for i in range(0x4D)]
+    ends = {tab[a] for a in EMPTY}
+    ok = ends == {0x8002CE84} and all(tab[a] != 0x8002CE84 for a in tuple(ATTACKS) + HEALS)
+    print(f"player_action's table: {len(ATTACKS)} attacking arms, {len(HEALS)} healing and "
+          f"protecting, {len(EMPTY)} to the end (0x8002ce84){'' if ok else ' -- NOT SO'}",
+          file=out)
+    return ok
+
+
+def whole_check(out=sys.stdout, per=2):
+    """player_action whole, against the game's own over every snapshot: each
+    of the 77 actions and four past the bound -- the attacking arms as
+    attack_check holds them, the healing and protecting as check() does,
+    and the other 35 and those past 0x4c doing nothing: no call made and all
+    of RAM as it was but the stack."""
+    import random
+    import levelin
+    import levelstate
+    import memcard
+    global ANNOUNCE
+    ANNOUNCE = ANNOUNCE or _announce()
+    rng = random.Random(0x77A)
+    tally = {"attack": [0, 0], "heal": [0, 0], "none": [0, 0]}
+    first = None
+    for path in memcard._snapshots():
+        base = bytearray(open(path, "rb").read())
+        for act in list(range(0x4D)) + list(PAST):
+            for _ in range(per):
+                ram = bytearray(base)
+                _vary(ram, rng)
+                struct.pack_into("<3H", ram, VIEW & MASK, rng.randrange(0x10000),
+                                 rng.randrange(0x1000), rng.choice((0, rng.randrange(0x1000))))
+                ram[0x801B25EA & MASK] = rng.randrange(0, 12)
+                g_calls = []
+                if act in ATTACKS:
+                    what = "attack"
+                    seed = rng.randrange(1 << 30)
+                    cpu = _attack_cpu(ram, g_calls, levelstate.Lcg(seed))
+                    cpu.call(PLAYER_ACTION, act)
+                    st = attack_state(ram)
+                    m_calls = []
+                    attack(st, ram, act, m_calls, _kind_op, _collide, SPAWNED, levelstate.Lcg(seed))
+                    same = _same_spawns(g_calls, m_calls, cpu) and attack_state(cpu.ram) == st
+                elif act in HEALS:
+                    what = "heal"
+                    cpu = _cpu(ram, g_calls)
+                    del cpu.hooks[PLAYER_ACTION]
+                    st = state_of(ram)
+                    cpu.call(PLAYER_ACTION, act)
+                    m_calls = []
+                    action(st, act, m_calls)
+                    same = not _same(state_of(cpu.ram), st) and g_calls == m_calls
+                else:
+                    what = "none"
+                    cpu = _attack_cpu(ram, g_calls, levelstate.Lcg(0))
+                    cpu.call(PLAYER_ACTION, act)
+                    lo, hi = levelin.STACK_LO, levelin.STACK_HI
+                    same = not g_calls and cpu.ram[:lo] == ram[:lo] and cpu.ram[hi:] == ram[hi:]
+                tally[what][0] += same
+                tally[what][1] += 1
+                if not same and first is None:
+                    first = f"{os.path.basename(path)} action {act:#x}: game {g_calls}"
+    good = table_check(out)
+    print(f"player_action whole, against the game's own: {tally['attack'][0]} of "
+          f"{tally['attack'][1]} attacking, {tally['heal'][0]} of {tally['heal'][1]} healing and "
+          f"protecting, {tally['none'][0]} of {tally['none'][1]} of the {len(EMPTY)} empty arms "
+          f"and past the bound doing nothing", file=out)
+    if first:
+        print("  first difference: " + first[:1500], file=out)
+    return good and all(a == b for a, b in tally.values())
+
+
 def _norm(calls, ram):
     """The model's calls as godot/selftest.gd compares them: a creature by
     its slot, a spawn's arguments as numbers and ["vel", x, y, z] / "view"."""
@@ -1097,6 +1183,8 @@ def export(out_dir, n=200):
 
 
 if __name__ == "__main__":
+    if "--whole" in sys.argv:
+        sys.exit(0 if whole_check() else 1)
     if "--check" in sys.argv:
         a = check()
         b = attack_check()

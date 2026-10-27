@@ -218,14 +218,14 @@ the equipment tables, against a RAM snapshot           3264/3264, 2112/2112, 16/
                                                        player_recalc_stats 483 of
                                                        483 values over 21 snapshots
 the conversation hooks, two readings of one table      23 of 23
-how much of the game the port has (portmap progress)   47.1% of the game's own
-                                                       code (game 47.6%, open
+how much of the game the port has (portmap progress)   48.0% of the game's own
+                                                       code (game 48.5%, open
                                                        46.7%, end 0%; partial at
                                                        half, the library left out)
-the port against the game, function by function        891 of 891 placed: 498
+the port against the game, function by function        892 of 892 placed: 499
                                                        reproduce the game, 393 the
-                                                       port's own; 565 markers and
-                                                       1134 cited addresses, every
+                                                       port's own; 566 markers and
+                                                       1136 cited addresses, every
                                                        one resolving
 the object loader, against 13 snapshots                angles 4344/4352, scale and
                                                        position 4352/4352, opcode
@@ -330,6 +330,9 @@ and effect_driver (its world stood in for)             914 frames, queries, hits
                                                        34 hits on a creature
 the attacking arms, against the game's own             840 of 840 casts, every
 player_action (aim, creature in sight, spawns)         spawn and argument
+player_action whole, every action against the game's   1512 of 1512 attacking,
+own (tools/magic.py --whole)                           252 of 252 healing, 1638
+                                                       of 1638 doing nothing
 a thing used, against the game's own use_item over     2800 of 2800 runs: calls,
 every level (tools/useitem.py)                         answer, pack, figures,
                                                        categories and 396 object
