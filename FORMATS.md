@@ -3718,6 +3718,57 @@ is `0x801b25ee`, set by `crossing.gd`'s warp below record `0xc` and carried
 across a crossing. Not in the port: the light's and level 9's frames, the
 sound, and objects shown or hidden among the static ones.
 
+### What a level does every frame: entry 1
+
+`level_overlay_tick` (`0x8005eb20`), seventh in game_main's frame, calls the
+level's own **entry 1** (`level_hooks + 4`) first thing. Twenty-two levels'
+is `jr $ra`; six do something (`tools/ticks.py` has them in full):
+
+* **level 0** -- a flicker: on `rand() < 0x2000` object 158's `+0x10` moves
+  by 16 times the word at `0x8009c21c`, which turns over past `0x800`, the
+  halfword back to 0 at `0x1000`. And the three men by the house: with story
+  flags 1 and 2 set and 7 clear, once the player is "far" from man 1, men 0
+  and 1 held (category 8) and man 2 up. "Far" is the source's `dx ^ 2 + dz
+  ^ 2 >= 401` (dx, dz the cells from the player, divided toward 0) -- which
+  C reads as `dx ^ (dz + 2) ^ 2`, an exclusive or, and the compiler kept the
+  slip (`0x801e86c0`: `addiu 2`, `xor`, `xori 2`). With dx below 0 it never
+  holds; level 1's same test squares properly.
+* **level 1** -- flag `0xa` (the blood herb given, entry 2) and not `0xb`,
+  the player 20 cells or more from creature 20 (`dx*dx + dz*dz >= 401`):
+  flag `0xb`, creatures 20, 25 and 40 held, 10, 23 and 24 up -- the son gone
+  home once out of sight, as entry 5 lays it for a later visit.
+* **level 2** -- the lake and the aquarian boots (`0x4b`, the feet,
+  `0x801b25d8`). Without them, once (object 82's `+0x40` to 1), every one of
+  objects 100..116 -- opcode `0x5f`, locks `0xc8..0xd8`, the arm that lays a
+  stamp_rect by `+0x3f` -- whose `+0x3f` is not 1 gets `+0x3f` 1 and state
+  1. In them, object 82 (opcode `0xa6`, the lake's switch, whose arm is the
+  level's entry 9) at rest with `+0x40` set gets state 4, its pattern laid
+  again, and `+0x40` 0.
+* **levels 8 and 17** -- a creature that appears when the player looks away:
+  level 8's creature 1 by flags `0x2c` 1 and `0x2e` 0 (the word at `0x2c`
+  masked `0xff00ff`: `0x2d` is not asked), level 17's creature 15 by flag
+  `0x51`; not in state 1, and the view's yaw (`0x801b260a`) not within
+  `0x258` of the way to it (`facing_test`, `vec_angle`): state 0, category
+  2. Level 17 also zeroes creature 56's `+3` (its floor) every frame.
+* **level 26** -- skill 3 not 0 and flag `0x5f` clear: flag `0x5f` 1.
+
+**Checked against the game's own.** `tools/ticks.py --check` runs every
+level's entry 1 out of its overlay with `tools/mipsrun.py` over the level as
+its loader leaves it, the flags, the creatures' categories, states, floors
+and places about the player, the player's place and view, the feet, the
+lake's switch and its seventeen, object 158's `+0x10`, the word at
+`0x8009c21c` and skill 3 at random, `rand` answering a sequence and
+vec_angle and facing_test running as the game's: **1680 of 1680** runs draw
+the model's rolls and leave its RAM, all of it but the stack.
+
+**In the port**: `godot/ticks.gd` is the same over the same addresses (the
+self-test against the model, `entry 1`), and `loot.gd _tick` runs it every
+frame of the game after the triggers, over the port's bytes (`_bytes` now
+carries the creatures' places and the view's yaw, `_bytes_back` an object's
+`+0x3f`). Not in the port: level 0's flicker (object 158's `+0x10` and the
+word are not kept, nor drawn), and what level 2's seventeen do with their
+state -- opcode `0x5f`'s arm is not run yet.
+
 ### A thing into the pack: give_item, take_item, entries 6 and 11
 
 **`give_item(id)`** (`0x8005d898`) puts one more into the first of the two

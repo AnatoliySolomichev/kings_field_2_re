@@ -268,8 +268,9 @@ func _level_in() -> void:
 
 # What the levels' own code reads, out of the port, at the game's addresses
 # (KFLevelIn's {"mem", "calls"}): the story flags, the pack, the figures,
-# drop_count_gold, the warp's byte (0x801b25ee), the player's place and
-# state, what is worn, the creatures' +0, +3 and +9 and every object's view.
+# drop_count_gold, the warp's byte (0x801b25ee), the player's place, view
+# and state, what is worn, the creatures' +0, +3, +9 and place and every
+# object's view.
 # @port engine -- the port's fields as the game's bytes
 func _bytes() -> Dictionary:
 	var ch: Dictionary = player.character
@@ -291,6 +292,7 @@ func _bytes() -> Dictionary:
 	KFLevelIn.wr(m, KFTriggers.PLAYER_POS + 4, player.gy, 4)
 	KFLevelIn.wr(m, KFTriggers.PLAYER_POS + 8, player.gz, 4)
 	KFLevelIn.wr(m, KFTriggers.PLAYER_STATE, int(player.pstate))
+	KFLevelIn.wr(m, KFTicks.VIEW_YAW, player.coll._s16(player.facing + int(player.tilt[1])), 2)
 	for slot in 7:
 		KFLevelIn.wr(m, 0x801B25D4 + slot, int(player.worn[slot]))
 	var an := get_node_or_null("../Actors")
@@ -300,6 +302,10 @@ func _bytes() -> Dictionary:
 		KFLevelIn.wr(m, KFLevelIn.A(k), 0xFF if c == null else int(c["cat"]))
 		KFLevelIn.wr(m, KFLevelIn.A(k, 3), 0 if c == null else int(c.get("floor", 0)))
 		KFLevelIn.wr(m, KFLevelIn.A(k, 9), 0 if c == null else int(c["st"]))
+		if c != null:
+			KFLevelIn.wr(m, KFLevelIn.A(k, 0x2C), int(c["px"]), 4)
+			KFLevelIn.wr(m, KFLevelIn.A(k, 0x30), int(c["py"]), 4)
+			KFLevelIn.wr(m, KFLevelIn.A(k, 0x34), int(c["pz"]), 4)
 	var objs := views()
 	for k in objs.size():
 		var o = objs[k]
@@ -329,8 +335,8 @@ func _bytes() -> Dictionary:
 # the pack, the warp's byte, the creatures' categories, floors and states
 # (actors.gd), an object's lock, state and +0x39 (_write_view), its type --
 # 0xff gone -- into the find rows and the things', its view byte into the
-# things', a trigger's +0x40, an object's place (a gate moved), and
-# drop_count_gold. The number of bytes it changed.
+# things', a trigger's +0x40, an object's +0x3f, an object's place (a gate
+# moved), and drop_count_gold. The number of bytes it changed.
 # @port engine -- the game's bytes back into the port's fields
 func _bytes_back(w: Dictionary) -> int:
 	var m: Dictionary = w["m"]
@@ -379,6 +385,7 @@ func _bytes_back(w: Dictionary) -> int:
 		o["state"] = KFLevelIn.rd(m, KFLevelIn.O(k, 8), 2)
 		o["lock"] = KFLevelIn.rd(m, KFLevelIn.O(k, 0x38))
 		o["b39"] = KFLevelIn.rd(m, KFLevelIn.O(k, 0x39))
+		o["b3f"] = KFLevelIn.rd(m, KFLevelIn.O(k, 0x3F))
 		_write_view(k, o)
 		fired[k] = KFLevelIn.rd(m, KFLevelIn.O(k, 0x40))
 		var x: int = KFTriggers.s32(KFLevelIn.rd(m, KFLevelIn.O(k, 0x14), 4))
@@ -481,6 +488,32 @@ func _triggers() -> void:
 		_act(w["m"]["calls"])
 		if not (w["m"]["calls"] as Array).is_empty():
 			KFInfo.note("trigger: slot %d, %s" % [k, str(w["m"]["calls"])])
+
+
+# level_overlay_tick's call of the level's own entry 1 (KFTicks.entry1), a
+# frame of the game at a time, over the bytes _bytes takes out of the port,
+# and what it wrote put back: the creatures' categories, states and floors,
+# the flags, level 2's lake (the switch's state and +0x40, the seventeen's
+# state and +0x3f -- kept, but their opcode 0x5f, which lays the cells, is
+# not run yet). Level 0's object 158 +0x10 and the word at 0x8009c21c are
+# not kept, so its flicker does not run.
+# @port engine -- the level's entry 1 a frame at a time over the port's bytes
+func _tick() -> void:
+	var lv: int = player._level()
+	if not lv in KFTicks.LEVELS:
+		return
+	KFTalk.load_level(lv)
+	var w := _bytes()
+	KFTicks.entry1(lv, w["m"], _rand_fn(), Callable(player.coll, "vec_angle"))
+	var mem: Dictionary = w["m"]["mem"]
+	var before: Dictionary = w["before"]
+	var kept := 0                         # what changed of the bytes the port keeps
+	for a in mem:
+		if before.has(a) and int(before[a]) != int(mem[a]):
+			kept += 1
+	_bytes_back(w)
+	if kept:
+		KFInfo.note("tick: level %d's entry 1, %d bytes" % [lv, kept])
 
 
 # What object_interpreter's first pass does before anything is drawn, after
@@ -720,6 +753,7 @@ func _process(dt: float) -> void:
 		for pd in pedestals:
 			_pedestal(pd)
 		_triggers()
+		_tick()
 	_draw()
 
 
@@ -1509,6 +1543,8 @@ func views() -> Array:
 		out[k]["op"] = int(held_locks[k]["op"])
 		out[k]["state"] = int(held_locks[k]["state"])
 		out[k]["lock"] = int(held_locks[k]["lock"])
+		if held_locks[k].has("b3f"):
+			out[k]["b3f"] = int(held_locks[k]["b3f"])
 	return out
 
 
@@ -1540,6 +1576,7 @@ func _write_view(k: int, o: Dictionary) -> void:
 	var g := _gate_of(k)
 	g["lock"] = int(o["lock"])
 	g["state"] = int(o["state"])
+	g["b3f"] = int(o.get("b3f", 0xFF))
 
 
 # The awake creatures as use_item's truth glass and the levels' entry 2 look

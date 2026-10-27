@@ -216,6 +216,9 @@ def main(quick=False, only_check=False):
     steps.append((["tools/triggers.py", "--check"],
         "the trigger rectangles, against the game's own opcode 0xe1 and every level's entry 3",
         ["opcode 0xe1 and entry 3, against", ": calls:", "(actor", "(object", "(flag"]))
+    steps.append((["tools/ticks.py", "--check"],
+        "what a level does every frame, against every level's own entry 1",
+        ["entry 1, against", ": rolls", "(actor", "(object", "(flag"]))
     steps.append((["tools/givetake.py", "--check"],
         "a thing into the pack and out, against the game's own give_item, take_item and every level's entries 6 and 11",
         ["give_item and take_item, against", ": model "]))

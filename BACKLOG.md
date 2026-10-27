@@ -589,7 +589,12 @@ Eating heals. Left, roughly in order:
   level 7's pedestal. give_item's and take_item's entries 6 and 11 are in
   (FORMATS.md, "A thing into the pack", 1680 of 1680 runs of the game's
   own); who reads level 2's flag `0x11`, which its entry 6 sets for the
-  aquarian boots, is not found.
+  aquarian boots, is not found. Every level's entry 1, the frame's tick, is
+  in (FORMATS.md, "What a level does every frame", 1680 of 1680 runs) but
+  for level 0's flicker (object 158's `+0x10`, not kept) and what level 2's
+  seventeen opcode-`0x5f` objects do with the state it gives them: opcode
+  `0x5f`'s arm (`0x800490b8`, a stamp_rect by `+0x3f`) and the lake's switch
+  (opcode `0xa6`, level 2's entry 9) are not in the port.
   Every level's conversation hook (entry 4, 45 arms) is in (FORMATS.md,
   "What a conversation makes happen", 2400 of 2400 runs of the overlays'
   own), but for what the port does not act out: the light's frames

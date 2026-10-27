@@ -222,10 +222,10 @@ how much of the game the port has (portmap progress)   47.1% of the game's own
                                                        code (game 47.6%, open
                                                        46.7%, end 0%; partial at
                                                        half, the library left out)
-the port against the game, function by function        876 of 876 placed: 495
-                                                       reproduce the game, 381 the
-                                                       port's own; 562 markers and
-                                                       1131 cited addresses, every
+the port against the game, function by function        883 of 883 placed: 496
+                                                       reproduce the game, 387 the
+                                                       port's own; 563 markers and
+                                                       1134 cited addresses, every
                                                        one resolving
 the object loader, against 13 snapshots                angles 4344/4352, scale and
                                                        position 4352/4352, opcode
@@ -350,6 +350,9 @@ creatures' categories against the snapshots            21 snapshots, 1167 slots
 the trigger rectangles, against the game's own        1500 of 1500 runs, all of
 opcode 0xe1 and every level's entry 3                  RAM but the stack; fifty
 (tools/triggers.py)                                    records on 14 levels
+what a level does every frame, against every         1680 of 1680 runs, the
+level's own entry 1 (tools/ticks.py)                   rolls and all of RAM but
+                                                       the stack
 a thing into the pack and out, against the game's     1680 of 1680 runs, the
 own give_item and take_item with every level's         answer, the calls and all
 entries 6 and 11 (tools/givetake.py)                   of RAM but the stack
@@ -415,7 +418,7 @@ effects 1494 of 1494 runs, 27656 of 27656 frames · aims 300 of 300 · volleys 2
 the run 150129 of 150129 frames
 player_take_hit 300 of 300 · the status 40 of 40 runs, 6312 of 6312 frames
 casting 1200 of 1200 · the attacking arms 240 of 240 · creature hits 400 of 400
-use_item 624 of 624 · conversation hooks 360 of 360 · entry 5 168 of 168 · triggers 200 of 200 · give and take 224 of 224 · warp_to 55 of 55 · seals 975 of 975 · fades 117 of 117
+use_item 624 of 624 · conversation hooks 360 of 360 · entry 5 168 of 168 · triggers 200 of 200 · give and take 224 of 224 · entry 1 120 of 120 · warp_to 55 of 55 · seals 975 of 975 · fades 117 of 117
 carry-over 61 of 61 fields and the place
 ```
 

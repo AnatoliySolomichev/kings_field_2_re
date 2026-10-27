@@ -359,6 +359,9 @@ func _init() -> void:
 	if not _give_takes():
 		quit(1)
 		return
+	if not _ticks():
+		quit(1)
+		return
 	if not _inscriptions():
 		quit(1)
 		return
@@ -2760,6 +2763,52 @@ func _level_ins() -> bool:
 			told = true
 			print("  first difference: level %d: %s" % [int(c["level"]), why])
 	print("entry 5: %d of %d runs of the levels' own entry 5 match tools/levelin.py -- the calls and every byte written" % [
+		ok, cases.size()])
+	return ok == cases.size()
+
+
+# The levels' own entry 1, godot/ticks.gd against the runs tools/ticks.py
+# made of its model, which every level's overlay holds: from the bytes the
+# model read and the rolls it drew, the same bytes written and none besides.
+func _ticks() -> bool:
+	if not FileAccess.file_exists("res://tickcheck.json"):
+		print("entry 1: no cases to check against")
+		return true
+	var doc = JSON.parse_string(FileAccess.get_file_as_string("res://tickcheck.json"))
+	var ok := 0
+	var told := false
+	var cases: Array = doc["cases"]
+	for c in cases:
+		var m := {"mem": {}, "calls": []}
+		for p in c["read"]:
+			m["mem"][int(p[0])] = int(p[1])
+		var before: Dictionary = (m["mem"] as Dictionary).duplicate()
+		var rolls: Array = _ints(c["rolls"])
+		var drawn := [0]
+		var rand := func() -> int:
+			drawn[0] += 1
+			return int(rolls[drawn[0] - 1]) if drawn[0] <= rolls.size() else 0
+		KFTicks.entry1(int(c["level"]), m, rand, Callable(coll, "vec_angle"))
+		var why := ""
+		if int(drawn[0]) != rolls.size():
+			why = "%d rolls, python %d" % [int(drawn[0]), rolls.size()]
+		var want := {}
+		for p in c["wrote"]:
+			want[int(p[0])] = int(p[1])
+		for a in want:
+			if why == "" and int(m["mem"].get(a, -1)) != int(want[a]):
+				why = "0x%x: %d, python %d" % [a, int(m["mem"].get(a, -1)), int(want[a])]
+		if why == "":
+			for a in m["mem"]:
+				if not want.has(a) and int(m["mem"][a]) != int(before.get(a, -1)):
+					why = "0x%x written, python did not" % int(a)
+					break
+		if why == "":
+			ok += 1
+		elif not told:
+			told = true
+			print("  first difference: level %d: %s" % [int(c["level"]), why])
+	print("entry 1: %d of %d runs of the levels' own entry 1 match tools/ticks.py -- the rolls and every byte written" % [
 		ok, cases.size()])
 	return ok == cases.size()
 

@@ -504,6 +504,22 @@ byte, worn things and state at random: **1500 of 1500** runs leave the
 model's calls and all of RAM but the stack. `godot/triggers.gd` reproduces
 the model on **200 of 200** runs (`triggercheck.json`).
 
+**`ticks.py`** — what a level does every frame: every level's entry 1
+(FORMATS.md, "What a level does every frame").
+
+```
+python3 tools/ticks.py               what each level's entry 1 does
+python3 tools/ticks.py --check       the model against the overlays' own entry 1
+python3 tools/ticks.py --export D    tickcheck.json into D, for the self-test
+```
+
+`--check` runs each level's entry 1 out of its overlay over the level as its
+loader leaves it, the flags, the creatures, the player's place and view, the
+lake's objects and the rest it reads at random, rand answering a sequence:
+**1680 of 1680** runs draw the model's rolls and leave its RAM, all of it but
+the stack. `godot/ticks.gd` reproduces the model on **120 of 120** runs
+(`tickcheck.json`).
+
 **`givetake.py`** — a thing into the pack and out of it: give_item and
 take_item whole, with every level's entries 6 and 11 (FORMATS.md, "A thing
 into the pack").
