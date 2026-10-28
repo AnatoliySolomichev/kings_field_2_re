@@ -932,10 +932,17 @@ A conversation can start a scene: `script_interpreter`'s service arm for a
 header `+0x12` in the `0x40` range writes `1` to `cutscene_phase` and `n & 3`
 to `cutscene_number`.
 
-And `story_flags` **93, 101 and 102 are not story**. `cutscene_step` and
-`level_overlay_tick` move them from 1 to 2 and back as phase state within a
-single fade. The array is at least `0x100` bytes and only its lower part is
-what the conversations test.
+And `story_flags` **93 is not story**: `cutscene_step` moves it from 1 to 2
+and back as phase state within a single fade. The array is at least `0x100`
+bytes and only its lower part is what the conversations test.
+
+**Withdrawn: 101 and 102 are story after all.** This said the same of them,
+from `level_overlay_tick` reading them; what was not read then is who writes
+them. Level 27's creature-death hook does (entry 19, "What a level does when
+a creature dies"): 101 (`0x65`) is its creature 0 dead, 102 (`0x66`) thing
+`0x10` in the pack at that moment. `level_overlay_tick` moves 101 from 1 to
+2 once and never back, and by 102 plays `S07` and goes on or plays `S08` and
+ends the game -- the two scenes in the table above with no mark.
 
 **Withdrawn: the flag is not a key, it is an "already shown" mark.** This
 document said bit `0x80` meant "skipped once that is set", and I told a player
@@ -3769,6 +3776,38 @@ carries the creatures' places and the view's yaw, `_bytes_back` an object's
 word are not kept, nor drawn). What level 2's seventeen do with their state
 is the next section.
 
+**The rest of level_overlay_tick** is one branch, on any level: story flag
+`0x65` at 1 (level 27's creature-death hook) becomes 2, and by flag `0x66`
+either `warp_to(0xd)` -- level 24 -- the music down by 2 a VSync from OPTION
+1's volume (`0x801b25dc`), the level loaded (res_wait, then res_upload_wait
+and level_load while `level_change_busy` is 1), scene 7 (`cutscene_number`
+7, its record at `seq_data + 52 * 7`, str_play: `\STR\S07.S`),
+player_state_reset, the master volume `0x7f`, `object_trigger(0xff, 0xff,
+0xff, 9, 0xb, 0x7f, 0x7f, 0x7f)`, the displayed buffer moved onto the drawn
+one, `fade_frames(1, 0, 0, 0)`; or the music down and stopped,
+`fade_frames(1, 0, 0x1000, 0x100)`, scene 8 (`\STR\S08.S`) and game_exit 4.
+`tools/ticks.py --check` runs GAME.EXE's own level_overlay_tick over every
+level, the level's entry 1 reached through its `jalr`, the two flags, the
+volume, the music's word and handle, level_change_busy and the draw buffer
+at random and the calls past the level's code logged, level_load clearing
+level_change_busy after one to three calls: **1120 of 1120** runs -- 297
+short endings, 272 warps on -- make the model's calls in order, draw its
+rolls and leave its RAM, all of it but the stack. `ticks.gd overlay_tick`
+is it in the port (the self-test, `level_overlay_tick`), and `loot.gd
+_tick` runs it every frame on a level with an entry 1 or with the flag at
+1: the warp on is crossing.gd's warp with warp_to's plan for record `0xd`
+and the scene for the next scene to play first (`KFCrossing.scene_back`),
+then `fade_frames(1, 0, 0, 0)`; the short ending `crossing.gd leave` with
+the scene between the fade and the shell. `opening.py` transcodes S07 and
+S08 now. Not acted: the sound, the level's load and player_state_reset
+(the warp's own), the master volume, object_trigger's part, MoveImage.
+
+**`loot.gd`'s frame did not run on a level with nothing to open.** Its
+`_process` returned at once while no chest or thing was in `rows`, which
+left a level with none -- 25 and 27 -- without its triggers, its
+level_overlay_tick and USE; it waits now only for the level's table to be
+read (`loaded`).
+
 ### Level 2's lake: opcode 0x5f and the switch (entry 9)
 
 **Opcode `0x5f`** (`object_interpreter+0x20a8`, `0x800490b8`) is a pair of
@@ -3927,8 +3966,8 @@ OPEN.EXE. Level 27's sets only flags; level_overlay_tick reads them the
 next frame (`0x801ba9ed` is flag `0x65`): 1 becomes 2, and with `0x66` clear
 the screen fades, scene 8 plays and the word is 4 -- the short ending; with
 `0x66` set -- thing `0x10` was in the pack -- it warps to record `0xd`
-(level 24), scene 7, and the game goes on. That part of level_overlay_tick
-is not in the port.
+(level 24), scene 7, and the game goes on. That part of level_overlay_tick is
+in the port too (the next paragraphs, and "What a level does every frame").
 
 **Checked against the game's own.** `tools/deaths.py --check` runs every
 level's entry 19 out of its overlay with `tools/mipsrun.py` over the level
@@ -3955,8 +3994,14 @@ sixteen of the game's for the sixty-four VSyncs, the screen as
 render_flags_reset leaves it, and the fade, the world held; then
 `KFGame.leave` hands the shell END.EXE (game_main's arms). Not in the port:
 level 15's sixteen frames (the two objects go at once), the lighting and
-status calls, the sound, the swing clock, an object's `+2`, `+5`, `+0x10`,
-`+0x3c` and `+0x3e`, and level 27's way on in level_overlay_tick.
+status calls, the sound, the swing clock, and an object's `+2`, `+5`,
+`+0x10`, `+0x3c` and `+0x3e`. Levels 25 and 27 build since: they are open
+ground, all 6400 cells alike, no wall and no object, and `level3d.py` writes
+their empty collision and object overlays as scenes of one empty node
+(`gltf.py _dump`). Run headless on them: level 25's creature 0 dead, 81
+frames and the shell into END.EXE, M4 playing; level 27's with thing `0x10`
+had, `0x11` in the pack and in hand, the warp into level 24's scene at
+(7, 70) and `S07`; without, `S08` and END.EXE with `overlay_arg` 3, M6.
 
 ### Status/records, and running the game's own code
 

@@ -362,6 +362,9 @@ func _init() -> void:
 	if not _ticks():
 		quit(1)
 		return
+	if not _ticks_whole():
+		quit(1)
+		return
 	if not _deaths():
 		quit(1)
 		return
@@ -2909,6 +2912,62 @@ func _ticks() -> bool:
 			told = true
 			print("  first difference: level %d: %s" % [int(c["level"]), why])
 	print("entry 1: %d of %d runs of the levels' own entry 1 match tools/ticks.py -- the rolls and every byte written" % [
+		ok, cases.size()])
+	return ok == cases.size()
+
+
+# level_overlay_tick whole, godot/ticks.gd overlay_tick against the runs
+# tools/ticks.py made of its model, which GAME.EXE's own holds: the level's
+# entry 1 and the flag 0x65 branch both ways -- from the bytes the model
+# read, the rolls it drew and its level_load clearing level_change_busy at
+# the same call, the same calls in order and the same bytes written.
+func _ticks_whole() -> bool:
+	if not FileAccess.file_exists("res://tickcheck.json"):
+		print("level_overlay_tick: no cases to check against")
+		return true
+	var doc = JSON.parse_string(FileAccess.get_file_as_string("res://tickcheck.json"))
+	var ok := 0
+	var told := false
+	var cases: Array = doc.get("whole", [])
+	for c in cases:
+		var m := {"mem": {}, "calls": []}
+		for p in c["read"]:
+			m["mem"][int(p[0])] = int(p[1])
+		var before: Dictionary = (m["mem"] as Dictionary).duplicate()
+		var rolls: Array = _ints(c["rolls"])
+		var drawn := [0]
+		var rand := func() -> int:
+			drawn[0] += 1
+			return int(rolls[drawn[0] - 1]) if drawn[0] <= rolls.size() else 0
+		var loads := [0]
+		var want_loads := int(c["loads"])
+		var load := func(mm: Dictionary) -> void:
+			loads[0] += 1
+			if loads[0] == want_loads:
+				KFLevelIn.wr(mm, KFTicks.LEVEL_CHANGE_BUSY, 0, 2)
+		KFTicks.overlay_tick(int(c["level"]), m, rand, Callable(coll, "vec_angle"), load)
+		var why := ""
+		if int(drawn[0]) != rolls.size():
+			why = "%d rolls, python %d" % [int(drawn[0]), rolls.size()]
+		elif str(m["calls"]) != str(_ints(c["calls"])):
+			why = "calls %s, python %s" % [str(m["calls"]).left(120), str(_ints(c["calls"])).left(120)]
+		var want := {}
+		for p in c["wrote"]:
+			want[int(p[0])] = int(p[1])
+		for a in want:
+			if why == "" and int(m["mem"].get(a, -1)) != int(want[a]):
+				why = "0x%x: %d, python %d" % [a, int(m["mem"].get(a, -1)), int(want[a])]
+		if why == "":
+			for a in m["mem"]:
+				if not want.has(a) and int(m["mem"][a]) != int(before.get(a, -1)):
+					why = "0x%x written, python did not" % int(a)
+					break
+		if why == "":
+			ok += 1
+		elif not told:
+			told = true
+			print("  first difference: level %d: %s" % [int(c["level"]), why])
+	print("level_overlay_tick: %d of %d runs of the whole routine match tools/ticks.py -- the rolls, the calls and every byte written" % [
 		ok, cases.size()])
 	return ok == cases.size()
 

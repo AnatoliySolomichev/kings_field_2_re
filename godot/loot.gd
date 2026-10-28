@@ -118,6 +118,7 @@ var night := -1                     # its scene
 var after_service := false         # a service a conversation ended in is up
 var player: Node3D
 var rows := {}                     # slot -> row, lootNN.json and the state
+var loaded := false                # lootNN.json read: the level's frame runs, chests or none
 var slots := []                    # in slot order, as object_interact asks
 var acc := 0.0
 var give := {}                     # object_give while it runs
@@ -241,6 +242,7 @@ func _ready() -> void:
 	KFLevelState.apply_table(table, d, classes, _rand_fn())
 	KFLevelState.tables[lv] = table
 	take_stream(d)
+	loaded = true
 	call_deferred("_come_in")
 
 
@@ -302,6 +304,7 @@ func _bytes() -> Dictionary:
 	for slot in 7:
 		KFLevelIn.wr(m, 0x801B25D4 + slot, int(player.worn[slot]))
 	KFLevelIn.wr(m, KFDeaths.IN_HAND, int(player.weapon_id))
+	KFLevelIn.wr(m, KFTicks.MUSIC_VOLUME, int(KFGame.sound[1]))
 	var an := get_node_or_null("../Actors")
 	var list: Array = an.get("actors") if an != null and an.get("actors") != null else []
 	for k in 200:
@@ -547,20 +550,27 @@ func _lake() -> void:
 		KFInfo.note("lake: %d stamps laid" % laid.size())
 
 
-# level_overlay_tick's call of the level's own entry 1 (KFTicks.entry1), a
-# frame of the game at a time, over the bytes _bytes takes out of the port,
-# and what it wrote put back: the creatures' categories, states and floors,
-# the flags, level 2's lake (the switch's state and +0x40, the seventeen's
-# state and +0x3f, which _lake then lays). Level 0's object 158 +0x10 and the
-# word at 0x8009c21c are not kept, so its flicker does not run.
-# @port engine -- the level's entry 1 a frame at a time over the port's bytes
+# level_overlay_tick (KFTicks.overlay_tick), a frame of the game at a time:
+# the level's own entry 1 and, with story flag 0x65 at 1, the finale, over
+# the bytes _bytes takes out of the port, and what it wrote put back: the
+# creatures' categories, states and floors, the flags, level 2's lake (the
+# switch's state and +0x40, the seventeen's state and +0x3f, which _lake then
+# lays). Level 0's object 158 +0x10 and the word at 0x8009c21c are not kept,
+# so its flicker does not run. The finale's warp on is crossing.gd's warp
+# with warp_to's plan for record 0xd and scene 7 for the next scene to play
+# first; its short ending is _ended. Not acted: the sound, the level's load
+# (the port's warp loads it), player_state_reset (the warp's own), the
+# master volume, object_trigger's light, MoveImage.
+# @port engine -- level_overlay_tick a frame at a time over the port's bytes
 func _tick() -> void:
 	var lv: int = player._level()
-	if not lv in KFTicks.LEVELS:
+	var done := KFTalk.flags.size() > KFTicks.FLAG_DONE and int(KFTalk.flags[KFTicks.FLAG_DONE]) == 1
+	if not lv in KFTicks.LEVELS and not done:
 		return
 	KFTalk.load_level(lv)
 	var w := _bytes()
-	KFTicks.entry1(lv, w["m"], _rand_fn(), Callable(player.coll, "vec_angle"))
+	KFTicks.overlay_tick(lv, w["m"], _rand_fn(), Callable(player.coll, "vec_angle"),
+		func(_m: Dictionary) -> void: pass)
 	var mem: Dictionary = w["m"]["mem"]
 	var before: Dictionary = w["before"]
 	var kept := 0                         # what changed of the bytes the port keeps
@@ -570,6 +580,21 @@ func _tick() -> void:
 	_bytes_back(w)
 	if kept:
 		KFInfo.note("tick: level %d's entry 1, %d bytes" % [lv, kept])
+	var calls: Array = w["m"]["calls"]
+	if calls.is_empty():
+		return
+	KFInfo.note("tick: level_overlay_tick's finale, %d calls" % calls.size())
+	if str(calls[0][0]) == "warp_to":
+		if KFUseItem.warps.is_empty():
+			KFUseItem.load_from()
+		var plan := KFUseItem.warp_plan(int(calls[0][1]), KFGame.block if not KFGame.block.is_empty()
+			else [lv, lv, lv, lv, lv], int(player.pitch))
+		var cr := get_node_or_null("../Crossing")
+		if cr and not plan.is_empty():
+			KFCrossing.scene_back = KFTicks.scene_of(KFLevelIn.rd(w["m"], KFTicks.CUT_RECORD, 4))
+			cr.warp(plan)
+		return
+	_ended(w["m"])
 
 
 # actor_tick's call of the level's own entry 19 (KFDeaths.entry19) for a
@@ -597,19 +622,31 @@ func death(k: int) -> void:
 	if n or not calls.is_empty():
 		KFInfo.note("death: level %d's entry 19, slot %d, %d bytes, %d calls" % [lv, k, n,
 			calls.size()])
-	var word := KFLevelIn.rd(w["m"], KFDeaths.EXIT, 4)
+	_ended(w["m"])
+
+
+# The levels' code that ends the game -- level 25's entry 19, the short
+# ending in level_overlay_tick -- leaves game_exit 3 or 4 and the frames it
+# ran of its own: crossing.gd plays them (the VSyncs, the fades, the scene
+# str_play played, by cutscene_record) and the shell gets END.EXE.
+# @port engine -- game_exit set: crossing.gd's last frames, then the shell
+func _ended(m: Dictionary) -> void:
+	var word := KFLevelIn.rd(m, KFDeaths.EXIT, 4)
 	if word == 0:
 		return
 	var runs := []
 	var vsyncs := 0
-	for c in calls:
+	var scene := -1
+	for c in m["calls"]:
 		if str(c[0]) == "fade_frames":
 			runs.append([int(c[1]), int(c[2]), int(c[3]), int(c[4])])
 		elif str(c[0]) == "vsync":
 			vsyncs += 1
+		elif str(c[0]) == "str_play":
+			scene = KFTicks.scene_of(KFLevelIn.rd(m, KFTicks.CUT_RECORD, 4))
 	var cr := get_node_or_null("../Crossing")
 	if cr:
-		cr.leave(word, vsyncs, runs)
+		cr.leave(word, vsyncs, runs, scene)
 	else:
 		KFGame.leave(get_tree(), word)
 
@@ -757,7 +794,9 @@ func _exit_tree() -> void:
 
 # @port engine -- USE into _interact, the arms at 15 a second, and object_give's own frames while it runs
 func _process(dt: float) -> void:
-	if rows.is_empty() and reading == null:
+	# a level with nothing to open -- 25 and 27 -- still has its frame: the
+	# triggers, the level's code (_tick), USE on a creature
+	if not loaded and reading == null:
 		return
 	if dream != null:
 		# the night's dream: START or a face button ends it, as play_movie's

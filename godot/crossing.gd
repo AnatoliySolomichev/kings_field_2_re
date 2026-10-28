@@ -30,7 +30,8 @@ var acc := 0.0
 var refused := {}                   # level -> true: not built, said once
 # warp_to's fades while they run (fade_frames): the screen's bytes still to
 # show, one a frame at 15 a second with the world held, then what follows --
-# "jump" (the plan carried out), "clear" (screen_fade(0xff)) or "" (none)
+# "jump" (the plan carried out), "clear" (screen_fade(0xff)), "leave" (the
+# shell) or "none"; "" while nothing runs
 var fades: Array = []
 var fade_then := ""
 var fade_plan := {}
@@ -39,6 +40,13 @@ var fade_acc := 0.0
 # the fades back and whether the screen is cleared after them
 static var fades_back: Array = []
 static var clear_back := false
+# and the scene it plays first, -1 for none: level_overlay_tick's scene 7
+# after its warp on to level 24 (KFTicks.finale), then fade_frames(1, 0, 0, 0)
+static var scene_back := -1
+# a scene's movie while it plays (str_play), the world held, and what follows
+var movie: VideoStreamPlayer
+var movie_layer: CanvasLayer
+var movie_then := ""
 
 
 # @port data -- crossNN.json: this level's crossing objects, tools/crossing.py export
@@ -54,6 +62,13 @@ func _ready() -> void:
 			trig = d
 	if KFGame.block.is_empty() or int(KFGame.block[1]) != lv:
 		KFGame.block = own_block(lv, trig)
+	if scene_back >= 0:
+		var n := scene_back
+		scene_back = -1
+		fades_back = [[1, 0, 0, 0]]
+		clear_back = false
+		_movie(n, "back")
+		return
 	if not fades_back.is_empty() or clear_back:
 		_fade(fades_back, "clear" if clear_back else "")
 		fades_back = []
@@ -74,6 +89,9 @@ static func own_block(lv: int, ts: Array) -> Array:
 
 # @port engine -- the arm at the game's 15 frames a second, while nothing else holds the world
 func _process(dt: float) -> void:
+	if movie != null:
+		_movie_tick()
+		return
 	if not fades.is_empty() or fade_then != "":
 		_fading(dt)
 		return
@@ -168,14 +186,75 @@ func warp(plan: Dictionary) -> void:
 # screen as render_flags_reset left it, four VSyncs to a frame of the game's
 # -- and its fade_frames, the world held; then game_main's test of the word
 # (KFGame.leave). The sound is not here.
+# level_overlay_tick's short ending plays scene 8 between its fade and the
+# shell (`scene`).
 # @port engine -- a level's last frames, then the shell
-func leave(word: int, vsyncs: int, runs: Array) -> void:
+func leave(word: int, vsyncs: int, runs: Array, scene := -1) -> void:
 	_fade(runs, "leave")
 	var hold := []
 	for i in vsyncs / 4:
 		hold.append([0xFF, 0, 0, 0])
 	fades = hold + fades
-	fade_plan = {"word": word}
+	fade_plan = {"word": word, "scene": scene}
+
+
+# A scene's movie, as str_play (0x80060d20) plays it out of \STR\SXX.S --
+# the record's first byte is the number, here the scene's own (7 and 8) --
+# over the world, which stands; then `then`: "exit" game_main's test of the
+# word (KFGame.leave), "back" the fades back the warp left. START or a face
+# button ends it, as the opening's and the dreams' do -- the port's; what
+# str_play's own loop reads is not read.
+# @port engine -- the scene's movie over the held world, then what follows
+func _movie(n: int, then: String) -> void:
+	var path := "res://opening/cutscene%02d.ogv" % n
+	movie_then = then
+	KFGame.modal = true
+	KFInfo.note("scene %d: \\STR\\S%02d.S" % [n, n])
+	if not ResourceLoader.exists(path):
+		KFInfo.note("scene %d is not transcoded (python3 tools/opening.py video)" % n)
+		_movie_done()
+		return
+	movie_layer = CanvasLayer.new()
+	movie_layer.layer = 10
+	var back := ColorRect.new()
+	back.color = Color.BLACK
+	back.anchor_right = 1.0
+	back.anchor_bottom = 1.0
+	movie_layer.add_child(back)
+	movie = VideoStreamPlayer.new()
+	movie.stream = load(path)
+	movie.expand = true
+	movie.anchor_right = 1.0
+	movie.anchor_bottom = 1.0
+	movie_layer.add_child(movie)
+	add_child(movie_layer)
+	movie.play()
+
+
+# @port engine -- the movie to its end, or skipped
+func _movie_tick() -> void:
+	KFPad.poll()
+	var skip := KFPad.hit_mask(KFPad.START | KFPad.TRIANGLE | KFPad.SQUARE
+		| KFPad.CIRCLE | KFPad.CROSS) or Input.is_key_pressed(KEY_ESCAPE)
+	if skip or not movie.is_playing():
+		_movie_done()
+
+
+# @port engine -- the movie gone, and what was to follow it
+func _movie_done() -> void:
+	if movie_layer != null:
+		movie_layer.queue_free()
+	movie = null
+	movie_layer = null
+	KFGame.modal = false
+	var then := movie_then
+	movie_then = ""
+	match then:
+		"exit":
+			KFGame.leave(get_tree(), int(fade_plan.get("word", 0)))
+		"back":
+			_fade(fades_back, "")
+			fades_back = []
 
 
 # The fades' runs, fade_frames' bytes a frame each, the world held, and then
@@ -185,7 +264,7 @@ func _fade(runs: Array, then: String) -> void:
 	fades = []
 	for r in runs:
 		fades += KFGame.fade_frames(int(r[0]), int(r[1]), int(r[2]), int(r[3]))
-	fade_then = then
+	fade_then = then if then != "" else "none"   # so _process runs it to the end and lets go
 	fade_acc = 0.0
 	KFGame.modal = true
 
@@ -206,7 +285,10 @@ func _fading(dt: float) -> void:
 			"jump":
 				_jump(fade_plan)
 			"leave":
-				KFGame.leave(get_tree(), int(fade_plan.get("word", 0)))
+				if int(fade_plan.get("scene", -1)) >= 0:
+					_movie(int(fade_plan["scene"]), "exit")
+				else:
+					KFGame.leave(get_tree(), int(fade_plan.get("word", 0)))
 			"clear":
 				KFGame.screen_fade(0xFF, 0, 0, 0)
 		return
@@ -238,6 +320,12 @@ func _jump(plan: Dictionary) -> void:
 		var an := get_node_or_null("../Actors")
 		if an:
 			an.spawn_anywhere = true
+		if scene_back >= 0:              # level_overlay_tick's scene, on the level in hand
+			var n := scene_back
+			scene_back = -1
+			fades_back = back + [[1, 0, 0, 0]]
+			_movie(n, "back")
+			return
 		if not back.is_empty() or clear:
 			_fade(back, "clear" if clear else "")
 		return

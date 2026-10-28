@@ -150,7 +150,13 @@ class Gltf:
         return self._dump(path, nodes)
 
     def _dump(self, path, nodes):
+        """With no nodes, one empty node: levels 25 and 27 are open ground --
+        not a wall, not an object -- and the world scene instances their
+        overlays all the same. glTF wants no empty array and no buffer of no
+        bytes, so those are left out."""
         base = os.path.basename(path).rsplit(".", 1)[0] + ".bin"
+        if not nodes:
+            nodes = [{"name": os.path.basename(path).rsplit(".", 1)[0]}]
         doc = {
             "asset": {"version": "2.0",
                       "generator": "kings_field_2 tools/gltf.py"},
@@ -165,11 +171,15 @@ class Gltf:
             "samplers": self.samplers,
             "accessors": self.accessors,
             "bufferViews": self.views,
-            "buffers": [{"uri": base, "byteLength": len(self.buf)}],
+            "buffers": [{"uri": base, "byteLength": len(self.buf)}] if self.buf else [],
         }
+        doc = {k: v for k, v in doc.items() if v != []}
+        if not self.materials:
+            doc.pop("extensionsUsed")
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         with open(path, "w") as f:
             json.dump(doc, f, separators=(",", ":"))
-        with open(os.path.join(os.path.dirname(path), base), "wb") as f:
-            f.write(self.buf)
+        if self.buf:
+            with open(os.path.join(os.path.dirname(path), base), "wb") as f:
+                f.write(self.buf)
         return path, len(self.buf)

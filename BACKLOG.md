@@ -15,17 +15,14 @@ finish, none of them blocking:
 
 * **`END.EXE` is read** (BOOT.md section 5a, `tools/ending.py`) and in the
   port (`godot/ending.gd`): three movies, then a stop that never returns.
-  Left: the decoding's callbacks (Godot's), and one of the two ways GAME.EXE
-  reaches it. Level 25's creature-death hook (3, all three movies) is in the
-  port with game_main's arms (FORMATS.md, "What a level does when a creature
-  dies"); level_overlay_tick's way (4, M6 alone, after scene 8: flag `0x65`,
-  which level 27's hook sets, and `0x66` clear -- or with it the warp to
-  level 24) is read off the code but not in the port, and scenes 7 and 8 are
-  not either. And level 25 itself does not build: it has no wall at all
-  (`collision.walls` gives none over its 6400 cells, no object is placed),
-  and `level3d.py`'s `build_collision_gltf` writes the empty overlay as a
-  primitive of no vertices, which `gltf.primitive` cannot bound; the world
-  scene loads that overlay unconditionally.
+  Left: the decoding's callbacks (Godot's). Both ways GAME.EXE reaches it
+  are in the port with game_main's arms -- level 25's creature-death hook
+  (3, all three movies) and level_overlay_tick's after level 27's (4, M6
+  alone, after `\STR\S08.S`; or with thing `0x10` had the warp to level 24
+  and `\STR\S07.S`) -- checked against the game's own (FORMATS.md, "What a
+  level does when a creature dies", "What a level does every frame") and run
+  headless on levels 25 and 27, which build now. What waits is a person:
+  PLAYTEST.md A25, A26.
 * **The save path -- read, and the card with it.** `OPEN.EXE` counts the
   saves on the card and passes the menu's answer in `overlay_arg2`;
   `read_overlay_arg2` (`0x8001fa60`) runs the list and `save_load_slot`

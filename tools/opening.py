@@ -59,7 +59,11 @@ TITLE_STREAM = ("/OP/M2.S", "the title screen's streamed music")
 # new-game flag, a few instructions after place_player_on_terrain. It is the
 # room with the table where the sword is handed over -- the same words the
 # three men there repeat afterwards, TALK 676 and on.
-CUTSCENES = [(3, "/STR/S03.S", "the opening: the sword handed over")]
+CUTSCENES = [(3, "/STR/S03.S", "the opening: the sword handed over"),
+             # level_overlay_tick's two (tools/ticks.py): its records at
+             # seq_data + 52 * n start with n
+             (7, "/STR/S07.S", "level 27's boss dead with thing 0x10 had: the warp on to level 24"),
+             (8, "/STR/S08.S", "level 27's boss dead without it: the short ending, before END.EXE's M6")]
 
 # The dreams. A scene whose record's first byte is 0x10 or more has no movie
 # of its own, and str_play builds the name from its second template instead,

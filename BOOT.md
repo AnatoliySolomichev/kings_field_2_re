@@ -365,8 +365,11 @@ and 3, 2 sets `next_exe` 0. Entry 19 is checked against every level's own
 **the port has level 25's way to the ending**: `loot.gd death`, then
 `crossing.gd leave` and `KFGame.leave` (game.gd) into the shell -- run
 headless over level 0's scene, it ends in the shell with `next_exe` 2 and
-`overlay_arg` 2; level 25 itself does not build yet (BACKLOG.md), and
-level_overlay_tick's way is not in.
+`overlay_arg` 2. Since, level 25 builds (an open field, no wall: FORMATS.md,
+"What a level does when a creature dies") and the whole of level 25's way
+runs on it, M4 playing; and level_overlay_tick's way is in -- with thing
+`0x10` the warp to level 24 and `\STR\S07.S`, without it `\STR\S08.S`
+and END.EXE with `overlay_arg` 3 -- run headless from level 27's own scene.
 
 Checked by running END.EXE's own code (`tools/ending.py --check`): `end_main`
 from its entry over a blank RAM with the image in, 12 of 12 `overlay_arg`s

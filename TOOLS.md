@@ -551,6 +551,12 @@ with the image laid in: `end_main` from the entry for every `overlay_arg`
 frame counter run up by 1, 2 or 3 a frame). `export` writes `ending.json`
 for the port, whose self-test holds `godot/ending.gd` to the model (31 of 31).
 
+`ticks.py --check` also runs **level_overlay_tick whole**, GAME.EXE's own,
+over every level with the flag `0x65` branch both ways (`whole_check`):
+**1120 of 1120** runs; the self-test holds `ticks.gd overlay_tick` to it,
+**48 of 48** (`tickcheck.json`'s `whole`). `opening.py` transcodes the
+scenes it plays, `cutscene07.ogv` and `cutscene08.ogv`, with S03.
+
 **`deaths.py`** — what a level does when one of its creatures dies: every
 level's entry 19 (FORMATS.md, "What a level does when a creature dies").
 

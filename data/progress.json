@@ -97,6 +97,14 @@
    "end": 32.6,
    "game": 48.8,
    "open": 46.7
+  },
+  {
+   "all": 48.8,
+   "boot": 43.5,
+   "date": "2026-10-28",
+   "end": 32.6,
+   "game": 49.0,
+   "open": 46.7
   }
  ],
  "instructions": {
@@ -105,7 +113,7 @@
    "own": 81266,
    "partial": 29187,
    "transcribed": 8736,
-   "verified": 16138
+   "verified": 16344
   },
   "boot": {
    "library": 0,
@@ -126,7 +134,7 @@
    "own": 77735,
    "partial": 28225,
    "transcribed": 7738,
-   "verified": 16068
+   "verified": 16274
   },
   "open": {
    "library": 17266,
@@ -137,10 +145,10 @@
   }
  },
  "now": {
-  "all": 48.6,
+  "all": 48.8,
   "boot": 43.5,
   "end": 32.6,
-  "game": 48.8,
+  "game": 49.0,
   "open": 46.7
  }
 }

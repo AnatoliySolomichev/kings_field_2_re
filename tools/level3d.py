@@ -418,6 +418,10 @@ def build_collision_gltf(lv, out="out/godot"):
                 nrm.append(nv)
                 uv.append((0.0, 0.0))
                 col.append((1.0, 1.0, 1.0, 1.0))
+    if not pos:                          # open ground (levels 25, 27): an empty scene
+        path, nbytes = g.write_nodes(f"{out}/collision{lv:02d}.gltf", [])
+        print(f"collision overlay: no wall planes -> {path}")
+        return path
     prim = g.primitive(pos, nrm, uv, col)
     prim["material"] = g.plain("collision", (1.0, 0.25, 0.2, 0.35))
     path, nbytes = g.write(f"{out}/collision{lv:02d}.gltf", [prim],
@@ -855,10 +859,8 @@ def build_objects_gltf(lv, out="out/godot"):
         return out_prims, n
 
     prims, ntri = prims_of(groups)
-    if not prims:
-        print("no objects placed")
-        return None
-    items = [(f"objects{lv}", prims, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))]
+    # none placed (levels 25, 27): the scene and its tables all the same, empty
+    items = [(f"objects{lv}", prims, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))] if prims else []
     lifts = build_lifts(lv, load, grid, look, prims_of, door_rows)
     items += lifts
     loot_rows = []
@@ -1921,7 +1923,7 @@ def verify(out="out/godot"):
         if line.startswith(("loaded:", "movement:", "steps:", "creature steps:",
                             "fences:",
                             "creature run:",
-                            "levels:", "use_item:", "warp_to:", "conversation hooks:", "entry 5:", "triggers:", "give and take:", "entry 1:", "entry 19:", "the lake:", "the ending:", "angles:",
+                            "levels:", "use_item:", "warp_to:", "conversation hooks:", "entry 5:", "triggers:", "give and take:", "entry 1:", "level_overlay_tick:", "entry 19:", "the lake:", "the ending:", "angles:",
                             "scripts:", "damage:", "equipment:", "player_recalc_stats:", "knock-back:", "weapon:", "animation:", "effects:", "lift doors:", "chests:", "seals:", "fades:", "carry-over:", "inscriptions:", "conversations:", "menus:", "routines:", "saves:", "level states:", "the run:", "player_take_hit:", "the status:", "casting:", "the attacking arms:", "creature hits:", "creature strikes:", "creature holds:", "FAIL", "  first",
                             "  level case", "  angle (", "  script level",
                             "  hit ")):
