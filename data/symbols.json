@@ -3352,5 +3352,10 @@
   "name": "excellector_mark",
   "kind": "data",
   "evidence": "s32: the experience excellector_grow counts the excellector's 13000 from; new_character writes -1 (0x8002b49c), excellector_grow takes player_exp into it on the first award with the excellector held and -1 after a growth or without it; save_serialise and save_restore keep it (+0x56bc). Every snapshot before an award holds -1, every one after the first kill 11, that award's experience (8 of 8)"
+ },
+ "0x8009c3f8": {
+  "name": "game_exit",
+  "kind": "data",
+  "evidence": "$gp+0x1e4, a word: game_main's loop runs while it is 0 and, read after render_frame (0x80014fb0), 2 sets next_exe 0 (OPEN.EXE), 3 next_exe 2 and overlay_arg 2 (END.EXE, all three movies), 4 next_exe 2 and overlay_arg 3 (M6 alone). Written by sub_800305d8 (2, QUIT GAME), level 25's entry 19 (3, its creature 0 dead) and level_overlay_tick (4, after scene 8). tools/deaths.py"
  }
 }

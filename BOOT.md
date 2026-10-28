@@ -355,7 +355,18 @@ light and the screen faded. **4** -- `overlay_arg` 3, M6 alone -- is
 `level_overlay_tick` (`0x8005ee34`): once story flag `0x65` is 1 it becomes
 2, and with flag `0x66` clear the screen fades, scene 8 plays
 (`cutscene_number` 8) and the word is 4; with `0x66` set it warps to record
-`0xd` (level 24) instead and the game goes on.
+`0xd` (level 24) instead and the game goes on. Flags `0x65` and `0x66` are
+level 27's creature-death hook's: its creature 0 dead, the player not in
+state `0x11`, `0x65`; and with thing `0x10` in the pack, `0x66` -- `0x10`
+exchanged for `0x11`, in hand too. game_main reads the word after
+render_frame (`0x80014fb0`): 3 and 4 set `next_exe` 2 and `overlay_arg` 2
+and 3, 2 sets `next_exe` 0. Entry 19 is checked against every level's own
+(FORMATS.md, "What a level does when a creature dies", 1680 of 1680), and
+**the port has level 25's way to the ending**: `loot.gd death`, then
+`crossing.gd leave` and `KFGame.leave` (game.gd) into the shell -- run
+headless over level 0's scene, it ends in the shell with `next_exe` 2 and
+`overlay_arg` 2; level 25 itself does not build yet (BACKLOG.md), and
+level_overlay_tick's way is not in.
 
 Checked by running END.EXE's own code (`tools/ending.py --check`): `end_main`
 from its entry over a blank RAM with the image in, 12 of 12 `overlay_arg`s

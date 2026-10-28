@@ -641,7 +641,7 @@ func tick(a: Dictionary, kind: Dictionary, player: Vector3i, others: Array) -> D
 					a["sub"] = 0xF
 			else:
 				a["sub"] = s3 + 1
-				if s3 >= 0x26:          # 0x80050868: gone, by its category
+				if s3 >= 0x26:          # 0x80050868: gone -- the level's entry 19 (deaths.gd), then by its category
 					a["retire"] = true
 					return blow
 			brake(a, int(kind["accel"]) << 1, 0xA, others, player)

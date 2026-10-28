@@ -551,6 +551,23 @@ with the image laid in: `end_main` from the entry for every `overlay_arg`
 frame counter run up by 1, 2 or 3 a frame). `export` writes `ending.json`
 for the port, whose self-test holds `godot/ending.gd` to the model (31 of 31).
 
+**`deaths.py`** — what a level does when one of its creatures dies: every
+level's entry 19 (FORMATS.md, "What a level does when a creature dies").
+
+```
+python3 tools/deaths.py              what each level's entry 19 does
+python3 tools/deaths.py --check      the model against the overlays' own code
+python3 tools/deaths.py --export D   deathcheck.json for the self-test
+```
+
+`--check` runs each level's own entry 19 out of its overlay with
+`tools/mipsrun.py` over the level as its loader leaves it, a slot and the
+bytes it reads at random, GAME.EXE's own has_item, take_item, give_item and
+object_signal run and the lighting, status, sound, frames, fade and
+equip_weapon logged: **1680 of 1680** runs make the model's calls in order
+and leave its RAM, all of it but the stack. `godot/deaths.gd` reproduces the
+model on **208 of 208** runs (`deathcheck.json`).
+
 **`givetake.py`** — a thing into the pack and out of it: give_item and
 take_item whole, with every level's entries 6 and 11 (FORMATS.md, "A thing
 into the pack").

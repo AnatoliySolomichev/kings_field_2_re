@@ -219,6 +219,9 @@ def main(quick=False, only_check=False):
     steps.append((["tools/ticks.py", "--check"],
         "what a level does every frame, against every level's own entry 1",
         ["entry 1, against", ": rolls", "(actor", "(object", "(flag"]))
+    steps.append((["tools/deaths.py", "--check"],
+        "what a level does when a creature dies, against every level's own entry 19",
+        ["entry 19, against", "first difference"]))
     steps.append((["tools/ending.py", "--check"],
         "the ending, against END.EXE's own end_main, end_movie_rect and end_play_movie",
         ["end_main, the game's", "end_movie_rect, the game's", "end_play_movie, the game's",

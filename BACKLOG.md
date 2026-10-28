@@ -15,10 +15,17 @@ finish, none of them blocking:
 
 * **`END.EXE` is read** (BOOT.md section 5a, `tools/ending.py`) and in the
   port (`godot/ending.gd`): three movies, then a stop that never returns.
-  Left: the decoding's callbacks (Godot's), and the two ways in GAME.EXE
-  reaches it -- level 25's creature-death hook (3) and level_overlay_tick
-  after scene 8 (4), read off the code (BOOT.md 5a) but not in the port, so
-  nothing in the port reaches the ending yet.
+  Left: the decoding's callbacks (Godot's), and one of the two ways GAME.EXE
+  reaches it. Level 25's creature-death hook (3, all three movies) is in the
+  port with game_main's arms (FORMATS.md, "What a level does when a creature
+  dies"); level_overlay_tick's way (4, M6 alone, after scene 8: flag `0x65`,
+  which level 27's hook sets, and `0x66` clear -- or with it the warp to
+  level 24) is read off the code but not in the port, and scenes 7 and 8 are
+  not either. And level 25 itself does not build: it has no wall at all
+  (`collision.walls` gives none over its 6400 cells, no object is placed),
+  and `level3d.py`'s `build_collision_gltf` writes the empty overlay as a
+  primitive of no vertices, which `gltf.primitive` cannot bound; the world
+  scene loads that overlay unconditionally.
 * **The save path -- read, and the card with it.** `OPEN.EXE` counts the
   saves on the card and passes the menu's answer in `overlay_arg2`;
   `read_overlay_arg2` (`0x8001fa60`) runs the list and `save_load_slot`
@@ -596,9 +603,14 @@ Eating heals. Left, roughly in order:
   in (FORMATS.md, "What a level does every frame", 1680 of 1680 runs) but
   for level 0's flicker (object 158's `+0x10`, not kept). Level 2's lake --
   opcode `0x5f`'s arm and the switch, its entry 9 -- is in (FORMATS.md,
-  "Level 2's lake", 672 of 672 runs) but for the switch's sound; what turns
-  the switch, the caretaker's death (entry 19, a creature-death hook that 13
-  levels have, `0x80050874`), is not read, nor is level 7's entry 9 (the
+  "Level 2's lake", 672 of 672 runs) but for the switch's sound. What turns
+  the switch, the caretaker's death -- every level's entry 19, the
+  creature-death hook thirteen levels have (`0x80050868`) -- is in
+  (FORMATS.md, "What a level does when a creature dies", 1680 of 1680 runs)
+  but for level 15's sixteen frames of the dissolve (its two objects go at
+  once), the lighting, status and sound calls, the swing clock and an
+  object's `+2`, `+5`, `+0x10`, `+0x3c`, `+0x3e`, which the port does not
+  keep. Not read: level 7's entry 9 (the
   pedestal for Ichrius' key, opcode `0xa7`, object_use_state with the
   overlay's two vectors, then every opcode-`0xe8` object's `+1` `0x81` and
   `+0x40` 0) or opcode `0xe8`'s arm (`0x8004a66c`).

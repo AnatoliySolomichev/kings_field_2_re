@@ -90,6 +90,25 @@ static var block: Array = []
 static var screen := [0xFF, 0, 0, 0]
 
 
+# game_main's test of the word at $gp+0x1e4, after render_frame, the frame's
+# last call: 3 hands the machine to END.EXE with overlay_arg 2 (all three
+# movies), 4 with 3 (M6 alone), by the shell's two bytes; 2, OPEN.EXE, is
+# QUIT GAME's (menu.gd _quit). sub_80015064 first -- the sound, PadStop,
+# ResetGraph(3) -- which is Godot's to do.
+# @orig game:0x80014fb0 game_main+0x3dc  status:transcribed -- the test of the word and its switch
+# @orig game:0x80014ff4 game_main+0x420  status:transcribed -- the arms of 3 and 4: next_exe 2, overlay_arg 2 or 3; not sub_80015064
+static func leave(tree: SceneTree, word: int) -> void:
+	if word != Exit.TO_ENDING_A and word != Exit.TO_ENDING_B:
+		return
+	var shell = load("res://boot.gd")
+	shell.next_exe = shell.END
+	shell.overlay_arg = 2 if word == Exit.TO_ENDING_A else 3
+	KFInfo.note("game: the word at $gp+0x1e4 is %d -- END.EXE, overlay_arg %d" % [word,
+		int(shell.overlay_arg)])
+	modal = false
+	tree.change_scene_to_file("res://boot.tscn")
+
+
 # @orig game:0x8003d624 screen_fade  status:verified -- through screen_fade_draw, 840 of 840 quads of the game's own over every snapshot (tools/fade.py)
 static func screen_fade(mode: int, r: int, g: int, b: int) -> void:
 	screen = [mode & 0xFF, r & 0xFF, g & 0xFF, b & 0xFF]

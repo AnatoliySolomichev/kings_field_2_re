@@ -301,6 +301,7 @@ func _bytes() -> Dictionary:
 	KFLevelIn.wr(m, KFTicks.VIEW_YAW, player.coll._s16(player.facing + int(player.tilt[1])), 2)
 	for slot in 7:
 		KFLevelIn.wr(m, 0x801B25D4 + slot, int(player.worn[slot]))
+	KFLevelIn.wr(m, KFDeaths.IN_HAND, int(player.weapon_id))
 	var an := get_node_or_null("../Actors")
 	var list: Array = an.get("actors") if an != null and an.get("actors") != null else []
 	for k in 200:
@@ -466,6 +467,8 @@ func _act(calls: Array) -> void:
 						[int(call[6]), int(call[7]), int(call[8])], int(call[9]),
 						[int(call[10]), int(call[11]), int(call[12]), int(call[13]), int(call[14])],
 						int(call[15]), int(call[16]))
+			"equip_weapon":
+				player.equip_weapon(int(call[1]))
 			"equip_armour":
 				player.equip_armour(int(call[1]), int(call[2]))
 			"recalc":
@@ -567,6 +570,48 @@ func _tick() -> void:
 	_bytes_back(w)
 	if kept:
 		KFInfo.note("tick: level %d's entry 1, %d bytes" % [lv, kept])
+
+
+# actor_tick's call of the level's own entry 19 (KFDeaths.entry19) for a
+# creature whose body is gone, before actors.gd _kill sends it by its
+# category -- which the level may have changed -- over the bytes _bytes takes
+# out of the port, and what it wrote put back: the flags, the pack, the
+# creatures' categories and floors, the objects' locks, states, +0x3f, +0
+# and type (level 15's two freed), equip_weapon acted. The word at
+# $gp+0x1e4 -- level 25's 3 -- ends the game: crossing.gd runs its frames and
+# its fade, and the shell END.EXE. Not acted: level 15's sixteen frames of
+# the dissolve (the two objects go at once), the lighting and the status
+# calls, the sound, the swing clock, and the bytes the port does not keep
+# (+2, +5, +0x10, +0x3c and +0x3e of an object).
+# @port engine -- the level's entry 19 over the port's bytes, before actors.gd _kill
+func death(k: int) -> void:
+	var lv: int = player._level()
+	if not lv in KFDeaths.LEVELS:
+		return
+	KFTalk.load_level(lv)
+	var w := _bytes()
+	KFDeaths.entry19(lv, w["m"], k)
+	var n := _bytes_back(w)
+	var calls: Array = w["m"]["calls"]
+	_act(calls)
+	if n or not calls.is_empty():
+		KFInfo.note("death: level %d's entry 19, slot %d, %d bytes, %d calls" % [lv, k, n,
+			calls.size()])
+	var word := KFLevelIn.rd(w["m"], KFDeaths.EXIT, 4)
+	if word == 0:
+		return
+	var runs := []
+	var vsyncs := 0
+	for c in calls:
+		if str(c[0]) == "fade_frames":
+			runs.append([int(c[1]), int(c[2]), int(c[3]), int(c[4])])
+		elif str(c[0]) == "vsync":
+			vsyncs += 1
+	var cr := get_node_or_null("../Crossing")
+	if cr:
+		cr.leave(word, vsyncs, runs)
+	else:
+		KFGame.leave(get_tree(), word)
 
 
 # What object_interpreter's first pass does before anything is drawn, after

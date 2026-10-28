@@ -163,7 +163,7 @@ func _process(dt: float) -> void:
 		refresh()
 
 
-# @port check -- F10 kills the nearest awake creature
+# @port check -- F10 kills the nearest awake creature, the level's entry 19 first, as a death in play
 func _unhandled_input(e: InputEvent) -> void:
 	# X, because K is the pad's cross in pad.gd and N the labels
 	if e is InputEventKey and e.pressed and not e.echo and e.keycode == KEY_F10:
@@ -171,6 +171,7 @@ func _unhandled_input(e: InputEvent) -> void:
 			return
 		var k := _nearest(int(player.get("gx")), int(player.get("gz")), 3 << 11)
 		if k >= 0:
+			_dying(k)
 			_kill(k)
 			refresh()
 
@@ -214,6 +215,7 @@ func _pass(px: int, pz: int) -> void:
 			a.erase("drop")
 		if a.get("retire", false):
 			a.erase("retire")
+			_dying(k)
 			_kill(k)
 			refresh()
 			continue
@@ -786,6 +788,15 @@ func _taken(k: int) -> int:
 				o["radius"] + me["radius"], o["height"], me["height"]) != -1:
 			return j
 	return -1
+
+
+# The level's own entry 19 for a creature whose body is gone, which
+# actor_tick calls before the death branch: loot.gd's, over the port's bytes.
+# @port engine -- hands the slot to loot.gd death (KFDeaths.entry19)
+func _dying(k: int) -> void:
+	var lt := get_node_or_null("../Loot")
+	if lt and lt.has_method("death"):
+		lt.death(k)
 
 
 # the death branch of actor_tick, 0x80052b7c

@@ -362,6 +362,9 @@ func _init() -> void:
 	if not _ticks():
 		quit(1)
 		return
+	if not _deaths():
+		quit(1)
+		return
 	if not _lake_runs():
 		quit(1)
 		return
@@ -2906,6 +2909,47 @@ func _ticks() -> bool:
 			told = true
 			print("  first difference: level %d: %s" % [int(c["level"]), why])
 	print("entry 1: %d of %d runs of the levels' own entry 1 match tools/ticks.py -- the rolls and every byte written" % [
+		ok, cases.size()])
+	return ok == cases.size()
+
+
+# The levels' own entry 19, godot/deaths.gd against the runs tools/deaths.py
+# made of its model, which every level's overlay holds: from the bytes the
+# model read, the same calls in order and the same bytes written, none besides.
+func _deaths() -> bool:
+	if not FileAccess.file_exists("res://deathcheck.json"):
+		print("entry 19: no cases to check against")
+		return true
+	var doc = JSON.parse_string(FileAccess.get_file_as_string("res://deathcheck.json"))
+	var ok := 0
+	var told := false
+	var cases: Array = doc["cases"]
+	for c in cases:
+		var m := {"mem": {}, "calls": []}
+		for p in c["read"]:
+			m["mem"][int(p[0])] = int(p[1])
+		var before: Dictionary = (m["mem"] as Dictionary).duplicate()
+		KFDeaths.entry19(int(c["level"]), m, int(c["slot"]))
+		var why := ""
+		if str(m["calls"]) != str(_ints(c["calls"])):
+			why = "calls %s, python %s" % [str(m["calls"]).left(120), str(_ints(c["calls"])).left(120)]
+		var want := {}
+		for p in c["wrote"]:
+			want[int(p[0])] = int(p[1])
+		for a in want:
+			if why == "" and int(m["mem"].get(a, -1)) != int(want[a]):
+				why = "0x%x: %d, python %d" % [a, int(m["mem"].get(a, -1)), int(want[a])]
+		if why == "":
+			for a in m["mem"]:
+				if not want.has(a) and int(m["mem"][a]) != int(before.get(a, -1)):
+					why = "0x%x written, python did not" % int(a)
+					break
+		if why == "":
+			ok += 1
+		elif not told:
+			told = true
+			print("  first difference: level %d, slot %d: %s" % [int(c["level"]), int(c["slot"]), why])
+	print("entry 19: %d of %d runs of the levels' own entry 19 match tools/deaths.py -- the calls and every byte written" % [
 		ok, cases.size()])
 	return ok == cases.size()
 

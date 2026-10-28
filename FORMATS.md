@@ -3823,9 +3823,10 @@ slot in slot order on a frame any of them is moving, over the port's bytes
 -- the switch's `+1` and `+0xa`, the stones' `+0x3c`, `+0x3e` and `+0x3f`
 kept with the held objects now, the loader's state in the find rows -- and
 lays the stamps (`doors.gd stamp_rect`). Not in the port: the switch's
-sound, and the creature-death hook that turns it (entry 19, not read for any
-level); level 7's entry 9 (the pedestal, opcode `0xa7`, with
-object_use_state and opcode `0xe8`) is not read into the port either.
+sound; level 7's entry 9 (the pedestal, opcode `0xa7`, with
+object_use_state and opcode `0xe8`) is not read into the port either. The
+creature-death hook that turns the switch (entry 19) is the section after
+next, and in the port.
 
 ### A thing into the pack: give_item, take_item, entries 6 and 11
 
@@ -3873,6 +3874,89 @@ the scene comes in, as level_load points `level_hooks` at the overlay; the
 self-test holds it to the model (`give and take`). `triggers.gd`'s give and
 take over the bytes (level 17's entry 3, whose entries 6 and 11 are empty)
 still only log the hooks.
+
+### What a level does when a creature dies: entry 19
+
+When a dying creature's count (`+0x70`) runs past `0x26` -- the body gone --
+`actor_tick` calls the level's own **entry 19** (`level_hooks + 0x4c`,
+`0x80050868`) with its record, and only then sends it by its category
+(`+0`): 1 `actor_retire` (state 3, never back), 2 state 0 and home, 5 the
+slot freed (`+0` `0xff`), anything else state 2 and home. So a level that
+writes the dying creature's own `+0` changes how it goes. Every level's
+works the slot out as `(a0 - actor_table) / 0x88` (a multiply by
+`0xf0f0f0f1` and a shift: the inverse of 17, the stride being 8 times 17).
+Fifteen levels' is `jr $ra`; thirteen do something (`tools/deaths.py` has
+them in full; the cells are the creature's home, x and z):
+
+| level | slot (cell) | what |
+|---|---|---|
+| 0 | `0x20` (63, 55) | flag 8 clear: flag 8, and object 344's lock `0xf1` lifted -- the chest (opcode 6) at (60, 53) |
+| 1 | `0x18` (61, 46), `0x28` (60, 44) | flag `0xc` clear: flag `0xc` |
+| 2 | 4 (12, 41) | the lake's caretaker: flag `0x15`, the switch (object 82) state 1 and lock 3 -- the lake's third pattern |
+| 6 | 3 (8, 73) | its own category 1: retired for good |
+| 8 | 1 (46, 26) | flag `0x2c` 1: flag `0x2c` 2, its own category 8 -- state 2, home, the one entry 1 makes appear when the player looks away |
+| 11 | 3 (34, 16) | flag `0x3c`; object 20's `+0` and `+0x3c` 0, and the object its `+0x3a` names -- unless `0xffff` or a free slot -- `+0` 2 and lock `0xff`; object 33's `+0x3e` 0 |
+| 12 | `0x32`, `0x33`, `0x34` (21, 15 and 9, 41) | flags `0x3e`, `0x3f`, `0x40`, each once, and `object_signal(0x64, 0x65, 0x66)` |
+| 13 | 0..12 | a bit each in the halfword at flag `0x44` (`0x44` and `0x45`); on every death, the halfword `0x1fff` -- all thirteen dead -- sets flag `0x46` |
+| 15 | 3 (39, 2), `0x28` (36, 33) | flag `0x49` (`0x4a`) clear: the flag, creatures 4 and 5 (10 and 11) held, objects `0x73` and `0x74` (`0x75`, `0x76`) dissolved |
+| 17 | `0xb`, `0xc`, `0xd` | flags `0x4e`, `0x4f`, `0x50` once: creature `0x10`, `0x37` or `0x2e` held and object `0x50`, `0x51` or 5 state 1 with `+0x3f` 1 |
+| 17 | `0xf` (3, 62) | flag `0x51` 1: flag 2 and its own category 8 |
+| 17 | `0x38` (69, 44) | its own category 1 and floor (`+3`) 0 |
+| 19 | `0x14` (36, 73) | flag `0x55`, object 85's `+0x3f` `0xff` and `+0` 2 |
+| 25 | 0 (40, 40) | flag `0x67` clear: **the ending** -- below |
+| 27 | 0 (40, 40) | the player not in state `0x11`: flag `0x65`, and with thing `0x10` in the pack flag `0x66`, `0x10` taken, `0x11` given, and in hand `0x10` becomes `0x11` (equip_weapon) |
+
+Level 15's dissolve (`0x801e85b8`) is a routine of the overlay's own that
+runs sixteen frames of the game itself -- res_wait, res_upload_spu,
+res_upload_vram, camera_pose, render_frame -- the world standing: both
+objects `+5` `0x32` and `+2` 5, their `+0x10` up by `0x100` a frame (a
+halfword, so it turns over) and held at `0xfff`, and then both freed (`+6`
+`0xff`).
+
+**The two that end the game.** Level 25's: flag `0x67`, swing_clock -1,
+light_table_reset, render_flags_reset, light_table_step, `sub_80030e14`
+(the status), then sixty-four VSyncs of the master volume going down
+(`sub_800699d8(v, v)`, the Sony library's, by 129: `0x7d` by 2 to 0),
+DrawSync and VSync each; the volume 0; the music stopped if the word at
+`0x801b0a04` is 1 (three calls on the handle at `0x801b0a08`, and the word
+0); the word at `$gp+0x1e4` 3; and `fade_frames(0x82, 0, 0x1000, 0x40)` --
+65 frames of the screen taken away, over the panel. game_main tests the
+word after render_frame (`0x80014fb0`): 3 is END.EXE with `overlay_arg` 2
+(all three movies, BOOT.md section 5a), 4 the same with 3 (M6 alone), 2
+OPEN.EXE. Level 27's sets only flags; level_overlay_tick reads them the
+next frame (`0x801ba9ed` is flag `0x65`): 1 becomes 2, and with `0x66` clear
+the screen fades, scene 8 plays and the word is 4 -- the short ending; with
+`0x66` set -- thing `0x10` was in the pack -- it warps to record `0xd`
+(level 24), scene 7, and the game goes on. That part of level_overlay_tick
+is not in the port.
+
+**Checked against the game's own.** `tools/deaths.py --check` runs every
+level's entry 19 out of its overlay with `tools/mipsrun.py` over the level
+as its loader leaves it, a slot at random (four in five of them one the
+level asks about), the flags, the creatures' categories and floors, the
+objects' bytes it reads and writes (344's lock, the switch, object 20's
+link and the object it names, the four that dissolve, 5, `0x50`, `0x51`,
+85), the pack's `0x10` and `0x11`, the weapon in hand, the player's state
+and the music's word and handle at random; GAME.EXE's own has_item,
+take_item, give_item (with the level's entries 6 and 11) and object_signal
+run, and the lighting, the status, the sound, the frames, the fade and
+equip_weapon are stood in for and logged: **1680 of 1680** runs make the
+model's calls in order -- 201 of them for the ending, 80 for a dissolve --
+and leave its RAM, all of it but the stack.
+
+**In the port**: `godot/deaths.gd` is the same over the same addresses (the
+self-test against the model, `entry 19`); `actors.gd` hands a creature whose
+body is gone to `loot.gd death` before `_kill` sends it by its category, and
+that runs it over the port's bytes (`_bytes` carries the weapon in hand now)
+and puts back what it wrote -- the flags, the pack, the categories and
+floors, the objects' locks, states, `+0x3f`, `+0` and type -- with
+equip_weapon acted. The word 3 or 4 has `crossing.gd leave` run the frames:
+sixteen of the game's for the sixty-four VSyncs, the screen as
+render_flags_reset leaves it, and the fade, the world held; then
+`KFGame.leave` hands the shell END.EXE (game_main's arms). Not in the port:
+level 15's sixteen frames (the two objects go at once), the lighting and
+status calls, the sound, the swing clock, an object's `+2`, `+5`, `+0x10`,
+`+0x3c` and `+0x3e`, and level 27's way on in level_overlay_tick.
 
 ### Status/records, and running the game's own code
 

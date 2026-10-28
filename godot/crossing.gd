@@ -163,6 +163,21 @@ func warp(plan: Dictionary) -> void:
 	_fade([out], "jump")
 
 
+# The game ended by a level's own code (KFDeaths, level 25's entry 19): the
+# frames it runs of its own -- the master volume down a VSync at a time, the
+# screen as render_flags_reset left it, four VSyncs to a frame of the game's
+# -- and its fade_frames, the world held; then game_main's test of the word
+# (KFGame.leave). The sound is not here.
+# @port engine -- a level's last frames, then the shell
+func leave(word: int, vsyncs: int, runs: Array) -> void:
+	_fade(runs, "leave")
+	var hold := []
+	for i in vsyncs / 4:
+		hold.append([0xFF, 0, 0, 0])
+	fades = hold + fades
+	fade_plan = {"word": word}
+
+
 # The fades' runs, fade_frames' bytes a frame each, the world held, and then
 # `then`.
 # @port engine -- warp_to's fades started: the frames to show and what follows
@@ -190,6 +205,8 @@ func _fading(dt: float) -> void:
 		match then:
 			"jump":
 				_jump(fade_plan)
+			"leave":
+				KFGame.leave(get_tree(), int(fade_plan.get("word", 0)))
 			"clear":
 				KFGame.screen_fade(0xFF, 0, 0, 0)
 		return
