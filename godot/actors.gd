@@ -458,7 +458,7 @@ const KILL_COUNT := 0x7A
 # else the first behaviour of op 2 the damage reaches and its chance allows,
 # bit 0x200000 and +0x84 0 for one it does not reach; then the push and
 # vertical state 0x10. {damage, exp, strong, practice, special, hp}.
-# @orig game:0x8004c668 actor_take_hit  status:verified -- tools/hit.py, 1260 of 1260 hits of the game's own on the snapshots' creatures, every flag path; the self-test this to it; not a part (+0 3) passing it to its actor, nor a follower's push handed to its leader
+# @orig game:0x8004c668 actor_take_hit  status:verified -- tools/hit.py, 1260 of 1260 hits of the game's own on the snapshots' creatures, every flag path; the self-test this to it; not a part (+0 3) passing it to its actor, nor a follower's push handed to its leader; F3's test (KFGame.test, the port's) gives the player's hit all of the HP and no way round it
 func take_hit_flags(k: int, dmg: int, strength: int, flags: int, point) -> Dictionary:
 	var a: Dictionary = actors[k]
 	var kind: Dictionary = kinds[int(a["kind"])]
@@ -477,6 +477,9 @@ func take_hit_flags(k: int, dmg: int, strength: int, flags: int, point) -> Dicti
 		a["sub"] = 2
 	var s7 := flags & 0xC0
 	var s1 := flags & 0x30
+	var test := KFGame.test and s7 == 0x40   # F3's test, the port's: the player's hit kills
+	if test:
+		dmg = maxi(dmg, int(a["hp"]))
 	if s7 == 0x80 and int(a.get("eflags", 0)) & 0x100000:
 		return out
 	KFWeapon.load_from()
@@ -504,6 +507,8 @@ func take_hit_flags(k: int, dmg: int, strength: int, flags: int, point) -> Dicti
 				if KFCreatureAI.facing_test(int(a["ry"]), KFCreatureAI.s16(b), 0x200):
 					KFCreatureAI.switch_to(a, rec)
 					skip = true
+	if test:
+		skip = false
 	if not skip:
 		if s7 & 0x40 and s1 & 0x10:
 			var pl := get_node_or_null("../Player")

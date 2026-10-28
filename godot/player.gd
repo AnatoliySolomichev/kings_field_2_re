@@ -523,6 +523,8 @@ func _refresh() -> void:
 	var cx := int(floor(float(gx) / CELL))
 	var cz := int(floor(float(gz) / CELL))
 	var note := "FLY" if flying else "WALK"
+	if KFGame.test:
+		note += "   TEST: no HP lost, every blow kills (F3)"
 	if not have_coll:
 		note += "  (no collision data)"
 	var above := "-"
@@ -530,7 +532,7 @@ func _refresh() -> void:
 		above = str(last_surface - gy)
 	var text := ("%s   cell (%d, %d)   height %d\n" +
 		"state %d   vy %d   speed %d/%d   %s above the surface\n" +
-		"F1 walk/fly   F2 darkening   G collision   Esc mouse   PgUp/PgDn fly up/down\n" +
+		"F1 walk/fly   F2 darkening   F3 test   G collision   Esc mouse   PgUp/PgDn fly up/down\n" +
 		"forward %s   strafe %s/%s   turn %s/%s   attack %s   use %s   menu %s   pause %s\n") % [
 		note, cx, cz, -gy, vstate, vvel, fwd_speed, stf_speed, above,
 		KFPad.slot_key(KFPad.FORWARD), KFPad.slot_key(KFPad.ALT_A),
@@ -546,7 +548,7 @@ func _refresh() -> void:
 		magic_meter, poison]
 
 
-# @port engine -- the mouse turns the facing and the pitch; F1, F11, G, Esc and Tab are the port's keys
+# @port engine -- the mouse turns the facing and the pitch; F1, F3, F11, G, Esc and Tab are the port's keys
 func _unhandled_input(e: InputEvent) -> void:
 	if e is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		# The mouse moves the game's own facing rather than the node, so that
@@ -563,6 +565,11 @@ func _unhandled_input(e: InputEvent) -> void:
 				flying = not flying
 				vstate = 0
 				vvel = 0
+				_refresh()
+			KEY_F3:
+				KFGame.test = not KFGame.test
+				KFInfo.note("test: %s -- no HP lost, every blow of the player's kills" % [
+					"on" if KFGame.test else "off"])
 				_refresh()
 			KEY_F11:
 				_learn_all()
@@ -684,14 +691,15 @@ func _tick(dir: Vector3) -> void:
 # flashes and one HP goes (hp_add, 0x8002a6a0; at 0 the player is thrown).
 # So a spore that keeps striking, setting it back to 0x384 each frame, takes
 # one HP a frame: 31 of 32 such frames in bp26, the other a roll resisted.
-# @orig game:0x80031e78 player_controller+0xeac  status:verified -- a label inside player_controller; tools/effects.py against bp26
+# @orig game:0x80031e78 player_controller+0xeac  status:verified -- a label inside player_controller; tools/effects.py against bp26; F3's test keeps the HP (the port's)
 func _poison() -> void:
 	if poison == 0:
 		return
 	if poison % 30 == 0:
 		flash_colour = 0x960
 		flash = 0x3C
-		hp = maxi(hp - 1, 0)
+		if not KFGame.test:          # F3's test, the port's: the poison takes nothing
+			hp = maxi(hp - 1, 0)
 		if hp == 0:
 			_throw(null)
 	poison -= 1
@@ -1893,7 +1901,7 @@ func _weapon() -> void:
 # the second bow costs and the throw when the last of it goes, and the arrow
 # on the effects node, put on the hand's model as held.gd draws it -- the
 # swing's phase and clock. The sound 0x60 the port has not.
-# @port helper -- hands KFWeapon.bow the player, the effects node and the hand's model
+# @port helper -- hands KFWeapon.bow the player, the effects node and the hand's model; F3's test keeps the HP
 func _bow(rec: PackedByteArray) -> void:
 	var fx = get_node_or_null("../Effects")
 	if fx == null:
@@ -1908,8 +1916,9 @@ func _bow(rec: PackedByteArray) -> void:
 	var a := inventory.a
 	a[item] = int(p["arrows"][item])
 	inventory.a = a
-	hp = int(p["hp"])
-	if ev.has("thrown"):
+	if not KFGame.test:              # F3's test, the port's: the second bow costs nothing
+		hp = int(p["hp"])
+	if ev.has("thrown") and not KFGame.test:
 		_throw(null)
 
 
@@ -2023,11 +2032,13 @@ static func _u16(rec: Array, o: int) -> int:
 # shake of isqrt(share << 2) held to 0x10..0x2a, one of eight by the bearing
 # against the view's yaw, into player_knock; effect bit 0x80 makes it a stun.
 # Without an attacker (a fall) the HP and the flash alone.
-# @orig game:0x8002a6f4 apply_damage  status:transcribed -- tools/knock.py: 83 of 83 knock-back frames, the push's Y from the creature
+# @orig game:0x8002a6f4 apply_damage  status:transcribed -- tools/knock.py: 83 of 83 knock-back frames, the push's Y from the creature; F3's test keeps the HP (the port's)
 func _apply_damage(dmg: int, has_at: bool, at: Vector3i, effect: int) -> void:
 	if pstate == 0x11 or dmg == 0:
 		return
 	var left := maxi(hp - dmg, 0)
+	if KFGame.test:                  # F3's test, the port's: the push and the flash, no HP
+		left = hp
 	var share := mini(coll._idiv(dmg << 12, hp_max), 0x3B6)
 	hp = left
 	var s1 := share >> 2
