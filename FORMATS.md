@@ -979,9 +979,16 @@ last four: nothing this project has found sets 123 to 126, so nothing stops
 those scenes repeating. That is a smaller mystery than "four locked endgame
 scenes" was, and it is what the code actually says.
 
-**Byte 0 and byte 1 are what has been read**; the other fifty bytes of each
-record are not. Reading them as further scene-and-flag pairs gives scene
-numbers like 158 and 252 that no file answers to, so they are left alone.
+The levels' entries 10 set 109 to 112 (`0x6d`..`0x70`) as those scenes
+play -- scene 12 on level 4, 13 on 13, 14 on 26, 15 on 2 -- fourteen below
+the marks; levels 2, 9 and 13 read 123 to 125, and nothing found writes
+them. So the four replay each time their rectangle is entered again (the
+section after next, "The scenes").
+
+**Withdrawn: "the other fifty bytes are not read".** They are the walk to
+the scene and back, which player_controller's states 7 and 9 make of them
+(the section after next); what was wrong was reading them as further
+scene-and-flag pairs, which gave scene numbers like 158 and 252.
 
 **A correction that follows from it:** these indices reach 126, and `cutscene_step`
 masks the byte with `0x7f`. So `story_flags` runs past 64 — and it runs past
@@ -4002,6 +4009,87 @@ their empty collision and object overlays as scenes of one empty node
 frames and the shell into END.EXE, M4 playing; level 27's with thing `0x10`
 had, `0x11` in the pack and in hand, the warp into level 24's scene at
 (7, 70) and `S07`; without, `S08` and END.EXE with `overlay_arg` 3, M6.
+
+### The scenes: cutscene_step, opcode 0xe4, entry 10 and the walk
+
+A scene is a record of 52 bytes at `seq_data + 52 * n` (`0x801e7edc`, off
+FDAT entry 97's seventh block; `tools/scenes.py` reads it and it matches
+the snapshot byte for byte):
+
+| offset | what |
+|---|---|
+| +0 | the movie: under 0x10 `\STR\Snn.S`, else a dream (`\DRM\Dnn.S`, at random) |
+| +1 | the mark (the section above) |
+| +4, +6, +8 | the view's pitch, facing and roll at the scene's place; -1 leaves it |
+| +0xa | not 0: a fade as the walk ends, `fade_frames(+0x22, 0, 0x1000, 0x100)` |
+| +0xc, +0x10, +0x14 | the place, x y z; -1 leaves it (x for z too) |
+| +0x1c, +0x1e, +0x20 | the view on the way back |
+| +0x22 | the fade's mode: 0x82 from black, 1 from white, else one plain frame |
+| +0x24, +0x28, +0x2c | the place back |
+
+**What starts one**: opcode `0xe4`'s arm (`object_interpreter+0x3998`), a
+rectangle of cells -- `+0x14 >> 11`, `+0x1c >> 11`, `+0x38` by `+0x39`, the
+height not asked -- naming scene `+0x3a`. With none under way and the player
+in it, phase 1 and the number; with its own, the player out and the phase 0
+or `0x10`, none. Nine such: level 2's object 97 (scene 15), 4's 93 (12),
+13's 58 (13) and 85 (4), 17's 84 (9), 20's 6 (5) and 7 (10), 24's 138 (6),
+26's 172 (14) -- exactly the seven levels with an entry 10. (And the inns'
+conversations, and level_overlay_tick's two, "What a level does every
+frame".)
+
+**cutscene_step** (`0x80061940`), from game_main every frame and from
+player_controller's state 8: phase 1 the mark -- passed, phase 2 and the
+player's state 7 (`sub_80030810`), refused `0x10`; phase 2 waits on
+`cutscene_pending`, then 4; phase 4 the level's **entry 10** with the scene,
+`str_play`, and -- with story flag `0x5d` at 1, which level 24's entry 10
+sets -- the flag 2, pending 1, the phase 0 and no scene, player_state_reset,
+the screen moved and `warp_to(0xc)`; then phase 8 and the state 9
+(`sub_80030864`) either way; phase 8 waits on pending, then 0 and the
+level's **entry 7**; phase `0x10` back to 1.
+
+**The player's states** (player_controller's switch at `0x8003141c`): **7**
+(`0x800315f4`) 33 frames from the view as it was kept (`0x801b266e`) to the
+record's place, `fixed_madd` at t = count * 128 + 1 -- the view's own pitch
+and roll eased to 0 while the third set of offsets (`0x801b2620`, which
+player_controller adds into view_angles with the tilt `0x801b2618` and the
+nod `0x801b2628`) takes +4 and +8, the facing eased to +6 -- the master
+volume down by 4 a frame; then state 8, the angles set outright, pending 1,
+and the fade by +0xa. **8** (`0x80031444`) calls cutscene_step -- the movie,
+the machine putting state 9 -- and fades back by +0x22. **9**
+(`0x80031874`) the same 33 frames back at t = count * 128, the volume up,
+then player_state_reset, the angles and pending 1. Within a frame the order
+is the game's: the objects (the rectangles), player_controller, then
+game_main's cutscene_step -- so a walk's end, its fade and phase 4 fall in
+one frame, and the movie in the next.
+
+**Entry 10**: level 2's scene 15 flag `0x6f`; 4's 12 `0x6d`; 13's 4 --
+with flag `0x42` -- object 20 freed and creature 30 held and gone, its 13
+`0x6e`; 17's 9 object 50's `+0` 0, objects 52..61's 2, a stamp_rect and
+creature 56 up; 20's 5 a stamp_rect, its 10 thing `0x7d` exchanged for
+`0x10` -- the sword level 27's ending asks after -- and flag `0x59`; 24's,
+any scene, flag `0x5d`; 26's 14 `0x70`.
+
+**Checked against the game's own** (`tools/scenes.py --check`):
+cutscene_step **960 of 960** runs over six levels, its own sub_80030810,
+sub_80030864 and player_state_reset run and the entries, str_play,
+MoveImage, DrawSync and warp_to logged; opcode `0xe4`'s arm **540 of 540**
+over its nine rectangles, the player in and about them; entry 10 **1680 of
+1680** over every level, has_item, take_item and give_item run -- the calls
+in order and all of RAM but the stack, each.
+
+**In the port**: `godot/scenes.gd` is the three over the same addresses (the
+self-test, `the scenes`, 304 of 304); `player.gd _tick` runs the rectangles
+before its controller and game_main's cutscene_step after
+(`loot.gd scene_objects`, `scene_main`, over the port's bytes with the
+machine's four kept in `KFScenes`), and its states 7, 8 and 9 walk the
+record (`_scene_frame`, transcribed; `scene_tilt`, `roll` and the kept view
+are new fields, added into the view); `crossing.gd` plays the movie and the
+fades. `opening.py` transcodes all thirteen `/STR` movies. Run headless on
+level 2: into object 97's cell, the walk to (13.5, 9.5), the white fade,
+flag `0x6f`, S15, the fade back, the walk, the phase 0, and out of the
+rectangle no scene. Not in the port: the master volume and the music's cue,
+the levels' entries 7 (logged, but for the inns', which do not go through
+the machine in the port), and a dream for a record of 0x10 and over.
 
 ### Status/records, and running the game's own code
 

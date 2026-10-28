@@ -3357,5 +3357,20 @@
   "name": "game_exit",
   "kind": "data",
   "evidence": "$gp+0x1e4, a word: game_main's loop runs while it is 0 and, read after render_frame (0x80014fb0), 2 sets next_exe 0 (OPEN.EXE), 3 next_exe 2 and overlay_arg 2 (END.EXE, all three movies), 4 next_exe 2 and overlay_arg 3 (M6 alone). Written by sub_800305d8 (2, QUIT GAME), level 25's entry 19 (3, its creature 0 dead) and level_overlay_tick (4, after scene 8). tools/deaths.py"
+ },
+ "0x80030810": {
+  "name": "player_to_scene",
+  "kind": "code",
+  "evidence": "(n): player_state 7, the scene n into 0x801b266c, the walk's count 0x801b266d 0, the view's eight bytes from 0x801b2610 kept at 0x801b266e -- cutscene_step's phase 1 starts the walk to the scene's place with it. tools/scenes.py step_check runs it"
+ },
+ "0x80030864": {
+  "name": "player_from_scene",
+  "kind": "code",
+  "evidence": "(n): the same with player_state 9 -- cutscene_step's phase 4 starts the walk back with it. tools/scenes.py step_check runs it"
+ },
+ "0x800307f4": {
+  "name": "player_in_scene",
+  "kind": "code",
+  "evidence": "(n): player_state 8 and the scene: state 7's last frame, the player held while cutscene_step plays the movie"
  }
 }

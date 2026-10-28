@@ -54,6 +54,7 @@ extends Node3D
 
 const UNIT := 1000.0
 const CELL := 2048.0
+const LOOT := preload("res://loot.gd")   # fixed_madd and angle_lerp, for a scene's walk
 const SPEED_MAX := 200               # 0x801b2664 in the recorded session; the
                                      # acceleration is a quarter of it, the decay an eighth
 const SPEED_MAX_RUN := 400           # not the game's -- its run is USE held, to 336
@@ -188,6 +189,17 @@ var push := [0, 0, 0]
 var tilt := [0, 0, 0]
 var tilt_vel := [0, 0, 0]
 var crouch := 0
+# A scene's walk (states 7, 8, 9; KFScenes): the view's third set of offsets
+# (0x801b2620, pitch yaw roll), which player_controller adds into
+# view_angles with the tilt and the nod; the view's own roll (0x801b2614);
+# the state's scene (0x801b266c) and the walk's count (0x801b266d); and the
+# view as the walk began (0x801b266e: pitch, facing, roll, and the halfword
+# after).
+var scene_tilt := [0, 0, 0]
+var roll := 0
+var scene_arg := 0
+var walk := 0
+var saved_view := [0, 0, 0, 0]
 var dip := 0
 var flash := 0
 # The hit's flash itself, 0x801b2658: 0xdac from apply_damage, 0x960 from the
@@ -703,12 +715,20 @@ func _ramp(speed: int, pos: bool, neg: bool, cap: int, decay := 3) -> int:
 	return 0
 
 
+# The scenes' two parts of game_main's frame go round it, in the game's
+# order: object_interpreter's 0xe4 rectangles before it, cutscene_step after
+# (loot.gd scene_objects, scene_main).
 # @orig game:0x80030fcc player_controller  status:partial -- one frame: the state's arm (_frame), then the poison at its end (_poison)
 func _tick(dir: Vector3) -> void:
 	_render_flags()
+	var lt := get_node_or_null("../Loot")
+	if lt and lt.has_method("scene_objects"):
+		lt.scene_objects()
 	_frame(dir)
 	_poison()
 	_timers()
+	if lt and lt.has_method("scene_main"):
+		lt.scene_main()             # after a fade this frame began too, as the game's blocking one
 
 
 # The end of player_controller (0x80031e78), whatever the state: the poison
@@ -1693,6 +1713,12 @@ func _frame(dir: Vector3) -> void:
 		combo_latch = 0
 		_weapon()
 		return
+	# states 7, 8, 9 -- a scene's (KFScenes): the walk to its place, the
+	# movie, the walk back; no turn, no walk of the player's own
+	if pstate == 7 or pstate == 8 or pstate == 9:
+		_scene_frame()
+		_view()
+		return
 	var held := KFPad.held(KFPad.FORWARD) or KFPad.held(KFPad.BACK)
 	var c := frame_caps(caps, held)
 	speed_cap = int(c[0])
@@ -1753,6 +1779,86 @@ func _frame(dir: Vector3) -> void:
 	_bob(coll.isqrt(fd * fd + sd * sd))
 	_view()
 	_weapon()
+
+
+# A scene's frame of the player's (states 7, 8, 9), the record at seq_data +
+# 52 * scene_arg (loot.gd's scene_record). 7: 33 frames from the view as the
+# walk began to the record's place (+0xc, +0x10, +0x14 unless -1, by
+# fixed_madd at t = count * 128 + 1) -- the view's own pitch and roll eased to
+# 0 while a scene's offsets take +4 and +8, the facing eased to +6 -- then
+# state 8 with the angles set outright, cutscene_pending 1 and, with +0xa,
+# fade_frames(+0x22, 0, 0x1000, 0x100). 8: cutscene_step (the movie, and the
+# machine putting state 9), then by +0x22 the fade back -- 0x82 from black,
+# 1 from white -- or one frame of fade_frames(1, 0, 0, 0). 9: the same 33
+# frames back to +0x24..+0x2c and +0x1c..+0x20 at t = count * 128, then
+# player_state_reset, the angles set and cutscene_pending 1. The master
+# volume's ramp, the music's cue and restart are not here.
+# @orig game:0x800315f4 player_controller+0x628  status:transcribed -- state 7, the walk to the scene's place; not the master volume (sub_800699d8) or cue_sound
+# @orig game:0x80031444 player_controller+0x478  status:transcribed -- state 8: cutscene_step and the fade back; MoveImage is Godot's
+# @orig game:0x80031874 player_controller+0x8a8  status:transcribed -- state 9, the walk back; not the volume or the music's restart (0x80067acc)
+func _scene_frame() -> void:
+	var lt := get_node_or_null("../Loot")
+	var rec: PackedByteArray = lt.scene_record(scene_arg) if lt and lt.has_method("scene_record") \
+		else PackedByteArray()
+	if rec.size() < 0x30:
+		_knock_end()
+		return
+	var h := func(o: int) -> int: return coll._s16(rec.decode_u16(o))
+	var wd := func(o: int) -> int: return rec.decode_s32(o)
+	if pstate == 8:
+		var runs: Array = [[1, 0, 0, 0]]
+		match int(h.call(0x22)):
+			0x82:
+				runs = [[0x82, 0x1000, 0x1000, 0], [0x82, 0x1000, 0, -0x100]]
+			1:
+				runs = [[1, 0x1000, 0x1000, 0], [1, 0x1000, 0, -0x100]]
+		lt.scene_step(runs, int(h.call(0x22)) == 0x82)
+		return
+	var back := pstate == 9
+	var t := walk << 7
+	if not back:
+		t += 1
+	var p0 := 0x24 if back else 0xC
+	var a0 := 0x1C if back else 4
+	if int(wd.call(p0)) != -1:
+		gx = LOOT.lerp_i(gx, int(wd.call(p0)), t)
+		gz = LOOT.lerp_i(gz, int(wd.call(p0 + 8)), t)
+	if int(wd.call(p0 + 4)) != -1:
+		gy = LOOT.lerp_i(gy, int(wd.call(p0 + 4)), t)
+	if int(h.call(a0)) != -1:
+		scene_tilt[0] = LOOT.angle_lerp(0, int(h.call(a0)), t)
+		pitch = LOOT.angle_lerp(int(saved_view[0]), 0, t)
+	if int(h.call(a0 + 2)) != -1:
+		scene_tilt[1] = 0
+		facing = LOOT.angle_lerp(int(saved_view[1]), int(h.call(a0 + 2)), t)
+	if int(h.call(a0 + 4)) != -1:
+		scene_tilt[2] = LOOT.angle_lerp(0, int(h.call(a0 + 4)), t)
+		roll = LOOT.angle_lerp(int(saved_view[2]), 0, t)
+	var was := walk
+	walk += 1
+	rotation.y = float(facing) * TAU / 4096.0
+	_to_godot()
+	if was < 0x20:
+		return
+	if back:
+		_knock_end()
+	else:
+		pstate = 8                     # sub_800307f4
+	if int(h.call(a0)) != -1:
+		pitch = int(h.call(a0)) & 0xFFF
+		scene_tilt[0] = 0
+	if int(h.call(a0 + 2)) != -1:
+		facing = int(h.call(a0 + 2)) & 0xFFF
+		scene_tilt[1] = 0
+		rotation.y = float(facing) * TAU / 4096.0
+	if int(h.call(a0 + 4)) != -1:
+		roll = int(h.call(a0 + 4)) & 0xFFF
+		scene_tilt[2] = 0
+	lt.scene_pending()
+	if not back and int(h.call(0xA)) != 0:
+		var cr := get_node_or_null("../Crossing")
+		if cr:
+			cr.scene_fade([[int(h.call(0x22)), 0, 0x1000, 0x100]])
 
 
 # player_controller's caps for the frame, before player_turn runs (0x80031180
@@ -1955,7 +2061,8 @@ func _bow(rec: PackedByteArray) -> void:
 # @port helper -- [pitch, yaw, roll], as _view draws them
 func view_angles() -> Array:
 	var p := view_pitch if view_pitch >= 0 else view_pitch_now()
-	return [_signed(p), _signed((facing + int(tilt[1])) & 0xFFF), _signed(int(tilt[2]) & 0xFFF)]
+	return [_signed(p), _signed((facing + int(tilt[1]) + int(scene_tilt[1])) & 0xFFF),
+		_signed((roll + int(tilt[2]) + int(scene_tilt[2])) & 0xFFF)]
 
 
 # The blow: the probe's step off the pitch and facing, the offense ratings --
@@ -2494,13 +2601,15 @@ func _knock_end() -> void:
 	fwd_speed = 0
 	stf_speed = 0
 	tilt = [0, 0, 0]
+	scene_tilt = [0, 0, 0]
 	dip = 0
 
 
 # The view, as camera_pose (0x8002b330) hands it to RotMatrix: the eye bob and
-# crouch below 0x640 (Y grows down), pitch + tilt.x + the nod, yaw + tilt.y,
-# roll = tilt.z, as Rx(pitch) Ry(yaw) Rz(roll) from the world to the eye. The
-# player node carries the facing, so the camera takes what is left of it.
+# crouch below 0x640 (Y grows down), pitch + tilt.x + a scene's + the nod,
+# yaw + tilt.y + a scene's, roll + tilt.z + a scene's (player_controller's
+# sums, 0x8003202c), as Rx(pitch) Ry(yaw) Rz(roll) from the world to the eye.
+# The player node carries the facing, so the camera takes what is left of it.
 # @orig game:0x8002b330 camera_pose  status:partial -- the eye's bob and crouch, and the three angles with the tilts, as the view takes them
 func _view() -> void:
 	var cam := get_node_or_null("Camera")
@@ -2509,8 +2618,8 @@ func _view() -> void:
 	cam.position.y = (EYE_UNITS - float(bob) - float(crouch)) / UNIT
 	var k := TAU / 4096.0
 	var p := float(_signed(view_pitch if view_pitch >= 0 else view_pitch_now())) * k
-	var y := float(_signed(int(tilt[1]))) * k
-	var r := float(_signed(int(tilt[2]))) * k
+	var y := float(_signed((int(tilt[1]) + int(scene_tilt[1])) & 0xFFF)) * k
+	var r := float(_signed((roll + int(tilt[2]) + int(scene_tilt[2])) & 0xFFF)) * k
 	var f := float(facing) * k
 	var world := Basis(Vector3.BACK, r) * Basis(Vector3.UP, f + y) \
 		* Basis(Vector3.RIGHT, -p)
@@ -2801,7 +2910,7 @@ func _aim() -> void:
 # the knock-back's tilt and the landing's nod.
 # @port helper -- the pitch _view draws at, for object_give to start from
 func view_pitch_now() -> int:
-	return (pitch + int(tilt[0]) + dip) & 0xFFF
+	return (pitch + int(tilt[0]) + int(scene_tilt[0]) + dip) & 0xFFF
 
 
 # clear_movement_state (0x8002b6f0): the speeds, the turn rate and the pitch

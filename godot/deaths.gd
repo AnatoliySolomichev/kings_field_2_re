@@ -66,7 +66,7 @@ static func _dissolve(m: Dictionary, a: int, b: int) -> void:
 # take_item over the bytes, as KFItems' (items.gd carries its marker): one
 # from the first array that has one; the level's entry 11 is jr $ra.
 # @port helper -- take_item over the pack as the game's bytes
-static func _take(m: Dictionary, item: int) -> void:
+static func take_item(m: Dictionary, item: int) -> void:
 	for base in [KFLevelIn.INV_A, KFLevelIn.INV_B]:
 		if KFLevelIn.rd(m, base + item):
 			KFLevelIn.wr(m, base + item, KFLevelIn.rd(m, base + item) - 1)
@@ -76,7 +76,7 @@ static func _take(m: Dictionary, item: int) -> void:
 # give_item over the bytes, as KFItems': one more in the first array under
 # 99 and the level's entry 6; both full, the banner.
 # @port helper -- give_item over the pack as the game's bytes
-static func _give(lv: int, m: Dictionary, item: int) -> void:
+static func give_item(lv: int, m: Dictionary, item: int) -> void:
 	for base in [KFLevelIn.INV_A, KFLevelIn.INV_B]:
 		if KFLevelIn.rd(m, base + item) < KFItems.CAP:
 			KFLevelIn.wr(m, base + item, KFLevelIn.rd(m, base + item) + 1)
@@ -189,7 +189,7 @@ static func entry19(lv: int, m: Dictionary, k: int) -> void:
 				KFLevelIn.wr(m, KFLevelIn.F(0x65), 1)
 				if KFLevelIn.has_item(m, 0x10) > 0:
 					KFLevelIn.wr(m, KFLevelIn.F(0x66), 1)
-					_take(m, 0x10)
-					_give(lv, m, 0x11)
+					take_item(m, 0x10)
+					give_item(lv, m, 0x11)
 					if KFLevelIn.rd(m, IN_HAND) == 0x10:
 						m["calls"].append(["equip_weapon", 0x11])

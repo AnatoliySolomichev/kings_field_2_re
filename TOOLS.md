@@ -557,6 +557,21 @@ over every level with the flag `0x65` branch both ways (`whole_check`):
 **48 of 48** (`tickcheck.json`'s `whole`). `opening.py` transcodes the
 scenes it plays, `cutscene07.ogv` and `cutscene08.ogv`, with S03.
 
+**`scenes.py`** — the scenes: cutscene_step, opcode 0xe4 and every level's
+entry 10 (FORMATS.md, "The scenes").
+
+```
+python3 tools/scenes.py              the records, their movies and marks
+python3 tools/scenes.py --check      the three against the game's own code
+python3 tools/scenes.py --export D   scenes.json and scenecheck.json for the port
+```
+
+`--check`: cutscene_step **960 of 960** runs of GAME.EXE's own, opcode
+0xe4's arm **540 of 540** (`mipsrun.object_arm`), entry 10 **1680 of 1680**
+out of the overlays -- the calls in order and all of RAM but the stack.
+`godot/scenes.gd` reproduces them on **304 of 304** runs (`scenecheck.json`);
+`scenes.json` is the sixteen records for the port's walk.
+
 **`deaths.py`** — what a level does when one of its creatures dies: every
 level's entry 19 (FORMATS.md, "What a level does when a creature dies").
 

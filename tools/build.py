@@ -222,6 +222,9 @@ def main(quick=False, only_check=False):
     steps.append((["tools/deaths.py", "--check"],
         "what a level does when a creature dies, against every level's own entry 19",
         ["entry 19, against", "first difference"]))
+    steps.append((["tools/scenes.py", "--check"],
+        "the scenes, against the game's own cutscene_step, opcode 0xe4 and every level's entry 10",
+        ["cutscene_step, the game's", "opcode 0xe4, the game's", "entry 10, against", "  "]))
     steps.append((["tools/ending.py", "--check"],
         "the ending, against END.EXE's own end_main, end_movie_rect and end_play_movie",
         ["end_main, the game's", "end_movie_rect, the game's", "end_play_movie, the game's",

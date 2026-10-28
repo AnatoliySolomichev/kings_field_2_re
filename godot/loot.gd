@@ -130,6 +130,8 @@ var talk_walks := true             # object_interact's call goes on to the objec
 var gifts := []                    # the things a level's entry 4 gave, for object_give once the call ends
 var triggers := []                 # the slots of opcode 0xe1, the rectangles that run the level's entry 3
 var lake := []                     # the slots of opcodes 0x5f and 0xa6: level 2's lake (godot/lake.gd)
+var scene_slots := []              # the slots of opcode 0xe4, the rectangles that start a scene
+var scene_records := []            # scenes.json: seq_data's sixteen records of 52 bytes
 var lake_words := []               # the seventeen words level 2's switch reads (lake.json)
 var fired := {}                    # slot -> a trigger's +0x40: fired, until the player steps out
 # What was opened, taken, dropped and set down goes where the game keeps it,
@@ -200,6 +202,9 @@ func _ready() -> void:
 			triggers.append(int(f[0]))
 		if f.size() > 10 and int(f[10]) in [KFLake.OP_STAMP, KFLake.OP_SWITCH]:
 			lake.append(int(f[0]))
+		if f.size() > 10 and int(f[10]) == KFScenes.SCENE_OP:
+			scene_slots.append(int(f[0]))
+	scene_records = _scene_records()
 	if not lake.is_empty():
 		lake_words = _lake_words()
 	for row in doc["rows"]:
@@ -507,6 +512,149 @@ func _triggers() -> void:
 		_act(w["m"]["calls"])
 		if not (w["m"]["calls"] as Array).is_empty():
 			KFInfo.note("trigger: slot %d, %s" % [k, str(w["m"]["calls"])])
+
+
+# @port data -- scenes.json: seq_data's sixteen records, which tools/scenes.py reads off FDAT entry 97
+func _scene_records() -> Array:
+	if not FileAccess.file_exists("res://scenes.json"):
+		return []
+	var d = JSON.parse_string(FileAccess.get_file_as_string("res://scenes.json"))
+	if typeof(d) != TYPE_DICTIONARY:
+		return []
+	return (d.get("records", []) as Array).map(
+		func(r): return PackedByteArray((r as Array).map(func(v): return int(v))))
+
+
+# @port data -- scene n's record (seq_data + 52 * n), empty past the sixteen
+func scene_record(n: int) -> PackedByteArray:
+	return scene_records[n] if n >= 0 and n < scene_records.size() else PackedByteArray()
+
+
+# The machine's bytes and what it reads of the player's, at the game's
+# addresses, into `m`: the four of the machine, the sixteen records, the
+# player's state, its scene, the walk's count, the view's eight bytes and
+# the eight kept as a walk began.
+# @port engine -- the scene machine's and the player's fields as the game's bytes
+func _scene_in(m: Dictionary) -> void:
+	KFLevelIn.wr(m, KFScenes.CUT_NUMBER, KFScenes.number)
+	KFLevelIn.wr(m, KFScenes.CUT_PHASE, KFScenes.phase, 2)
+	KFLevelIn.wr(m, KFScenes.CUT_PENDING, KFScenes.pending, 2)
+	KFLevelIn.wr(m, KFScenes.CUT_RECORD, KFScenes.record, 4)
+	for i in scene_records.size():
+		var r: PackedByteArray = scene_records[i]
+		for j in r.size():
+			KFLevelIn.wr(m, KFScenes.SEQ_DATA + KFScenes.STRIDE * i + j, r[j])
+	KFLevelIn.wr(m, KFScenes.PLAYER_STATE, int(player.pstate))
+	KFLevelIn.wr(m, KFScenes.SCENE_ARG, int(player.scene_arg))
+	KFLevelIn.wr(m, KFScenes.WALK, int(player.walk))
+	var view := [int(player.pitch), int(player.facing), int(player.roll), 0]
+	for i in 4:
+		KFLevelIn.wr(m, KFScenes.VIEW + 2 * i, view[i], 2)
+		KFLevelIn.wr(m, KFScenes.SAVED + 2 * i, int(player.saved_view[i]), 2)
+	for i in 3:
+		KFLevelIn.wr(m, 0x801B2618 + 2 * i, int(player.tilt[i]), 2)
+		KFLevelIn.wr(m, 0x801B2620 + 2 * i, int(player.scene_tilt[i]), 2)
+
+
+# @port engine -- what the machine wrote of its own and the player's, back
+func _scene_out(m: Dictionary) -> void:
+	KFScenes.number = KFLevelIn.rd(m, KFScenes.CUT_NUMBER)
+	KFScenes.phase = KFLevelIn.rd(m, KFScenes.CUT_PHASE, 2)
+	KFScenes.pending = KFLevelIn.rd(m, KFScenes.CUT_PENDING, 2)
+	KFScenes.record = KFLevelIn.rd(m, KFScenes.CUT_RECORD, 4)
+	var st := KFLevelIn.rd(m, KFScenes.PLAYER_STATE)
+	if st != int(player.pstate):
+		if st == 0:
+			player._knock_end()
+		player.pstate = st
+	player.scene_arg = KFLevelIn.rd(m, KFScenes.SCENE_ARG)
+	player.walk = KFLevelIn.rd(m, KFScenes.WALK)
+	for i in 4:
+		player.saved_view[i] = KFLevelIn.rd(m, KFScenes.SAVED + 2 * i, 2)
+	for i in 3:
+		player.tilt[i] = player.coll._s16(KFLevelIn.rd(m, 0x801B2618 + 2 * i, 2))
+		player.scene_tilt[i] = player.coll._s16(KFLevelIn.rd(m, 0x801B2620 + 2 * i, 2))
+
+
+# object_interpreter's part of the scenes, a frame of the game's (player.gd
+# calls it before its controller, as game_main runs the objects first):
+# opcode 0xe4's arm for each of the level's rectangles (KFScenes.arm).
+# @port engine -- the scene rectangles a frame at a time over the port's bytes
+func scene_objects() -> void:
+	if scene_slots.is_empty() or not loaded:
+		return
+	_scene_run(func(m: Dictionary) -> void:
+		for k in scene_slots:
+			KFScenes.arm(m, k), false, [], false)
+
+
+# game_main's cutscene_step, tenth in its frame (player.gd calls it after its
+# controller).
+# @port engine -- cutscene_step a frame at a time over the port's bytes
+func scene_main() -> void:
+	if KFScenes.number == 0xFF or not loaded:
+		return
+	_scene_run(func(_m: Dictionary) -> void: pass, true, [], false)
+
+
+# The machine over the port's bytes: `pre` (the rectangles, or nothing),
+# cutscene_step with the level's entry 10 (KFScenes.entry10) and entry 7
+# (not ported but for the inns' -- logged), and what follows put back and
+# acted: the stamps, a banner, the warp after scene 6 (record 0xc), and the
+# movie str_play plays -- the record's +0, \STR\Snn.S -- then `runs`, the
+# fade back the player's state 8 does after it.
+# @port engine -- cutscene_step over the port's bytes, then its calls acted
+func _scene_run(pre: Callable, run_step: bool, runs: Array, clear: bool) -> void:
+	var lv: int = player._level()
+	KFTalk.load_level(lv)
+	var w := _bytes()
+	var m: Dictionary = w["m"]
+	_scene_in(m)
+	w["before"] = (m["mem"] as Dictionary).duplicate()
+	pre.call(m)
+	if run_step:
+		KFScenes.step(m, func(n: int, k: int) -> void:
+			if n == KFScenes.ENTRY_SCENE:
+				KFScenes.entry10(lv, m, k)
+			else:
+				m["calls"].append(["entry", n, k]))
+	_scene_out(m)
+	_bytes_back(w)
+	var calls: Array = m["calls"]
+	_act(calls)
+	var cr := get_node_or_null("../Crossing")
+	var movie := -1
+	for c in calls:
+		match str(c[0]):
+			"str_play":
+				var n := int(KFScenes.record - KFScenes.SEQ_DATA) / KFScenes.STRIDE
+				var rec := scene_record(n)
+				movie = int(rec[0]) if rec.size() > 0 else n
+				KFInfo.note("scene %d: the level's entry 10, the movie %d" % [n, movie])
+			"entry":
+				KFInfo.note("scene: the level's entry %d with %d -- not in the port" % [
+					int(c[1]), int(c[2])])
+			"warp_to":
+				if KFUseItem.warps.is_empty():
+					KFUseItem.load_from()
+				var plan := KFUseItem.warp_plan(int(c[1]), KFGame.block if not KFGame.block.is_empty()
+					else [lv, lv, lv, lv, lv], int(player.pitch))
+				if cr and not plan.is_empty():
+					cr.warp(plan)
+	if cr and (movie >= 0 or not runs.is_empty()):
+		cr.scene_movie(movie, runs, clear)
+
+
+# player_controller's state 8 calls cutscene_step itself, and then fades back
+# by the record's +0x22 (`runs`, `clear`: screen_fade(0xff) after).
+# @port engine -- the player's state 8: the machine, then the fade back
+func scene_step(runs: Array, clear: bool) -> void:
+	_scene_run(func(_m: Dictionary) -> void: pass, true, runs, clear)
+
+
+# @port engine -- a walk over: cutscene_pending 1
+func scene_pending() -> void:
+	KFScenes.pending = 1
 
 
 # @port data -- lake.json's seventeen words, which tools/lake.py reads off level 2's overlay

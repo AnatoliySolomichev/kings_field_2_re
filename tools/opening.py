@@ -64,6 +64,14 @@ CUTSCENES = [(3, "/STR/S03.S", "the opening: the sword handed over"),
              # seq_data + 52 * n start with n
              (7, "/STR/S07.S", "level 27's boss dead with thing 0x10 had: the warp on to level 24"),
              (8, "/STR/S08.S", "level 27's boss dead without it: the short ending, before END.EXE's M6")]
+# and the rest of the thirteen, which cutscene_step plays when opcode 0xe4's
+# rectangles start them (tools/scenes.py) -- 11 is started by nothing found
+CUTSCENES += [(n, f"/STR/S{n:02d}.S", w) for n, w in (
+    (4, "level 13, object 85's rectangle"), (5, "level 20, object 6's"),
+    (6, "level 24, object 138's: then the warp of record 0xc"), (9, "level 17, object 84's"),
+    (10, "level 20, object 7's: thing 0x7d for 0x10"), (11, "not started by anything found"),
+    (12, "level 4, object 93's"), (13, "level 13, object 58's"), (14, "level 26, object 172's"),
+    (15, "level 2, object 97's"))]
 
 # The dreams. A scene whose record's first byte is 0x10 or more has no movie
 # of its own, and str_play builds the name from its second template instead,

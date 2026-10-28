@@ -198,6 +198,24 @@ func leave(word: int, vsyncs: int, runs: Array, scene := -1) -> void:
 	fade_plan = {"word": word, "scene": scene}
 
 
+# A scene's walk ending in a fade (player.gd, state 7's +0xa): its frames,
+# the world held.
+# @port engine -- a scene's fade, then nothing
+func scene_fade(runs: Array) -> void:
+	_fade(runs, "none")
+
+
+# The player's state 8: the movie cutscene_step played (`n`, -1 for none),
+# then the fade back (`runs`) and, for 0x82, screen_fade(0xff).
+# @port engine -- the scene's movie, then its fade back
+func scene_movie(n: int, runs: Array, clear: bool) -> void:
+	fade_plan = {"runs": runs, "clear": clear}
+	if n < 0:
+		_fade(runs, "clear" if clear else "none")
+		return
+	_movie(n, "fadeback")
+
+
 # A scene's movie, as str_play (0x80060d20) plays it out of \STR\SXX.S --
 # the record's first byte is the number, here the scene's own (7 and 8) --
 # over the world, which stands; then `then`: "exit" game_main's test of the
@@ -255,6 +273,8 @@ func _movie_done() -> void:
 		"back":
 			_fade(fades_back, "")
 			fades_back = []
+		"fadeback":
+			_fade(fade_plan.get("runs", []), "clear" if bool(fade_plan.get("clear", false)) else "none")
 
 
 # The fades' runs, fade_frames' bytes a frame each, the world held, and then
