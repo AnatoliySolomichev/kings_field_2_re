@@ -995,8 +995,9 @@ arrows, **X** CROSS, **Z** SQUARE, **D** CIRCLE, **S** TRIANGLE, **Q/R** L1/R1,
 the slots filled by scheme A and action scheme 3, the ones the player's save
 uses, so X uses, Z attacks and D opens the menu in both windows. The port's own
 keys keep off those: **F1** walks or flies, **F2** turns the distance
-darkening off and on, **F3** is a test switch -- the player loses no HP and
-every blow or spell of the player's that reaches a creature takes all of
+darkening off and on, **F3** is a test switch -- a hit does nothing to the
+player but a flash (no HP, no status, no MP, no push or stun; what hits had
+left taken off as it is turned on) and every blow or spell of the player's that reaches a creature takes all of
 its HP, so it dies the game's way, its drops and experience with it
 (`KFGame.test`) -- **G** shows the collision, **PgUp/PgDn**
 rise and sink while flying, **Shift** hurries, **Escape** frees the mouse,

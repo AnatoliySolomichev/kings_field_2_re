@@ -524,7 +524,7 @@ func _refresh() -> void:
 	var cz := int(floor(float(gz) / CELL))
 	var note := "FLY" if flying else "WALK"
 	if KFGame.test:
-		note += "   TEST: no HP lost, every blow kills (F3)"
+		note += "   TEST: hits do nothing to you, every blow kills (F3)"
 	if not have_coll:
 		note += "  (no collision data)"
 	var above := "-"
@@ -568,7 +568,9 @@ func _unhandled_input(e: InputEvent) -> void:
 				_refresh()
 			KEY_F3:
 				KFGame.test = not KFGame.test
-				KFInfo.note("test: %s -- no HP lost, every blow of the player's kills" % [
+				if KFGame.test:
+					_test_clear()
+				KFInfo.note("test: %s -- nothing a hit does to the player, every blow of the player's kills" % [
 					"on" if KFGame.test else "off"])
 				_refresh()
 			KEY_F11:
@@ -581,6 +583,29 @@ func _unhandled_input(e: InputEvent) -> void:
 				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 			KEY_TAB:
 				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+# F3's test, the port's: what a hit would have left shown as the shortest
+# flash apply_damage makes, and nothing else.
+# @port check -- F3: a hit's flash, and no more
+func _test_flash() -> void:
+	flash = 0x46
+	flash_colour = 0xDAC
+
+
+# F3 turned on, the port's: what hits had left taken off -- the poison, the
+# paralysis, the slowing, the curse (and the stats recalculated without it)
+# and the darkness. A push under way runs out by itself.
+# @port check -- F3 on: the statuses a hit left taken off
+func _test_clear() -> void:
+	poison = 0
+	caps["paralysis"] = 0
+	caps["slow"] = 0
+	var cursed := int(curse[0]) != 0
+	curse = [0, 0]
+	dark = [0, 0]
+	if cursed:
+		recalc_stats()
 
 
 # F11, the port's own: every spell the game can give learned and the MP
@@ -1607,8 +1632,11 @@ static func hit_shield(worn: Array, attacks: Array, rnd: Callable) -> Array:
 	return a
 
 
-# @port helper -- a hit: the player's fields into take_hit and back, then apply_damage (from `at`, or from no point)
+# @port helper -- a hit: the player's fields into take_hit and back, then apply_damage (from `at`, or from no point); F3's test leaves it the flash alone
 func _hit(attacks: Array, effect: int, scale: int, pct: int, at: Vector3i, has_at := true) -> void:
+	if KFGame.test:                  # F3's test, the port's: no damage, no status, no push
+		_test_flash()
+		return
 	var st := {"worn": worn, "guard": guard, "shielded": shielded, "resist": resist,
 		"mp": mp, "mp_max": int(character.get("mp_max", 30)), "poison": poison,
 		"curse_lv": curse[0], "curse_t": curse[1], "dark_t": dark[1],
@@ -2032,13 +2060,14 @@ static func _u16(rec: Array, o: int) -> int:
 # shake of isqrt(share << 2) held to 0x10..0x2a, one of eight by the bearing
 # against the view's yaw, into player_knock; effect bit 0x80 makes it a stun.
 # Without an attacker (a fall) the HP and the flash alone.
-# @orig game:0x8002a6f4 apply_damage  status:transcribed -- tools/knock.py: 83 of 83 knock-back frames, the push's Y from the creature; F3's test keeps the HP (the port's)
+# @orig game:0x8002a6f4 apply_damage  status:transcribed -- tools/knock.py: 83 of 83 knock-back frames, the push's Y from the creature; F3's test leaves the flash alone (the port's)
 func _apply_damage(dmg: int, has_at: bool, at: Vector3i, effect: int) -> void:
 	if pstate == 0x11 or dmg == 0:
 		return
+	if KFGame.test:                  # F3's test, the port's: a fall too, the flash alone
+		_test_flash()
+		return
 	var left := maxi(hp - dmg, 0)
-	if KFGame.test:                  # F3's test, the port's: the push and the flash, no HP
-		left = hp
 	var share := mini(coll._idiv(dmg << 12, hp_max), 0x3B6)
 	hp = left
 	var s1 := share >> 2

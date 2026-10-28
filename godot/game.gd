@@ -88,9 +88,11 @@ static var block: Array = []
 # render_flags_reset puts the mode back to 0xff every frame of the game's, so
 # whoever fades says so every frame (player.gd's tick, crossing.gd's fades).
 static var screen := [0xFF, 0, 0, 0]
-# F3, the port's own test switch (player.gd), not the game's: the player
-# loses no HP -- the blows, the falls, the poison and the second bow leave it
-# as it was, so nothing kills -- and every blow or spell of the player's
+# F3, the port's own test switch (player.gd), not the game's: a hit does
+# nothing to the player but a flash -- no HP, no poison, paralysis, curse,
+# darkness, slowing or MP taken, no push and no stun, and a fall the same;
+# the poison, the second bow cost nothing; what hits had left is taken off
+# as it is turned on -- and every blow or spell of the player's
 # that reaches a creature takes all of its HP, so it dies the game's way:
 # its dying behaviour, the gold and the thing actor_tick's drops leave, the
 # experience, the level's entry 19. What the game makes nothing hurt (the
