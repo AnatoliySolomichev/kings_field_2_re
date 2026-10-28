@@ -149,5 +149,45 @@
   "name": "CD_datasync",
   "kind": "code",
   "evidence": "forms the address of \"CD_datasync\", which is that routine's own debug message"
+ },
+ "0x80011d04": {
+  "name": "end_entry",
+  "kind": "code",
+  "evidence": "END.EXE's entry (its header): $gp = 0x80037498 and a jump to end_main"
+ },
+ "0x800119b8": {
+  "name": "end_main",
+  "kind": "code",
+  "evidence": "the set-up (the heap at 0x80100000, CdInit, end_graphics, the two environments put) and the sequence: overlay_arg 2 plays movies 0 and 1 and holds sixty VSyncs, then movie 2 for any; next_exe and overlay_arg 0, 0x8001c08c, CdControl(8) and a loop on itself. tools/ending.py main_check runs it from the entry, 12 of 12 overlay_args"
+ },
+ "0x80011ae0": {
+  "name": "end_graphics",
+  "kind": "code",
+  "evidence": "ResetGraph(0), SetGraphDebug(0), the two draw and display environments of 320 by 240 at y 0 and 240, clear on and black, SetDispMask(1)"
+ },
+ "0x80011d14": {
+  "name": "end_play_movie",
+  "kind": "code",
+  "evidence": "(i): the three counts at 0x80011000 and names at 0x8001100c copied to the stack, the file searched (0x800175b4; not found, nothing), end_movie_rect(i), and a frame decoded at a time until the counter at $gp+8 passes the count or the loop has gone round more than it; CdControl(9). No pad read: the ending cannot be skipped. tools/ending.py play_check, 9 of 9"
+ },
+ "0x80011f64": {
+  "name": "end_movie_rect",
+  "kind": "code",
+  "evidence": "(i): the decoder's buffers and the picture's rectangles -- movie 0 320x176 at y 32 and 272, the others 320x240 at y 0 and 240 -- at 0x8009b0dc. tools/ending.py rect_check, 6 of 6"
+ },
+ "0x8001c208": {
+  "name": "VSync",
+  "kind": "code",
+  "evidence": "the same code as OPEN.EXE's VSync (0x8001fe6c) but for the addresses its jumps and loads name; end_main calls it sixty times with 0"
+ },
+ "0x80018198": {
+  "name": "CdControl",
+  "kind": "code",
+  "evidence": "the same code as OPEN.EXE's CdControl (0x8001b020) but for the addresses; end_main's CdControl(8, 0, 0), CdlStop"
+ },
+ "0x800126a8": {
+  "name": "heap_init",
+  "kind": "code",
+  "evidence": "the same code as OPEN.EXE's heap_init but for the addresses; end_main's (0x80100000, 0xf8000)"
  }
 }

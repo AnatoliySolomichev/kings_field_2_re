@@ -314,6 +314,55 @@ game returns to the title screen.
 
 ---
 
+## 5a. `END.EXE` — the ending
+
+`game_main` hands the machine here when the word at `$gp+0x1e4` is 3 or 4,
+with `overlay_arg` 2 or 3. END.EXE is a movie player and nothing else; its
+names are in `data/symbols_end.json`, and `tools/ending.py` has it whole.
+
+```c
+end_entry:  $gp = 0x80037498; goto end_main;      /* 0x80011d04 */
+
+end_main() {                                       /* 0x800119b8 */
+    heap_init(0x80100000, 0xf8000); CdInit(); end_graphics();  /* 320x240, twice */
+    if (overlay_arg == 2) {
+        end_play_movie(0);                         /* \OP\M4.S, 3380 frames, 320x176 */
+        end_play_movie(1);                         /* \OP\M5.S,  942 frames */
+        for (i = 0; i < 60; i++) VSync(0);         /* a second of its last frame */
+    }
+    end_play_movie(2);                             /* \OP\M6.S, 1841 frames */
+    next_exe = 0; overlay_arg = 0;
+    0x8001c08c(); CdControl(CdlStop, 0, 0);
+    for (;;) ;                                     /* never returns to the shell */
+}
+```
+
+**The ending does not go back to the title.** `end_main` zeroes the shell's
+two bytes and then loops on itself: the last frame of M6 stays until a reset.
+`end_play_movie(i)` (`0x80011d14`) takes the movie's name and count from the
+two tables at the image's very start (`0x8001100c`, `0x80011000`), lays out
+the picture (`end_movie_rect`, `0x80011f64`: movie 0 letterboxed, 320 by 176
+from y 32 -- the stream's own frames are 320 by 176 -- the others 320 by 240)
+and decodes until the frame counter at `$gp+8` passes the count; **it reads
+no button**, so the ending cannot be skipped as the opening's movies can.
+
+**What starts it**, read off the code and not yet run: the word at
+`$gp+0x1e4` (`0x8009c3f8`) has three writers. `sub_800305d8` writes 2 (QUIT
+GAME: back to the title). **3** -- END.EXE with `overlay_arg` 2, all three
+movies -- is level 25's creature-death hook (its entry 19, `0x801e85e4`):
+when its creature 0 dies and story flag `0x67` is clear, the flag set, the
+light and the screen faded. **4** -- `overlay_arg` 3, M6 alone -- is
+`level_overlay_tick` (`0x8005ee34`): once story flag `0x65` is 1 it becomes
+2, and with flag `0x66` clear the screen fades, scene 8 plays
+(`cutscene_number` 8) and the word is 4; with `0x66` set it warps to record
+`0xd` (level 24) instead and the game goes on.
+
+Checked by running END.EXE's own code (`tools/ending.py --check`): `end_main`
+from its entry over a blank RAM with the image in, 12 of 12 `overlay_arg`s
+-- the calls in order, the two bytes, the loop on itself reached;
+`end_movie_rect` 6 of 6; `end_play_movie` 9 of 9 -- the name, the frames
+decoded, the rectangle and the pause.
+
 ## 6. The buttons
 
 ### `PadRead`
@@ -435,6 +484,7 @@ now takes its input through the slots instead of reading keys directly.
 | `init_graphics` (`OPEN` `0x80012500`) | `boot.gd`, `_fit` — the 640×240 screen and its 4:3 stretch |
 | `open_main` (`OPEN` `0x80011e14`) | `opening.gd`, `_tick` |
 | `play_movie` (`OPEN` `0x800136d8`) | `opening.gd`, `_movie_tick` — the same skip rules over a still |
+| `end_main`, `end_play_movie`, `end_movie_rect` (`END` `0x800119b8`, `0x80011d14`, `0x80011f64`) | `ending.gd`, `plan`, `_start`, `rect` |
 | `title_layer_a/b/c` (`0x8001279c`, `0x80012b0c`, `0x80012ea0`) | `opening.gd`, `_draw_title` |
 | `title_menu` (`OPEN` `0x800131ac`) | `opening.gd`, `_title_tick` |
 | `load_opening_data` (`OPEN` `0x80012494`) and `OP.D` | `tools/opening.py`, into `out/godot/opening/` |
@@ -486,9 +536,9 @@ inversion, the fourteen binding slots and all eleven schemes.
 
 **Not done:**
 
-* **`END.EXE` is not read.** Its own `play_movie` table names `\OP\M4.S`,
-  `M5.S` and `M6.S`, and its symbols file has the library named and nothing
-  else.
+* **`END.EXE` is read** (section 5a): three movies and a stop. What is not
+  is the decoding's own callbacks and `0x8001c08c`, which the port leaves to
+  Godot.
 * **The save path -- read on the `GAME.EXE` side.** `card_list_saves` finds
   the saves and `overlay_arg2` carries the answer. `read_overlay_arg2`
   (`0x8001fa60`) answers `-1` for a new game; for CONTINUE it runs the list

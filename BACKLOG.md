@@ -13,9 +13,12 @@ bytes, `OPEN.EXE`'s logos, attract movies and title menu, the STR decoder, and
 the whole input path down to the seven control schemes. Four things it did not
 finish, none of them blocking:
 
-* **`END.EXE` is unread.** Only its Sony library is named, by `tools/psyq.py`.
-  Its own `play_movie` table names `\OP\M4.S`, `M5.S` and `M6.S`, so it is
-  built like `OPEN.EXE` and should read quickly.
+* **`END.EXE` is read** (BOOT.md section 5a, `tools/ending.py`) and in the
+  port (`godot/ending.gd`): three movies, then a stop that never returns.
+  Left: the decoding's callbacks (Godot's), and the two ways in GAME.EXE
+  reaches it -- level 25's creature-death hook (3) and level_overlay_tick
+  after scene 8 (4), read off the code (BOOT.md 5a) but not in the port, so
+  nothing in the port reaches the ending yet.
 * **The save path -- read, and the card with it.** `OPEN.EXE` counts the
   saves on the card and passes the menu's answer in `overlay_arg2`;
   `read_overlay_arg2` (`0x8001fa60`) runs the list and `save_load_slot`

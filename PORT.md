@@ -43,9 +43,9 @@ and `@port` says which kind of the port's own code a function is:
 
 ## How much is covered
 
-893 functions in 44 files: **499 reproduce
-code of the game** and 394 are the port's own
-(94 check, 26 data, 74 engine, 200 helper). 566 markers, 1136 addresses cited in
+903 functions in 45 files: **503 reproduce
+code of the game** and 400 are the port's own
+(95 check, 27 data, 77 engine, 201 helper). 571 markers, 1137 addresses cited in
 comments, every one of them with its executable.
 
 | executable | routines | with a marker | stretches marked inside them | instructions | covered |
@@ -53,7 +53,7 @@ comments, every one of them with its executable.
 | boot | 10 | 1 | 1 | 115 | 50 (43%) |
 | open | 293 | 9 | 3 | 20002 | 1607 (8%) |
 | game | 820 | 267 | 240 | 93512 | 52497 (56%) |
-| end | 167 | 0 | 0 | 9966 | 0 (0%) |
+| end | 167 | 5 | 0 | 9966 | 373 (3%) |
 
 Those percentages are of *all* the code in the image, which includes
 the Sony library, the CD reader and the memory card. They are a
@@ -73,10 +73,10 @@ In instructions:
 | boot | 115 | 0 | 50 | 0 | **43.5%** | 0 |
 | open | 2736 | 0 | 948 | 659 | **46.7%** | 17266 |
 | game | 77735 | 16068 | 7738 | 28225 | **48.8%** | 15777 |
-| end | 680 | 0 | 0 | 0 | **0.0%** | 9286 |
-| **all** | 81266 | 16068 | 8736 | 28884 | **48.3%** | 42329 |
+| end | 680 | 70 | 0 | 303 | **32.6%** | 9286 |
+| **all** | 81266 | 16138 | 8736 | 29187 | **48.6%** | 42329 |
 
-Its history (`data/progress.json`, a line whenever it moves): 2026-10-21 46.0%, 2026-10-22 46.5%, 2026-10-22 46.6%, 2026-10-25 46.6%, 2026-10-25 46.8%, 2026-10-26 46.9%, 2026-10-26 47.0%, 2026-10-27 47.0%, 2026-10-27 47.1%, 2026-10-27 48.0%, 2026-10-27 48.3%.
+Its history (`data/progress.json`, a line whenever it moves): 2026-10-21 46.0%, 2026-10-22 46.5%, 2026-10-22 46.6%, 2026-10-25 46.6%, 2026-10-25 46.8%, 2026-10-26 46.9%, 2026-10-26 47.0%, 2026-10-27 47.0%, 2026-10-27 47.1%, 2026-10-27 48.0%, 2026-10-27 48.3%, 2026-10-28 48.6%.
 
 ## Every function, file by file
 
@@ -191,7 +191,7 @@ Its history (`data/progress.json`, a line whenever it moves): 2026-10-21 46.0%, 
 | [`_ready`](godot/boot.gd#L42) | — port's own, *engine*: the screen node the overlays draw into; shell_main's own start | |
 | [`_fit`](godot/boot.gd#L60) | `open:0x80012500` init_graphics | transcribed |
 | [`_exec`](godot/boot.gd#L71) | `boot:0x80010038` shell_main | transcribed |
-| [`overlay_returned`](godot/boot.gd#L95) | `boot:0x800100dc` shell_main+0xa4 | transcribed |
+| [`overlay_returned`](godot/boot.gd#L97) | `boot:0x800100dc` shell_main+0xa4 | transcribed |
 
 ### [`godot/card.gd`](godot/card.gd)
 
@@ -523,6 +523,21 @@ Its history (`data/progress.json`, a line whenever it moves): 2026-10-21 46.0%, 
 | [`lob_solve`](godot/effects.gd#L4001) | `game:0x80017210` lob_solve | verified |
 | [`volley_fire`](godot/effects.gd#L4037) | `game:0x8004f5b8` actor_animation_effects+0x1a4 | verified |
 | [`_draw_all`](godot/effects.gd#L4164) | `game:0x8004165c` render_walk+0xb78 | partial |
+
+### [`godot/ending.gd`](godot/ending.gd)
+
+| function | in the game | status |
+| --- | --- | --- |
+| [`plan`](godot/ending.gd#L35) | `end:0x800119b8` end_main | verified |
+| [`rect`](godot/ending.gd#L48) | `end:0x80011f64` end_movie_rect | partial |
+| [`frames_decoded`](godot/ending.gd#L55) | — port's own, *helper*: tools/ending.py frames_decoded, which play_check holds to END.EXE's own loop | |
+| [`_ready`](godot/ending.gd#L71) | `end:0x80011d04` end_entry | verified |
+|  | `end:0x80011ae0` end_graphics | partial |
+| [`_movies`](godot/ending.gd#L87) | — port's own, *data*: ending.json: the three movies' names, counts and letterboxes, off END.EXE | |
+| [`_arg`](godot/ending.gd#L96) | — port's own, *engine*: the shell's byte, as opening.gd reads it | |
+| [`_start`](godot/ending.gd#L103) | `end:0x80011d14` end_play_movie | partial |
+| [`_next`](godot/ending.gd#L122) | — port's own, *engine*: the next of end_main's steps, or the stop: next_exe and overlay_arg 0, the last frame left on the screen | |
+| [`_process`](godot/ending.gd#L142) | — port's own, *engine*: the steps a frame at a time; no button is read | |
 
 ### [`godot/equip.gd`](godot/equip.gd)
 
@@ -1110,46 +1125,47 @@ The whole file is the port's own: **check** — the self-test; it runs the port'
 | [`_ai_holds`](godot/selftest.gd#L190) | — port's own, *check*: KFCreatureAI.tick's hold against ai00.json's holds | |
 | [`_one_run`](godot/selftest.gd#L233) | — port's own, *check* | |
 | [`_init`](godot/selftest.gd#L275) | — port's own, *check* | |
-| [`_knock`](godot/selftest.gd#L422) | — port's own, *check* | |
-| [`_weapon`](godot/selftest.gd#L504) | — port's own, *check* | |
-| [`_anim`](godot/selftest.gd#L688) | — port's own, *check* | |
-| [`_effects`](godot/selftest.gd#L720) | — port's own, *check* | |
-| [`_lifts`](godot/selftest.gd#L1137) | — port's own, *check* | |
-| [`_routines`](godot/selftest.gd#L1224) | — port's own, *check* | |
-| [`_run`](godot/selftest.gd#L1303) | — port's own, *check* | |
-| [`_take_hit`](godot/selftest.gd#L1342) | — port's own, *check* | |
-| [`_status_tick`](godot/selftest.gd#L1392) | — port's own, *check* | |
-| [`_casting`](godot/selftest.gd#L1451) | — port's own, *check* | |
-| [`_attacks`](godot/selftest.gd#L1502) | — port's own, *check* | |
-| [`_creature_hits`](godot/selftest.gd#L1544) | — port's own, *check* | |
-| [`_strike_areas`](godot/selftest.gd#L1611) | — port's own, *check*: strike_area against strikecheck.json | |
-| [`_ints`](godot/selftest.gd#L1724) | — port's own, *check*: JSON's floats back to ints, all the way down | |
-| [`_saves`](godot/selftest.gd#L1741) | — port's own, *check* | |
-| [`_level_states`](godot/selftest.gd#L1798) | — port's own, *check* | |
-| [`_table`](godot/selftest.gd#L1883) | — port's own, *check* | |
-| [`_chests`](godot/selftest.gd#L1894) | — port's own, *check* | |
-| [`_seals`](godot/selftest.gd#L2030) | — port's own, *check* | |
-| [`_fades`](godot/selftest.gd#L2106) | — port's own, *check* | |
-| [`_carry`](godot/selftest.gd#L2149) | — port's own, *check* | |
-| [`_conversations`](godot/selftest.gd#L2204) | — port's own, *check* | |
-| [`_menus`](godot/selftest.gd#L2253) | — port's own, *check* | |
-| [`_use_items`](godot/selftest.gd#L2595) | — port's own, *check*: a primitive list with every number an int and every pair an array, for comparing | |
-| [`_hooks`](godot/selftest.gd#L2664) | — port's own, *check* | |
-| [`_level_ins`](godot/selftest.gd#L2731) | — port's own, *check* | |
-| [`_lake_runs`](godot/selftest.gd#L2777) | — port's own, *check* | |
-| [`_ticks`](godot/selftest.gd#L2820) | — port's own, *check* | |
-| [`_give_takes`](godot/selftest.gd#L2868) | — port's own, *check* | |
-| [`_trigger_runs`](godot/selftest.gd#L2925) | — port's own, *check* | |
-| [`_use_world`](godot/selftest.gd#L2966) | — port's own, *helper*: a case's world, as KFUseItem.run takes it | |
-| [`_norm`](godot/selftest.gd#L2992) | — port's own, *check* | |
-| [`_inscriptions`](godot/selftest.gd#L3012) | — port's own, *check* | |
-| [`_damage`](godot/selftest.gd#L3057) | — port's own, *check* | |
-| [`_scripts`](godot/selftest.gd#L3100) | — port's own, *check* | |
-| [`_equip`](godot/selftest.gd#L3169) | — port's own, *check* | |
-| [`_objects`](godot/selftest.gd#L3202) | — port's own, *check* | |
-| [`_directions`](godot/selftest.gd#L3237) | — port's own, *check* | |
-| [`_angles`](godot/selftest.gd#L3268) | — port's own, *check* | |
-| [`_levels`](godot/selftest.gd#L3297) | — port's own, *check* | |
+| [`_knock`](godot/selftest.gd#L425) | — port's own, *check* | |
+| [`_weapon`](godot/selftest.gd#L507) | — port's own, *check* | |
+| [`_anim`](godot/selftest.gd#L691) | — port's own, *check* | |
+| [`_effects`](godot/selftest.gd#L723) | — port's own, *check* | |
+| [`_lifts`](godot/selftest.gd#L1140) | — port's own, *check* | |
+| [`_routines`](godot/selftest.gd#L1227) | — port's own, *check* | |
+| [`_run`](godot/selftest.gd#L1306) | — port's own, *check* | |
+| [`_take_hit`](godot/selftest.gd#L1345) | — port's own, *check* | |
+| [`_status_tick`](godot/selftest.gd#L1395) | — port's own, *check* | |
+| [`_casting`](godot/selftest.gd#L1454) | — port's own, *check* | |
+| [`_attacks`](godot/selftest.gd#L1505) | — port's own, *check* | |
+| [`_creature_hits`](godot/selftest.gd#L1547) | — port's own, *check* | |
+| [`_strike_areas`](godot/selftest.gd#L1614) | — port's own, *check*: strike_area against strikecheck.json | |
+| [`_ints`](godot/selftest.gd#L1727) | — port's own, *check*: JSON's floats back to ints, all the way down | |
+| [`_saves`](godot/selftest.gd#L1744) | — port's own, *check* | |
+| [`_level_states`](godot/selftest.gd#L1801) | — port's own, *check* | |
+| [`_table`](godot/selftest.gd#L1886) | — port's own, *check* | |
+| [`_chests`](godot/selftest.gd#L1897) | — port's own, *check* | |
+| [`_seals`](godot/selftest.gd#L2033) | — port's own, *check* | |
+| [`_fades`](godot/selftest.gd#L2109) | — port's own, *check* | |
+| [`_carry`](godot/selftest.gd#L2152) | — port's own, *check* | |
+| [`_conversations`](godot/selftest.gd#L2207) | — port's own, *check* | |
+| [`_menus`](godot/selftest.gd#L2256) | — port's own, *check* | |
+| [`_use_items`](godot/selftest.gd#L2598) | — port's own, *check*: a primitive list with every number an int and every pair an array, for comparing | |
+| [`_hooks`](godot/selftest.gd#L2667) | — port's own, *check* | |
+| [`_level_ins`](godot/selftest.gd#L2734) | — port's own, *check* | |
+| [`_ending`](godot/selftest.gd#L2779) | — port's own, *check* | |
+| [`_lake_runs`](godot/selftest.gd#L2827) | — port's own, *check* | |
+| [`_ticks`](godot/selftest.gd#L2870) | — port's own, *check* | |
+| [`_give_takes`](godot/selftest.gd#L2918) | — port's own, *check* | |
+| [`_trigger_runs`](godot/selftest.gd#L2975) | — port's own, *check* | |
+| [`_use_world`](godot/selftest.gd#L3016) | — port's own, *helper*: a case's world, as KFUseItem.run takes it | |
+| [`_norm`](godot/selftest.gd#L3042) | — port's own, *check* | |
+| [`_inscriptions`](godot/selftest.gd#L3062) | — port's own, *check* | |
+| [`_damage`](godot/selftest.gd#L3107) | — port's own, *check* | |
+| [`_scripts`](godot/selftest.gd#L3150) | — port's own, *check* | |
+| [`_equip`](godot/selftest.gd#L3219) | — port's own, *check* | |
+| [`_objects`](godot/selftest.gd#L3252) | — port's own, *check* | |
+| [`_directions`](godot/selftest.gd#L3287) | — port's own, *check* | |
+| [`_angles`](godot/selftest.gd#L3318) | — port's own, *check* | |
+| [`_levels`](godot/selftest.gd#L3347) | — port's own, *check* | |
 
 ### [`godot/sky.gd`](godot/sky.gd)
 
@@ -1272,7 +1288,12 @@ The whole file is the port's own: **check** — a model browser for naming thing
 | in the game | in the port | what it is | status |
 | --- | --- | --- | --- |
 | `boot:0x80010038` shell_main | [`godot/boot.gd:70`](godot/boot.gd#L70) | `func _exec` | transcribed |
-| `boot:0x800100dc` shell_main+0xa4 | [`godot/boot.gd:94`](godot/boot.gd#L94) | `func overlay_returned` | transcribed |
+| `boot:0x800100dc` shell_main+0xa4 | [`godot/boot.gd:96`](godot/boot.gd#L96) | `func overlay_returned` | transcribed |
+| `end:0x800119b8` end_main | [`godot/ending.gd:34`](godot/ending.gd#L34) | `func plan` | verified |
+| `end:0x80011ae0` end_graphics | [`godot/ending.gd:70`](godot/ending.gd#L70) | `func _ready` | partial |
+| `end:0x80011d04` end_entry | [`godot/ending.gd:69`](godot/ending.gd#L69) | `func _ready` | verified |
+| `end:0x80011d14` end_play_movie | [`godot/ending.gd:102`](godot/ending.gd#L102) | `func _start` | partial |
+| `end:0x80011f64` end_movie_rect | [`godot/ending.gd:47`](godot/ending.gd#L47) | `func rect` | partial |
 | `game:0x80014db4` game_main+0x1e0 | [`godot/loadscreen.gd:71`](godot/loadscreen.gd#L71) | `func _enter` | partial |
 | `game:0x80014e4c` game_main+0x278 | [`godot/cutscene.gd:46`](godot/cutscene.gd#L46) | `func _ready` | transcribed |
 | `game:0x80014f24` game_main+0x350 | [`godot/game.gd:53`](godot/game.gd#L53) | `other static` | partial |

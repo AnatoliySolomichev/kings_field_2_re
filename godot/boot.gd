@@ -84,9 +84,11 @@ func _exec() -> void:
 			ls.shell = self
 			screen.add_child(ls)
 		END:
-			var l := Label.new()
-			l.text = "END.EXE is not ported. It plays \\OP\\M4.S, M5.S and M6.S."
-			screen.add_child(l)
+			# END.EXE: the ending's movies (ending.gd), and then nothing --
+			# it never hands the machine back.
+			var en := preload("res://ending.gd").new()
+			en.shell = self
+			screen.add_child(en)
 
 
 # What an overlay does when it returns: the shell reads the byte and goes round

@@ -218,14 +218,14 @@ the equipment tables, against a RAM snapshot           3264/3264, 2112/2112, 16/
                                                        player_recalc_stats 483 of
                                                        483 values over 21 snapshots
 the conversation hooks, two readings of one table      23 of 23
-how much of the game the port has (portmap progress)   48.3% of the game's own
+how much of the game the port has (portmap progress)   48.6% of the game's own
                                                        code (game 48.8%, open
-                                                       46.7%, end 0%; partial at
+                                                       46.7%, end 32.6%; partial at
                                                        half, the library left out)
-the port against the game, function by function        893 of 893 placed: 499
-                                                       reproduce the game, 394 the
-                                                       port's own; 566 markers and
-                                                       1136 cited addresses, every
+the port against the game, function by function        903 of 903 placed: 503
+                                                       reproduce the game, 400 the
+                                                       port's own; 571 markers and
+                                                       1137 cited addresses, every
                                                        one resolving
 the object loader, against 13 snapshots                angles 4344/4352, scale and
                                                        position 4352/4352, opcode
@@ -333,6 +333,9 @@ player_action (aim, creature in sight, spawns)         spawn and argument
 player_action whole, every action against the game's   1512 of 1512 attacking,
 own (tools/magic.py --whole)                           252 of 252 healing, 1638
                                                        of 1638 doing nothing
+the ending, against END.EXE's own end_main,           12 of 12 overlay_args, 6
+end_movie_rect and end_play_movie (tools/ending.py)    of 6 rectangles, 9 of 9
+                                                       movies played
 player_turn whole, against the game's own             1260 of 1260 frames, the
 (tools/magic.py --whole, turn_check)                   calls in order and the
                                                        fields
@@ -427,7 +430,7 @@ effects 1494 of 1494 runs, 27656 of 27656 frames · aims 300 of 300 · volleys 2
 the run 150129 of 150129 frames
 player_take_hit 300 of 300 · the status 40 of 40 runs, 6312 of 6312 frames
 casting 1200 of 1200 · the attacking arms 240 of 240 · creature hits 400 of 400
-use_item 624 of 624 · conversation hooks 360 of 360 · entry 5 168 of 168 · triggers 200 of 200 · give and take 224 of 224 · entry 1 120 of 120 · the lake 168 of 168 · warp_to 55 of 55 · seals 975 of 975 · fades 117 of 117
+use_item 624 of 624 · conversation hooks 360 of 360 · entry 5 168 of 168 · triggers 200 of 200 · give and take 224 of 224 · entry 1 120 of 120 · the lake 168 of 168 · the ending 31 of 31 · warp_to 55 of 55 · seals 975 of 975 · fades 117 of 117
 carry-over 61 of 61 fields and the place
 ```
 

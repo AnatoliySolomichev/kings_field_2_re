@@ -365,6 +365,9 @@ func _init() -> void:
 	if not _lake_runs():
 		quit(1)
 		return
+	if not _ending():
+		quit(1)
+		return
 	if not _inscriptions():
 		quit(1)
 		return
@@ -2768,6 +2771,53 @@ func _level_ins() -> bool:
 	print("entry 5: %d of %d runs of the levels' own entry 5 match tools/levelin.py -- the calls and every byte written" % [
 		ok, cases.size()])
 	return ok == cases.size()
+
+
+# The ending, godot/ending.gd against tools/ending.py's model, which END.EXE's
+# own code holds: end_main's plan for each overlay_arg, the picture's
+# rectangle, and the frames end_play_movie decodes.
+func _ending() -> bool:
+	if not FileAccess.file_exists("res://ending.json"):
+		print("the ending: no cases to check against")
+		return true
+	var c = JSON.parse_string(FileAccess.get_file_as_string("res://ending.json"))["check"]
+	var en = load("res://ending.gd")
+	var ok := 0
+	var n := 0
+	var first := ""
+	for p in c["plans"]:
+		var want := []
+		var held := 0
+		for call in p[1]:
+			if str(call[0]) == "vsync":
+				held += 1
+				continue
+			if held:
+				want.append(["hold", held])
+				held = 0
+			want.append(["movie", int(call[1])])
+		var got: Array = en.plan(int(p[0]))
+		n += 1
+		if str(got) == str(want):
+			ok += 1
+		elif first == "":
+			first = "plan %d: %s, python %s" % [int(p[0]), str(got), str(want)]
+	for r in c["rects"]:
+		n += 1
+		if en.rect(int(r[0])) == [int(r[1]), int(r[2])]:
+			ok += 1
+		elif first == "":
+			first = "rect %d: %s" % [int(r[0]), str(en.rect(int(r[0])))]
+	for f in c["frames"]:
+		n += 1
+		if en.frames_decoded(int(f[0]), int(f[1])) == int(f[2]):
+			ok += 1
+		elif first == "":
+			first = "frames %d by %d" % [int(f[0]), int(f[1])]
+	if first != "":
+		print("  first difference: " + first)
+	print("the ending: %d of %d -- end_main's plans, the pictures' rectangles and the frames decoded match tools/ending.py (whose model END.EXE's own code holds)" % [ok, n])
+	return ok == n
 
 
 # Level 2's lake, godot/lake.gd (opcode 0x5f's arm and the switch, level

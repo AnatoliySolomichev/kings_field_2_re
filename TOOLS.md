@@ -537,6 +537,20 @@ of 672** runs leave the model's calls and all of RAM but the stack.
 `godot/lake.gd` reproduces the model on **168 of 168** runs (`lakecheck.json`);
 `lake.json` is the seventeen words the switch reads, for the port.
 
+**`ending.py`** — the ending: END.EXE whole (BOOT.md, "END.EXE").
+
+```
+python3 tools/ending.py              the three movies, their counts and rectangles
+python3 tools/ending.py --check      the model against END.EXE's own code
+python3 tools/ending.py video        transcode M4, M5 and M6 into out/godot/opening/
+```
+
+`--check` runs END.EXE's own code with `tools/mipsrun.py` over a blank RAM
+with the image laid in: `end_main` from the entry for every `overlay_arg`
+(12 of 12), `end_movie_rect` (6 of 6) and `end_play_movie` (9 of 9, the
+frame counter run up by 1, 2 or 3 a frame). `export` writes `ending.json`
+for the port, whose self-test holds `godot/ending.gd` to the model (31 of 31).
+
 **`givetake.py`** — a thing into the pack and out of it: give_item and
 take_item whole, with every level's entries 6 and 11 (FORMATS.md, "A thing
 into the pack").
