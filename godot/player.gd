@@ -2913,6 +2913,23 @@ func view_pitch_now() -> int:
 	return (pitch + int(tilt[0]) + int(scene_tilt[0]) + dip) & 0xFFF
 
 
+# place_player_on_terrain (0x8002b760): the height collide_at_cell finds at
+# the player's x and z on the layer 0x801b2644 names (5 the upper, 0 the
+# lower), spawn_anywhere, the vertical state, its speed and the player's
+# state 0, clear_movement_state.
+# @orig game:0x8002b760 place_player_on_terrain  status:transcribed -- not 0x801b2580, nor grid_mark of the player's cells (the port keeps no player in the grid)
+func place_on_terrain() -> void:
+	gy = coll.at_cell(2 if layer != 0 else 1, gx, gz)
+	var an := get_node_or_null("../Actors")
+	if an:
+		an.spawn_anywhere = true
+	vstate = 0
+	vvel = 0
+	pstate = 0
+	clear_movement()
+	_to_godot()
+
+
 # clear_movement_state (0x8002b6f0): the speeds, the turn rate and the pitch
 # rate zeroed. Its other half, buttons_now masked down to the attack, action,
 # use and map buttons, the port's pad does not need.

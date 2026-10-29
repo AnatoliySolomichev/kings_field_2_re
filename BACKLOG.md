@@ -607,10 +607,13 @@ Eating heals. Left, roughly in order:
   but for level 15's sixteen frames of the dissolve (its two objects go at
   once), the lighting, status and sound calls, the swing clock and an
   object's `+2`, `+5`, `+0x10`, `+0x3c`, `+0x3e`, which the port does not
-  keep. Not read: level 7's entry 9 (the
-  pedestal for Ichrius' key, opcode `0xa7`, object_use_state with the
-  overlay's two vectors, then every opcode-`0xe8` object's `+1` `0x81` and
-  `+0x40` 0) or opcode `0xe8`'s arm (`0x8004a66c`).
+  keep. Level 7's entry 9 (the pedestal for Ichrius' key, opcode `0xa7`)
+  and opcode `0xe8`'s arm (`0x8004a66c`), its twelve teleports, are in
+  (FORMATS.md, "Level 7's teleports", 480 of 480 runs and 1440 of 1440
+  frames of the game's own) but for the two screen_captures, grid_mark,
+  the teleports' `+0xa` and `+1` (nothing drawn of them) and use_answer;
+  `place_player_on_terrain` and `collide_at_cell` are transcribed, not
+  held to the game's own.
   The scenes are in (FORMATS.md, "The scenes"): cutscene_step whole, opcode
   `0xe4`'s arm and every level's entry 10, each against the game's own, and
   the player's states 7, 8 and 9, the walk to a scene and back

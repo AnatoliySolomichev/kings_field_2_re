@@ -371,6 +371,9 @@ func _init() -> void:
 	if not _scenes():
 		quit(1)
 		return
+	if not _teleports():
+		quit(1)
+		return
 	if not _lake_runs():
 		quit(1)
 		return
@@ -3026,6 +3029,51 @@ func _scenes() -> bool:
 	print("the scenes: %d of %d runs (%d of cutscene_step, %d of opcode 0xe4, %d of entry 10, %d of entry 7) match tools/scenes.py -- the calls and every byte written" % [
 		ok, cases.size(), int(kinds.get("step", 0)), int(kinds.get("arm", 0)), int(kinds.get("entry10", 0)),
 		int(kinds.get("entry7", 0))])
+	return ok == cases.size()
+
+
+# Level 7's teleports, godot/teleports.gd against the runs tools/teleports.py
+# made of its model of opcode 0xe8's arm, which the game's own holds: from
+# the bytes the model read, the same calls in order and the same bytes
+# written, none besides.
+func _teleports() -> bool:
+	if not FileAccess.file_exists("res://teleportcheck.json"):
+		print("teleports: no cases to check against")
+		return true
+	var doc = JSON.parse_string(FileAccess.get_file_as_string("res://teleportcheck.json"))
+	var ok := 0
+	var moved := 0
+	var told := false
+	var cases: Array = doc["cases"]
+	for c in cases:
+		var m := {"mem": {}, "calls": []}
+		for p in c["read"]:
+			m["mem"][int(p[0])] = int(p[1])
+		var before: Dictionary = (m["mem"] as Dictionary).duplicate()
+		KFTeleports.arm(m, int(c["slot"]))
+		var why := ""
+		if str(m["calls"]) != str(_ints(c["calls"])):
+			why = "calls %s, python %s" % [str(m["calls"]).left(120), str(_ints(c["calls"])).left(120)]
+		var want := {}
+		for p in c["wrote"]:
+			want[int(p[0])] = int(p[1])
+		for a in want:
+			if why == "" and int(m["mem"].get(a, -1)) != int(want[a]):
+				why = "0x%x: %d, python %d" % [a, int(m["mem"].get(a, -1)), int(want[a])]
+		if why == "":
+			for a in m["mem"]:
+				if not want.has(a) and int(m["mem"][a]) != int(before.get(a, -1)):
+					why = "0x%x written, python did not" % int(a)
+					break
+		if why == "":
+			ok += 1
+			if not (c["calls"] as Array).is_empty():
+				moved += 1
+		elif not told:
+			told = true
+			print("  first difference: slot %d: %s" % [int(c["slot"]), why])
+	print("teleports: %d of %d runs of opcode 0xe8's arm (%d of them a move) match tools/teleports.py -- the calls and every byte written" % [
+		ok, cases.size(), moved])
 	return ok == cases.size()
 
 

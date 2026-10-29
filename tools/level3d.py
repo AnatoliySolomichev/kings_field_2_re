@@ -1070,15 +1070,16 @@ def build_loot(lv, load, grid, look, prims_of, rows, slots):
     return items
 
 
-PEDESTAL_OPS = (0x18,)
+PEDESTAL_OPS = (0x18, 0xA7)
 # use_item's arms: Silviera's key asks for type 0x101, Orladin's for 0x102
 # (whose pedestals, opcode 0x1a, are loot.gd's rows: tools/seals.py); level
-# 23's own entry 2 puts 0x86 on its type 0x13f (tools/useitem.py level_use)
-PEDESTAL_KEYS = {0x101: 141, 0x102: 0x88, 0x13F: 0x86}
+# 23's own entry 2 puts 0x86 on its type 0x13f, level 7's Ichrius' key 0x85
+# on its type 0x140, opcode 0xa7 (tools/useitem.py level_use, tools/teleports.py)
+PEDESTAL_KEYS = {0x101: 141, 0x102: 0x88, 0x13F: 0x86, 0x140: 0x85}
 
 
 def build_pedestals(lv, load, look, prims_of, rows, keys):
-    """The pedestals (opcode 0x18), their rows for lootNN.json, and a hidden
+    """The pedestals (opcode 0x18, and level 7's 0xa7), their rows for lootNN.json, and a hidden
     node `qNNN` for each key a pedestal takes here -- Silviera's, 141, on a
     type-0x101 pedestal, and Orladin's, 0x88, on a type-0x102 one (opcode
     0x1a) -- which godot/loot.gd copies when the key is put there. At the
@@ -1660,7 +1661,8 @@ def project(lv, out="out/godot", start=(57, 4)):
                  "weapon.gd", "anim.gd", "effects.gd", "held.gd",
                  "loot.gd", "messages.gd", "document.gd", "talk.gd", "info.gd", "menu.gd",
                  "crossing.gd", "card.gd", "levelstate.gd", "loadscreen.gd", "useitem.gd",
-                 "levelin.gd", "triggers.gd", "ticks.gd", "lake.gd", "ending.gd", "deaths.gd", "scenes.gd"):
+                 "levelin.gd", "triggers.gd", "ticks.gd", "lake.gd", "ending.gd", "deaths.gd", "scenes.gd",
+                 "teleports.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening
@@ -1902,6 +1904,11 @@ def project(lv, out="out/godot", start=(57, 4)):
         scenes.export(out)
     except Exception as e:                       # no snapshot, no scene cases
         print(f"scene cases skipped: {e}")
+    try:
+        import teleports
+        teleports.export(out)
+    except Exception as e:                       # no snapshot, no teleport cases
+        print(f"teleport cases skipped: {e}")
     print(f"godot project in {out}/ — player starts in cell ({cx},{cz})")
 
 
@@ -1945,7 +1952,7 @@ def verify(out="out/godot"):
         if line.startswith(("loaded:", "movement:", "steps:", "creature steps:",
                             "fences:",
                             "creature run:",
-                            "levels:", "use_item:", "warp_to:", "conversation hooks:", "entry 5:", "triggers:", "give and take:", "entry 1:", "level_overlay_tick:", "entry 19:", "the scenes:", "the lake:", "the ending:", "angles:",
+                            "levels:", "use_item:", "warp_to:", "conversation hooks:", "entry 5:", "triggers:", "give and take:", "entry 1:", "level_overlay_tick:", "entry 19:", "the scenes:", "teleports:", "the lake:", "the ending:", "angles:",
                             "scripts:", "damage:", "equipment:", "player_recalc_stats:", "knock-back:", "weapon:", "animation:", "effects:", "lift doors:", "chests:", "seals:", "fades:", "carry-over:", "inscriptions:", "conversations:", "menus:", "routines:", "saves:", "level states:", "the run:", "player_take_hit:", "the status:", "casting:", "the attacking arms:", "creature hits:", "creature strikes:", "creature holds:", "FAIL", "  first",
                             "  level case", "  angle (", "  script level",
                             "  hit ")):

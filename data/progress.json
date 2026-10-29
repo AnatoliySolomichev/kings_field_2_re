@@ -1,6 +1,6 @@
 {
  "_note": "tools/portmap.py --doc: the share of each executable's own code (below the Sony library) with a copy in the port, partial routines at half; `history` gains a line whenever it moves",
- "date": "2026-10-28",
+ "date": "2026-10-29",
  "history": [
   {
    "all": 46.0,
@@ -113,6 +113,14 @@
    "end": 32.6,
    "game": 49.3,
    "open": 46.7
+  },
+  {
+   "all": 49.2,
+   "boot": 43.5,
+   "date": "2026-10-29",
+   "end": 32.6,
+   "game": 49.4,
+   "open": 46.7
   }
  ],
  "instructions": {
@@ -120,7 +128,7 @@
    "library": 42329,
    "own": 81266,
    "partial": 29187,
-   "transcribed": 8753,
+   "transcribed": 8844,
    "verified": 16547
   },
   "boot": {
@@ -141,7 +149,7 @@
    "library": 15777,
    "own": 77735,
    "partial": 28225,
-   "transcribed": 7755,
+   "transcribed": 7846,
    "verified": 16477
   },
   "open": {
@@ -153,10 +161,10 @@
   }
  },
  "now": {
-  "all": 49.1,
+  "all": 49.2,
   "boot": 43.5,
   "end": 32.6,
-  "game": 49.3,
+  "game": 49.4,
   "open": 46.7
  }
 }

@@ -537,6 +537,24 @@ of 672** runs leave the model's calls and all of RAM but the stack.
 `godot/lake.gd` reproduces the model on **168 of 168** runs (`lakecheck.json`);
 `lake.json` is the seventeen words the switch reads, for the port.
 
+**`teleports.py`** — level 7's teleports: opcode `0xe8` and the pedestal
+that wakes them (opcode `0xa7`, the level's entry 9), FORMATS.md "Level
+7's teleports".
+
+```
+python3 tools/teleports.py            the twelve teleports and where each goes
+python3 tools/teleports.py --check    the models against the game's own code
+python3 tools/teleports.py --export D teleportcheck.json for the self-test
+```
+
+`--check` runs GAME.EXE's own arm for each of the twelve, the player in and
+about its rectangle (`mipsrun.object_arm`): **480 of 480** runs leave the
+model's calls and all of RAM but the stack; and the pedestal's frames, the
+game's own arm, object_use_state and the overlay's entry 9 beside
+`pedestal_step` (tools/seals.py's `use_state`): **1440 of 1440** frames,
+the pedestal, the key and the twelve field by field. `godot/teleports.gd`
+reproduces the arm on **72 of 72** runs (`teleportcheck.json`).
+
 **`ending.py`** — the ending: END.EXE whole (BOOT.md, "END.EXE").
 
 ```

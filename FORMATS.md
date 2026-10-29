@@ -3526,9 +3526,9 @@ banners, the herb given 23 times and level 2's four things 24 times; and
 the records given a listening opcode and fields of the id, its neighbour or
 anything: **280 of 280** runs, all 396 records (4094 of them changed). The
 port's `useitem.gd level_use` holds to the model in the self-test (624 of
-624). What follows the record's change is not all in the port: level 7's
-pedestal is opcode `0xa7` and level 5's objects opcode `0x53`, neither of
-which the port runs. Level 2's own entry 4, which names the next thing, is
+624). What follows the record's change is not all in the port: level 5's
+objects are opcode `0x53`, which the port does not run; level 7's pedestal,
+opcode `0xa7`, it does ("Level 7's teleports"). Level 2's own entry 4, which names the next thing, is
 in the port's conversations now (below, "What a conversation makes happen").
 
 **In the port**: `useitem.gd level_use` hands the herb and the four things
@@ -3873,10 +3873,11 @@ slot in slot order on a frame any of them is moving, over the port's bytes
 -- the switch's `+1` and `+0xa`, the stones' `+0x3c`, `+0x3e` and `+0x3f`
 kept with the held objects now, the loader's state in the find rows -- and
 lays the stamps (`doors.gd stamp_rect`). Not in the port: the switch's
-sound; level 7's entry 9 (the pedestal, opcode `0xa7`, with
-object_use_state and opcode `0xe8`) is not read into the port either. The
-creature-death hook that turns the switch (entry 19) is the section after
-next, and in the port.
+sound. Level 7's entry 9 (the pedestal, opcode `0xa7`, with
+object_use_state) and its opcode `0xe8` are the section after next, "Level
+7's teleports", and in the port. The
+creature-death hook that turns the switch (entry 19) is "What a level does
+when a creature dies", and in the port.
 
 ### A thing into the pack: give_item, take_item, entries 6 and 11
 
@@ -3924,6 +3925,69 @@ the scene comes in, as level_load points `level_hooks` at the overlay; the
 self-test holds it to the model (`give and take`). `triggers.gd`'s give and
 take over the bytes (level 17's entry 3, whose entries 6 and 11 are empty)
 still only log the hooks.
+
+### Level 7's teleports: opcode 0xe8, and the pedestal that wakes them
+
+Level 7 has twelve objects of opcode `0xe8` -- six pairs -- and its arm
+(`object_interpreter+0x365c`, `0x8004a66c`) is a rectangle of cells given
+outright, the record's `+0x38`, `+0x39`, `+0x3a` by `+0x3b` (all 1 by 1
+here), at the height `+0x18` (player_in_rect's), and a place: the cell
+`+0x3c`, `+0x3d`, the layer `+0x3e` (1 the lower, else the upper; all
+twelve say 2) and the facing `-(+0x3f << 4)`:
+
+```
+slot   8  (28, 29) -> (23, 29) facing 0x400    slot  85  (24, 29) -> (29, 29) 0xc00
+slot  43  (16, 38) -> (16, 33) 0x800           slot 123  (16, 34) -> (16, 39) 0x000
+slot  44  (47,  9) -> (47, 12) 0x000           slot  48  (47, 11) -> (47,  8) 0x800
+slot  50  (58, 18) -> (53, 18) 0x400           slot  53  (54, 18) -> (59, 18) 0xc00
+slot  67  (43, 31) -> (43, 35) 0x000           slot  88  (43, 34) -> (43, 30) 0x800
+slot  90  (62,  8) -> (57,  8) 0x400           slot  93  (58,  8) -> (63,  8) 0xc00
+```
+
+Each lands one cell past its partner's rectangle. With the player in the
+rectangle and its `+0x40` 0: `screen_capture` (`0x8003daec`, the frame kept,
+320 by 240), every 0xe8 record's `+0x40` 1, `grid_mark` of the player's
+cells cleared (-1), the player at the cell's middle (`<< 11` and 0x400),
+the layer (`0x801b2644`) 0 or 5, the facing, **place_player_on_terrain**
+(`0x8002b760`: the height `collide_at_cell` finds on that layer, the vertical
+state and the player's state 0, clear_movement_state, spawn_anywhere,
+grid_mark back), the view's yaw (`0x801b260a`) the facing with the tilt's,
+the scene's and the nod's on, and screen_capture again. Out of the
+rectangle, a `+0x40` other than 0xff goes back to 0 -- so the player, set
+down outside every rectangle, can use one again once out. And either way
+`+0xa` goes 0x40 on, held to 0xfff.
+
+**None works at first**: the loader leaves `+0x40` 0xff (its word
+0xffffffff). What clears it is the pedestal in slot 12 (type 0x140, opcode
+`0xa7`, cell (66, 9)). Ichrius' key (thing 0x85) used on it -- level 7's
+entry 2, "Things the level takes" -- gives it the lock 0x85 and state 0 and
+puts the key in the ring (`pedestal_put_key`, 380 + `+0x39`). Opcode 0xa7
+is one of the 191 object_interpreter hands to the level's **entry 9**
+(`level_hooks + 0x24`), and level 7's (`0x801e87d0`) runs
+`object_use_state` over the pedestal and the key with the overlay's own two
+vectors, (0, -1600, 1024) to (0, -1600, 256) turned by the pedestal's
+angles, 0 and twenty frames; on the frame the key comes to rest every 0xe8
+record's `+1` is 0x81 and its `+0x40` 0, and use_answer 1.
+
+**Checked against the game's own** (`tools/teleports.py --check`): the
+arm, **480 of 480** runs over the twelve (`mipsrun.object_arm`), the player
+in and about each rectangle at heights about it, the `+0x40`s, `+0xa`, the
+facing, the layer and the yaw offsets at random, screen_capture, grid_mark
+and place_player_on_terrain logged -- the calls in order and all of RAM but
+the stack; the pedestal, **1440 of 1440** frames of the game's own arm,
+object_use_state and the overlay's entry 9, the key put in a ring slot at
+random, the pedestal, the key and the twelve compared field by field each
+frame, object_sound and use_answer.
+
+**In the port**: `godot/teleports.gd` is the arm over the same addresses
+(the self-test, `teleports`); `loot.gd _teleports` runs it on a frame the
+player stands in one or one has fired and acts the move --
+`player.gd place_on_terrain` and `collision.gd at_cell`, transcribed --
+and level 7's pedestal is one of loot.gd's pedestals (`ichrius_step`, the
+port's verified `use_state` with the overlay's vectors), its key model
+`q133`. Not in the port: the two screen_captures, grid_mark (the port keeps
+no player in the grid), `+0xa` and `+1` (nothing of theirs is drawn), and
+use_answer.
 
 ### What a level does when a creature dies: entry 19
 

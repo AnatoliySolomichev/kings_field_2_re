@@ -70,7 +70,7 @@ static func _position(m: Dictionary, r: int) -> void:
 # 0xfff (state 2), then the pattern for (+1 + 1) mod 6 laid on the
 # seventeen (state 3), and back to 0; state 4 the position and the pattern
 # at once. Every other level's, and level 2's for any other opcode, nothing.
-# @orig game:0x8004b4b4 object_interpreter+0x44a4  status:verified -- the escape into the level's entry 9 (level_hooks + 0x24); level 2's own out of its overlay, written out here as tools/lake.py, which the game's own arm and overlay hold (672 of 672 runs), the self-test this to it; level 7's (the pedestal, opcode 0xa7, object_use_state) not yet
+# @orig game:0x8004b4b4 object_interpreter+0x44a4  status:verified -- the escape into the level's entry 9 (level_hooks + 0x24); level 2's own out of its overlay, written out here as tools/lake.py, which the game's own arm and overlay hold (672 of 672 runs), the self-test this to it; level 7's (the pedestal, opcode 0xa7, object_use_state) is loot.gd ichrius_step, on its rows
 static func entry9(lv: int, m: Dictionary, k: int) -> void:
 	var r := KFLevelIn.O(k)
 	if lv != 2 or KFLevelIn.rd(m, r + 4) != OP_SWITCH:

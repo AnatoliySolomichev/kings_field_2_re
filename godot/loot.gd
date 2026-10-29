@@ -128,6 +128,7 @@ var gifts := []                    # the things a level's entry 4 gave, for obje
 var triggers := []                 # the slots of opcode 0xe1, the rectangles that run the level's entry 3
 var lake := []                     # the slots of opcodes 0x5f and 0xa6: level 2's lake (godot/lake.gd)
 var scene_slots := []              # the slots of opcode 0xe4, the rectangles that start a scene
+var teleports := []                # the slots of opcode 0xe8: level 7's teleports (godot/teleports.gd)
 var scene_records := []            # scenes.json: seq_data's sixteen records of 52 bytes
 var lake_words := []               # the seventeen words level 2's switch reads (lake.json)
 var fired := {}                    # slot -> a trigger's +0x40: fired, until the player steps out
@@ -201,6 +202,8 @@ func _ready() -> void:
 			lake.append(int(f[0]))
 		if f.size() > 10 and int(f[10]) == KFScenes.SCENE_OP:
 			scene_slots.append(int(f[0]))
+		if f.size() > 10 and int(f[10]) == KFTeleports.OP:
+			teleports.append(int(f[0]))
 	scene_records = _scene_records()
 	if not lake.is_empty():
 		lake_words = _lake_words()
@@ -1065,6 +1068,7 @@ func _process(dt: float) -> void:
 			_pedestal(pd)
 		_lake()
 		_triggers()
+		_teleports()
 		_tick()
 	_draw()
 
@@ -2064,6 +2068,14 @@ static func use_state(p: Dictionary, key: Dictionary, c: KFCollision,
 func _pedestal(p: Dictionary) -> void:
 	var ring := int(p["ring"])
 	var key = rows.get(KEY_RING + ring) if ring < KEY_RING_SIZE else null
+	if int(p["op"]) == KFTeleports.PEDESTAL_OP:
+		if ichrius_step(p, key, player.coll):
+			for k in teleports:
+				_gate_of(k)["b1"] = 0x81
+				fired[k] = 0
+			KFInfo.note("pedestal: Ichrius' key rests on slot %d, and the %d teleports wake" % [
+				int(p["slot"]), teleports.size()])
+		return
 	var gate := _gate_of(int(p["tail"][3]))
 	var was := int(p["state"])
 	if pedestal_step(p, key, gate, player.coll):
@@ -2072,6 +2084,63 @@ func _pedestal(p: Dictionary) -> void:
 	elif was != 0 and int(p["state"]) == 0:
 		KFInfo.note("pedestal: the key is gone from slot %d, and the lock of slot %d is %d" % [
 			int(p["slot"]), int(p["tail"][3]), int(gate["lock"])])
+
+
+# Level 7's entry 9 on its pedestal (opcode 0xa7, which object_interpreter
+# hands to the level): object_use_state with the overlay's two vectors, 0
+# and twenty frames. True on the frame the key comes to rest, when the
+# caller wakes every teleport (+1 0x81, +0x40 0); use_answer 1 is not kept.
+# @port helper -- level 7's entry 9 (overlay 0x801e87d0, reached through object_interpreter+0x44a4, whose marker lake.gd carries) on loot.gd's rows: tools/teleports.py pedestal_step, which 1440 of 1440 frames of the game's own arm, object_use_state and the overlay hold
+static func ichrius_step(p: Dictionary, key, c: KFCollision) -> bool:
+	if key == null:
+		return false
+	return use_state(p, key, c, KFTeleports.KEY_START, KFTeleports.KEY_END)
+
+
+# Opcode 0xe8 for each of level 7's teleports, a frame of object_interpreter's
+# (KFTeleports.arm), over the port's bytes on a frame the player stands in
+# one or one has fired (+0x40 1, back to 0 as the player steps out), and
+# what it did acted: the player at the place, on its layer and facing its
+# way, put on the terrain (place_on_terrain). Not acted: the two
+# screen_captures and grid_mark; +0xa, the clock, and +1 are not drawn.
+# @port engine -- the teleports' arm a frame at a time over the port's bytes
+func _teleports() -> void:
+	if teleports.is_empty():
+		return
+	var objs := views()
+	var asked := false
+	for k in teleports:
+		var o = objs[k]
+		if o == null:
+			continue
+		var wh := int(o["h3a"])
+		if int(fired.get(k, o["b40"])) == 1 or KFObjects.player_in_rect(player.gx, player.gz,
+				int(o["lock"]), int(o["b39"]), wh & 0xFF, wh >> 8):
+			asked = true
+	if not asked:
+		return
+	var lv: int = player._level()
+	KFTalk.load_level(lv)
+	var w := _bytes()
+	var m: Dictionary = w["m"]
+	KFLevelIn.wr(m, KFTeleports.LAYER, int(player.layer), 2)
+	KFLevelIn.wr(m, KFTeleports.FACING, int(player.facing), 2)
+	var offs := [int(player.tilt[1]), int(player.scene_tilt[1]), 0]
+	for i in 3:
+		KFLevelIn.wr(m, int(KFTeleports.YAW_OFFSETS[i]), offs[i], 2)
+	for k in teleports:
+		KFTeleports.arm(m, k)
+	_bytes_back(w)
+	for c in m["calls"]:
+		if str(c[0]) == "place":
+			player.gx = KFTicks.s32(KFLevelIn.rd(m, KFTriggers.PLAYER_POS, 4))
+			player.gz = KFTicks.s32(KFLevelIn.rd(m, KFTriggers.PLAYER_POS + 8, 4))
+			player.layer = KFLevelIn.rd(m, KFTeleports.LAYER, 2)
+			player.facing = KFLevelIn.rd(m, KFTeleports.FACING, 2) & 0xFFF
+			player.rotation.y = float(player.facing) * TAU / 4096.0
+			player.place_on_terrain()
+			KFInfo.note("teleport: to cell (%d, %d), facing 0x%x" % [player.gx >> 11,
+				player.gz >> 11, int(player.facing)])
 
 
 # @port helper -- the slot a pedestal's tail[3] names, from the pedestal's slot (a key's +0x40)

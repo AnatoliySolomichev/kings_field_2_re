@@ -450,8 +450,9 @@ var surfaces := {}
 var flags := 0                       # the fifth argument's top nibble, which only 0x18 reads
 
 
+# `lay`, 0 or 3, puts the layer outright, as collide_at_cell does.
 # @orig game:0x8003260c tile_collision  status:verified -- 8075 of 8078 logged calls, through tools/collision.py
-func query(x: int, y: int, z: int, ymid := 0x7FFFFFFF) -> Dictionary:
+func query(x: int, y: int, z: int, ymid := 0x7FFFFFFF, lay := -1) -> Dictionary:
 	if ymid == 0x7FFFFFFF:
 		ymid = y - (body >> 1)
 	var out := {"mask": 0, "floor": NO_SURFACE, "ceil": CEIL_START, "push": 0,
@@ -460,7 +461,7 @@ func query(x: int, y: int, z: int, ymid := 0x7FFFFFFF) -> Dictionary:
 	var cz := z >> 11
 	if cx < 0 or cx >= W or cz < 0 or cz >= W:
 		return out
-	var i := (cz * W + cx) * 6 + _layer((cz * W + cx) * 6, ymid)
+	var i := (cz * W + cx) * 6 + (_layer((cz * W + cx) * 6, ymid) if lay < 0 else lay)
 	var sid := cells[i]
 	var key := str(sid)
 	var base := -128 * cells[i + 2]
@@ -793,6 +794,20 @@ const FENCED_SURFACE := -100000
 # @port helper -- the lateral bits of query()'s mask; nothing calls it now
 func blocked(x: int, y: int, z: int) -> bool:
 	return (query(x, y, z)["mask"] & BLOCKING) != 0
+
+
+# collide_at_cell (0x80033b8c): the cell's upper layer for 2 (the offset 5,
+# here 3), else its lower, the height -128 times that layer's byte, and
+# tile_collision there: the surface it leaves.
+# @orig game:0x80033b8c collide_at_cell  status:transcribed
+func at_cell(sel: int, x: int, z: int) -> int:
+	var cx := x >> 11
+	var cz := z >> 11
+	if cx < 0 or cx >= W or cz < 0 or cz >= W:
+		return NO_SURFACE
+	var lay := 3 if sel & 0xFF == 2 else 0
+	var base := -128 * cells[(cz * W + cx) * 6 + lay + 2]
+	return int(query(x, base, z, 0x7FFFFFFF, lay)["floor"])
 
 
 # 0x80033b10: the nearest surface alone, the way player_vertical asks for it.
