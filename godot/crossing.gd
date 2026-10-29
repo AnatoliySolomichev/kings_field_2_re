@@ -216,20 +216,32 @@ func scene_movie(n: int, runs: Array, clear: bool) -> void:
 	_movie(n, "fadeback")
 
 
-# A scene's movie, as str_play (0x80060d20) plays it out of \STR\SXX.S --
-# the record's first byte is the number, here the scene's own (7 and 8) --
-# over the world, which stands; then `then`: "exit" game_main's test of the
-# word (KFGame.leave), "back" the fades back the warp left. START or a face
-# button ends it, as the opening's and the dreams' do -- the port's; what
-# str_play's own loop reads is not read.
+# The movie str_play names for a record's first byte `n`: under 0x10
+# \STR\Snn.S, else -- the inns' records, 0xff -- \DRM\Dnn.S with
+# rand() * 18 >> 15, held to 17: one of the eighteen dreams at random.
+# @orig game:0x80060fd4 str_play+0x2b4  status:transcribed -- the two names (build_str_name, build_drm_name); the port's own rand, not the game's sequence
+static func movie_path(n: int) -> String:
+	if n < 0x10:
+		return "res://opening/cutscene%02d.ogv" % n
+	var k := mini(17, (18 * (randi() & 0x7FFF)) >> 15)
+	return "res://opening/dream%02d.ogv" % k
+
+
+# A scene's movie, as str_play (0x80060d20) plays it out of the file
+# movie_path names -- the record's first byte, the scene's own number for
+# 3..15 and a dream for the inns' -- over the world, which stands; then
+# `then`: "exit" game_main's test of the word (KFGame.leave), "back" the
+# fades back the warp left, "fadeback" the player's state 8's. START or a
+# face button ends it, as the opening's does -- the port's; what str_play's
+# own loop reads is not read.
 # @port engine -- the scene's movie over the held world, then what follows
 func _movie(n: int, then: String) -> void:
-	var path := "res://opening/cutscene%02d.ogv" % n
+	var path := movie_path(n)
 	movie_then = then
 	KFGame.modal = true
-	KFInfo.note("scene %d: \\STR\\S%02d.S" % [n, n])
+	KFInfo.note("scene %d: %s" % [n, path.get_file()])
 	if not ResourceLoader.exists(path):
-		KFInfo.note("scene %d is not transcoded (python3 tools/opening.py video)" % n)
+		KFInfo.note("%s is not transcoded (python3 tools/opening.py video)" % path.get_file())
 		_movie_done()
 		return
 	movie_layer = CanvasLayer.new()

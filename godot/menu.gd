@@ -97,7 +97,6 @@ var shop_sel := 0                   # its page's line: buy, sell
 var stall := {}                     # its list while it is up
 var sell_cursor := 0                # gp+0x89
 var inn := {}                       # the inn a conversation has opened: "n", "sel", "gold"
-var night_scene := -1               # the scene a night at the inn starts, or -1
 var guide := {}                     # the guide while it is up: its list, its page, the state it came from
 var guide_tex := {}                 # ITEM.T's pages, by entry
 var prompt_sel := 0
@@ -1698,7 +1697,6 @@ func open_shop(n: int) -> void:
 func open_inn(n: int) -> void:
 	KFGame.modal = true
 	inn = {"n": n & 0xF, "sel": 0, "gold": int(player.gold)}
-	night_scene = -1
 	state = "inn"
 	visible = true
 	acc = 0.0
@@ -2044,10 +2042,12 @@ func _step(press: int) -> void:
 			if int(inn["sel"]) != was:
 				moved = true
 			if a == 0:
-				# script_interpreter's service arm 0x40: the night, cutscene
-				# phase 1 for scene n & 3
+				# script_interpreter's service arm 0x40: the night,
+				# cutscene_phase 1 and cutscene_number n & 3 -- the scene
+				# machine takes it from there (KFScenes, loot.gd scene_main)
 				player.gold = int(inn["gold"])
-				night_scene = int(inn["n"]) & 3
+				KFScenes.phase = 1
+				KFScenes.number = int(inn["n"]) & 3
 				KFInfo.note("inn %d: a night, gold %d" % [int(inn["n"]), int(player.gold)])
 				_close()
 			elif a == -1:

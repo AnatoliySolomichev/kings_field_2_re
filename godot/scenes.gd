@@ -55,6 +55,16 @@ static var pending := 0
 static var record := 0
 
 
+# cutscene_reset (0x80061918): no scene -- the number 0xff, the phase 0,
+# pending -1 -- as game_main, level_load (before the level's own hooks),
+# enter_current_level and a new character after a death leave the machine.
+# @orig game:0x80061918 cutscene_reset  status:transcribed
+static func reset() -> void:
+	number = 0xFF
+	phase = 0
+	pending = 0xFFFF
+
+
 # @port helper -- a halfword as the s16 lh reads
 static func s16(v: int) -> int:
 	v &= 0xFFFF

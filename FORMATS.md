@@ -4049,7 +4049,12 @@ player's state 7 (`sub_80030810`), refused `0x10`; phase 2 waits on
 sets -- the flag 2, pending 1, the phase 0 and no scene, player_state_reset,
 the screen moved and `warp_to(0xc)`; then phase 8 and the state 9
 (`sub_80030864`) either way; phase 8 waits on pending, then 0 and the
-level's **entry 7**; phase `0x10` back to 1.
+level's **entry 7**; phase `0x10` back to 1. **`cutscene_reset`**
+(`0x80061918`) -- the number 0xff, the phase 0, pending -1 -- is game_main's,
+level_load's (before the level's own hooks), enter_current_level's and a new
+character's after a death: an inn's scene, which no rectangle takes back,
+stays the machine's number at phase 0 until the next level, and no
+rectangle can start one meanwhile.
 
 **The player's states** (player_controller's switch at `0x8003141c`): **7**
 (`0x800315f4`) 33 frames from the view as it was kept (`0x801b266e`) to the
@@ -4118,10 +4123,9 @@ held and objects 70 and 91 gone, and gone still when the level is entered
 again (`tools/level3d.py` gives the objects the levels' code frees nodes of
 their own, `fNNN`, and `loot.gd` keeps them freed in the level's table). Not
 in the port: the master volume and the music's cue, the sixteen frames an
-object takes to go (it goes at once), `seq_lookup` (no CONVERSATION
-records), the inns' nights through the machine (`loot.gd _sleep` and
-`_wake`, entry 7 for them all the same), and a dream for a record of 0x10
-and over.
+object takes to go (it goes at once) and `seq_lookup` (no CONVERSATION
+records). The inns' nights go through the machine too ("The inn, and a
+night's dream"), and a record of 0x10 and over plays a dream.
 
 ### Status/records, and running the game's own code
 
@@ -4461,9 +4465,16 @@ a time). **Against the game's own code** over menu1 (`tools/ui.py
 inn_check`): the page 4 of 4 frames, the inn run whole on scripted words
 100 of 100 runs (the answer, the words read and the gold), and the two
 levels' entry 7 run out of their overlays, laid in from the disc, 24 of 24.
-In the port the night is the dream (`tools/opening.py` transcodes the
-eighteen) and then the level's healing; the moves of states 7 and 9 are
-not there.
+In the port the night goes through the scene machine as the game's does
+(2026-10-29; "The scenes"): "stay" leaves `cutscene_phase` 1 and
+`cutscene_number` n & 3, and `cutscene_step` takes it from there -- record
+0 walks the player to (27.5, 55.5) on level 0, record 1 to (33.5, 38.5) on
+level 1, both with the fade to black (`+0xa` 0x82); the dream
+(`crossing.gd movie_path`, `tools/opening.py` transcodes the eighteen); the
+fade back and the walk back, to (28.5, 56.5) and (34.5, 39.5); and only
+then entry 7, the healing. **Withdrawn** from the port: its own night
+(`loot.gd _sleep`, `_wake`), which played the dream at once and healed
+after it, with no walk.
 
 ### The guide
 

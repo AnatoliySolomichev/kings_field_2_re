@@ -621,10 +621,10 @@ Eating heals. Left, roughly in order:
   replay") -- and the other scenes' marks. Left: the sixteen frames a
   shrine's objects take to go (they go at once; `+2`, `+5` and `+0x10` are
   not kept), `seq_lookup`'s two lines (`seq_state`, status/records'
-  CONVERSATION, which is not in the port), the inn going through the
-  machine as the game's does (the port's still plays the dream itself and
-  runs entry 7 on its own), a dream for a record of 0x10 and over, the
-  volume and the music.
+  CONVERSATION, which is not in the port), the volume and the music. The
+  inn's night goes through the machine as the game's does (2026-10-29):
+  the walk to the bed and back, the fades, the dream str_play names for a
+  record of 0x10 and over (the port's own rand), then entry 7.
   Every level's conversation hook (entry 4, 45 arms) is in (FORMATS.md,
   "What a conversation makes happen", 2400 of 2400 runs of the overlays'
   own), but for what the port does not act out: the light's frames

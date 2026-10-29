@@ -254,6 +254,11 @@
   "kind": "code",
   "evidence": "forms \\DRM\\Dnn.S, index clamped 0..17"
  },
+ "0x80061918": {
+  "name": "cutscene_reset",
+  "kind": "code",
+  "evidence": "no scene: cutscene_pending -1, cutscene_phase 0, cutscene_number 0xff; called by game_main, enter_current_level, level_load (before the level's hooks) and player_controller's new character after a death"
+ },
  "0x800c85e8": {
   "name": "inventory_a",
   "kind": "data",
