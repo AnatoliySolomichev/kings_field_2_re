@@ -363,8 +363,9 @@ what a level does every frame, against every         1680 of 1680 runs, the
 level's own entry 1 (tools/ticks.py)                   rolls and all of RAM but
                                                        the stack
 the scenes, against the game's own cutscene_step,    960 of 960 runs; 540 of 540
-opcode 0xe4's arm and every level's entry 10           of the arm; 1680 of 1680 of
-(tools/scenes.py)                                      entry 10 -- calls and RAM
+opcode 0xe4's arm and every level's entries 10         of the arm; 1680 of 1680 of
+and 7 (tools/scenes.py)                                entry 10 and of entry 7 --
+                                                       calls and RAM
 level_overlay_tick whole, against GAME.EXE's own     1120 of 1120 runs, the
 (tools/ticks.py whole_check)                           rolls, the calls in order
                                                        and all of RAM but the stack
@@ -439,7 +440,7 @@ effects 1494 of 1494 runs, 27656 of 27656 frames · aims 300 of 300 · volleys 2
 the run 150129 of 150129 frames
 player_take_hit 300 of 300 · the status 40 of 40 runs, 6312 of 6312 frames
 casting 1200 of 1200 · the attacking arms 240 of 240 · creature hits 400 of 400
-use_item 624 of 624 · conversation hooks 360 of 360 · entry 5 168 of 168 · triggers 200 of 200 · give and take 224 of 224 · entry 1 120 of 120 · level_overlay_tick 48 of 48 · entry 19 208 of 208 · the scenes 304 of 304 · the lake 168 of 168 · the ending 31 of 31 · warp_to 55 of 55 · seals 975 of 975 · fades 117 of 117
+use_item 624 of 624 · conversation hooks 360 of 360 · entry 5 168 of 168 · triggers 200 of 200 · give and take 224 of 224 · entry 1 120 of 120 · level_overlay_tick 48 of 48 · entry 19 208 of 208 · the scenes 448 of 448 · the lake 168 of 168 · the ending 31 of 31 · warp_to 55 of 55 · seals 975 of 975 · fades 117 of 117
 carry-over 61 of 61 fields and the place
 ```
 

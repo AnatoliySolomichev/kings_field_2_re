@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""The scenes: cutscene_step, the rectangles that start them (opcode 0xe4) and every level's entry 10, against the game's own.
+"""The scenes: cutscene_step, the rectangles that start them (opcode 0xe4) and every level's entries 10 and 7, against the game's own.
 
     python3 tools/scenes.py            the scene records and where each starts
-    python3 tools/scenes.py --check    the three models against the game's own code
+    python3 tools/scenes.py --check    the four models against the game's own code
     python3 tools/scenes.py --export D scenes.json and scenecheck.json for the port
 
 **What starts a scene.** Opcode `0xe4` (`object_interpreter+0x3998`,
@@ -62,6 +62,35 @@ level 24  any scene: flag 0x5d -- cutscene_step's warp after scene 6
 level 26  scene 14: flag 0x70
 ```
 
+**Entry 7** (`level_hooks + 0x1c`), once the walk back is over, with the
+scene -- what is left after it, and the mark that retires it:
+
+```
+level 0   scene 0 (the inn): the HP to its most, the MP 30 on, held to its most
+level 1   any scene (the inn): the HP to its most
+level 2   any scene: the shrine of skill 2 -- then, flag 0x12 clear, the flag,
+          creature 4 held (8) and object 44's +0x38 0xff
+level 4   any scene: the shrine of skill 0
+level 13  scene 13: the shrine of skill 1; scene 4: flag 0x43
+level 17  scene 9: flag 0x54
+level 20  scene 5: flag 0x57; scene 10: flag 0x58 and object 2 taken away
+level 26  any scene: the shrine of skill 3
+level 27  any scene: flag 0x65 (level_overlay_tick's short ending)
+```
+
+A shrine (levels 2, 4, 13, 26; objects 70 and 91, 55 and 148, 15 and 86, 6
+and 87): its skill 20 on, with nothing to hold it, `skill_unlock` with it,
+`player_recalc_stats`, its two objects taken away one after the other --
+`+5` 0x32, `+2` 5, sixteen frames of the game's own with `+0x10` up by 0x100
+to 0xfff, `+6` 0xff -- and `seq_lookup` for two lines of its talker (0xc's
+0x10 and 0x11 on level 2, 0xa's, 0xb's and 9's 0 and 1), the lines the
+CONVERSATION records list. Every scene's mark is written after it: scenes
+4, 5, 9 and 10 by entry 7 (0x43, 0x57, 0x54, 0x58), scene 6 by entry 10
+(0x5d), and the shrines' scenes 12..15 by `skill_unlock` -- their marks
+0x7b..0x7e are its story flag 0x7b + k, set with the skill's first spell,
+which the 20 always reaches (its first threshold is 20) once entry 10 has
+set flag 0x6d + k, the skill's gate. So no scene plays twice.
+
 **How it is held to the game.** `step_check()` runs GAME.EXE's own
 cutscene_step over a level as its loader leaves it, the number, the phase,
 pending, the marks, flag 0x5d and the player's view at random, its own
@@ -73,7 +102,10 @@ it but the stack. `arm_check()` runs object_interpreter's own arm for every
 random (mipsrun.object_arm). `entry_check()` runs every level's own entry 10
 out of its overlay, the scene, the flags, the objects and creatures it
 writes and the pack at random, GAME.EXE's has_item, take_item and give_item
-run, stamp_rect logged.
+run, stamp_rect logged. Entry 7's check does the same, the skills, the
+spells' `+0`, the gates and marks, the objects' bytes and the HP and MP at
+random, GAME.EXE's skill_unlock run, player_recalc_stats, seq_lookup and the
+frames' five calls logged.
 """
 import os
 import random
@@ -264,6 +296,87 @@ def entry10(lv, m, n):
 
 ENTRY10_LEVELS = (2, 4, 13, 17, 20, 24, 26)
 
+HP_MAX, HP, MP_MAX, MP = 0x801B24FA, 0x801B24FC, 0x801B24FE, 0x801B2500
+SKILLS = levelin.SKILLS            # five halfwords, the magic's elements
+FRAME = (("res_wait",), ("res_upload_spu",), ("res_upload_vram",), ("camera_pose",),
+         ("render_frame",))
+# the four shrines: the level, its skill, the two objects it takes away, the
+# talker whose lines seq_lookup marks and the first of the two
+SHRINES = {2: (2, (70, 91), 0xC, 0x10), 4: (0, (55, 148), 0xA, 0),
+           13: (1, (15, 86), 0xB, 0), 26: (3, (6, 87), 9, 0)}
+ENTRY7_LEVELS = (0, 1, 2, 4, 13, 17, 20, 26, 27)
+
+
+def fade_out(m, k):
+    """One object of a scene's place taken away, as levels 2, 4, 13, 20 and 26
+    write it out: +5 0x32, +2 5, then sixteen frames of the game's own --
+    res_wait, res_upload_spu, res_upload_vram, camera_pose, render_frame --
+    with +0x10 up by 0x100 a frame (a halfword) and held to 0xfff, and the
+    object freed (+6 0xff)."""
+    m.wr(O(k, 5), 0x32)
+    m.wr(O(k, 2), 5)
+    for _ in range(16):
+        m.wr(O(k, 0x10), m.rd(O(k, 0x10), 2) + 0x100, 2)
+        if m.rd(O(k, 0x10), 2) >= 0xFFF:
+            m.wr(O(k, 0x10), 0xFFF, 2)
+        m.calls += FRAME
+    m.wr(O(k, 6), 0xFF, 2)
+
+
+def shrine(m, lv, unlock):
+    """A shrine's scene over: its skill 20 on (unbounded), skill_unlock with
+    it, player_recalc_stats, its two objects taken away in turn and
+    seq_lookup for two lines of its talker."""
+    k, objs, who, line = SHRINES[lv]
+    m.wr(SKILLS + 2 * k, m.rd(SKILLS + 2 * k, 2) + 0x14, 2)
+    unlock(m, k)
+    m.calls.append(("recalc",))
+    for o in objs:
+        fade_out(m, o)
+    m.calls.append(("seq", who, line))
+    m.calls.append(("seq", who, line + 1))
+
+
+def entry7(lv, m, n, unlock=None):
+    """Level `lv`'s entry 7 with scene `n`, over `m` -- what cutscene_step's
+    phase 8 calls once the walk back is over. `unlock(m, k)` is skill_unlock;
+    without one it is logged."""
+    if unlock is None:
+        unlock = lambda m, k: m.calls.append(("unlock", k))          # noqa: E731
+    n &= 0xFF
+    if lv == 0:
+        if n == 0:
+            hp_max, mp_max = m.rd(HP_MAX, 2), m.rd(MP_MAX, 2)
+            m.wr(MP, m.rd(MP, 2) + 0x1E, 2)
+            mp = m.rd(MP, 2)
+            m.wr(HP, hp_max, 2)
+            if mp_max < mp:
+                m.wr(MP, mp_max, 2)
+    elif lv == 1:
+        m.wr(HP, m.rd(HP_MAX, 2), 2)
+    elif lv in (2, 4, 26):
+        shrine(m, lv, unlock)
+        if lv == 2 and not m.rd(F(0x12)):
+            m.wr(F(0x12), 1)
+            m.wr(A(4), 8)
+            m.wr(O(44, 0x38), 0xFF)
+    elif lv == 13:
+        if n == 0xD:
+            shrine(m, lv, unlock)
+        if n == 4:
+            m.wr(F(0x43), 1)
+    elif lv == 17:
+        if n == 9:
+            m.wr(F(0x54), 1)
+    elif lv == 20:
+        if n == 5:
+            m.wr(F(0x57), 1)
+        if n == 0xA:
+            m.wr(F(0x58), 1)
+            fade_out(m, 2)
+    elif lv == 27:
+        m.wr(F(0x65), 1)
+
 
 # --- against the game's own ------------------------------------------------------
 
@@ -445,6 +558,87 @@ def entry_compare(cpu, lv, n):
     return what, (f"scene {n}: {d}" if d else None)
 
 
+RECALC, SEQ_LOOKUP = 0x80029500, 0x800608EC
+RES_WAIT, RES_UPLOAD_SPU, RES_UPLOAD_VRAM = 0x80019AB4, 0x80015A48, 0x80018CD0
+CAMERA_POSE, RENDER_FRAME = 0x8002B330, 0x800422B8
+
+
+def entry7_run(cpu, n):
+    """The overlay's own entry 7 with scene n, GAME.EXE's skill_unlock run:
+    [the calls the model logs]."""
+    calls = []
+
+    def log(*what):
+        return lambda c: calls.append(what)
+    cpu.hooks = dict(cpu.hooks)
+    cpu.hooks.update({
+        RECALC: log("recalc"),
+        SEQ_LOOKUP: lambda c: calls.append(("seq", c.r[4], c.r[5])),
+        RES_WAIT: log("res_wait"),
+        RES_UPLOAD_SPU: log("res_upload_spu"),
+        RES_UPLOAD_VRAM: log("res_upload_vram"),
+        CAMERA_POSE: log("camera_pose"),
+        RENDER_FRAME: log("render_frame"),
+        useitem.ANNOUNCE: lambda c: calls.append(("announce", c.r[4])),
+    })
+    cpu.call(_entry(cpu, ENTRY_AFTER), n)
+    return calls
+
+
+SCENES7_OF = {0: (0,), 1: (0, 1), 2: (15,), 4: (12,), 13: (4, 13), 17: (9,), 20: (5, 10),
+              26: (14,)}
+
+
+def entry7_cases(lv, n, rng, snap="a1"):
+    import levelup
+    import mipsrun
+    base = mipsrun.level_cpu(lv, snap)
+    ram0 = bytes(base.ram)
+    put = useitem._put
+    out = []
+    for _ in range(n):
+        cpu = mipsrun.CPU(ram0)
+        cpu.hooks.update(base.hooks)
+        sc = rng.choice(SCENES7_OF.get(lv, (0,)) * 3 + (rng.randrange(16), rng.randrange(0x100)))
+        for f in (0x12, 0x43, 0x54, 0x57, 0x58, 0x65) + tuple(range(0x6D, 0x71)) + \
+                tuple(range(0x7B, 0x80)):
+            put(cpu, F(f), 1, rng.choice((0, 0, 1, 1, 2)))
+        for k in range(5):
+            put(cpu, SKILLS + 2 * k, 2, rng.choice((0, 0, 1, 15, 20, 30, 45, 60, 0x3E7, 0xFFF0,
+                                                    rng.randrange(0x10000))))
+        for i in range(levelup.SPELLS):
+            put(cpu, levelup.SPELL_TABLE + levelup.SPELL_STRIDE * i, 1, rng.choice((0, 0, 1)))
+        for k in (2, 6, 15, 55, 70, 86, 87, 91, 148):
+            put(cpu, O(k, 0x10), 2, rng.choice((0, 0x80, 0xF00, 0xFF80, rng.randrange(0x10000))))
+            put(cpu, O(k, 2), 1, rng.randrange(8))
+            put(cpu, O(k, 5), 1, rng.choice((0, 0xFF)))
+            put(cpu, O(k, 6), 2, rng.choice((0xFF, 0x12C, rng.randrange(0x150))))
+        put(cpu, A(4), 1, rng.choice((0, 1, 2, 8, 0xFF)))
+        put(cpu, O(44, 0x38), 1, rng.choice((0, 3, 0xFF)))
+        hp_max, mp_max = rng.randrange(1, 1000), rng.randrange(1, 1000)
+        put(cpu, HP_MAX, 2, hp_max)
+        put(cpu, MP_MAX, 2, mp_max)
+        put(cpu, HP, 2, rng.randrange(hp_max + 1))
+        put(cpu, MP, 2, rng.choice((rng.randrange(mp_max + 1), mp_max, mp_max - 0x1E,
+                                    0xFFF0, rng.randrange(0x10000))) & 0xFFFF)
+        out.append((cpu, sc))
+    return out
+
+
+def entry7_compare(cpu, lv, n):
+    import levelup
+    data = levelup.skill_data()
+    m = Mem(bytes(cpu.ram))
+    entry7(lv, m, n, lambda m, k: levelup._skill_unlock(m, k, data))
+    got = entry7_run(cpu, n)
+    what = (lv, hash((tuple(m.calls), tuple(sorted((a, m.ram[a & MASK]) for a in m.written
+                                                   if m.ram[a & MASK] != m.read.get(a, -1))))))
+    if m.calls != got:
+        return what, f"level {lv} scene {n}: calls: model {m.calls[:8]}, game {got[:8]}"
+    d = _ram_diff(m.ram, cpu.ram)
+    return what, (f"level {lv} scene {n}: {d}" if d else None)
+
+
 def _tally(name, runs, compare, out, verbose):
     ok = n = 0
     seen = set()
@@ -488,12 +682,23 @@ def check(out=sys.stdout, seed=97, verbose=False):
     print(f"entry 10, against the overlays' own over 28 levels: {ok} of {n} runs agree -- "
           f"the calls and all of RAM but the stack, {ways} different outcomes", file=out)
     good &= ok == n
+    runs = []
+    for lv in range(28):
+        try:
+            runs += [(cpu, lv, sc) for cpu, sc in entry7_cases(lv, 60, rng)]
+        except Exception as e:                                     # noqa: BLE001
+            print(f"  level {lv}: no machine ({e})", file=out)
+    ok, n, ways = _tally("entry 7", runs, entry7_compare, out, verbose)
+    print(f"entry 7, against the overlays' own over 28 levels: {ok} of {n} runs agree -- "
+          f"the calls and all of RAM but the stack, skill_unlock run, {ways} different "
+          f"outcomes", file=out)
+    good &= ok == n
     return good
 
 
 def export(out_dir, seed=101):
     """scenes.json (the sixteen records, for the port) and scenecheck.json:
-    runs of the three models -- the bytes read, the bytes written, the calls
+    runs of the four models -- the bytes read, the bytes written, the calls
     -- which godot/selftest.gd holds godot/scenes.gd to."""
     import json
     rng = random.Random(seed)
@@ -523,6 +728,11 @@ def export(out_dir, seed=101):
             m = Mem(bytes(cpu.ram))
             entry10(lv, m, sc)
             rows.append(row("entry10", m, level=lv, scene=sc))
+    for lv in ENTRY7_LEVELS:
+        for cpu, sc in entry7_cases(lv, 16, rng):
+            m = Mem(bytes(cpu.ram))
+            entry7(lv, m, sc)
+            rows.append(row("entry7", m, level=lv, scene=sc))
     cpath = os.path.join(out_dir, "scenecheck.json")
     with open(cpath, "w") as fh:
         json.dump({"cases": rows}, fh, separators=(",", ":"))

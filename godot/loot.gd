@@ -281,9 +281,9 @@ func _level_in() -> void:
 
 # What the levels' own code reads, out of the port, at the game's addresses
 # (KFLevelIn's {"mem", "calls"}): the story flags, the pack, the figures,
-# drop_count_gold, the warp's byte (0x801b25ee), the player's place, view
-# and state, what is worn, the creatures' +0, +3, +9 and place and every
-# object's view.
+# the HP and MP and their most, drop_count_gold, the warp's byte
+# (0x801b25ee), the player's place, view and state, what is worn, the
+# creatures' +0, +3, +9 and place and every object's view.
 # @port engine -- the port's fields as the game's bytes
 func _bytes() -> Dictionary:
 	var ch: Dictionary = player.character
@@ -299,6 +299,10 @@ func _bytes() -> Dictionary:
 	for k in 5:
 		KFLevelIn.wr(m, KFLevelIn.SKILLS + 2 * k, int(grow[k]), 2)
 	KFLevelIn.wr(m, KFLevelIn.PLAYER_LEVEL, int(ch.get("level", 1)))
+	KFLevelIn.wr(m, KFScenes.HP, int(player.hp), 2)
+	KFLevelIn.wr(m, KFScenes.HP_MAX, int(player.hp_max), 2)
+	KFLevelIn.wr(m, KFScenes.MP, int(player.mp), 2)
+	KFLevelIn.wr(m, KFScenes.MP_MAX, int(ch.get("mp_max", player.mp)), 2)
 	KFLevelIn.wr(m, KFLevelIn.DROP_COUNT, int(counters[0x15E]), 2)
 	KFLevelIn.wr(m, KFTriggers.WARPED, int(player.warped))
 	KFLevelIn.wr(m, KFTriggers.PLAYER_POS, player.gx, 4)
@@ -355,7 +359,8 @@ func _bytes() -> Dictionary:
 # (actors.gd), an object's lock, state and +0x39 (_write_view), its type --
 # 0xff gone -- into the find rows and the things', its view byte into the
 # things', a trigger's +0x40, an object's +0x3f, an object's place (a gate
-# moved), and drop_count_gold. The number of bytes it changed.
+# moved), drop_count_gold, the five skills (a shrine's), the HP and the MP
+# (an inn's night). The number of bytes it changed.
 # @port engine -- the game's bytes back into the port's fields
 func _bytes_back(w: Dictionary) -> int:
 	var m: Dictionary = w["m"]
@@ -393,6 +398,14 @@ func _bytes_back(w: Dictionary) -> int:
 			touched[(a - KFLevelIn.OBJECTS) / KFLevelIn.OSTRIDE] = true
 		elif a >= KFLevelIn.DROP_COUNT and a < KFLevelIn.DROP_COUNT + 2:
 			counters[0x15E] = KFLevelIn.rd(m, KFLevelIn.DROP_COUNT, 2)
+		elif a >= KFLevelIn.SKILLS and a < KFLevelIn.SKILLS + 10:
+			var grow: Array = player.character.get("grow", [0, 0, 0, 0, 0])
+			grow[(a - KFLevelIn.SKILLS) / 2] = KFLevelIn.rd(m, a & ~1, 2)
+			player.character["grow"] = grow
+		elif a == KFScenes.HP or a == KFScenes.HP + 1:
+			player.hp = KFLevelIn.rd(m, KFScenes.HP, 2)
+		elif a == KFScenes.MP or a == KFScenes.MP + 1:
+			player.mp = KFLevelIn.rd(m, KFScenes.MP, 2)
 	for k in touched:
 		var o = objs[k]
 		if o == null:
@@ -415,6 +428,8 @@ func _bytes_back(w: Dictionary) -> int:
 			_move_x(k, x)
 		if finds.has(k):
 			finds[k][2] = typ
+			if typ == 0xFF:
+				_free_find(k)
 		if rows.has(k):
 			if typ == 0xFF:
 				rows[k]["type"] = GONE
@@ -423,6 +438,17 @@ func _bytes_back(w: Dictionary) -> int:
 	if an != null and an.has_method("refresh"):
 		an.refresh()
 	return changed.size()
+
+
+# An object the levels' own code freed (+6 0xff) out of sight: its node,
+# fNNN, which tools/level3d.py gives the ones it frees (FREED) instead of
+# putting them in the level's one mesh.
+# @port engine -- a freed object's model hidden
+func _free_find(k: int) -> void:
+	var objs := get_node_or_null("../Objects")
+	var nd: Node3D = objs.find_child("f%03d" % k, true, false) if objs else null
+	if nd:
+		nd.visible = false
 
 
 # An object's x moved by the levels' own code (level 4's gate 115, which its
@@ -481,6 +507,12 @@ func _act(calls: Array) -> void:
 				player.equip_armour(int(call[1]), int(call[2]))
 			"recalc":
 				recalc = true
+			"unlock":
+				for b in KFLevels.skill_unlock(player.character, int(call[1]), KFTalk.flags):
+					KFMessages.announce(int(b))
+			"seq":
+				KFInfo.note("seq_lookup(%d, %d): a CONVERSATION record, not in the port" % [
+					int(call[1]), int(call[2])])
 			"announce":
 				KFMessages.announce(int(call[1]))
 	if recalc:
@@ -599,10 +631,12 @@ func scene_main() -> void:
 
 # The machine over the port's bytes: `pre` (the rectangles, or nothing),
 # cutscene_step with the level's entry 10 (KFScenes.entry10) and entry 7
-# (not ported but for the inns' -- logged), and what follows put back and
-# acted: the stamps, a banner, the warp after scene 6 (record 0xc), and the
-# movie str_play plays -- the record's +0, \STR\Snn.S -- then `runs`, the
-# fade back the player's state 8 does after it.
+# (KFScenes.entry7), and what follows put back and acted: the stamps, a
+# banner, a shrine's skill and the spells it unlocks, the stats, the warp
+# after scene 6 (record 0xc), and the movie str_play plays -- the record's
+# +0, \STR\Snn.S -- then `runs`, the fade back the player's state 8 does
+# after it. Not acted: the frames of an object taken away (it goes at once)
+# and seq_lookup (the CONVERSATION records are not in the port).
 # @port engine -- cutscene_step over the port's bytes, then its calls acted
 func _scene_run(pre: Callable, run_step: bool, runs: Array, clear: bool) -> void:
 	var lv: int = player._level()
@@ -617,6 +651,7 @@ func _scene_run(pre: Callable, run_step: bool, runs: Array, clear: bool) -> void
 			if n == KFScenes.ENTRY_SCENE:
 				KFScenes.entry10(lv, m, k)
 			else:
+				KFScenes.entry7(lv, m, k)
 				m["calls"].append(["entry", n, k]))
 	_scene_out(m)
 	_bytes_back(w)
@@ -632,8 +667,7 @@ func _scene_run(pre: Callable, run_step: bool, runs: Array, clear: bool) -> void
 				movie = int(rec[0]) if rec.size() > 0 else n
 				KFInfo.note("scene %d: the level's entry 10, the movie %d" % [n, movie])
 			"entry":
-				KFInfo.note("scene: the level's entry %d with %d -- not in the port" % [
-					int(c[1]), int(c[2])])
+				KFInfo.note("scene %d over: the level's entry %d" % [int(c[2]), int(c[1])])
 			"warp_to":
 				if KFUseItem.warps.is_empty():
 					KFUseItem.load_from()
@@ -847,6 +881,9 @@ func take_stream(d: Dictionary) -> void:
 		if op == 0xFF:
 			if rows.has(s):
 				rows[s]["type"] = GONE
+			elif finds.has(s):
+				finds[s][2] = 0xFF
+				_free_find(s)
 		elif op == 0xFD:
 			if rows.has(s):
 				rows[s]["lock"] = int(row[1])
@@ -905,8 +942,9 @@ func _made(s: int, t: Dictionary) -> void:
 
 
 # What the chests, the things and the pedestals are as the level is left, into
-# its table: a thing taken is an empty slot, the rest their type, kind, place,
-# yaw and lock -- and +0x3a for kind 0x62, the angle it comes to rest at -- and
+# its table: a thing taken is an empty slot, and so is an object the level's
+# code freed (a shrine's); the rest their type, kind, place, yaw and lock --
+# and +0x3a for kind 0x62, the angle it comes to rest at -- and
 # a pedestal its lock and its key's place; then the table is final, and
 # KFLevelState writes it into the level's stream when the level is next asked
 # for (level_state_write, which object_trigger and player_controller call as
@@ -919,6 +957,9 @@ func _exit_tree() -> void:
 	var table: Array = KFLevelState.tables.get(lv, [])
 	if table.is_empty():
 		return
+	for k in finds:
+		if int(finds[k][2]) == 0xFF and not rows.has(k) and k < table.size():
+			table[k] = null                # freed by the level's code: a shrine's
 	for k in rows:
 		var r: Dictionary = rows[k]
 		var typ := int(r["type"])

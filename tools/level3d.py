@@ -743,6 +743,14 @@ def build_held_gltf(lv, out="out/godot", weapons=HELD_WEAPONS):
 DOOR_OPS = (0x01,)
 
 
+# The objects the levels' own code frees (+6 0xff) that would otherwise be in
+# the level's one mesh: the shrines' entry 7 and level 20's (tools/scenes.py),
+# level 13's entry 10 and level 15's entry 19 (tools/deaths.py). Each is a
+# node of its own, `fNNN`, which godot/loot.gd hides once its type is 0xff.
+FREED = {2: (70, 91), 4: (55, 148), 13: (15, 86, 20), 15: (0x73, 0x74, 0x75, 0x76),
+         20: (2,), 26: (6, 87)}
+
+
 def build_objects_gltf(lv, out="out/godot"):
     """Everything standing on the level: doors, chests, trees, save points.
 
@@ -785,6 +793,7 @@ def build_objects_gltf(lv, out="out/godot"):
     groups = {}
     placed = missing = hidden = 0
     doors, door_rows = [], []
+    apart = []
     loot = loot_slots(load)
     import doors as doormod
     for _k, o in sorted(load.recs.items()):
@@ -841,11 +850,14 @@ def build_objects_gltf(lv, out="out/godot"):
             az = m[2][0] * nx + m[2][1] * ny + m[2][2] * nz
             return (ax / 4096.0, -ay / 4096.0, -az / 4096.0)
 
-        own = {} if door else groups
+        freed = o["slot"] in FREED.get(lv, ())
+        own = {} if door or freed else groups
         emit_object(objs, place, lambda raw: shade(raw, llm, lcm, bk), own,
                     spin_normal, fog=fog_of(look, c[9] & 0x3F))
         if door:
             doors.append((o, own))
+        elif freed:
+            apart.append((o, own))
 
     mats = {}
 
@@ -876,6 +888,10 @@ def build_objects_gltf(lv, out="out/godot"):
                    # which level_state_write looks a thing's arm up by
                    "classes": [r[0] if r else 0 for r in load.rows[:332]]},
                   f, separators=(",", ":"))
+    for o, bags in apart:
+        dp, dn = prims_of(bags)
+        ntri += dn
+        items.append((f"f{o['slot']:03d}", dp, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)))
     for o, bags in doors:
         dp, dn = prims_of(bags)
         ntri += dn
@@ -893,9 +909,10 @@ def build_objects_gltf(lv, out="out/godot"):
     with open(f"{out}/doors{lv:02d}.json", "w") as f:
         json.dump(door_rows, f, separators=(",", ":"))
     print(f"objects: {placed} placed, {len(doors)} of them doors on their own "
-          f"node, {len(lifts)} lift doors and gates, {len(loot_rows)} chests, things to take and "
-          f"things to read, {missing} without a model, {hidden} the game does not draw, "
-          f"{ntri} triangles, {len(mats)} materials -> {path}")
+          f"node, {len(apart)} the level's code frees on theirs, {len(lifts)} lift doors and "
+          f"gates, {len(loot_rows)} chests, things to take and things to read, {missing} "
+          f"without a model, {hidden} the game does not draw, {ntri} triangles, "
+          f"{len(mats)} materials -> {path}")
     return path
 
 

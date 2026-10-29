@@ -2977,7 +2977,7 @@ func _ticks_whole() -> bool:
 
 # The scenes, godot/scenes.gd against the runs tools/scenes.py made of its
 # models, which the game's own cutscene_step, opcode 0xe4's arm and every
-# level's entry 10 hold: from the bytes the model read, the same calls in
+# level's entries 10 and 7 hold: from the bytes the model read, the same calls in
 # order and the same bytes written, none besides.
 func _scenes() -> bool:
 	if not FileAccess.file_exists("res://scenecheck.json"):
@@ -3002,6 +3002,8 @@ func _scenes() -> bool:
 				KFScenes.arm(m, int(c["slot"]))
 			"entry10":
 				KFScenes.entry10(int(c["level"]), m, int(c["scene"]))
+			"entry7":
+				KFScenes.entry7(int(c["level"]), m, int(c["scene"]))
 		var why := ""
 		if str(m["calls"]) != str(_ints(c["calls"])):
 			why = "calls %s, python %s" % [str(m["calls"]).left(120), str(_ints(c["calls"])).left(120)]
@@ -3021,8 +3023,9 @@ func _scenes() -> bool:
 		elif not told:
 			told = true
 			print("  first difference: %s: %s" % [kind, why])
-	print("the scenes: %d of %d runs (%d of cutscene_step, %d of opcode 0xe4, %d of entry 10) match tools/scenes.py -- the calls and every byte written" % [
-		ok, cases.size(), int(kinds.get("step", 0)), int(kinds.get("arm", 0)), int(kinds.get("entry10", 0))])
+	print("the scenes: %d of %d runs (%d of cutscene_step, %d of opcode 0xe4, %d of entry 10, %d of entry 7) match tools/scenes.py -- the calls and every byte written" % [
+		ok, cases.size(), int(kinds.get("step", 0)), int(kinds.get("arm", 0)), int(kinds.get("entry10", 0)),
+		int(kinds.get("entry7", 0))])
 	return ok == cases.size()
 
 

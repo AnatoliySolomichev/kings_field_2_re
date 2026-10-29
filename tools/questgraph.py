@@ -32,13 +32,13 @@ number comes from the object's own placement record rather than from an
 instruction, so no constant scan can see it. Those records are not decoded
 (BACKLOG item 2).
 
-The flags with no writer are **123, 124, 126, 135, 137, 140, 143, 144 and
-147**, and that is now a settled negative rather than a gap in the method.
-Every word of `GAME.EXE` and every word of all 28 overlays has been scanned
-linearly for a store landing in the array -- not only the parts control flow
-reaches -- and no routine anywhere forms the array's base and then indexes it
-by a register, so there is no computed write to hide behind either. Those nine
-`f9` branches cannot be taken in a game that starts from `reset_story_flags`.
+The flags with no writer found are **135, 137, 140, 143, 144 and 147**.
+**Withdrawn:** this said nine, with 123, 124 and 126, and called it a settled
+negative because "no routine forms the array's base and then indexes it by a
+register". `skill_unlock` forms `story_flags + 0x7b` and indexes that by the
+skill (`writes_in_game_exe` names it now): the scan looked for the base
+itself, so an offset base can hide a write from it, and the six left are no
+more than not found.
 
 **Withdrawn:** "doors, chests and levers write flags through the object
 interpreter, and the flag's number comes from the object's placement record".
@@ -165,6 +165,11 @@ def writes_in_game_exe():
             for k in range(width):
                 if addr - FLAGS + k < FLAG_SPAN:
                     out[addr - FLAGS + k].add(syms.name(f.addr) or f"{f.addr:#x}")
+    # skill_unlock (0x80029f1c) stores through story_flags + 0x7b + k with k
+    # in a register, which no walk resolves to a constant: the mark of the
+    # skill's first spell, and of the shrines' scenes 12..15 (tools/scenes.py)
+    for k in range(5):
+        out[0x7B + k].add("skill_unlock")
     # `save_restore` copies the whole array back from the card, so it writes
     # every index and says nothing about any of them.
     return {k: sorted(v) for k, v in out.items() if v != {"save_restore"}}

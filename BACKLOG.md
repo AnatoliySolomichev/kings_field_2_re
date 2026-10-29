@@ -614,13 +614,17 @@ Eating heals. Left, roughly in order:
   The scenes are in (FORMATS.md, "The scenes"): cutscene_step whole, opcode
   `0xe4`'s arm and every level's entry 10, each against the game's own, and
   the player's states 7, 8 and 9, the walk to a scene and back
-  (transcribed, run headless on level 2). Left: the levels' entries 7
-  after a scene (2, 4, 13, 20, 26 are 60 to 115 instructions; 17's and
-  27's small), the inn going through the machine as the game's does (the
-  port's still plays the dream itself), a dream for a record of 0x10 and
-  over, the volume and the music; and who sets the marks 123..126 of
-  scenes 12..15 -- levels 2, 9 and 13 read them, nothing found writes them,
-  so the four replay.
+  (transcribed, run headless on level 2), and every level's entry 7 after
+  a scene (1680 of 1680 runs of the overlays' own): the inns' nights, the
+  four shrines -- the skill 20 on and `skill_unlock`, which sets the marks
+  123..126 of scenes 12..15 (withdrawn: "nothing writes them, so the four
+  replay") -- and the other scenes' marks. Left: the sixteen frames a
+  shrine's objects take to go (they go at once; `+2`, `+5` and `+0x10` are
+  not kept), `seq_lookup`'s two lines (`seq_state`, status/records'
+  CONVERSATION, which is not in the port), the inn going through the
+  machine as the game's does (the port's still plays the dream itself and
+  runs entry 7 on its own), a dream for a record of 0x10 and over, the
+  volume and the music.
   Every level's conversation hook (entry 4, 45 arms) is in (FORMATS.md,
   "What a conversation makes happen", 2400 of 2400 runs of the overlays'
   own), but for what the port does not act out: the light's frames

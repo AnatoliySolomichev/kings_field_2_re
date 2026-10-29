@@ -967,23 +967,27 @@ So the table is a list of scenes and the marks that retire them:
 | cutscene | mark | set by |
 | --- | --- | --- |
 | `S03` | 9 | `game_main` and `player_controller` |
-| `S04` | 67 | level 13's overlay |
-| `S05` | 87 | level 20's overlay |
-| `S06` | 93 | level 24's overlay |
-| `S09` | 84 | level 17's overlay |
-| `S10` | 88 | level 20's overlay |
-| `S12`–`S15` | 123–126 | nothing found yet |
+| `S04` | 67 | level 13's entry 7, after the scene |
+| `S05` | 87 | level 20's entry 7 |
+| `S06` | 93 | level 24's entry 10, before the movie |
+| `S09` | 84 | level 17's entry 7 |
+| `S10` | 88 | level 20's entry 7 |
+| `S12`–`S15` | 123–126 | `skill_unlock`, as the shrine's entry 7 gives the skill 20 |
 
-`S07`, `S08` and `S11` carry no mark at all, and neither, in effect, do the
-last four: nothing this project has found sets 123 to 126, so nothing stops
-those scenes repeating. That is a smaller mystery than "four locked endgame
-scenes" was, and it is what the code actually says.
+`S07`, `S08` and `S11` carry no mark at all; every other scene is retired
+by what follows it, so none plays twice.
 
-The levels' entries 10 set 109 to 112 (`0x6d`..`0x70`) as those scenes
-play -- scene 12 on level 4, 13 on 13, 14 on 26, 15 on 2 -- fourteen below
-the marks; levels 2, 9 and 13 read 123 to 125, and nothing found writes
-them. So the four replay each time their rectangle is entered again (the
-section after next, "The scenes").
+**Withdrawn: "nothing found sets 123 to 126, so those scenes repeat".** This
+said so here and in "The scenes" below, and PLAYTEST A27 asked a player to
+watch them replay. They are `skill_unlock`'s (`0x80029f1c`) story flag
+`0x7b + k`, which it sets with the first spell of skill k it unlocks -- a
+store through `story_flags + 0x7b + k` with k in a register, which is why no
+scan for a constant address found it. Scenes 12 to 15 are the four shrines
+of skills 0, 1, 3 and 2: entry 10 sets 109 to 112 (`0x6d + k`, the skill's
+gate) as the movie starts, and entry 7, after the walk back, adds 20 to the
+skill and calls `skill_unlock(k)`; the skill's first threshold is 20, so the
+first spell is unlocked and the mark set, every time (the section after
+next, "The scenes").
 
 **Withdrawn: "the other fifty bytes are not read".** They are the walk to
 the scene and back, which player_controller's states 7 and 9 make of them
@@ -4010,7 +4014,7 @@ frames and the shell into END.EXE, M4 playing; level 27's with thing `0x10`
 had, `0x11` in the pack and in hand, the warp into level 24's scene at
 (7, 70) and `S07`; without, `S08` and END.EXE with `overlay_arg` 3, M6.
 
-### The scenes: cutscene_step, opcode 0xe4, entry 10 and the walk
+### The scenes: cutscene_step, opcode 0xe4, entries 10 and 7, and the walk
 
 A scene is a record of 52 bytes at `seq_data + 52 * n` (`0x801e7edc`, off
 FDAT entry 97's seventh block; `tools/scenes.py` reads it and it matches
@@ -4069,16 +4073,37 @@ creature 56 up; 20's 5 a stamp_rect, its 10 thing `0x7d` exchanged for
 `0x10` -- the sword level 27's ending asks after -- and flag `0x59`; 24's,
 any scene, flag `0x5d`; 26's 14 `0x70`.
 
+**Entry 7** (`level_hooks + 0x1c`), once the walk back is over: level 0's
+scene 0 and level 1's any -- the inns' nights, the HP to its most (level 0
+the MP 30 on, held); 2's, 4's and 26's any scene and 13's scene 13 -- the
+**shrines** of skills 2, 0, 3 and 1: the skill 20 on, unbounded,
+`skill_unlock(k)`, `player_recalc_stats`, the shrine's two objects (70 and
+91, 55 and 148, 6 and 87, 15 and 86) taken away one after the other --
+`+5` 0x32, `+2` 5, sixteen frames of the game's own (res_wait, the two
+uploads, camera_pose, render_frame) with `+0x10` up by 0x100 to 0xfff, then
+`+6` 0xff -- and `seq_lookup` (`0x800608ec`) for two lines of a talker (0xc's
+0x10 and 0x11 on level 2; 0xa's, 0xb's, 9's 0 and 1), which marks the line
+3 in `seq_state` -- the table status/records' CONVERSATION (`text_pager`,
+not read yet) pages through -- and any unset (0xff) line before it 0; level 2 then, with flag `0x12` clear, the flag, creature 4 --
+the lake's caretaker -- held (8) and object 44's `+0x38` `0xff`. 13's scene 4
+flag `0x43`, 17's 9 `0x54`, 20's 5 `0x57` and 10 `0x58` with object 2 taken
+away the same way; 27's, any scene, `0x65` (level_overlay_tick's short
+ending). Those are the scenes' marks (the table above): every scene is
+retired by its entry 7 but 6, by its entry 10, and the shrines', by
+`skill_unlock`.
+
 **Checked against the game's own** (`tools/scenes.py --check`):
 cutscene_step **960 of 960** runs over six levels, its own sub_80030810,
 sub_80030864 and player_state_reset run and the entries, str_play,
 MoveImage, DrawSync and warp_to logged; opcode `0xe4`'s arm **540 of 540**
 over its nine rectangles, the player in and about them; entry 10 **1680 of
-1680** over every level, has_item, take_item and give_item run -- the calls
-in order and all of RAM but the stack, each.
+1680** over every level, has_item, take_item and give_item run; entry 7
+**1680 of 1680** over every level, GAME.EXE's skill_unlock run, the stats,
+seq_lookup and the frames logged -- the calls in order and all of RAM but
+the stack, each.
 
-**In the port**: `godot/scenes.gd` is the three over the same addresses (the
-self-test, `the scenes`, 304 of 304); `player.gd _tick` runs the rectangles
+**In the port**: `godot/scenes.gd` is the four over the same addresses (the
+self-test, `the scenes`, 448 of 448); `player.gd _tick` runs the rectangles
 before its controller and game_main's cutscene_step after
 (`loot.gd scene_objects`, `scene_main`, over the port's bytes with the
 machine's four kept in `KFScenes`), and its states 7, 8 and 9 walk the
@@ -4087,9 +4112,16 @@ are new fields, added into the view); `crossing.gd` plays the movie and the
 fades. `opening.py` transcodes all thirteen `/STR` movies. Run headless on
 level 2: into object 97's cell, the walk to (13.5, 9.5), the white fade,
 flag `0x6f`, S15, the fade back, the walk, the phase 0, and out of the
-rectangle no scene. Not in the port: the master volume and the music's cue,
-the levels' entries 7 (logged, but for the inns', which do not go through
-the machine in the port), and a dream for a record of 0x10 and over.
+rectangle no scene. With entry 7, the same run ends with skill 2 at 20,
+spell 25 and flag `0x7d` -- in again, phase `0x10`, refused -- the caretaker
+held and objects 70 and 91 gone, and gone still when the level is entered
+again (`tools/level3d.py` gives the objects the levels' code frees nodes of
+their own, `fNNN`, and `loot.gd` keeps them freed in the level's table). Not
+in the port: the master volume and the music's cue, the sixteen frames an
+object takes to go (it goes at once), `seq_lookup` (no CONVERSATION
+records), the inns' nights through the machine (`loot.gd _sleep` and
+`_wake`, entry 7 for them all the same), and a dream for a record of 0x10
+and over.
 
 ### Status/records, and running the game's own code
 

@@ -2,7 +2,7 @@ class_name KFScenes
 # The scenes: cutscene_step (0x80061940), the machine game_main runs every
 # frame and player_controller's state 8 again; opcode 0xe4's arm, the
 # rectangles that start one; and every level's entry 10, which the machine
-# calls before the movie. A scene is a record of 52 bytes at seq_data
+# calls before the movie, and entry 7, after the walk back. A scene is a record of 52 bytes at seq_data
 # (0x801e7edc + 52 * n): +0 the movie, +1 the mark that retires it, then
 # the place the player is walked to (+0xc, +0x10, +0x14 and the view's three
 # angles +4, +6, +8), the fade (+0xa, +0x22) and the place back (+0x24,
@@ -36,6 +36,16 @@ const SCENE_OP := 0xE4
 const ENTRY_SCENE := 10
 const ENTRY_AFTER := 7
 const LEVELS := [2, 4, 13, 17, 20, 24, 26]   # the levels whose entry 10 is not jr $ra
+const AFTER_LEVELS := [0, 1, 2, 4, 13, 17, 20, 26, 27]   # and entry 7
+const HP_MAX := 0x801B24FA
+const HP := 0x801B24FC
+const MP_MAX := 0x801B24FE
+const MP := 0x801B2500
+const FRAME := ["res_wait", "res_upload_spu", "res_upload_vram", "camera_pose", "render_frame"]
+# the four shrines: the level, its skill, the two objects it takes away, the
+# talker whose lines seq_lookup marks and the first of the two
+const SHRINES := {2: [2, [70, 91], 0xC, 0x10], 4: [0, [55, 148], 0xA, 0],
+	13: [1, [15, 86], 0xB, 0], 26: [3, [6, 87], 9, 0]}
 
 # The machine's own four (cutscene_number, cutscene_phase, cutscene_pending,
 # cutscene_record), kept across frames and levels as the game's RAM keeps them
@@ -199,3 +209,81 @@ static func entry10(lv: int, m: Dictionary, n: int) -> void:
 		26:
 			if n == 0xE:
 				KFLevelIn.wr(m, KFLevelIn.F(0x70), 1)
+
+
+# One object of a scene's place taken away: +5 0x32, +2 5, sixteen frames of
+# the game's own with +0x10 up by 0x100 (a halfword) and held to 0xfff, and
+# the object freed (+6 0xff).
+# @port helper -- the loop levels 2, 4, 13, 20 and 26 write out, each its own; its frames are calls here
+static func fade_out(m: Dictionary, k: int) -> void:
+	KFLevelIn.wr(m, KFLevelIn.O(k, 5), 0x32)
+	KFLevelIn.wr(m, KFLevelIn.O(k, 2), 5)
+	for i in 16:
+		KFLevelIn.wr(m, KFLevelIn.O(k, 0x10), KFLevelIn.rd(m, KFLevelIn.O(k, 0x10), 2) + 0x100, 2)
+		if KFLevelIn.rd(m, KFLevelIn.O(k, 0x10), 2) >= 0xFFF:
+			KFLevelIn.wr(m, KFLevelIn.O(k, 0x10), 0xFFF, 2)
+		for c in FRAME:
+			m["calls"].append([c])
+	KFLevelIn.wr(m, KFLevelIn.O(k, 6), 0xFF, 2)
+
+
+# A shrine's scene over: its skill 20 on (unbounded), skill_unlock with it
+# (["unlock", k], the caller's), player_recalc_stats (["recalc"]), its two
+# objects taken away in turn, and seq_lookup for two lines of its talker
+# (["seq", id, line] -- the CONVERSATION records', not in the port).
+# @port helper -- the shrines' part of levels 2, 4, 13 and 26's entry 7, written out once
+static func shrine(m: Dictionary, lv: int) -> void:
+	var s: Array = SHRINES[lv]
+	var k := int(s[0])
+	var a := KFLevelIn.SKILLS + 2 * k
+	KFLevelIn.wr(m, a, KFLevelIn.rd(m, a, 2) + 0x14, 2)
+	m["calls"].append(["unlock", k])
+	m["calls"].append(["recalc"])
+	for o in s[1]:
+		fade_out(m, int(o))
+	m["calls"].append(["seq", int(s[2]), int(s[3])])
+	m["calls"].append(["seq", int(s[2]), int(s[3]) + 1])
+
+
+# The level's entry 7 with scene n, which cutscene_step's phase 8 calls once
+# the walk back is over: the inns' nights (levels 0 and 1), the shrines
+# (2, 4, 13's scene 13, 26), the marks of scenes 4, 5, 9 and 10, level 2's
+# caretaker held, level 20's object 2 taken away, level 27's flag 0x65.
+# tools/scenes.py has each level's in prose.
+# @orig game:0x80061b8c cutscene_step+0x24c  status:verified -- the call of the level's entry 7 (level_hooks + 0x1c) with the scene; every level's own out of its overlay, written out here as tools/scenes.py, which the overlays' own code holds (1680 of 1680 runs, GAME.EXE's skill_unlock run: the calls and all of RAM but the stack), the self-test this to it
+static func entry7(lv: int, m: Dictionary, n: int) -> void:
+	n &= 0xFF
+	match lv:
+		0:
+			if n == 0:
+				var hp_max := KFLevelIn.rd(m, HP_MAX, 2)
+				var mp_max := KFLevelIn.rd(m, MP_MAX, 2)
+				KFLevelIn.wr(m, MP, KFLevelIn.rd(m, MP, 2) + 0x1E, 2)
+				var mp := KFLevelIn.rd(m, MP, 2)
+				KFLevelIn.wr(m, HP, hp_max, 2)
+				if mp_max < mp:
+					KFLevelIn.wr(m, MP, mp_max, 2)
+		1:
+			KFLevelIn.wr(m, HP, KFLevelIn.rd(m, HP_MAX, 2), 2)
+		2, 4, 26:
+			shrine(m, lv)
+			if lv == 2 and not KFLevelIn.f(m, 0x12):
+				KFLevelIn.wr(m, KFLevelIn.F(0x12), 1)
+				KFLevelIn.wr(m, KFLevelIn.A(4), 8)
+				KFLevelIn.wr(m, KFLevelIn.O(44, 0x38), 0xFF)
+		13:
+			if n == 0xD:
+				shrine(m, lv)
+			if n == 4:
+				KFLevelIn.wr(m, KFLevelIn.F(0x43), 1)
+		17:
+			if n == 9:
+				KFLevelIn.wr(m, KFLevelIn.F(0x54), 1)
+		20:
+			if n == 5:
+				KFLevelIn.wr(m, KFLevelIn.F(0x57), 1)
+			if n == 0xA:
+				KFLevelIn.wr(m, KFLevelIn.F(0x58), 1)
+				fade_out(m, 2)
+		27:
+			KFLevelIn.wr(m, KFLevelIn.F(0x65), 1)

@@ -1871,7 +1871,7 @@
  "0x800608ec": {
   "name": "seq_lookup",
   "kind": "code",
-  "evidence": "(id) -> walks the 0x30 entries of the table build_seq_index made, folding a few ids onto others first (1 and 2 become 1, 0x25 and 0x24 fold, 0x22 becomes 0x20). script_interpreter calls it with a script's frame byte for an entity whose kind is not 0x2b -- so it is what a non-talker's script byte means"
+  "evidence": "(id, line) -> walks the 0x30 entries of the table build_seq_index made, folding a few ids onto others first (1 and 2 become 1, 0x25 and 0x24 fold, 0x22 becomes 0x20); for the id found, seq_state[offset + line] = 3 and every 0xff of the lines before it 0. script_interpreter calls it with a script's frame byte for an entity whose kind is not 0x2b, and the shrines' entry 7 (levels 2, 4, 13, 26) for two lines of a talker; text_pager and text_fetch_page read seq_state (status/records' CONVERSATION)"
  },
  "0x801983a8": {
   "name": "seq_index",

@@ -558,18 +558,19 @@ over every level with the flag `0x65` branch both ways (`whole_check`):
 scenes it plays, `cutscene07.ogv` and `cutscene08.ogv`, with S03.
 
 **`scenes.py`** — the scenes: cutscene_step, opcode 0xe4 and every level's
-entry 10 (FORMATS.md, "The scenes").
+entries 10 and 7 (FORMATS.md, "The scenes").
 
 ```
 python3 tools/scenes.py              the records, their movies and marks
-python3 tools/scenes.py --check      the three against the game's own code
+python3 tools/scenes.py --check      the four against the game's own code
 python3 tools/scenes.py --export D   scenes.json and scenecheck.json for the port
 ```
 
 `--check`: cutscene_step **960 of 960** runs of GAME.EXE's own, opcode
 0xe4's arm **540 of 540** (`mipsrun.object_arm`), entry 10 **1680 of 1680**
-out of the overlays -- the calls in order and all of RAM but the stack.
-`godot/scenes.gd` reproduces them on **304 of 304** runs (`scenecheck.json`);
+and entry 7 **1680 of 1680** out of the overlays (GAME.EXE's skill_unlock
+run under entry 7) -- the calls in order and all of RAM but the stack.
+`godot/scenes.gd` reproduces them on **448 of 448** runs (`scenecheck.json`);
 `scenes.json` is the sixteen records for the port's walk.
 
 **`deaths.py`** — what a level does when one of its creatures dies: every
@@ -1953,14 +1954,18 @@ hiding it. `tools/ovdis.py` follows control flow into switch arms and finds
 edge is `solid` when both agree, `partial` when only the walker saw it — the
 level is known, the condition is not — `native` when `GAME.EXE` writes it
 rather than any level, and `missing` when nothing writes it anywhere here.
-Of the 43: **27 solid, 5 partial, 1 native, 10 missing**.
+Of the 43: **32 solid, 0 partial, 5 native, 6 missing** (the run of
+2026-10-29).
 
-The nine are a settled negative, not a gap in the method. Every word of
-`GAME.EXE` and every word of all 28 overlays has been scanned linearly for a
-store landing in the array — not only the parts control flow reaches — and no
-routine anywhere forms the array's base and then indexes it by a register. So
-**those nine `f9` branches cannot be taken** in a game that starts from
-`reset_story_flags`.
+**Withdrawn: "the nine are a settled negative -- no routine forms the
+array's base and then indexes it by a register".** `skill_unlock`
+(`0x80029f1c`) forms `story_flags + 0x7b` and adds the skill's number to it
+before the store; the scan looked for the base itself. So 123, 124 and 126
+are written -- each the mark of a skill's first spell, and of the shrines'
+scenes (FORMATS.md, "The scenes") -- and the conversations of levels 2, 9 and
+13 that read them can be reached. The six left, **135, 137, 140, 143, 144
+and 147**, are no writer this project has found, which is all that can be
+said of them now: an offset base can hide a write the same way.
 
 **Withdrawn:** "doors, chests and levers write the flag, and its number comes
 from the object's placement record". There is no such write anywhere.

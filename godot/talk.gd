@@ -184,16 +184,16 @@ static func _end(c: Dictionary, why: String) -> int:
 # 8 calls with the scene after the movie -- a night's dream at the inn:
 # level 0's, for scene 0 alone, the HP to its most and the MP 30 on, held to
 # its most; level 1's the HP to its most, for any scene. [hp, mp].
-# @orig game:0x80061b8c cutscene_step+0x24c  status:verified -- the call of the level's entry 7; level 0's (overlay 0x801e89d8) and level 1's (overlay 0x801e88cc) written out here, tools/ui.py night_heal, each 12 of 12 against the overlay's own code run over menu1 (inn_check)
+# @port helper -- KFScenes.entry7 (which carries cutscene_step+0x24c) over the four halfwords alone; tools/ui.py night_heal holds levels 0 and 1's to the overlays' own over menu1 too (inn_check, 12 of 12 each)
 static func night(level: int, scene: int, hp: int, hp_max: int, mp: int, mp_max: int) -> Array:
-	if level == 0 and scene & 0xFF == 0:
-		mp = (mp + 0x1E) & 0xFFFF
-		hp = hp_max
-		if mp_max < mp:
-			mp = mp_max
-	elif level == 1:
-		hp = hp_max
-	return [hp, mp]
+	var m := {"mem": {}, "calls": []}
+	KFLevelIn.wr(m, KFScenes.HP, hp, 2)
+	KFLevelIn.wr(m, KFScenes.HP_MAX, hp_max, 2)
+	KFLevelIn.wr(m, KFScenes.MP, mp, 2)
+	KFLevelIn.wr(m, KFScenes.MP_MAX, mp_max, 2)
+	if level == 0 or level == 1:
+		KFScenes.entry7(level, m, scene)
+	return [KFLevelIn.rd(m, KFScenes.HP, 2), KFLevelIn.rd(m, KFScenes.MP, 2)]
 
 
 # What 0xf4 calls: the level's own entry 4 (level_hooks + 0x10), which lives
