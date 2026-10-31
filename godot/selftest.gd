@@ -1225,7 +1225,42 @@ func _lifts() -> bool:
 				if first == "":
 					first = "wall frame %d: godot %s python %s" % [f, str(got), str(w)]
 			f += 1
-	print("lift doors: %d of %d frames match tools/doors.py (%d of them a gate's, %d a hidden wall's)" % [n - bad, n, gn, wn])
+	var dn := 0
+	for run in doc.get("doubles", []):
+		var dd := {"state": 0, "counter": 0x3E8}
+		for k in run["d"]:
+			dd[k] = int(run["d"][k])
+		var dw := {}
+		for k in run["w"]:
+			dw[k] = int(run["w"][k])
+		var left := [int(run["held"])]
+		var dlaid := [-1]
+		var dclear := func() -> bool:
+			if left[0] > 0:
+				left[0] -= 1
+				return false
+			return true
+		var dstamp := func(k: int) -> void:
+			dlaid[0] = k
+		for want in run["frames"]:
+			if int(want[0]) != 0:
+				dd["state"] = 1
+			dw["facing"] = int(want[1])
+			dw["view"] = int(want[2])
+			script.double_step(dd, dw, coll, dclear, dstamp)
+			var got := [int(want[0]), dw["facing"], dw["view"], int(dd["state"]), int(dd["counter"]),
+				int(dd["yaw"]), int(dd.get("pyaw", 0)), int(dw["x"]), int(dw["z"]), int(dw["stf"]),
+				int(dw["fwd"]), int(dw["saved"]), int(dlaid[0])]
+			var w := []
+			for v in want:
+				w.append(int(v))
+			n += 1
+			dn += 1
+			if got != w:
+				bad += 1
+				if first == "":
+					first = "double door frame %d: godot %s python %s" % [dn, str(got), str(w)]
+	print("lift doors: %d of %d frames match tools/doors.py (%d of them a gate's, %d a hidden wall's, %d a double door's)" % [n - bad, n, gn, wn, dn])
 	if bad > 0:
 		print("  first difference: " + first)
 	return bad == 0

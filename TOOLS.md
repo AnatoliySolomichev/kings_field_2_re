@@ -1077,7 +1077,7 @@ too (G, GQ and P lines: the gates, their doorway test, the pedestals), and
 
 ```
 python3 tools/doors.py              all three kinds against the recordings, with what differs
-python3 tools/doors.py --check      the counts alone
+python3 tools/doors.py --check      the counts alone, and the double doors (below)
 ./emu/run.sh debug bp27.lua         a lift door or a gate frame by frame, into out/lua_bp27.log
 ```
 

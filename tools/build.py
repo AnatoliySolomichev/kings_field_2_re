@@ -186,7 +186,8 @@ def main(quick=False, only_check=False):
         "the doors, the gates and the hidden wall, against what was played and the game's code",
         ["steps of a moving door", "steps of a lift door", "more at 0x14",
               "doorway answers", "no out/lua_bp27", "steps of a gate", "no gate lines",
-              "game's own gate arm", "game's own hidden-wall arm"]))
+              "game's own gate arm", "game's own hidden-wall arm",
+              "double-door arms"]))
     steps.append((["tools/crossing.py", "--check"],
         "the crossings between levels, against what was played",
         ["crossings the model makes", "routines object_trigger"]))

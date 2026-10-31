@@ -736,11 +736,12 @@ def build_held_gltf(lv, out="out/godot", weapons=HELD_WEAPONS):
     return path
 
 
-# The opcodes whose objects turn on a hinge: `object_interpreter`'s arm for
-# opcode 1 (0x8004814c) swings the model a quarter turn and back. godot/doors.gd
-# runs it; the other door classes (0x00, 0x1b, and the grid-drawn 0x03 to 0x05)
-# are not ported yet.
-DOOR_OPS = (0x01,)
+# The opcodes whose objects turn on a hinge: `object_interpreter`'s arms for
+# opcodes 1 (0x8004814c), 0x1b (0x80047858) and 0 (0x80047cbc) swing the model
+# a quarter turn and back, and 0x1b's a partner with it, the object whose slot
+# is the u16 at +0x3e (opcode 0xff, on a node of its own all the same).
+# godot/doors.gd runs them.
+DOOR_OPS = (0x01, 0x00, 0x1B)
 
 
 # The objects the levels' own code frees (+6 0xff) that would otherwise be in
@@ -796,6 +797,12 @@ def build_objects_gltf(lv, out="out/godot"):
     apart = []
     loot = loot_slots(load)
     import doors as doormod
+    leaves = {}                         # a double door's partner -> its door
+    for k, o in load.recs.items():
+        if o["op"] in doormod.DOUBLE_OPS:
+            q = struct.unpack_from("<H", bytes(o["tail"]), 6)[0]
+            if q != 0xFFFF:
+                leaves[q] = k
     for _k, o in sorted(load.recs.items()):
         if o["slot"] in loot:
             continue                    # a node of its own: build_loot
@@ -830,7 +837,7 @@ def build_objects_gltf(lv, out="out/godot"):
         ox, oy, oz = o["x"], o["y"], o["z"]
         # A door turns on its hinge, so it is a node of its own with its
         # vertices about its own position (godot/doors.gd).
-        door = o["op"] in DOOR_OPS
+        door = o["op"] in DOOR_OPS or o["slot"] in leaves
         if door:
             ox = oy = oz = 0
 
@@ -898,13 +905,22 @@ def build_objects_gltf(lv, out="out/godot"):
         items.append((f"d{o['slot']:03d}", dp,
                       (o["x"] / UNIT, -o["y"] / UNIT, -o["z"] / UNIT),
                       (0.0, 0.0, 0.0, 1.0)))
+        if o["op"] not in DOOR_OPS:
+            continue                    # a partner: the door's row below says so
         tr = load.rows[o["type"]]
-        door_rows.append({
+        double = o["op"] in doormod.DOUBLE_OPS
+        row = {
             "slot": o["slot"], "type": o["type"], "op": o["op"],
             "x": o["x"], "y": o["y"], "z": o["z"], "yaw": o["angles"][1],
             "b0": o["b0"], "height": o["height"], "tail": list(o["tail"][:8]),
             "reach": struct.unpack_from("<H", tr, 6)[0],
-            "w": tr[0xD], "h": tr[0xE]})
+            "w": doormod.DOUBLE_W if double else tr[0xD],
+            "h": doormod.DOUBLE_H if double else tr[0xE]}
+        q = struct.unpack_from("<H", bytes(o["tail"]), 6)[0]
+        if double and q != 0xFFFF:
+            p = load.recs[q]
+            row.update({"partner": q, "px": p["x"], "pz": p["z"], "pyaw": p["angles"][1]})
+        door_rows.append(row)
     path, nbytes = g.write_nodes(f"{out}/objects{lv:02d}.gltf", items)
     with open(f"{out}/doors{lv:02d}.json", "w") as f:
         json.dump(door_rows, f, separators=(",", ":"))

@@ -110,7 +110,7 @@ static func player_in_rect(px: int, pz: int, cx: int, cz: int,
 # One frame of the interpreter over whatever the port has placed. It finds each
 # object's opcode and its group and returns the tally; it runs no handler,
 # because no handler has been checked against the game.
-# @orig game:0x80047010 object_interpreter  status:partial -- the walk and the dispatch, none of the arms; doors.gd runs opcode 1's and 3-5's
+# @orig game:0x80047010 object_interpreter  status:partial -- the walk and the dispatch, none of the arms; doors.gd runs the doors' opcodes
 func tick(objects: Array) -> Dictionary:
 	var seen := {}
 	var n := 0

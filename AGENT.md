@@ -218,14 +218,14 @@ the equipment tables, against a RAM snapshot           3264/3264, 2112/2112, 16/
                                                        player_recalc_stats 483 of
                                                        483 values over 21 snapshots
 the conversation hooks, two readings of one table      23 of 23
-how much of the game the port has (portmap progress)   49.1% of the game's own
-                                                       code (game 49.3%, open
+how much of the game the port has (portmap progress)   49.2% of the game's own
+                                                       code (game 49.4%, open
                                                        46.7%, end 32.6%; partial at
                                                        half, the library left out)
-the port against the game, function by function        946 of 946 placed: 512
-                                                       reproduce the game, 434 the
-                                                       port's own; 585 markers and
-                                                       1157 cited addresses, every
+the port against the game, function by function        962 of 962 placed: 517
+                                                       reproduce the game, 445 the
+                                                       port's own; 591 markers and
+                                                       1165 cited addresses, every
                                                        one resolving
 the object loader, against 13 snapshots                angles 4344/4352, scale and
                                                        position 4352/4352, opcode
@@ -234,6 +234,10 @@ the lighting table, against every snapshot             89 856 of 89 856 bytes
 the panel's sprite table, against every snapshot       520 of 520 fields
 the compass's records, against every snapshot          105 of 105 fields
 the swinging door, against the bp24 recording          226 of 226 steps
+the double doors, against the game's own arms for      18200 of 18200 frames, 140
+opcodes 0x1b and 0 (tools/doors.py double_game_check)  runs over all 35 doors, the
+                                                       calls and all of RAM but
+                                                       the stack
 the lift doors, against the bp27 recording             3528 of 3528 steps; the doorway
                                                        answers, the player 1078 of
                                                        1078, the creatures 457 of 457

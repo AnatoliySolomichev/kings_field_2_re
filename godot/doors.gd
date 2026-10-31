@@ -113,6 +113,21 @@ const GATE_CLEAR := 0x1130         # collide_query's radius for the gateway
 const GATE_OPEN := 0               # the templates, in gate widths along
 const GATE_MOVING := 1
 const GATE_SHUT := 2
+# The double doors: opcodes 0x1b (0x80047858) and 0 (0x80047cbc), one arm
+# twice over -- opcode 1's across a doorway three cells wide, the stamps 3 by
+# 2, a leaf that swings -0x20 a frame (0x1b) or +0x20 (0), and a partner, the
+# object +0x3e names (0xffff none), swung the other way in step. All 23 of
+# 0x1b's have one, none of 0's 12. tools/doors.py double_step.
+const DOUBLE_OPS := [0, 0x1B]
+const DOUBLE_SHUT := 3             # the shut template, along from the open one
+const DOUBLE_CLEAR := 0xBB8        # collide_query's radius for the doorway
+const DOUBLE_TURN := {0x1B: -0x20, 0: 0x20}
+const DOUBLE_POINT := {0x1B: -0x700, 0: 0x700}
+const USE_POINT := {0x1B: 0x700, 0: -0x700, 1: -0x400}   # find_object's, along the door's yaw
+const SEALED := 5                  # announce's codes
+const LOCKED := 6
+const DOESNT_OPEN := 0xF
+const SPELL_CAST := 0x17
 
 var doors: Array = []
 var lifts: Array = []
@@ -126,6 +141,7 @@ var made_epoch := -1
 var level := -1                    # this scene's level; KFGame's is the next one's as it goes
 var player: Node3D
 var acc := 0.0
+var saved := {0x1B: 0, 0: 0}       # the facing USE found, one word an opcode ($gp+0x1c0, $gp+0x1c4)
 
 
 # @port data -- reads doorsNN.json, the doors tools/level3d.py finds in the placement, and finds their nodes
@@ -180,6 +196,9 @@ func _ready() -> void:
 		d["state"] = 0
 		d["counter"] = 0x3e7
 		d["push"] = 0
+		if d.has("px"):                # a leaf of its own node, the row's partner
+			d["pnode"] = objs.find_child("d%03d" % int(d["partner"]), true, false) if objs else null
+			d["pyaw0"] = int(d["pyaw"])
 		doors.append(d)
 	made_epoch = KFLevelState.epoch
 	level = player._level()
@@ -239,7 +258,7 @@ func _process(dt: float) -> void:
 			acc -= 1.0 / TICK_HZ
 			for d in doors:
 				if int(d["state"]) != 0:
-					_step(d)
+					_double(d) if int(d["op"]) in DOUBLE_OPS else _step(d)
 			for d in lifts:
 				if int(d["state"]) != 0:
 					_lift(d)
@@ -252,6 +271,8 @@ func _process(dt: float) -> void:
 			# rot_matrix_y is cos, -sin / sin, cos, so with y and z flipped the
 			# game's Ry(t) is a turn of +t about Godot's up axis.
 			d["node"].rotation.y = float(int(d["yaw"]) - int(d["yaw0"])) * TAU / 4096.0
+		if d.get("pnode"):
+			d["pnode"].rotation.y = float(int(d["pyaw"]) - int(d["pyaw0"])) * TAU / 4096.0
 	for d in lifts:
 		_draw_lift(d)
 	for d in gates:
@@ -260,17 +281,49 @@ func _process(dt: float) -> void:
 		_draw_lift(d)
 
 
-# object_interact for the doors: find_object's point for class 1 is the player,
-# 0x1f4 up, moved 0x400 back along the door's own yaw; it must be within the
-# type's reach plus 0x320 of the door, and the door within 0x200 of the facing.
-# @orig game:0x8005e2d0 object_interact  status:partial -- classes 1 and 3 to 5: state 0 and the lock
-# @orig game:0x80045c7c find_object  status:partial -- its point and tests for class 1 and for a class past 2 (0x80045f30)
+# object_interact's .L18: what USE on a door or a gate (classes 0..2, 0x1b)
+# standing still does by its lock -- 0 it opens, else the announce's code:
+# 0xff opens, 0xfd and 0xfe too but for type 0xae, 0xf1 and 0x98 "Sealed",
+# 0x96 and 0xf0 "Spell is Cast", 0x9a and 0xf2 "Doesn't Open", the rest "Locked".
+# @orig game:0x8005e600 object_interact+0x330  status:transcribed
+static func use_answer(lock: int, type: int) -> int:
+	match lock:
+		0xFF:
+			return 0
+		0xFD, 0xFE:
+			return LOCKED if type == 0xAE else 0
+		0xF1, 0x98:
+			return SEALED
+		0x96, 0xF0:
+			return SPELL_CAST
+		0x9A, 0xF2:
+			return DOESNT_OPEN
+	return LOCKED
+
+
+# USE on a door or a gate standing still, by use_answer.
+# @port helper -- the answer acted out
+func _use(d: Dictionary, lock: int, what: String) -> void:
+	var said := use_answer(lock, int(d["type"]))
+	if said != 0:
+		KFMessages.announce(said)
+		return
+	d["state"] = 1
+	KFInfo.note("door: the %s in slot %d opens" % [what, int(d["slot"])])
+
+
+# object_interact for the doors: find_object's point for classes 0, 1 and 0x1b
+# is the player, 0x1f4 up, moved along the door's own yaw -- 0x700 ahead for
+# 0x1b, 0x700 back for 0 and 0x400 back for 1; it must be within the type's
+# reach plus 0x320 of the door, and the door within 0x200 of the facing.
+# @orig game:0x8005e2d0 object_interact  status:partial -- classes 0 to 5 and 0x1b: state 0 and the lock (.L17, use_answer's .L18)
+# @orig game:0x80045c7c find_object  status:partial -- its point and tests for classes 0, 1 and 0x1b and for a class past 2 (0x80045f30)
 func _interact() -> void:
 	var c: KFCollision = player.coll
 	# find_object's test for a class past 2 (0x80045f30) and object_interact's
 	# arm for classes 3 to 5 (0x8005e2d0, .L17): state 0 and the lock 0xff
 	for d in lifts:
-		if int(d["state"]) != 0 or int(d["tail"][0]) != 0xFF:
+		if int(d["state"]) != 0:
 			continue
 		var py: int = player.gy + USE_UP
 		if _in_range(int(d["x"]), int(d["y"]), int(d["z"]), player.gx, py, player.gz,
@@ -279,13 +332,14 @@ func _interact() -> void:
 		if not _facing(player.facing,
 				c.vec_angle(int(d["x"]) - player.gx, int(d["z"]) - player.gz), USE_FACING):
 			continue
+		if int(d["tail"][0]) != 0xFF:
+			KFMessages.announce(LOCKED)
+			continue
 		d["state"] = 1
 		KFInfo.note("door: the lift door in slot %d opens" % int(d["slot"]))
-	# classes 0 to 2 the same: state 0, the lock 0xff -- or 0xfd or 0xfe unless
-	# the type is 0xae; a gate (class 2) through find_object's plain test
+	# classes 0 to 2 by use_answer; a gate (class 2) through find_object's plain test
 	for d in gates:
-		var gl := int(d["lock"])
-		if int(d["state"]) != 0 or not (gl == 0xFF or ((gl == 0xFD or gl == 0xFE) and int(d["type"]) != 0xAE)):
+		if int(d["state"]) != 0:
 			continue
 		if _in_range(int(d["x"]), int(d["y"]), int(d["z"]), player.gx, player.gy + USE_UP, player.gz,
 				int(d["reach"]) + USE_REACH, int(d["top"]), USE_OWN) < 0:
@@ -293,26 +347,22 @@ func _interact() -> void:
 		if not _facing(player.facing,
 				c.vec_angle(int(d["x"]) - player.gx, int(d["z"]) - player.gz), USE_FACING):
 			continue
-		d["state"] = 1
-		KFInfo.note("door: the gate in slot %d rises" % int(d["slot"]))
+		_use(d, int(d["lock"]), "gate")
 	for d in doors:
 		if int(d["state"]) != 0:
 			continue
-		var lock := int(d["tail"][0])
-		if not (lock == 0xFF or ((lock == 0xFD or lock == 0xFE) and int(d["type"]) != 0xAE)):
-			continue
 		var yaw := int(d["yaw"])
-		# Ry(yaw) . (-0x400, 0, 0) = (cos * -0x400, 0, sin * -0x400)
-		var px: int = player.gx + ((c.game_cos(yaw) * -0x400) >> 12)
-		var pz: int = player.gz + ((c.game_sin(yaw) * -0x400) >> 12)
+		var along: int = USE_POINT[int(d["op"])]
+		# Ry(yaw) . (along, 0, 0) = (cos * along, 0, sin * along)
+		var px: int = player.gx + ((c.game_cos(yaw) * along) >> 12)
+		var pz: int = player.gz + ((c.game_sin(yaw) * along) >> 12)
 		if _in_range(int(d["x"]), int(d["y"]), int(d["z"]), px, player.gy + 0x1f4, pz,
 				int(d["reach"]) + 0x320, int(d["height"]), 0x9c4) < 0:
 			continue
 		var ang := c.vec_angle(int(d["x"]) - px, int(d["z"]) - pz)
 		if not _facing(player.facing, ang, 0x200):
 			continue
-		d["state"] = 1
-		KFInfo.note("door: the door in slot %d swings" % int(d["slot"]))
+		_use(d, int(d["tail"][0]), "door")
 
 
 # @orig game:0x8004814c object_interpreter+0x113c  status:verified -- opcode 1's arm: the swing, the shove, the stamps and the wait; 226 of 226 recorded steps (emu/bp24.lua, tools/doors.py)
@@ -356,6 +406,106 @@ func _step(d: Dictionary) -> void:
 		d["yaw"] = int(d["yaw"]) - SWING
 		return
 	d["state"] = 0
+
+
+# @port helper -- hands double_step the player, the doorway test and the stamps
+func _double(d: Dictionary) -> void:
+	var w := {"x": player.gx, "z": player.gz, "facing": player.facing,
+		"view": int(player.view_angles()[1]), "saved": int(saved[int(d["op"])]),
+		"stf": player.stf_speed, "fwd": player.fwd_speed}
+	double_step(d, w, player.coll, func() -> bool: return _double_clear(d),
+		func(k: int) -> void: _stamp(d, k))
+	player.gx = int(w["x"])
+	player.gz = int(w["z"])
+	player.stf_speed = int(w["stf"])
+	player.fwd_speed = int(w["fwd"])
+	saved[int(d["op"])] = int(w["saved"])
+
+
+# The point the doorway is asked about, 0x700 along the door's yaw: behind a
+# class-0x1b door, ahead of a class-0 one.
+# @port helper -- Ry(yaw0) . (off, 0, 0), as the arm's rot_matrix_y and ApplyMatrixLV give it
+static func double_query(d: Dictionary, c: KFCollision) -> Vector2i:
+	var off: int = DOUBLE_POINT[int(d["op"])]
+	var a := KFWeapon.s16(int(d["yaw0"]))
+	return Vector2i(int(d["x"]) + ((c.game_cos(a) * off) >> 12),
+		int(d["z"]) + ((c.game_sin(a) * off) >> 12))
+
+
+# One frame of opcodes 0x1b's and 0's arm on d's state, counter and two yaws;
+# `w` the player as the arm sees them (x, z, facing, view, this opcode's saved
+# word, stf, fwd), `clear` collide_query about the doorway and `stamp(k)` the
+# template k along. tools/doors.py double_step; +1 and +0xe of the leaves, and
+# the partner's class, are not kept: nothing the port draws reads them.
+# @orig game:0x80047858 object_interpreter+0x848  status:verified -- opcode 0x1b's arm; 18200 of 18200 frames of the game's own arms (tools/doors.py double_game_runs, both opcodes), the calls in order and all of RAM but the stack; the object_sounds not played
+# @orig game:0x80047cbc object_interpreter+0xcac  status:verified -- opcode 0's, the same arm with the leaf the other way round and the doorway's point ahead
+static func double_step(d: Dictionary, w: Dictionary, c: KFCollision, clear: Callable,
+		stamp: Callable) -> void:
+	if int(d["state"]) == 0:
+		return
+	var has := d.has("px")
+	var yaw0 := KFWeapon.s16(int(d["yaw0"]))
+	if int(d["state"]) == 1:
+		d["state"] = 2
+		d["counter"] = 0
+		w["saved"] = int(w["facing"])
+	var n := KFWeapon.s16(int(d["counter"]))
+	d["counter"] = (int(d["counter"]) + 1) & 0xFFFF
+	var turn: int = DOUBLE_TURN[int(d["op"])]
+	if n < OPENING:
+		if n < SHOVE_UNTIL and _facing(KFWeapon.s16(int(w["saved"]) + 0x800), yaw0, 0x384):
+			var push := false
+			if has:
+				push = _facing(KFWeapon.s16(int(w["saved"])), KFWeapon.s16(c.vec_angle(
+					int(d["px"]) - int(w["x"]),
+					int(d["pz"]) - int(w["z"]))), 0x400)
+			if not push:
+				push = _facing(KFWeapon.s16(int(w["view"])), KFWeapon.s16(c.vec_angle(
+					int(d["x"]) - int(w["x"]),
+					int(d["z"]) - int(w["z"]))), 0x400)
+			if push:
+				# Ry(a) . (0, 0, -0x4c) = (-sin * -0x4c, 0, cos * -0x4c)
+				var a := KFWeapon.s16(yaw0 + 0x800)
+				w["x"] = int(w["x"]) + ((-c.game_sin(a) * SHOVE) >> 12)
+				w["z"] = int(w["z"]) + ((c.game_cos(a) * SHOVE) >> 12)
+				w["stf"] = 0
+				w["fwd"] = SHOVE
+		d["yaw"] = (int(d["yaw"]) + turn) & 0xFFFF
+		if has:
+			d["pyaw"] = (int(d["pyaw"]) - turn) & 0xFFFF
+		if n == STAMP_OPEN:
+			stamp.call(0)
+		elif n == LAST_SWING:
+			d["counter"] = WAIT_FROM
+		return
+	if n < CLOSE_AT:
+		return
+	if n < DONE_AT:
+		if n == CLOSE_AT:
+			if not clear.call():
+				d["counter"] = CLOSE_AT
+				return
+			stamp.call(DOUBLE_SHUT)
+		d["yaw"] = (int(d["yaw"]) - turn) & 0xFFFF
+		if has:
+			d["pyaw"] = (int(d["pyaw"]) + turn) & 0xFFFF
+		return
+	d["state"] = 0
+
+
+# collide_query(the doorway's point, the door's y, 0xbb8, its height, 0xc0): the
+# creatures awake, then the player; the door's own mark, radius 0xbb8, covers
+# the point, so the cell's count is never what answers.
+# @port helper -- as _gate_clear
+func _double_clear(d: Dictionary) -> bool:
+	var q := double_query(d, player.coll)
+	var y := int(d["y"])
+	var h := int(d["height"])
+	var an := get_node_or_null("../Actors")
+	if an and an.has_method("in_range_of") and an.in_range_of(q.x, y, q.y, DOUBLE_CLEAR, h) != -1:
+		return false
+	return _in_range(player.gx, player.gy, player.gz, q.x, y, q.y, DOUBLE_CLEAR + PLAYER_R,
+		PLAYER_BODY, h) < 0
 
 
 # @port helper -- hands lift_step the doorway test and the stamps

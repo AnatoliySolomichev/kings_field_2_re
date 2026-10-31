@@ -5,7 +5,10 @@
     python3 tools/doors.py --check    the checks alone
 
 The swinging doors against emu/bp24.lua, and the lift doors (opcodes 3 to 5,
-lift_step) and the gates (opcode 2, gate_step) against emu/bp27.lua.
+lift_step) and the gates (opcode 2, gate_step) against emu/bp27.lua. The
+double doors (opcodes 0x1b and 0, double_step) against the game's own arms,
+which no recording has: 18200 of 18200 frames over all 35 doors, the calls
+and all of RAM but the stack (double_game_check).
 
 `object_interpreter`'s arm for opcode 1 (`0x8004814c`) runs once a frame for
 every class-1 door, and `godot/doors.gd` is its port; this is the same arm in
@@ -585,7 +588,8 @@ def export(out_dir):
              for st, en, lv in ((True, 2, None), (False, 3, 5))]
     path = os.path.join(out_dir, "liftcheck.json")
     with open(path, "w") as fh:
-        json.dump({"runs": runs, "gates": gates, "walls": walls}, fh, separators=(",", ":"))
+        json.dump({"runs": runs, "gates": gates, "walls": walls, "doubles": double_cycles()},
+                  fh, separators=(",", ":"))
     return path
 
 
@@ -773,6 +777,8 @@ def gate_check(out=sys.stdout, verbose=False):
 
 
 COLLIDE_QUERY = 0x80033F38
+STRAFE, FORWARD = 0x801B2646, 0x801B2648
+VIEW_NOW, VIEW_ANGLE = 0x801AEC5E, 0x801B260A      # the facing USE keeps, the view_angles yaw
 LEVEL_GRID = 0x801D4464
 
 
@@ -922,6 +928,403 @@ def wall_game_runs(snap="a1"):
     return out
 
 
+# -- the double doors --------------------------------------------------------
+#
+# Opcodes 0x1b (0x80047858) and 0 (0x80047cbc) are one arm written out twice,
+# opcode 1's stretched to a doorway three cells wide: a leaf swung the other
+# way round each (0x1b's -0x20 a frame, 0's +0x20), a partner -- the object
+# whose slot the u16 at +0x3e names, 0xffff for none -- that swings the
+# opposite way in step, and the stamps of 3 by 2 cells (the open template at
+# +0x3b, the shut one 3 along), as the loader's. The partners are opcode 0xff
+# and do nothing of themselves; all 23 of 0x1b's have one, none of 0's 12.
+# The doorway test at 0x12c is collide_query at the point 0x700 along yaw0
+# (behind 0x1b's), radius 0xbb8, the door's height, 0xc0. Each opcode keeps
+# the facing USE found in a word of its own ($gp+0x1c0, $gp+0x1c4); +0xe, a
+# leaf's depth bias, follows the player for an object whose +3 has bit 7,
+# and the loader's first frame (state 2, counter 0x3e7) goes straight to the
+# end: state 0, -0x32 in +0xe, and the partner's type row's class 0x24.
+DOUBLE_OPS = (0, 0x1B)
+DOUBLE_W, DOUBLE_H = 3, 2
+DOUBLE_SHUT = 3                  # the template, along from the open one
+DOUBLE_CLEAR = 0xBB8             # collide_query's radius for the doorway
+DOUBLE_TURN = {0x1B: -SWING, 0: SWING}
+DOUBLE_POINT = {0x1B: -0x700, 0: 0x700}
+DOUBLE_SAVED = {0x1B: 0x8009C3D4, 0: 0x8009C3D8}    # $gp+0x1c0, $gp+0x1c4
+SHOVE = -0x4C
+SHOVE_UNTIL = 0x15
+OPEN_B1, STAND_B1, SHUT_B1 = 0x81, 0x82, 0x80
+
+
+def _s16(v):
+    v &= 0xFFFF
+    return v - 0x10000 if v >= 0x8000 else v
+
+
+def _s32(v):
+    v &= 0xFFFFFFFF
+    return v - 0x100000000 if v & 0x80000000 else v
+
+
+def _facing(a, b, tol):
+    t = (a - b) & 0xFFF
+    return t <= tol or t >= 0x1000 - tol
+
+
+def double_query(d):
+    """The point collide_query is asked about at 0x12c."""
+    off, a = DOUBLE_POINT[d["op"]], _s16(d["yaw0"])
+    return (d["x"] + ((movement.game_cos(a) * off) >> 12),
+            d["z"] + ((movement.game_sin(a) * off) >> 12))
+
+
+def double_step(d, w, clear, stamp, sound):
+    """One frame of the arm on `d` (op, state, counter, yaw, yaw0, b1, bias,
+    b3, x, y, z and partner, None or its x, z, yaw, b1, bias, b3) and `w`, the
+    player as the arm sees it (x, z, facing, view, saved -- this opcode's
+    word --, stf, fwd). clear() answers collide_query about the doorway,
+    stamp(k) lays the template k along down, sound() is object_sound. What
+    it returns is whether the partner's type row is written."""
+    if d["state"] == 0:
+        return False
+    p = d["partner"]
+    yaw0 = d["yaw0"]
+    if d["b3"] & 0x80:
+        t = movement.vec_angle(_s32(w["x"] - d["x"]), _s32(w["z"] - d["z"]))
+        d["bias"] = -0x30 if ((t - yaw0) & 0xFFF) < 0x801 else 0xF0
+    if p is not None and p["b3"] & 0x80:
+        t = movement.vec_angle(_s32(w["x"] - p["x"]), _s32(w["z"] - p["z"]))
+        p["bias"] = 0xF0 if ((t - yaw0) & 0xFFF) < 0x801 else -0x30
+    if d["state"] == 1:
+        d["state"], d["counter"] = 2, 0
+        w["saved"] = w["facing"]
+        sound()
+    n = _s16(d["counter"])
+    d["counter"] = (d["counter"] + 1) & 0xFFFF
+    turn = DOUBLE_TURN[d["op"]]
+    if n < OPENING:
+        if n < SHOVE_UNTIL and _facing(_s16(w["saved"] + 0x800), _s16(yaw0), 0x384):
+            push = False
+            if p is not None:
+                t = movement.vec_angle(_s32(p["x"] - w["x"]), _s32(p["z"] - w["z"]))
+                push = _facing(_s16(w["saved"]), _s16(t), 0x400)
+            if not push:
+                t = movement.vec_angle(_s32(d["x"] - w["x"]), _s32(d["z"] - w["z"]))
+                push = _facing(_s16(w["view"]), _s16(t), 0x400)
+            if push:
+                # Ry(a) . (0, 0, -0x4c) = (-sin * -0x4c, 0, cos * -0x4c)
+                a = _s16(yaw0 + 0x800)
+                w["x"] += (-movement.game_sin(a) * SHOVE) >> 12
+                w["z"] += (movement.game_cos(a) * SHOVE) >> 12
+                w["stf"], w["fwd"] = 0, SHOVE
+        d["b1"] = OPEN_B1
+        d["yaw"] = (d["yaw"] + turn) & 0xFFFF
+        if p is not None:
+            p["b1"] = OPEN_B1
+            p["yaw"] = (p["yaw"] - turn) & 0xFFFF
+        if n == STAMP_OPEN:
+            stamp(0)
+        elif n == LAST_SWING:
+            d["b1"] = STAND_B1
+            d["counter"] = WAIT_FROM
+            if p is not None:
+                p["b1"] = STAND_B1
+        return False
+    if n < CLOSE_AT:
+        return False
+    if n < DONE_AT:
+        if n == CLOSE_AT:
+            if not clear():
+                d["counter"] = CLOSE_AT
+                return False
+            stamp(DOUBLE_SHUT)
+            sound()
+        d["b1"] = OPEN_B1
+        d["yaw"] = (d["yaw"] - turn) & 0xFFFF
+        if p is not None:
+            p["b1"] = OPEN_B1
+            p["yaw"] = (p["yaw"] + turn) & 0xFFFF
+        return False
+    d["state"], d["b1"], d["bias"] = 0, SHUT_B1, -0x32
+    if p is None:
+        return False
+    p["b1"], p["bias"] = SHUT_B1, -0x32
+    return True
+
+
+def double_doors(lv):
+    """[slot] of a level's double doors."""
+    import objload
+    return [k for k, r in sorted(objload.Load(lv).recs.items()) if r["op"] in DOUBLE_OPS]
+
+
+def double_load(cpu, k):
+    """The arm's fields of slot k, out of a machine's RAM."""
+    import mipsrun
+    ot, st = mipsrun.OBJECT_TABLE, mipsrun.OBJECT_STRIDE
+    r = ot + st * k
+    q = cpu.rd(r + 0x3E, 2)
+    p = None
+    if q != 0xFFFF:
+        b = ot + st * q
+        p = {"slot": q, "type": cpu.rd(b + 6, 2), "x": mipsrun.s32(cpu.rd(b + 0x14, 4)),
+             "z": mipsrun.s32(cpu.rd(b + 0x1C, 4)), "yaw": cpu.rd(b + 0x26, 2),
+             "b1": cpu.rd(b + 1, 1), "bias": _s16(cpu.rd(b + 0xE, 2)), "b3": cpu.rd(b + 3, 1)}
+    return {"slot": k, "op": cpu.rd(r + 4, 1), "state": cpu.rd(r + 8, 2),
+            "counter": cpu.rd(r + 0x40, 2), "yaw": cpu.rd(r + 0x26, 2),
+            "yaw0": cpu.rd(r + 0x42, 2), "b1": cpu.rd(r + 1, 1),
+            "bias": _s16(cpu.rd(r + 0xE, 2)), "b3": cpu.rd(r + 3, 1),
+            "x": mipsrun.s32(cpu.rd(r + 0x14, 4)), "y": mipsrun.s32(cpu.rd(r + 0x18, 4)),
+            "z": mipsrun.s32(cpu.rd(r + 0x1C, 4)), "height": cpu.rd(r + 0xC, 2),
+            "type": cpu.rd(r + 6, 2), "partner": p}
+
+
+def double_store(ram, d, w):
+    """What the arm wrote, back into a copy of RAM."""
+    import mipsrun
+
+    def put(a, n, v):
+        a &= 0x1FFFFF
+        ram[a:a + n] = (v & ((1 << (8 * n)) - 1)).to_bytes(n, "little")
+    ot, st = mipsrun.OBJECT_TABLE, mipsrun.OBJECT_STRIDE
+    r = ot + st * d["slot"]
+    put(r + 8, 2, d["state"])
+    put(r + 0x40, 2, d["counter"])
+    put(r + 0x26, 2, d["yaw"])
+    put(r + 1, 1, d["b1"])
+    put(r + 0xE, 2, d["bias"])
+    p = d["partner"]
+    if p is not None:
+        b = ot + st * p["slot"]
+        put(b + 0x26, 2, p["yaw"])
+        put(b + 1, 1, p["b1"])
+        put(b + 0xE, 2, p["bias"])
+    put(PLAYER_POS, 4, w["x"])
+    put(PLAYER_POS + 8, 4, w["z"])
+    put(STRAFE, 2, w["stf"])
+    put(FORWARD, 2, w["fwd"])
+    put(DOUBLE_SAVED[d["op"]], 2, w["saved"])
+
+
+def double_script(rng, d, frames):
+    """What the frames of a run are given: when USE comes, how many times
+    collide_query is hit, and at each frame whether the player turns."""
+    return {"use": rng.randrange(2, 12), "held": rng.choice((0, 0, 0, 3, 9)),
+            "turns": [rng.random() < 0.08 for _ in range(frames)]}
+
+
+def double_place(rng, d):
+    """A player for the run: most in the swing, facing the doorway as a
+    player does who opened it, some anywhere about it."""
+    y0 = d["yaw0"]
+    if rng.random() < 0.6:
+        a = _s16(y0 + 0x800)
+        s = rng.randrange(0x300, 0xA00)
+        side = rng.randrange(-0x600, 0x600)
+        x = d["x"] + ((movement.game_sin(a) * s + movement.game_cos(a) * side) >> 12)
+        z = d["z"] + ((-movement.game_cos(a) * s + movement.game_sin(a) * side) >> 12)
+        f = (y0 + 0x800 + rng.randrange(-0x300, 0x300)) & 0xFFF
+    else:
+        x = d["x"] + rng.randrange(-0x1800, 0x1800)
+        z = d["z"] + rng.randrange(-0x1800, 0x1800)
+        f = rng.randrange(0x1000)
+    return x, z, f
+
+
+def double_game_runs(per_door=4, frames=130, seed=91):
+    """Every double door of the game, the game's own arm run by
+    tools/mipsrun.py over its level beside double_step: the fresh load's
+    first frame, USE (state 1) at a random frame, a player in and about the
+    swing, +3's bit 7 at random and the doorway held by a scripted
+    collide_query. The calls in order and, every frame, all of RAM but the
+    stack: [(lv, slot, frames alike, frames, the first difference)]."""
+    import random
+    import levelin
+    import mipsrun
+    import objload
+    rng = random.Random(seed)
+    out = []
+    levels = [lv for lv in range(28) if double_doors(lv)]
+    for lv in levels:
+        base = mipsrun.level_cpu(lv)
+        ram0 = bytes(base.ram)
+        ld0 = objload.Load(lv)
+        for k in double_doors(lv):
+            for _run in range(per_door):
+                cpu = mipsrun.CPU(ram0)
+                cpu.hooks.update(base.hooks)
+                ot, st = mipsrun.OBJECT_TABLE, mipsrun.OBJECT_STRIDE
+                rec = ot + st * k
+                d0 = double_load(cpu, k)
+                if rng.random() < 0.3:
+                    cpu.wr(rec + 3, 1, cpu.rd(rec + 3, 1) | 0x80)
+                    if d0["partner"] is not None:
+                        b = ot + st * d0["partner"]["slot"]
+                        cpu.wr(b + 3, 1, cpu.rd(b + 3, 1) | 0x80)
+                d = double_load(cpu, k)
+                px, pz, f = double_place(rng, d)
+                sc = double_script(rng, d, frames)
+                view = (f + rng.choice((0, 0, rng.randrange(-0x200, 0x200)))) & 0xFFFF
+                for a, n, v in ((PLAYER_POS, 4, px), (PLAYER_POS + 8, 4, pz), (VIEW_NOW, 2, f),
+                                (VIEW_ANGLE, 2, view), (STRAFE, 2, 0x11), (FORWARD, 2, 0x22)):
+                    cpu.wr(a, n, v)
+                w = {"x": px, "z": pz, "facing": f, "view": view,
+                     "saved": cpu.rd(DOUBLE_SAVED[d["op"]], 2), "stf": 0x11, "fwd": 0x22}
+                heard, asked, left = [], [], [sc["held"]]
+
+                def query(c, asked=asked, left=left):
+                    sp = c.r[29]
+                    asked.append(("query", mipsrun.s32(c.r[4]), mipsrun.s32(c.r[5]),
+                                  mipsrun.s32(c.r[6]), c.r[7], c.rd(sp + 0x10, 4),
+                                  c.rd(sp + 0x14, 4)))
+                    if left[0] > 0:
+                        left[0] -= 1
+                        return 0x40
+                    return 0
+
+                def noise(c, asked=asked):
+                    asked.append(("sound", c.r[4], c.r[5]))
+                    return 0
+                cpu.hooks[COLLIDE_QUERY] = query
+                cpu.hooks[mipsrun.OBJECT_SOUND] = noise
+                ld = objload.Load.__new__(objload.Load)
+                ld.__dict__.update(ld0.__dict__)
+                ld.grid = bytearray(cpu.ram[LEVEL_GRID & 0x1FFFFF:(LEVEL_GRID & 0x1FFFFF) + 64000])
+                row = cpu.rd(rec + 0x3B, 1), cpu.rd(rec + 0x3C, 1), cpu.rd(rec + 0x39, 1), \
+                    cpu.rd(rec + 0x3A, 1), cpu.rd(rec, 1)
+                tone = cpu.rd(mipsrun.OBJECT_TYPES + 24 * d["type"] + 0xF, 1)
+                m = bytearray(cpu.ram)
+                mheld = [sc["held"]]
+                said = []
+
+                def clear(d=d, mheld=mheld, said=said):
+                    qx, qz = double_query(d)
+                    said.append(("query", qx, d["y"], qz, DOUBLE_CLEAR, d["height"], 0xC0))
+                    if mheld[0] > 0:
+                        mheld[0] -= 1
+                        return False
+                    return True
+
+                def stamp(s, ld=ld, row=row, d=d):
+                    ld.stamp_rect(row[4], row[0] + s, row[1], row[2], row[3], DOUBLE_W, DOUBLE_H,
+                                  _s16(d["yaw0"]), MASK)
+
+                def sound(said=said, rec=rec, tone=tone):
+                    said.append(("sound", rec, tone))
+                alike = n = 0
+                bad = None
+                for fr in range(frames):
+                    if fr == sc["use"] and d["state"] == 0:
+                        cpu.wr(rec + 8, 2, 1)
+                        d["state"] = 1
+                        m[(rec + 8) & 0x1FFFFF:(rec + 10) & 0x1FFFFF] = (1).to_bytes(2, "little")
+                    if sc["turns"][fr]:
+                        f = rng.randrange(0x1000)
+                        view = rng.randrange(0x1000)
+                        cpu.wr(VIEW_NOW, 2, f)
+                        cpu.wr(VIEW_ANGLE, 2, view)
+                        w["facing"], w["view"] = f, view
+                        for a, c, v in ((VIEW_NOW, 2, f), (VIEW_ANGLE, 2, view)):
+                            m[a & 0x1FFFFF:(a & 0x1FFFFF) + c] = v.to_bytes(2, "little")
+                    mipsrun.object_arm(cpu, k)
+                    if double_step(d, w, clear, stamp, sound):
+                        tr = mipsrun.OBJECT_TYPES + 24 * d["partner"]["type"]
+                        m[tr & 0x1FFFFF] = 0x24
+                    double_store(m, d, w)
+                    m[(LEVEL_GRID & 0x1FFFFF):(LEVEL_GRID & 0x1FFFFF) + 64000] = ld.grid
+                    for a, v in ((mipsrun.CURRENT_OBJECT, rec),
+                                 (mipsrun.CURRENT_TYPE, mipsrun.OBJECT_TYPES + 24 * d["type"])):
+                        m[a & 0x1FFFFF:(a & 0x1FFFFF) + 4] = v.to_bytes(4, "little")
+                    n += 1
+                    same = said == asked
+                    if same:
+                        for lo, hi in ((0, levelin.STACK_LO), (levelin.STACK_HI, len(m))):
+                            if m[lo:hi] != cpu.ram[lo:hi]:
+                                same = False
+                                if bad is None:
+                                    for i in range(lo, hi):
+                                        if m[i] != cpu.ram[i]:
+                                            bad = (f"level {lv} slot {k} frame {fr}: "
+                                                   f"{0x80000000 | i:#x}: model {m[i]:#x}, game "
+                                                   f"{cpu.ram[i]:#x}")
+                                            break
+                                break
+                    elif bad is None:
+                        bad = f"level {lv} slot {k} frame {fr}: calls {said} / {asked}"
+                    alike += same
+                out.append((lv, k, alike, n, bad))
+    return out
+
+
+def double_cycles(per_door=2, frames=110, seed=93):
+    """double_step's frames for godot/selftest.gd, over levels 12's and 8's
+    doors of both opcodes: the door, the player, how long the doorway is
+    held, and each frame's USE, turn and what the model leaves."""
+    import random
+    import objload
+    rng = random.Random(seed)
+    out = []
+    for lv in (8, 12):
+        ld = objload.Load(lv)
+        for k in double_doors(lv):
+            for _ in range(per_door):
+                o = ld.recs[k]
+                t = bytes(o["tail"])
+                q = struct.unpack_from("<H", t, 6)[0]
+                p = None
+                if q != 0xFFFF:
+                    r = ld.recs[q]
+                    p = {"slot": q, "x": r["x"], "z": r["z"], "yaw": r["angles"][1] & 0xFFFF,
+                         "b1": 0x80, "bias": 0, "b3": 0}
+                d = {"slot": k, "op": o["op"], "state": 0, "counter": 0x3E8,
+                     "yaw": o["angles"][1] & 0xFFFF, "yaw0": o["angles"][1] & 0xFFFF, "b1": 0x80,
+                     "bias": 0, "b3": 0, "x": o["x"], "y": o["y"], "z": o["z"],
+                     "height": o["height"], "partner": p}
+                px, pz, f = double_place(rng, d)
+                w = {"x": px, "z": pz, "facing": f, "view": f, "saved": 0, "stf": 7, "fwd": 9}
+                sc = double_script(rng, d, frames)
+                run = {"d": {x: d[x] for x in ("op", "x", "y", "z", "yaw", "yaw0", "height")},
+                       "w": dict(w), "held": sc["held"], "frames": []}
+                if p is not None:
+                    run["d"].update({"px": p["x"], "pz": p["z"], "pyaw": p["yaw"]})
+                left, laid = [sc["held"]], [-1]
+
+                def clear(left=left):
+                    if left[0] > 0:
+                        left[0] -= 1
+                        return False
+                    return True
+
+                def stamp(s, laid=laid):
+                    laid[0] = s
+                for fr in range(frames):
+                    use = fr == sc["use"] and d["state"] == 0
+                    if use:
+                        d["state"] = 1
+                    if sc["turns"][fr]:
+                        w["facing"], w["view"] = rng.randrange(0x1000), rng.randrange(0x1000)
+                    double_step(d, w, clear, stamp, lambda: None)
+                    run["frames"].append([
+                        int(use), w["facing"], w["view"], d["state"], d["counter"], d["yaw"],
+                        p["yaw"] if p else 0, w["x"], w["z"], w["stf"], w["fwd"], w["saved"],
+                        laid[0]])
+                out.append(run)
+    return out
+
+
+def double_game_check(out=sys.stdout):
+    runs = double_game_runs()
+    alike = sum(r[2] for r in runs)
+    n = sum(r[3] for r in runs)
+    doors = len({(r[0], r[1]) for r in runs})
+    first = next((r[4] for r in runs if r[4]), None)
+    print(f"  {alike} of {n} frames of the game's own double-door arms (opcodes 0x1b and 0), "
+          f"{len(runs)} runs over the game's {doors} doors, are double_step's -- the calls in "
+          f"order and all of RAM but the stack", file=out)
+    if first:
+        print(f"  first difference: {first}", file=out)
+    return alike == n
+
+
 def gate_game_check(out=sys.stdout):
     """gate_game_runs, counted; and every doorway test the arm made asks
     collide_query of the gate's own place at 0x1130, 0xc80 and 0xc0."""
@@ -959,4 +1362,5 @@ if __name__ == "__main__":
     b = lift_check(verbose=v)
     c = gate_check(verbose=v)
     g = gate_game_check()
-    sys.exit(0 if a and b and c and g else 1)
+    e = double_game_check()
+    sys.exit(0 if a and b and c and g and e else 1)

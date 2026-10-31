@@ -2612,6 +2612,77 @@ record's `+0xe` the log carries is the arm's other write: while the door is
 drawn (+3 bit 0x80) it holds -0x30 or 0xf0 by which side of the door the player
 is on, and `render_walk` hands it to `draw_model_plain`.
 
+### A double door: opcodes 0x1b and 0
+
+Opcodes `0x1b` (`0x80047858`) and `0` (`0x80047cbc`) are one arm written out
+twice, and the arm is opcode 1's across a doorway three cells wide: 35 doors
+on levels 8, 12, 19, 22, 23, 24 and 26. The loader stamps the shut template
+3 by 2 (`stamp_rect`, `+0x3b` + 3, `+0x3c`, mask 0x2d) and marks the grid at
+0xbb8. All 23 of `0x1b`'s have a **partner**, the object whose slot is the
+u16 at `+0x3e`: opcode 0xff, of a type whose row has class 0xff, it does
+nothing of itself and the door's arm swings it. None of 0's twelve has one.
+Each is one leaf turned the other way round from the other:
+
+```
+                  own leaf   partner   the doorway's point   USE's point
+opcode 0x1b       -0x20      +0x20     -0x700 along yaw0     +0x700 along the yaw
+opcode 0          +0x20      -0x20     +0x700                -0x700
+```
+
+Frame by frame, on the state `+8` and the counter `+0x40`, as opcode 1's:
+
+```
+state 1            state 2, counter 0, the facing (0x801aec5e) into $gp+0x1c0
+                   (0x1b) or $gp+0x1c4 (0), object_sound(row +0xf)
+counter < 0x20     the leaves turn; +1 0x81. Under 0x15, and the kept facing
+                   turned round within 0x384 of yaw0: the player shoved 0x4c
+                   along yaw0 + 0x800 (speed -0x4c, strafe 0), if the partner
+                   is within 0x400 of the kept facing or the door within 0x400
+                   of the view (0x801b260a).
+counter 0x18       stamp_rect the open template (+0x3b), 3 by 2, mask 0x2d
+counter 0x1f       counter 0x118, +1 0x82 -- twenty frames of standing open
+counter 0x12c      collide_query(the doorway's point, y, 0xbb8, +0xc, 0xc0):
+                   anything there, stay; else the shut template and the sound
+counter < 0x14c    the leaves turn back; +1 0x81
+then               state 0, +1 0x80, +0xe -0x32
+```
+
+The loader leaves state 2 and counter 0x3e7, so the first frame goes straight
+to the last line, and with a partner writes **class 0x24 into the partner's
+type row** and its `+1` and `+0xe`. `+0xe` is the depth bias again: an object
+with `+3` bit 7 has its bias follow the player, -0x30 or 0xf0 by which side
+they stand, the partner the opposite way.
+
+What USE does (`object_interact`, `.L18`, classes 0..2 and 0x1b): nothing but
+at state 0; lock 0xff opens, 0xfd and 0xfe too but for type 0xae; 0xf1 and
+0x98 "Sealed" (5), 0x96 and 0xf0 "Spell is Cast" (0x17), 0x9a and 0xf2 "Doesn't
+Open" (0xf), anything else "Locked" (6). Eleven of opcode 0's twelve carry
+lock 0x8c, the key to the castle prison (levels 12 and 22), and level 26's
+slot 98 lock 0xf2, which the level's own `object_signal(0xf2)` turns.
+Classes 3..5 are `.L17`: 0xff opens, anything else "Locked". **The port said
+none of these** until now: a door that did not open was silent.
+
+**Checked against the game's own** (`tools/doors.py double_game_check`):
+every one of the 35 doors, four runs each, 130 frames, the game's own arms
+over its level (`mipsrun.level_cpu`, `object_arm`) beside `double_step` from
+the fresh load's first frame, USE at a random frame, the player in and about
+the swing, turning at random, `+3`'s bit 7 at random and `collide_query`
+scripted to hold the doorway: **18200 of 18200 frames**, the calls in order
+(object_sound, collide_query with its arguments) and all of RAM but the
+stack, the grid's stamps through the loader's `stamp_rect` among it. 1608
+frames of those shove the player. A leaf, a point or a template broken on
+purpose is caught.
+
+**In the port**: `godot/doors.gd double_step` (the self-test 3960 of 3960
+frames of `double_cycles`), each leaf a node of its own (`level3d.py`,
+`dNNN`, the partner's row in its door's). The stamps change the shapes and
+the fence only, and that is all the two templates differ in: their tiles are
+the same. Not kept: `+1`, `+0xe`, the partner's class (the port draws with a
+depth buffer) and the sounds. Run headless on level 12: door 12 opens from
+USE, both leaves a quarter turn apart and back, the doorway's shapes 59, 25,
+19, 24, 58, 23 giving way to 2, 22, 1, 1, 0, 21 and back, holding while the
+player stands in it; key door 115 says "Locked", and after key 0x8c opens.
+
 ### A door that lifts: opcodes 3, 4 and 5
 
 Reported from play as walls that open when pressed, and that is what they are.

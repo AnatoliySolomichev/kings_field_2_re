@@ -762,8 +762,13 @@ it would open:
   "What else levels 0 and 4 place"): level 0's traps never run, 0xe6 is a
   depth bias and 0x1f an ambient sound -- nothing for the port -- and the
   0xe1 triggers call the levels' own entry 3, which is not in the port.
-* **classes 0x00 (12) and 0x1b (23)**, `find_object` points 0x700 in front of or
-  behind them; 11 of the 12 class-0 doors carry lock byte `0x8c`, a key.
+* **classes 0x00 (12) and 0x1b (23) -- read and in the port** (FORMATS.md, "A
+  double door"): opcode 1's arm across a doorway three cells wide, 0x1b's
+  with a partner leaf swung the other way; `tools/doors.py double_step`,
+  18200 of 18200 frames of the game's own arms over all 35 doors, all of RAM
+  but the stack. USE's answers by the lock are in with them: "Sealed", "Spell
+  is Cast", "Doesn't Open" and "Locked" for every door, gate and lift, which
+  the port did not say. No recording has one yet (PLAYTEST.md).
 * **keys -- in**: a lock byte other than 0xff, 0xfd or 0xfe is either the
   number of the key that opens it or a code no key is. A locked chest says
   "Locked", and the right key from the menu sets its lock to 0xff
