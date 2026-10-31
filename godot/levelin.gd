@@ -108,10 +108,11 @@ static func signal_all(m: Dictionary, sig: int) -> void:
 	KFUseItem.object_signal({"objects": objs}, sig)
 	for k in COUNT:
 		var o: Dictionary = objs[k]
-		wr(m, O(k, 8), int(o["state"]), 2)
-		wr(m, O(k, 0x38), int(o["lock"]))
-		wr(m, O(k, 0x39), int(o["b39"]))
-		wr(m, O(k, 0x3F), int(o["b3f"]))
+		if int(o["state"]) != rd(m, O(k, 8), 2):
+			wr(m, O(k, 8), int(o["state"]), 2)
+		for at in [[0x38, "lock"], [0x39, "b39"], [0x3F, "b3f"]]:
+			if int(o[at[1]]) != rd(m, O(k, int(at[0]))):
+				wr(m, O(k, int(at[0])), int(o[at[1]]))
 
 
 # find_free_slot (0x80046034) over the records' bytes: the slot, or -1.

@@ -227,6 +227,9 @@ def main(quick=False, only_check=False):
         "the scenes, against the game's own cutscene_step, opcode 0xe4 and every level's entries 10 and 7",
         ["cutscene_step, the game's", "opcode 0xe4, the game's", "entry 10, against", "entry 7, against",
          "  "]))
+    steps.append((["tools/levers.py", "--check"],
+        "the levers, the trees and the slabs, against the game's own opcodes 0x53, 0x56 and 0x58",
+        ["game's own arms", "first difference"]))
     steps.append((["tools/teleports.py", "--check"],
         "level 7's teleports, against the game's own opcode 0xe8, object_use_state and the overlay's entry 9",
         ["opcode 0xe8, the game's", "level 7's pedestal", "  "]))

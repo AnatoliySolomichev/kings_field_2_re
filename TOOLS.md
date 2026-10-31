@@ -537,6 +537,16 @@ of 672** runs leave the model's calls and all of RAM but the stack.
 `godot/lake.gd` reproduces the model on **168 of 168** runs (`lakecheck.json`);
 `lake.json` is the seventeen words the switch reads, for the port.
 
+**`levers.py`** — the levers, opcode `0x53`, and two of the things they move:
+level 5's trees, `0x56`, and level 13's slabs, `0x58`. FORMATS.md, "Levers".
+Without arguments every lever and what its signal reaches.
+
+```
+python3 tools/levers.py            every lever and what it reaches
+python3 tools/levers.py --check    the models against the game's own arms
+python3 tools/levers.py --export D levercheck.json for the self-test
+```
+
 **`teleports.py`** — level 7's teleports: opcode `0xe8` and the pedestal
 that wakes them (opcode `0xa7`, the level's entry 9), FORMATS.md "Level
 7's teleports".

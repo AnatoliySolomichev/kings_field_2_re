@@ -592,8 +592,8 @@ Eating heals. Left, roughly in order:
   -- 1, 2, 5, 7, 20, 23, 25 and 27's are in (FORMATS.md, "The levels' own
   use of a thing", 2800 of 2800; levels 1 and 2 hand a thing to a creature,
   which then talks, and level 2's opens its gate through `object_signal`),
-  but for what opcodes `0x53` and `0xa7` then do with level 5's objects and
-  level 7's pedestal. give_item's and take_item's entries 6 and 11 are in
+  and what opcodes `0x53` and `0xa7` then do with level 5's levers and level
+  7's pedestal is in too (FORMATS.md, "Levers", "Level 7's teleports"). give_item's and take_item's entries 6 and 11 are in
   (FORMATS.md, "A thing into the pack", 1680 of 1680 runs of the game's
   own); who reads level 2's flag `0x11`, which its entry 6 sets for the
   aquarian boots, is not found. Every level's entry 1, the frame's tick, is
@@ -634,7 +634,7 @@ Eating heals. Left, roughly in order:
   (`0x8005d948`, `0x8003da10`) of levels 6, 8 and 17, level 3's pack chooser
   (`0x80021d94`, `ui_panel` mode `0xc`; the port answers nothing chosen),
   level 0's play clock (not kept by the port), objects switched by `+0` or
-  their scale (level 5's opcode-`0x56` ones and level 17's 63, drawn in the
+  their scale (level 17's 63, drawn in the
   level's one mesh), the tile a `stamp_rect` copies, and object_give's frames
   inside the conversation's call (the port flies the thing after it). The
   levels' entry 5, which `level_load` runs as each level comes in, is in
@@ -762,6 +762,11 @@ it would open:
   "What else levels 0 and 4 place"): level 0's traps never run, 0xe6 is a
   depth bias and 0x1f an ambient sound -- nothing for the port -- and the
   0xe1 triggers call the levels' own entry 3, which is not in the port.
+* **the levers, opcode 0x53, and two of the things they move, 0x56 and 0x58 --
+  read and in the port** (FORMATS.md, "Levers"): 7200 of 7200 frames of the
+  game's own arms, all of RAM but the stack. Left of what they reach: the traps
+  (0x51, 73 of them, the levers of 12, 15 and 18 and more), 0x52, 0x55, 0x5a.
+  Until those are in a lever there moves and does nothing.
 * **classes 0x00 (12) and 0x1b (23) -- read and in the port** (FORMATS.md, "A
   double door"): opcode 1's arm across a doorway three cells wide, 0x1b's
   with a partner leaf swung the other way; `tools/doors.py double_step`,

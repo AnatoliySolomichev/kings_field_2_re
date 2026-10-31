@@ -309,7 +309,7 @@ class Load:
             tail[8] = r["b0"]
             r["b0"] = 0
         elif cls == 0x53:
-            r["op"], r["b1"] = 0x53, 0
+            r["op"], r["b1"], r["state"] = 0x53, 0, 9
         elif cls == 0x54:
             r["b1"] = 0
             tail[8] = r["b0"]
@@ -396,6 +396,7 @@ class Load:
         elif cls == 0x58:
             r["b1"] = 0
             r["op"] = 0x58
+            r["state"] = 1
         elif cls == 0x59:
             r["op"] = 0x59
             r["b5"] = 0x32

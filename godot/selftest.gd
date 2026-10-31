@@ -371,6 +371,9 @@ func _init() -> void:
 	if not _scenes():
 		quit(1)
 		return
+	if not _levers():
+		quit(1)
+		return
 	if not _teleports():
 		quit(1)
 		return
@@ -3064,6 +3067,52 @@ func _scenes() -> bool:
 	print("the scenes: %d of %d runs (%d of cutscene_step, %d of opcode 0xe4, %d of entry 10, %d of entry 7) match tools/scenes.py -- the calls and every byte written" % [
 		ok, cases.size(), int(kinds.get("step", 0)), int(kinds.get("arm", 0)), int(kinds.get("entry10", 0)),
 		int(kinds.get("entry7", 0))])
+	return ok == cases.size()
+
+
+# The levers, the trees and the slabs, godot/levers.gd against the arms
+# tools/levers.py ran of its models, which the game's own hold: from the bytes
+# the model read, the same calls and the same bytes written, none besides.
+func _levers() -> bool:
+	if not FileAccess.file_exists("res://levercheck.json"):
+		print("levers: no cases to check against")
+		return true
+	var doc = JSON.parse_string(FileAccess.get_file_as_string("res://levercheck.json"))
+	var ok := 0
+	var told := false
+	var cases: Array = doc["cases"]
+	for c in cases:
+		var m := {"mem": {}, "calls": []}
+		for p in c["read"]:
+			m["mem"][int(p[0])] = int(p[1])
+		var before: Dictionary = (m["mem"] as Dictionary).duplicate()
+		var r := KFLevelIn.O(int(c["slot"]))
+		var idle := not KFLevers.busy(KFLevelIn.rd(m, r + 4), KFLevelIn.rd(m, r + 8, 2),
+			KFLevelIn.rd(m, r + 0x39), KFLevelIn.rd(m, r + KFLevers.SCALE, 2))
+		KFLevers.arm(m, int(c["slot"]))
+		var why := ""
+		if idle and bool(c["moved"]):
+			why = "busy says idle of an arm that moved"
+		if why == "" and str(m["calls"]) != str(_ints(c["calls"])):
+			why = "calls %s, python %s" % [str(m["calls"]).left(120), str(_ints(c["calls"])).left(120)]
+		var want := {}
+		for p in c["wrote"]:
+			want[int(p[0])] = int(p[1])
+		for a in want:
+			if why == "" and int(m["mem"].get(a, before.get(a, 0))) != int(want[a]):
+				why = "0x%x: %d, python %d" % [a, int(m["mem"].get(a, -1)), int(want[a])]
+		if why == "":
+			for a in m["mem"]:
+				if not want.has(a) and int(m["mem"][a]) != int(before.get(a, -1)):
+					why = "0x%x written, python did not" % int(a)
+					break
+		if why == "":
+			ok += 1
+		elif not told:
+			told = true
+			print("  first difference: slot %d: %s" % [int(c["slot"]), why])
+	print("levers: %d of %d arms of opcodes 0x53, 0x56 and 0x58 match tools/levers.py -- the calls and every byte written" % [
+		ok, cases.size()])
 	return ok == cases.size()
 
 

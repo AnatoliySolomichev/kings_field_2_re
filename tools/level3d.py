@@ -797,6 +797,7 @@ def build_objects_gltf(lv, out="out/godot"):
     apart = []
     loot = loot_slots(load)
     import doors as doormod
+    import levers as levermod
     leaves = {}                         # a double door's partner -> its door
     for k, o in load.recs.items():
         if o["op"] in doormod.DOUBLE_OPS:
@@ -806,8 +807,8 @@ def build_objects_gltf(lv, out="out/godot"):
     for _k, o in sorted(load.recs.items()):
         if o["slot"] in loot:
             continue                    # a node of its own: build_loot
-        if o["op"] in doormod.GATE_OPS:
-            continue                    # a node of its own that rises: build_lifts
+        if o["op"] in doormod.GATE_OPS or o["op"] in levermod.OPS:
+            continue                    # a node of its own: build_lifts, build_levers
         # The game's own rule, read off load_object_placement and render_walk:
         # the opcode, the record's +0 against the view byte, and the scale.
         if not load.drawn(o):
@@ -888,9 +889,11 @@ def build_objects_gltf(lv, out="out/godot"):
     items += build_drops(lv, load, look, prims_of, spawn)
     keys, pedestal_rows = {}, []
     items += build_pedestals(lv, load, look, prims_of, pedestal_rows, keys)
+    lever_rows = []
+    items += build_levers(lv, load, grid, look, prims_of, lever_rows)
     with open(f"{out}/loot{lv:02d}.json", "w") as f:
         json.dump({"rows": loot_rows, "spawn": spawn, "pedestals": pedestal_rows,
-                   "keys": keys, "find": find_rows(load),
+                   "keys": keys, "find": find_rows(load), "levers": lever_rows,
                    # the class (byte 0) of each of the level's 332 type rows,
                    # which level_state_write looks a thing's arm up by
                    "classes": [r[0] if r else 0 for r in load.rows[:332]]},
@@ -1257,6 +1260,39 @@ def build_lifts(lv, load, grid, look, prims_of, rows):
             row["rect"] = list(doors.wall_rect(o["tail"]))
             row["stay"] = bool(o["tail"][6] & 2)
         rows.append(row)
+    return items
+
+
+def build_levers(lv, load, grid, look, prims_of, rows):
+    """The levers, the trees and the slabs (tools/levers.py), one node each,
+    `lNNN` by slot, and their rows: the slot, the model and the animation as a
+    lift door's -- a lever and a slab move by the clock +0xa -- and the scale
+    and the row's radius, which a tree's +0x38 takes the circle from. The
+    vertices are the model's own, at scale 1: the node turns and sizes them."""
+    import levers
+    items = []
+    for k, o in sorted(load.recs.items()):
+        if o["op"] not in levers.OPS:
+            continue
+        tr = load.rows[o["type"]]
+        try:
+            _flags, objs = tmd.load(*tmd.model_of(o["type"], lv))
+        except Exception:
+            objs = None                 # works all the same, unseen
+        if objs is not None:
+            cx, cz = o["x"] >> 11, o["z"] >> 11
+            c = grid[(cz * W + cx) * CELLB:(cz * W + cx) * CELLB + CELLB]
+            llm, lcm, bk = light_class(look, c[9] & 0x3F, c[7] & 3)
+            rx, ry, rz = o["angles"]
+            own = {}
+            emit_object(objs, lambda v: (v[0] / UNIT, -v[1] / UNIT, -v[2] / UNIT),
+                        lambda raw: shade(raw, llm, lcm, bk), own,
+                        fog=fog_of(look, c[9] & 0x3F))
+            dp, _dn = prims_of(own)
+            items.append((f"l{k:03d}", dp, (o["x"] / UNIT, -o["y"] / UNIT, -o["z"] / UNIT),
+                          quaternion(_rot3(rx, ry + 0x800, rz))))
+        rows.append({"slot": k, "model": lift_model(o["type"], lv), "anim": o.get("b1", 0),
+                     "scale": o["scale"][0], "radius": struct.unpack_from("<H", tr, 4)[0]})
     return items
 
 
@@ -1678,7 +1714,7 @@ def project(lv, out="out/godot", start=(57, 4)):
                  "loot.gd", "messages.gd", "document.gd", "talk.gd", "info.gd", "menu.gd",
                  "crossing.gd", "card.gd", "levelstate.gd", "loadscreen.gd", "useitem.gd",
                  "levelin.gd", "triggers.gd", "ticks.gd", "lake.gd", "ending.gd", "deaths.gd", "scenes.gd",
-                 "teleports.gd"):
+                 "teleports.gd", "levers.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening
@@ -1923,6 +1959,8 @@ def project(lv, out="out/godot", start=(57, 4)):
     try:
         import teleports
         teleports.export(out)
+        import levers
+        levers.export(out)
     except Exception as e:                       # no snapshot, no teleport cases
         print(f"teleport cases skipped: {e}")
     print(f"godot project in {out}/ — player starts in cell ({cx},{cz})")
@@ -1968,7 +2006,7 @@ def verify(out="out/godot"):
         if line.startswith(("loaded:", "movement:", "steps:", "creature steps:",
                             "fences:",
                             "creature run:",
-                            "levels:", "use_item:", "warp_to:", "conversation hooks:", "entry 5:", "triggers:", "give and take:", "entry 1:", "level_overlay_tick:", "entry 19:", "the scenes:", "teleports:", "the lake:", "the ending:", "angles:",
+                            "levels:", "use_item:", "warp_to:", "conversation hooks:", "entry 5:", "triggers:", "give and take:", "entry 1:", "level_overlay_tick:", "entry 19:", "the scenes:", "teleports:", "levers:", "the lake:", "the ending:", "angles:",
                             "scripts:", "damage:", "equipment:", "player_recalc_stats:", "knock-back:", "weapon:", "animation:", "effects:", "lift doors:", "chests:", "seals:", "fades:", "carry-over:", "inscriptions:", "conversations:", "menus:", "routines:", "saves:", "level states:", "the run:", "player_take_hit:", "the status:", "casting:", "the attacking arms:", "creature hits:", "creature strikes:", "creature holds:", "FAIL", "  first",
                             "  level case", "  angle (", "  script level",
                             "  hit ")):

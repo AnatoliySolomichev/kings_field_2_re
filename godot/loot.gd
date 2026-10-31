@@ -157,6 +157,8 @@ var pedestals: Array = []
 var key_templates := {}
 var finds := {}
 var held_locks := {}               # slot -> {op, state, lock}: an object a pedestal or a key asks of
+var levers := []                   # the slots of opcodes 0x53, 0x56 and 0x58 (levers.gd)
+var lever_rows := {}               # slot -> lootNN.json's row, with its node and skin
 
 
 # @port data -- reads lootNN.json, tools/level3d.py build_loot's rows, and finds their nodes
@@ -204,6 +206,8 @@ func _ready() -> void:
 			scene_slots.append(int(f[0]))
 		if f.size() > 10 and int(f[10]) == KFTeleports.OP:
 			teleports.append(int(f[0]))
+	for row in doc.get("levers", []):
+		_lever_row(row, objs)
 	scene_records = _scene_records()
 	if not lake.is_empty():
 		lake_words = _lake_words()
@@ -341,6 +345,9 @@ func _bytes() -> Dictionary:
 		KFLevelIn.wr(m, KFLevelIn.O(k, 0x18), int(o["y"]), 4)
 		KFLevelIn.wr(m, KFLevelIn.O(k, 0x1C), int(o["z"]), 4)
 		KFLevelIn.wr(m, KFLevelIn.O(k, 0x26), int(o["yaw"]), 2)
+		if o.has("scale"):
+			for i in 3:
+				KFLevelIn.wr(m, KFLevelIn.O(k, KFLevers.SCALE + 2 * i), int(o["scale"]), 2)
 		KFLevelIn.wr(m, KFLevelIn.O(k, 0x38), int(o["lock"]))
 		KFLevelIn.wr(m, KFLevelIn.O(k, 0x39), int(o["b39"]))
 		KFLevelIn.wr(m, KFLevelIn.O(k, 0x3A), int(o["h3a"]), 2)
@@ -416,6 +423,9 @@ func _bytes_back(w: Dictionary) -> int:
 		var b0: int = KFLevelIn.rd(m, KFLevelIn.O(k))
 		o["op"] = KFLevelIn.rd(m, KFLevelIn.O(k, 4))
 		o["state"] = KFLevelIn.rd(m, KFLevelIn.O(k, 8), 2)
+		o["b0"] = b0
+		if o.has("scale"):
+			o["scale"] = KFLevelIn.rd(m, KFLevelIn.O(k, KFLevers.SCALE), 2)
 		o["lock"] = KFLevelIn.rd(m, KFLevelIn.O(k, 0x38))
 		o["b39"] = KFLevelIn.rd(m, KFLevelIn.O(k, 0x39))
 		o["b3f"] = KFLevelIn.rd(m, KFLevelIn.O(k, 0x3F))
@@ -888,6 +898,11 @@ func take_stream(d: Dictionary) -> void:
 		elif op == 0xFD:
 			if rows.has(s):
 				rows[s]["lock"] = int(row[1])
+			elif lever_rows.has(s):
+				held_locks[s]["lock"] = int(row[1])
+		elif op == 0xF5:
+			if lever_rows.has(s):
+				held_locks[s]["b39"] = int(row[1])
 		elif op == 0xF4:
 			for pd in pedestals:
 				if int(pd["slot"]) == s:
@@ -979,6 +994,11 @@ func _exit_tree() -> void:
 		if e != null:
 			e[7] = int(pd["lock"])
 			e[8] = int(pd["ring"])
+	for k in levers:
+		var e = table[k]
+		if e != null:
+			e[7] = int(held_locks[k]["lock"])
+			e[8] = int(held_locks[k]["b39"])
 	KFLevelState.left[lv] = true
 
 
@@ -1067,6 +1087,7 @@ func _process(dt: float) -> void:
 		for pd in pedestals:
 			_pedestal(pd)
 		_lake()
+		_levers()
 		_triggers()
 		_teleports()
 		_tick()
@@ -1477,7 +1498,7 @@ static func _spring_to(target: int, cur: int, vel: int) -> int:
 # type's +6 plus 0x320, the type's +8 as its top and 0x9c4 as the point's, and
 # within 0x200 of the facing -- in slot order from `from`. A lid must also face
 # the player within 0x155. After a thing is taken the walk stops.
-# @orig game:0x8005e2d0 object_interact  status:partial -- the talker first, then classes 6, 7, 0x40, 0x0d and 0x14 (.L13, .L26, .L28, .L38); doors.gd has the doors, and no save point is here
+# @orig game:0x8005e2d0 object_interact  status:partial -- the talker first, then classes 6, 7, 0x40, 0x0d, 0x14 and 0x53 (.L13, .L14, .L26, .L28, .L38); doors.gd has the doors, and no save point is here
 # @orig game:0x80045c7c find_object  status:partial -- the plain test, for a class past 2
 func _interact(from: int, talked := false) -> void:
 	var c: KFCollision = player.coll
@@ -1493,6 +1514,8 @@ func _interact(from: int, talked := false) -> void:
 					c.vec_angle(int(a["px"]) - px, int(a["pz"]) - pz), TALK_FACING):
 				if _talk(a):
 					return
+	if from == 0:
+		_lever_use(px, py, pz)
 	for i in range(from, slots.size()):
 		var r: Dictionary = rows[slots[i]]
 		if int(r["type"]) == GONE:
@@ -1516,6 +1539,94 @@ func _interact(from: int, talked := false) -> void:
 			0x0D, 0x14:
 				if _read(r, i):
 					return
+
+
+# object_interact's .L14: a lever in front at state 0, its +0x3e not 0 and its
+# +0x3d 0xff, goes to state 1. One whose +0x3d names a thing -- level 5's seven
+# ask Varde's key -- is worked by the level's own entry 2 instead.
+# @orig game:0x8005e594 object_interact+0x2c4  status:transcribed
+func _lever_use(px: int, py: int, pz: int) -> void:
+	var c: KFCollision = player.coll
+	for k in levers:
+		var f: Array = finds[k]
+		if int(f[10]) != KFLevers.LEVER_OP or int(held_locks[k]["op"]) != KFLevers.LEVER_OP:
+			continue
+		if int(f[20]) == 0 or int(held_locks[k]["state"]) != 0 or int(f[16]) != 0xFF:
+			continue
+		if c.in_range(int(f[3]), int(f[4]), int(f[5]), px, py, pz, int(f[8]) + USE_REACH,
+				int(f[9]), USE_OWN) < 0:
+			continue
+		if _facing(player.facing, c.vec_angle(int(f[3]) - px, int(f[5]) - pz), USE_FACING):
+			held_locks[k]["state"] = 1
+			KFInfo.note("lever: slot %d" % k)
+
+
+# A lever's, a tree's or a slab's row: what the record starts with kept in
+# held_locks, which views() lays over the find rows, and its node.
+# @port data -- lootNN.json's lever row
+func _lever_row(row: Dictionary, objs: Node) -> void:
+	var k := int(row["slot"])
+	var f: Array = finds[k]
+	held_locks[k] = {"op": int(f[10]), "state": int(f[18]), "lock": int(f[11]), "b3f": int(f[17]),
+		"b1": int(row["anim"]), "ha": 0, "b0": int(f[14]), "b39": int(f[12]),
+		"scale": int(row["scale"])}
+	levers.append(k)
+	lever_rows[k] = {"node": objs.find_child("l%03d" % k, true, false) if objs else null,
+		"model": int(row["model"]), "anim": int(row["anim"]), "radius": int(row["radius"]),
+		"skin": {}, "drawn": []}
+
+
+# Opcodes 0x53, 0x56 and 0x58 a frame, over the level's bytes while any of
+# them has work to do; object_signal reaches every object the port keeps.
+# @port engine -- the arms over the game's bytes, what they wrote and called acted out
+func _levers() -> void:
+	var moving := false
+	for k in levers:
+		var h: Dictionary = held_locks[k]
+		if int(h["op"]) in KFLevers.OPS and KFLevers.busy(int(h["op"]), int(h["state"]),
+				int(h["b39"]), int(h["scale"])):
+			moving = true
+	if moving:
+		var w := _bytes()
+		for k in levers:
+			if int(held_locks[k]["op"]) in KFLevers.OPS:
+				KFLevers.arm(w["m"], k)
+		_bytes_back(w)
+		_act(w["m"]["calls"])
+	for k in levers:
+		_draw_lever(k)
+
+
+# A lever or a slab at its clock (the animation +1 names, as a lift door's); a
+# tree at its scale, and object_collide's circle with it: the row's +4 by
+# +0x38 / 128. Nothing drawn while +0 is 0.
+# @orig game:0x8003e34c draw_model_plain  status:partial -- the model at its clock or its scale
+func _draw_lever(k: int) -> void:
+	var r: Dictionary = lever_rows[k]
+	var h: Dictionary = held_locks[k]
+	var now := [int(h["op"]), int(h["b0"]), int(h["scale"]), int(h["ha"]), int(h["lock"])]
+	if now == r["drawn"]:
+		return
+	r["drawn"] = now
+	var nd: Node3D = r["node"]
+	var on := int(h["op"]) != 0xFF and int(h["b0"]) != 0
+	if int(finds[k][10]) == KFLevers.TREE_OP:
+		var s := int(h["scale"])
+		var circle := (int(r["radius"]) * int(h["lock"])) / 128
+		player.coll.object_moved(k, on and circle != 0, circle)
+		if nd:
+			nd.visible = on and s != 0
+			nd.scale = Vector3.ONE * (float(s) / 4096.0)
+		return
+	if nd == null:
+		return
+	nd.visible = on
+	if (r["skin"] as Dictionary).is_empty():
+		if not KFAnim.models.has(int(r["model"])):
+			KFAnim.load_from("res://anim%02d.json" % player._level())
+		r["skin"] = KFAnim.skin(nd, int(r["model"]))
+	if not (r["skin"] as Dictionary).is_empty():
+		KFAnim.animate(r["skin"], int(r["anim"]), int(h["ha"]))
 
 
 # object_interact's .L38: something to read, while its +0x3e is not 0 --
@@ -1633,7 +1744,7 @@ func _hook(lv: int, a: int) -> void:
 		var o = objs[k]
 		if o == null or before[k] == null:
 			continue
-		for f in ["lock", "state", "b39"]:
+		for f in ["lock", "state", "b39", "op"]:
 			if int(o[f]) != int(before[k][f]):
 				_write_view(k, o)
 				break
@@ -1863,7 +1974,7 @@ func views() -> Array:
 		out[k]["op"] = int(held_locks[k]["op"])
 		out[k]["state"] = int(held_locks[k]["state"])
 		out[k]["lock"] = int(held_locks[k]["lock"])
-		for key in ["b3f", "b1", "ha"]:
+		for key in ["b3f", "b1", "ha", "b0", "b39", "scale"]:
 			if held_locks[k].has(key):
 				out[k][key] = int(held_locks[k][key])
 	return out
@@ -1901,6 +2012,11 @@ func _write_view(k: int, o: Dictionary) -> void:
 	if o.has("b1"):
 		g["b1"] = int(o["b1"])
 		g["ha"] = int(o["ha"])
+	if lever_rows.has(k):
+		g["op"] = int(o["op"])
+		g["b0"] = int(o["b0"])
+		g["b39"] = int(o["b39"])
+		g["scale"] = int(o["scale"])
 
 
 # The awake creatures as use_item's truth glass and the levels' entry 2 look

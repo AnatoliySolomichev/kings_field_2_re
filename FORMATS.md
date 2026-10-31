@@ -2890,6 +2890,102 @@ frames, the state, counter, scale, `+1` and the three cells' tile, shape and
 `+9`. **In the port** it is a lift door with one table (`godot/doors.gd`
 `wall_step`): its cells are a node of their own, `t323`, its model `l323`.
 
+### Levers: opcode 0x53, and what they move
+
+Twenty-four objects of opcode `0x53` (`0x80048c7c`) on levels 5, 10, 12, 13, 15
+and 18, each a clock `+0xa` and an id it hands `object_signal`. The loader
+leaves **state 9**, not 0 (`tools/objload.py` had it as 0): its one frame stands
+a lever of `+0x38` 3 at the clock's end, which is also how one pulled on an
+earlier visit comes back pulled, since level_state_write keeps a `+0x38` of 2
+or more and nothing else of it. `+0x38` 2 and 3 are the two ways it stands,
+turned over at each use; 0 and 1 go once and end in 0x63. `+0x39` is the id,
+the u16 at `+0x3a` the clock's step (0xffff: 0x100), `+0x3c` 1 signals as it
+starts and anything else as it ends.
+
+```
+state 1   the sound (unless the type's +0xf is 0xf); +0x3c 1: object_signal.
+          +0x38 2: 3, state 2.  3: 2, state 3.  0, 1: state 2
+state 2   the clock up by the step; a +0xf of 0xf sounds as it passes 0x400;
+          from 0x1000, 0xfff and the end
+state 3   the clock down; a +0xf of 0xf sounds as it passes 0xc00; at 0 or
+          under, 0 and the end
+the end   +0x3c not 1: object_signal.  +0x38 1: the sound, state 4.  0: state
+          0x63.  2, 3: state 0
+state 4   the clock down; at 0 or under, state 0x63
+state 9   +0x38 3: the clock 0xfff.  State 0
+```
+
+USE (`object_interact`, `.L14`) sets state 1 at state 0 with `+0x3e` not 0 and
+`+0x3d` 0xff. A `+0x3d` of anything else asks that thing: level 5's seven name
+Varde's key, 0x66, and its entry 2 works them. On level 13 the sound is the
+type's `+0xf` plus 0x1f0. What each signal reaches (`python3 tools/levers.py`):
+
+```
+level  5   seven levers (Varde's key), two trees each, but for slot 7's one
+level 10   two levers, both 0x98: gate 85's lock turned over (odd opens)
+level 13   three levers: four slabs
+levels 12, 15, 18   the traps of opcode 0x51; 18's two 0x55s
+```
+
+**Opcode `0x56`**, level 5's seventeen, are great trunks with their roots
+spread, 0xaab high (by the model: nobody has looked yet). Each carries a scale
+(`+0x2c`, `+0x2e`, `+0x30`), and its type's row has `+3` bit 0x10 and radius
+0x700, so object_collide stops the player at 0x700 by `+0x38` / 128. Thirteen
+have an id, six pairs and one alone: object_signal of the `+0x3a` turns `+0x39`
+between 0 and 0xff, one of a pair stands and the other does not, and a lever
+swaps them -- the way through the wood moves. Four have no id and just stand.
+
+```
+state 0   +0x39 0: state 2, the scale 0, +0x38 0, +0 0 -- gone at once
+          else: the scale 0x1000, +0x38 0x80, +0 2, state 1
+state 1   +0x39 0: state 2
+state 2   the scale down 0x80; at 0 or under, 0, +0x38 0, +0 0, and with
+          +0x39 0xff state 3. Otherwise it stays here for good
+state 3   +0 2, the scale up 0x100; from 0x1000, 0x1000, +0x38 0x80, state 0
+```
+
+So one going takes 32 frames and keeps its circle to the end, and one coming
+takes 16 and has none until it is whole. **The placement's scale does not
+stand**: those four are placed at 0x1fe0, and the first frame's arm makes them
+0x1000; the port drew them double until now. Level 5's conversation and its
+entry 5 (flag 0x1e) put an end to all seventeen, opcode 0xff.
+
+**Opcode `0x58`** (`0x8004ab40`), level 13's four slabs, four cells long.
+object_signal of `+0x39` gives state 1 and turns `+0x38` between 0 and 1. The
+loader leaves state 1 and `+0x38` 1, so they come up as the level comes in.
+
+```
+state 1   +0x38 0: state 2, 1: state 3, either with sound 0x14; and
+          stamp_rect(the template at +0x3c + +0x3e, +0x3d, to +0x3a, +0x3b,
+          +0x3e by +0x3f, the yaw, 0x2d), whichever it is
+state 2   the clock down 0x40; at 0 or under, 0, state 0x63 and the template
+          at +0x3c laid
+state 3   the clock up 0x40; from 0x1000, 0xfff and state 0x63
+```
+
+**Checked against the game's own** (`tools/levers.py --check`): every lever,
+tree and slab of the six levels, 45 in all, each arm a frame in slot order over
+`mipsrun.level_cpu` from the loader's states, the levers worked at random and
+their `+0x38`, `+0x3c` and step at random, object_sound and stamp_rect logged,
+`object_signal` the game's own: **7200 of 7200 frames**, the calls in order and
+all of RAM but the stack. Models broken on purpose are caught, the sound on
+level 13 among them, which a machine still saying level 0 did not ask until
+`current_level` was put in it.
+
+**In the port**: `godot/levers.gd`, the three arms over the same addresses
+(the self-test, `levers`), `loot.gd _levers` running them while any has work to
+do -- `busy`, which the check holds to: a frame it calls idle changes nothing --
+and `_lever_use` for USE. Each is a node of its own, `lNNN`, a lever and a slab
+at their clock (the animation `+1` names, as a lift door's), a tree at its
+scale with `collision.gd object_moved` keeping object_collide's circle with it.
+`object_signal` reaches what the port keeps; the traps, 0x55, 0x59 and 0x5a are
+not in the port, so a lever on 12, 15 or 18 moves and does nothing yet. Run
+headless: level 5, Varde's key at lever 3 -- tree 11 goes and tree 14 comes,
+its circle off and on, and both as they were on coming back; level 10, lever
+82 -- the lock 0x98 to 0x99 and gate 85 rises; level 13, lever 25 -- slab 19 down
+and the cells at (13, 46) from 1, 11, 11, 26 to 0, 10, 10, 25; level 5's arm 0
+and its entry 5 -- all seventeen gone, drawn and solid.
+
 ### What else levels 0 and 4 place
 
 * **Opcode `0x51`, level 0's four of type 219** (slots 209 to 212): a trap
@@ -3598,7 +3694,7 @@ the records given a listening opcode and fields of the id, its neighbour or
 anything: **280 of 280** runs, all 396 records (4094 of them changed). The
 port's `useitem.gd level_use` holds to the model in the self-test (624 of
 624). What follows the record's change is not all in the port: level 5's
-objects are opcode `0x53`, which the port does not run; level 7's pedestal,
+objects are opcode `0x53`, which it now runs too ("Levers"); level 7's pedestal,
 opcode `0xa7`, it does ("Level 7's teleports"). Level 2's own entry 4, which names the next thing, is
 in the port's conversations now (below, "What a conversation makes happen").
 

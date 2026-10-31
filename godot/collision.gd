@@ -54,6 +54,7 @@ var isqrt_below := PackedInt32Array()   # the 192 halfwords 640 bytes before it
 var sin_table := PackedInt32Array()
 var ratan_table := PackedInt32Array()
 var occ := PackedInt32Array()        # each cell's occupancy count, byte +2 >> 2
+var objects_off := {}                # slots object_collide skips: +0 gone 0 since the export
 var objects := []                    # [slot, 0 circle / 1 rect, a, b, byte +3,
                                      #  x, y, z, top, angle, push radius]
 
@@ -748,6 +749,8 @@ func in_oriented_rect(ang: int, px: int, py: int, pz: int, x: int, y: int,
 func object_collide(x: int, y: int, z: int) -> int:
 	for i in objects.size():
 		var o: Array = objects[i]
+		if not objects_off.is_empty() and objects_off.has(int(o[0])):
+			continue
 		var hit := -1
 		if int(o[1]) == 0:
 			hit = in_range(o[5], o[6], o[7], x, y, z, int(o[2]) + radius, o[8], body)
@@ -757,6 +760,22 @@ func object_collide(x: int, y: int, z: int) -> int:
 		if hit != -1:
 			return i
 	return -1
+
+
+# A circle whose object's +0 or +0x38 the game has changed since the export
+# (level 5's trees): object_collide skips a +0 of 0, and takes the radius, and
+# the push-out with it, as the row's +4 by +0x38 / 128.
+# @port helper -- the export's list kept up with the record, as object_collide reads it each time
+func object_moved(slot: int, on: bool, r: int) -> void:
+	if on:
+		objects_off.erase(slot)
+	else:
+		objects_off[slot] = true
+	for o in objects:
+		if int(o[0]) == slot:
+			o[2] = r
+			o[10] = r
+			return
 
 
 # collide_query with the player's 0x31, the objects included: the tile answer
