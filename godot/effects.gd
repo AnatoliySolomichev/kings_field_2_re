@@ -3462,6 +3462,25 @@ func attack_hit(code: int, flags: int, kind: int, strength: int, stat: int, pct:
 		player.call("spell_struck", out, kind)
 
 
+# A trap's strike (object_interpreter's .L200), which has no spell record:
+# its four attacks and no effect, strength 0x1388, stat 5, the point. The mask
+# whole, as attack_hit's: the player and a creature at once strike neither.
+# @port helper -- attack_hit's two halves, for what a trap hands actor_attack_player
+func trap_hit(code: int, att: Array, pct: int, p: Array) -> void:
+	var at := [int(att[0]), int(att[1]), int(att[2]), int(att[3]), 0, 0, 0, 0]
+	var lo := code & 0xFFF0FFFF
+	var point := Vector3i(int(p[0]), int(p[1]), int(p[2]))
+	if lo == 0x80:
+		if player and player.has_method("take_effect"):
+			player.call("take_effect", at, 0, 0x1388, pct, point)
+		return
+	if lo != 0x10 or collide_actor < 0:
+		return
+	var an := get_node_or_null("../Actors")
+	if an and an.has_method("take_spell"):
+		an.call("take_spell", collide_actor, 5, at, 0x1388, 0x80, point, code & 0xF0000)
+
+
 # The protecting spells' marks (0x8005b5e4, 0x8005b610, 0x8005b63c): gone
 # when their timer is, else turned by 0x40, -0x100 or -0x40 a frame.
 # @orig game:0x8005b5e4 effect_tick+0x4d28  status:verified -- kinds 0x1a, 0x1b, 0x1c; tools/effects.py magic_check, 126 of 126 runs of the game's own, which the self-test holds this to

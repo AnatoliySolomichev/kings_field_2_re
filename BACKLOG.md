@@ -764,9 +764,10 @@ it would open:
   0xe1 triggers call the levels' own entry 3, which is not in the port.
 * **the levers, opcode 0x53, and two of the things they move, 0x56 and 0x58 --
   read and in the port** (FORMATS.md, "Levers"): 7200 of 7200 frames of the
-  game's own arms, all of RAM but the stack. Left of what they reach: the traps
-  (0x51, 73 of them, the levers of 12, 15 and 18 and more), 0x52, 0x55, 0x5a.
-  Until those are in a lever there moves and does nothing.
+  game's own arms, all of RAM but the stack. Left of what they reach: level
+  18's two 0x55s, so its levers 13 and 62 move and do nothing yet. The traps,
+  0x51 and 0x52, are in (FORMATS.md, "The traps", 3600 of 3600 frames of the
+  game's own), but for their sounds.
 * **classes 0x00 (12) and 0x1b (23) -- read and in the port** (FORMATS.md, "A
   double door"): opcode 1's arm across a doorway three cells wide, 0x1b's
   with a partner leaf swung the other way; `tools/doors.py double_step`,

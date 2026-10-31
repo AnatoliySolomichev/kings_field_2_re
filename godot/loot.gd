@@ -159,6 +159,9 @@ var finds := {}
 var held_locks := {}               # slot -> {op, state, lock}: an object a pedestal or a key asks of
 var levers := []                   # the slots of opcodes 0x53, 0x56 and 0x58 (levers.gd)
 var lever_rows := {}               # slot -> lootNN.json's row, with its node and skin
+var traps := []                    # the slots of opcodes 0x51 and 0x52 (traps.gd)
+var trap_rows := {}                # slot -> what the arms read of its type, its nodes and skin
+var trap_world := {}               # what the arms ask of the world
 
 
 # @port data -- reads lootNN.json, tools/level3d.py build_loot's rows, and finds their nodes
@@ -208,6 +211,10 @@ func _ready() -> void:
 			teleports.append(int(f[0]))
 	for row in doc.get("levers", []):
 		_lever_row(row, objs)
+	for row in doc.get("traps", []):
+		_trap_row(row, objs)
+	if not traps.is_empty():
+		_trap_world()
 	scene_records = _scene_records()
 	if not lake.is_empty():
 		lake_words = _lake_words()
@@ -898,7 +905,7 @@ func take_stream(d: Dictionary) -> void:
 		elif op == 0xFD:
 			if rows.has(s):
 				rows[s]["lock"] = int(row[1])
-			elif lever_rows.has(s):
+			elif lever_rows.has(s) or trap_rows.has(s):
 				held_locks[s]["lock"] = int(row[1])
 		elif op == 0xF5:
 			if lever_rows.has(s):
@@ -994,7 +1001,7 @@ func _exit_tree() -> void:
 		if e != null:
 			e[7] = int(pd["lock"])
 			e[8] = int(pd["ring"])
-	for k in levers:
+	for k in levers + traps:
 		var e = table[k]
 		if e != null:
 			e[7] = int(held_locks[k]["lock"])
@@ -1088,6 +1095,7 @@ func _process(dt: float) -> void:
 			_pedestal(pd)
 		_lake()
 		_levers()
+		_traps()
 		_triggers()
 		_teleports()
 		_tick()
@@ -1629,6 +1637,92 @@ func _draw_lever(k: int) -> void:
 		KFAnim.animate(r["skin"], int(r["anim"]), int(h["ha"]))
 
 
+# A trap's row: the record kept in held_locks, which views() lays over the find
+# rows and the arms run on, and its nodes -- the model, and the cell's own tile
+# if it is one that comes and goes (tNNN in the level's mesh).
+# @port data -- lootNN.json's trap row
+func _trap_row(row: Dictionary, objs: Node) -> void:
+	var k := int(row["slot"])
+	var f: Array = finds[k]
+	var a: Array = row["angles"]
+	var h3a := int(f[13])
+	held_locks[k] = {"slot": k, "op": int(f[10]), "type": int(f[2]), "state": int(f[18]), "ha": 0,
+		"b0": int(f[14]), "b1": int(row["anim"]), "lock": int(f[11]), "b39": int(f[12]),
+		"b3a": h3a & 0xFF, "b3b": h3a >> 8, "b3c": int(f[19]), "b3d": int(f[16]),
+		"b3e": int(f[20]), "b3f": int(f[17]), "b40": 0, "x": int(f[3]), "y": int(f[4]),
+		"z": int(f[5]), "ax": int(a[0]), "yaw": int(a[1]), "az": int(a[2]),
+		"scale": int(row["scale"])}
+	traps.append(k)
+	var r := {"v0": int(row["v0"]), "v1": int(row["v1"]), "v16": int(row["v16"]),
+		"radius": int(row["radius"]), "height": int(row["height"]), "att": row["att"],
+		"sound": int(row["sound"]), "tile": int(row["tile"]), "model": int(row["model"]),
+		"node": objs.find_child("l%03d" % k, true, false) if objs else null, "skin": {}}
+	var level_mesh := get_node_or_null("../Level")
+	r["tiles"] = level_mesh.find_child("t%03d" % k, true, false) if level_mesh else null
+	trap_rows[k] = r
+	if not KFAnim.models.has(int(r["model"])):
+		KFAnim.load_from("res://anim%02d.json" % player._level())
+
+
+# What the arms ask: player_in_rect, the vertex's point, collide_query and
+# actor_attack_player (effects.gd), and object_set_present.
+# @port engine -- the world handed to KFTraps
+func _trap_world() -> void:
+	var fx := get_node_or_null("../Effects")
+	trap_world = {
+		"rect": func(cx: int, cz: int, w: int, h: int, y: int) -> bool:
+			return KFObjects.player_in_rect(player.gx, player.gz, cx, cz, w, h, player.gy, y),
+		"vertex": func(d: Dictionary, v: int) -> Array:
+			return KFTraps.point(player.coll, d, int(trap_rows[int(d["slot"])]["model"]), v),
+		"query": func(p: Array, r: int, h: int, flags: int) -> int:
+			return int(fx.collide_query(int(p[0]), int(p[1]), int(p[2]), r, h, flags)) if fx else 0,
+		"attack": func(mask: int, pct: int, att: Array, p: Array) -> void:
+			if fx:
+				fx.trap_hit(mask, att, pct, p),
+		"sound": func(_s: int) -> void:
+			pass,
+		"present": _trap_present}
+
+
+# object_set_present: the scale, and the cell's tile by its node (tNNN), which
+# shows the row's +0x17 while the trap is away and 0xfc, nothing, while it is
+# here. objects_forced_present is only ever cleared, so its branch is not here.
+# @orig game:0x80044b40 object_set_present  status:partial -- for a trap; the port's cells keep no tile, so the node stands for it
+func _trap_present(d: Dictionary, on: int, _tile: int) -> void:
+	d["scale"] = 0x1000 if on != 0 else 0
+
+
+# Opcodes 0x51 and 0x52 a frame, in slot order among themselves.
+# @port engine -- the arms, and their models drawn
+func _traps() -> void:
+	for k in traps:
+		var d: Dictionary = held_locks[k]
+		if int(d["op"]) in KFTraps.OPS:
+			KFTraps.step(d, trap_rows[k], trap_world)
+		_draw_trap(k, d)
+
+
+# A trap at its clock, the animation +1 names, while it has a scale; posed only
+# within NEAR of the player. The cell's own tile stands in while it is away.
+# @orig game:0x8003e34c draw_model_plain  status:partial -- the model at its clock
+func _draw_trap(k: int, d: Dictionary) -> void:
+	var r: Dictionary = trap_rows[k]
+	var on := int(d["op"]) != 0xFF and int(d["scale"]) != 0
+	if r["tiles"]:
+		(r["tiles"] as Node3D).visible = not on
+	var nd: Node3D = r["node"]
+	if nd == null:
+		return
+	nd.visible = on
+	if not on or absi(player.gx - int(d["x"])) > KFTraps.NEAR \
+			or absi(player.gz - int(d["z"])) > KFTraps.NEAR:
+		return
+	if (r["skin"] as Dictionary).is_empty():
+		r["skin"] = KFAnim.skin(nd, int(r["model"]))
+	if not (r["skin"] as Dictionary).is_empty():
+		KFAnim.animate(r["skin"], int(d["b1"]), int(d["ha"]))
+
+
 # object_interact's .L38: something to read, while its +0x3e is not 0 --
 # facing it within 0x155 unless its +0x3d says not to ask -- shows ITEM.T
 # entry 0x96 + its u16 at +0x38 (load_entry, godot/document.gd). True when the
@@ -2012,7 +2106,7 @@ func _write_view(k: int, o: Dictionary) -> void:
 	if o.has("b1"):
 		g["b1"] = int(o["b1"])
 		g["ha"] = int(o["ha"])
-	if lever_rows.has(k):
+	if lever_rows.has(k) or trap_rows.has(k):
 		g["op"] = int(o["op"])
 		g["b0"] = int(o["b0"])
 		g["b39"] = int(o["b39"])

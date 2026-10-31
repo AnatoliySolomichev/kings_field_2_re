@@ -285,10 +285,11 @@ def export(out_dir, lv=0):
         import doors
         import level3d
         import levers
+        import traps
         ld = objload.Load(lv)
         for m in sorted({level3d.lift_model(r["type"], lv) for r in ld.recs.values()
                          if r["op"] in doors.LIFT_OPS + doors.GATE_OPS + doors.WALL_OPS
-                         + levers.OPS or r["op"] == 7}):
+                         + levers.OPS + traps.OPS or r["op"] == 7}):
             if (m, None) not in wanted:
                 wanted.append((m, None))
     except Exception:

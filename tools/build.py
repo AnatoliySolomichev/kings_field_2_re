@@ -227,6 +227,9 @@ def main(quick=False, only_check=False):
         "the scenes, against the game's own cutscene_step, opcode 0xe4 and every level's entries 10 and 7",
         ["cutscene_step, the game's", "opcode 0xe4, the game's", "entry 10, against", "entry 7, against",
          "  "]))
+    steps.append((["tools/traps.py", "--check"],
+        "the traps, against the game's own opcodes 0x51 and 0x52 and model_vertex",
+        ["game's own arms", "first difference"]))
     steps.append((["tools/levers.py", "--check"],
         "the levers, the trees and the slabs, against the game's own opcodes 0x53, 0x56 and 0x58",
         ["game's own arms", "first difference"]))

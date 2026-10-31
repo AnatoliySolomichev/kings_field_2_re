@@ -2978,21 +2978,100 @@ do -- `busy`, which the check holds to: a frame it calls idle changes nothing --
 and `_lever_use` for USE. Each is a node of its own, `lNNN`, a lever and a slab
 at their clock (the animation `+1` names, as a lift door's), a tree at its
 scale with `collision.gd object_moved` keeping object_collide's circle with it.
-`object_signal` reaches what the port keeps; the traps, 0x55, 0x59 and 0x5a are
-not in the port, so a lever on 12, 15 or 18 moves and does nothing yet. Run
+`object_signal` reaches what the port keeps; 0x55, 0x59 and 0x5a are not in the
+port, so levers 13 and 62 of level 18 move and do nothing yet. Run
 headless: level 5, Varde's key at lever 3 -- tree 11 goes and tree 14 comes,
 its circle off and on, and both as they were on coming back; level 10, lever
 82 -- the lock 0x98 to 0x99 and gate 85 rises; level 13, lever 25 -- slab 19 down
 and the cells at (13, 46) from 1, 11, 11, 26 to 0, 10, 10, 25; level 5's arm 0
 and its entry 5 -- all seventeen gone, drawn and solid.
 
+### The traps: opcodes 0x51 and 0x52
+
+Ninety-four objects with one idea: a model that moves by its clock `+0xa`, and
+vertices of it that strike what stands at them. `tools/traps.py` lists them.
+
+**Opcode `0x51`** (`0x80049188`), 73 objects: 6 on level 12, 7 on 15, 31 on 18
+that run from the moment the level comes in (`+0x3b` 0xff), and 29 of type 219
+on levels 0 and 18 that never do (`+0x3b` 0xfe, taken away by the loader).
+`+0x3a` is the clock's step in fours, `+0x39` the percentage handed to the hit,
+and `+0x38` 0xff its going: object_signal of `+0x3d` turns that between 0 and
+0xff, which is what the levers of levels 12, 15 and 18 do. Any other `+0x3b`
+would be a rectangle from its own cell, `+0x3b` by `+0x3c`; none is placed.
+
+```
+state 0   +0x38 0: state 2, +1 1, the clock 0.  +0x3b 0xfe: nothing.  The
+          rectangle answering, or 0xff: state 1, +1 0, the clock and +0x40 0,
+          the sound (+0x16 of the row plus 0x1f0; 0xff: 0x1e)
+state 1   a rectangle's at clock 0: object_set_present(1, row +0x17), sound
+          0x1e. +0x38 0 with less than a step left: state 2, +1 1, the clock
+          0. The clock on by the step; from 0xfff a rectangle's ends -- clock
+          and state 0, object_set_present(0) -- and a free one goes round with
+          the sound, & 0xfff. A free one sounds again as it passes 0x800.
+          Then the strike
+state 2   +1 1: the clock on 0x40; from 0xfff, 0xfff, and with +0x38 0xff
+          state 3. The strike
+state 3   the clock back 0x40; under 0, 0 and state 0. The strike
+```
+
+So a lever stops a trap at the end of its swing, and animation 1 carries it
+to rest, still striking; pulled again it runs animation 1 back and swings on.
+
+**Opcode `0x52`** (`0x80049888`), 21 objects on levels 15 and 18, comes out of
+the floor. `+0x3b`, `+0x3c`, `+0x3d` by `+0x3e` is a rectangle given outright;
+the player in it starts state 1. A `+0x3d` not 0xff means it comes and goes:
+object_set_present(1) at clock 0, and at the clock's end (0) back to state 0.
+Its sound is the row's own, 0x1e sounds as the clock passes 0x5dc, it strikes
+with one vertex, the row's u16 at `+0xc`, and states 2 and 3 strike nothing.
+Its object_signal id is `+0x3f`, and none is placed with one.
+
+**The strike.** The point is `object_vertex_point` (`0x80046760`):
+`model_vertex` of the model at `+1` and the clock, each axis by the scale,
+turned by the angles with the yaw a half turn on, from its place.
+`collide_query(point, row +0xe, row +0x10, 0x90)` asks the creatures and the
+player; 0x51 asks of the row's two bytes at `+0xc` and `+0xd`, in turn, and
+stops at the first met. Anything there and `+0x40` clear: `+0x40` 1 and
+`actor_attack_player(mask, 0x80, 0, 0x1388, 5, +0x39, row +0x12..+0x15, 0, 0,
+0, 0, 0, the point)`. Nothing there: `+0x40` 0. So it strikes once a meeting,
+and the mask goes whole: a creature and the player at once, 0x90, strike
+neither. The flags 0x80 give the player no experience of what a trap kills.
+
+`object_set_present` (`0x80044b40`) writes 0xfc into the object's own cell's tile
+and scale 0x1000, or the row's `+0x17` and scale 0: a trap that comes and goes
+is the floor's tile until it comes. Its remove path asks
+`objects_forced_present` (`0x801b2574`), and that is only ever cleared
+(`player_restore`) or read back from a save, so it is always 0.
+
+An animation past the model's: a turned lock means `+1` 1, and types 219 and 221
+have one animation. None of theirs has an id, so it cannot happen.
+
+**Checked against the game's own** (`tools/traps.py --check`): every trap of the
+four levels, its own arm a frame in slot order over `mipsrun.level_cpu`, the
+models off the disc put in the machine's RAM so that the game's own
+`object_vertex_point` and `model_vertex` run; locks turned as object_signal
+turns them, the player moved in and out of the rectangles, `collide_query`
+answered at random: **3600 of 3600 frames**, the calls in order -- so the
+points, in collide_query's arguments and actor_attack_player's -- and all of
+RAM but the stack. Seven models broken on purpose are caught. Three runs of the
+kind, counted: 22 696 queries, 3385 strikes, 42 comings and goings.
+
+**In the port**: `godot/traps.gd` (the self-test, `traps`), on dictionaries and
+not the game's bytes, because 44 of these run every frame and the bytes are a
+whole level's; `loot.gd _traps`, 2 to 3.5 ms a frame on level 18. Each trap is a
+node, `lNNN`, posed at its clock within twenty cells of the player; the cell of
+one that comes and goes a node of its own, `tNNN`, as a lift door's. `effects.gd
+trap_hit` is `actor_attack_player`'s two halves without a spell record. Run
+headless: level 18, the player under trap 51 -- a pendulum, its vertices at y
+-10700 to -9138 over a floor at -8704 -- 50 HP gone at a stroke; into trap 29's
+rectangle -- it comes, its cell's tile goes; level 12, lever 126 -- 148, 165 and
+231 come to rest in state 2, and pulled again go through state 3 and swing on; a
+creature struck 300 to 87 and the player given nothing. Not in the port: the
+sounds, and `objects_forced_present`.
+
 ### What else levels 0 and 4 place
 
 * **Opcode `0x51`, level 0's four of type 219** (slots 209 to 212): a trap
-  that swings its model and tests two of its vertices (the type's `+0xc` and
-  `+0xd`, through `0x80046760`, the vertex at the animation's clock, scaled,
-  turned and placed) against the player and the creatures, striking through
-  `actor_attack_player` with the type's `+0x12..+0x15`. Level 0's never run:
+  ("The traps", above). Level 0's never run:
   their `+0x3b` is `0xfe`, which state 0 takes for "nothing", and the loader
   has already taken them away (`object_set_present` 0, the scale 0) because
   it is not `0xff`; `sub_800463bc`, which toggles a trap's `+0x38` by the

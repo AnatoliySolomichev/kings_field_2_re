@@ -374,6 +374,9 @@ func _init() -> void:
 	if not _levers():
 		quit(1)
 		return
+	if not _traps():
+		quit(1)
+		return
 	if not _teleports():
 		quit(1)
 		return
@@ -3068,6 +3071,106 @@ func _scenes() -> bool:
 		ok, cases.size(), int(kinds.get("step", 0)), int(kinds.get("arm", 0)), int(kinds.get("entry10", 0)),
 		int(kinds.get("entry7", 0))])
 	return ok == cases.size()
+
+
+# The traps, godot/traps.gd against the frames tools/traps.py ran of its
+# models, which the game's own hold: from the same answers the same questions
+# in the same order and the same fields after each frame; and the vertex's
+# point, on the model level 0 has.
+func _traps() -> bool:
+	if not FileAccess.file_exists("res://trapcheck.json"):
+		print("traps: no cases to check against")
+		return true
+	var doc = JSON.parse_string(FileAccess.get_file_as_string("res://trapcheck.json"))
+	var n := 0
+	var bad := 0
+	var first := ""
+	var said := [[]]                   # held in an array: a lambda keeps its locals as they were
+	var pos := [0]
+	var says := func(want: Array) -> Array:
+		var at: int = pos[0]
+		pos[0] = at + 1
+		var calls: Array = said[0]
+		var e: Array = calls[at] if at < calls.size() else []
+		if e.size() < want.size() or str(e[0]) != str(want[0]):
+			return []
+		for i in range(1, want.size()):
+			if int(e[i]) != int(want[i]):
+				return []
+		return e
+	var odd := [false]
+	var w := {
+		"rect": func(cx: int, cz: int, wd: int, h: int, y: int) -> bool:
+			var e: Array = says.call(["rect", cx, cz, wd, h, y])
+			if e.is_empty():
+				odd[0] = true
+				return false
+			return int(e[6]) != 0,
+		"vertex": func(_d: Dictionary, v: int) -> Array:
+			var e: Array = says.call(["vertex", v])
+			if e.is_empty():
+				odd[0] = true
+				return [0, 0, 0]
+			return [int(e[2]), int(e[3]), int(e[4])],
+		"query": func(p: Array, r: int, h: int, flags: int) -> int:
+			var e: Array = says.call(["query", p[0], p[1], p[2], r, h, flags])
+			if e.is_empty():
+				odd[0] = true
+				return 0
+			return int(e[7]),
+		"attack": func(mask: int, pct: int, att: Array, p: Array) -> void:
+			if says.call(["attack", mask, pct, att[0], att[1], att[2], att[3], p[0], p[1], p[2]]).is_empty():
+				odd[0] = true,
+		"sound": func(s: int) -> void:
+			if says.call(["sound", s]).is_empty():
+				odd[0] = true,
+		"present": func(d: Dictionary, on: int, tile: int) -> void:
+			if says.call(["present", on, tile]).is_empty():
+				odd[0] = true
+			d["scale"] = 0x1000 if on != 0 else 0}
+	for run in doc["runs"]:
+		var d := {}
+		for k in run["d"]:
+			d[k] = int(run["d"][k])
+		var row: Dictionary = run["row"]
+		for fr in run["frames"]:
+			d["lock"] = int(fr["lock"])
+			said[0] = fr["calls"]
+			pos[0] = 0
+			odd[0] = false
+			KFTraps.step(d, row, w)
+			var got := [int(d["state"]), int(d["ha"]), int(d["b1"]), int(d["b40"]), int(d["scale"])]
+			var want := []
+			for v in fr["out"]:
+				want.append(int(v))
+			n += 1
+			if got != want or odd[0] or pos[0] != (fr["calls"] as Array).size():
+				bad += 1
+				if first == "":
+					first = "slot %d: %s, python %s, %d of %d calls%s" % [int(d["slot"]), str(got),
+						str(want), int(pos[0]), (fr["calls"] as Array).size(),
+						" out of order" if odd[0] else ""]
+	var pn := 0
+	var key := int(doc["model"])
+	if KFAnim.models.has(key) or KFAnim.load_from("res://anim00.json"):
+		for c in doc["points"]:
+			var d := {}
+			for k in c["d"]:
+				d[k] = int(c["d"][k])
+			var got := KFTraps.point(coll, d, key, int(c["vertex"]))
+			var want := []
+			for v in c["p"]:
+				want.append(int(v))
+			pn += 1
+			if got != want:
+				bad += 1
+				if first == "":
+					first = "point %d: %s, python %s" % [pn, str(got), str(want)]
+	print("traps: %d of %d frames and points match tools/traps.py (%d points) -- the questions in order, the answers and every field" % [
+		n + pn - bad, n + pn, pn])
+	if bad > 0:
+		print("  first difference: " + first)
+	return bad == 0
 
 
 # The levers, the trees and the slabs, godot/levers.gd against the arms
