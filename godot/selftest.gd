@@ -3124,6 +3124,10 @@ func _traps() -> bool:
 		"sound": func(s: int) -> void:
 			if says.call(["sound", s]).is_empty():
 				odd[0] = true,
+		"stamp": func(b0: int, sx: int, sz: int, dx: int, dz: int, wd: int, h: int, ang: int,
+				mask: int) -> void:
+			if says.call(["stamp", b0, sx, sz, dx, dz, wd, h, ang, mask]).is_empty():
+				odd[0] = true,
 		"present": func(d: Dictionary, on: int, tile: int) -> void:
 			if says.call(["present", on, tile]).is_empty():
 				odd[0] = true
@@ -3139,7 +3143,8 @@ func _traps() -> bool:
 			pos[0] = 0
 			odd[0] = false
 			KFTraps.step(d, row, w)
-			var got := [int(d["state"]), int(d["ha"]), int(d["b1"]), int(d["b40"]), int(d["scale"])]
+			var got := [int(d["state"]), int(d["ha"]), int(d["b1"]), int(d["b40"]), int(d["scale"]),
+				int(d["lock"]), int(d["b42"]), int(d["b43"]), int(d["x"]), int(d["z"])]
 			var want := []
 			for v in fr["out"]:
 				want.append(int(v))

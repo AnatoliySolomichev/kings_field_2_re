@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The traps: opcodes 0x51 and 0x52.
+"""The traps: opcodes 0x51, 0x52 and 0x55, and level 18's gates, 0x5a.
 
     python3 tools/traps.py            every trap, by level
     python3 tools/traps.py --check    the models against the game's own arms
@@ -52,6 +52,54 @@ once a meeting.
 scale 0x1000, or the row's byte +0x17 with the scale 0; a trap that comes and
 goes is the floor's own tile till then.
 
+**Opcode `0x55`** (0x80049b40), two objects of level 18: what rolls. It runs
+between the cell `+0x3b`, `+0x3c` and the cell `+0x3d`, `+0x3e` -- a row or a
+column of them; the loader puts the lower first and writes `+0x42`, bit 1 the
+axis (0 along, 1 across) and bit 0 which way it goes, and `+0x43` 1. `+0x3a`
+in eights is its clock's step, the row's `+0x17` in sixteens its speed.
+
+```
+state 0   +0x38 0: gone (below). Else state 1, the clock and +0x40 0, the scale
+          0x1000, the type's sound (+0x16, plus 0x1f0)
+state 1   +0x38 0 with a step of the turn left: gone. The clock on by the step;
+          past its end the sound, & 0xfff. Then the strike, and the move
+gone      state 2, the scale 0, the clock 0
+state 2   the clock on 0x40; at 0xfff or more, 0xfff, and with +0x38 0xff state 3
+state 3   the clock back 0x40; under 0, 0 and state 0
+```
+
+So object_signal of its `+0x3f` -- levers 13 and 62 -- takes it **out of the
+world** at the end of a turn of its clock, where it stands, and brings it back
+there; it does not stop it at an end of its run.
+
+The strike is vertex `row +0xc`, asked 0x800 lower (collide_query's y only; the
+point handed to actor_attack_player is the vertex) -- and **`+0x40` is cleared
+here but never set**, so it strikes every frame it touches, not once a meeting.
+
+The move: the speed, `row +0x17 << 4`, on z or (bit 1) on x, negative with bit
+0. In the cell it left, `+0x43` still 1, the speed is `(speed * how far past
+the cell's centre) >> 10`, plus 8; out of that cell `+0x43` goes to 0. In the
+cell it is making for it is `(speed * how far short of the centre) >> 10` plus
+4, and at the centre bit 0 turns over and `+0x43` goes to 1: it slows into an
+end and gathers speed out of it.
+
+**Opcode `0x5a`** (0x800496b8), level 18's two gates. Open at the start: the
+loader stamps the template at `+0x3b + +0x3d`, `+0x3c` into the rectangle.
+
+```
+state 0   +0x38 0: state 1, the clock 0.  The player in `+0x39`, `+0x3a` by
+          `+0x3d` by `+0x3e` (the last two the other way round at a yaw of
+          0x400 or 0xc00): +0x38 0, state 1, the clock 0, the sound (row +0xf)
+state 1   collide_query(its place, 0x1130, 0xc80, 0xc0) answering: nothing. Else
+          state 2, stamp_rect of the shut template at `+0x3b`, `+0x3c` over the
+          rectangle, mask 0x2d, and the sound
+state 2   the clock on 0x100 to 0x800, then 0x40; from 0xfff, 0xfff and state 9
+```
+
+So a gate shuts behind whoever walked in, once nothing stands within 0x1130 of
+it. A level come back to has `+0x38` 0 and the arm stamps it again. A yaw of
+anything else would read `w` and `h` off the stack; both gates stand at 0xc00.
+
 **How it is held to the game.** Every trap of a level, its own arm a frame in
 slot order over `mipsrun.level_cpu`, the models put in RAM so that the game's
 own `object_vertex_point` and `model_vertex` run; the locks turned as object_signal
@@ -69,11 +117,11 @@ import movement                                                      # noqa: E40
 import triggers                                                      # noqa: E402
 from levelin import O, Mem                                           # noqa: E402
 
-SWING_OP, POP_OP = 0x51, 0x52
-OPS = (SWING_OP, POP_OP)
+SWING_OP, POP_OP, ROLL_OP, GATE_OP = 0x51, 0x52, 0x55, 0x5A
+OPS = (SWING_OP, POP_OP, ROLL_OP, GATE_OP)
 LEVELS = (0, 12, 15, 18)
 COLLIDE_QUERY, ATTACK = 0x80033F38, 0x800533E8
-OBJECT_SOUND, MODEL_PTR = 0x8004482C, 0x800405E8
+OBJECT_SOUND, MODEL_PTR, STAMP_RECT = 0x8004482C, 0x800405E8, 0x800445B8
 OBJECT_TYPES = 0x8018FB3C
 CURRENT_OBJECT, CURRENT_TYPE = 0x80198394, 0x80198390
 LEVEL_GRID = 0x801D4464
@@ -89,6 +137,11 @@ REST_STEP = 0x40
 SOUND = 0x1E
 BIG_STEP_TYPE = 0xDE         # steps in sixteens, not fours; no 0x51 has it
 HEAP = 0x80100000            # where the check's machine keeps the models
+WAY_BACK, WAY_ACROSS = 1, 2  # 0x55's +0x42
+ROLL_LOWER = 0x800           # the strike's question, this far below the vertex
+GATE_RADIUS, GATE_HEIGHT, GATE_FLAGS = 0x1130, 0xC80, 0xC0
+GATE_MASK = 0x2D             # shape, height, rotation, fence
+GATE_DONE = 9
 
 
 def s16(v):
@@ -106,7 +159,7 @@ def row_of(raw):
     u16 = lambda o: raw[o] | (raw[o + 1] << 8)                       # noqa: E731
     return {"v0": raw[0xC], "v1": raw[0xD], "v16": u16(0xC), "radius": u16(0xE),
             "height": u16(0x10), "att": [raw[0x12], raw[0x13], raw[0x14], raw[0x15]],
-            "sound": raw[0x16], "tile": raw[0x17]}
+            "sound": raw[0x16], "tile": raw[0x17], "tone": raw[0xF]}
 
 
 def _hit(d, row, w, p, mask):
@@ -232,8 +285,104 @@ def pop(d, row, w):
         _back(d)
 
 
+def _gone(d):
+    """0x55's .L207: out of the world where it stands."""
+    d["state"], d["scale"], d["ha"] = 2, 0, 0
+
+
+def _roll_speed(d, row):
+    """What 0x55 adds to its place this frame; +0x42 and +0x43 as it goes."""
+    fast = row["tile"] << 4
+    ax, az, bx, bz = d["b3b"], d["b3c"], d["b3d"], d["b3e"]
+    x, z = d["x"] - 0x400, d["z"] - 0x400
+    cell = (d["x"] >> 11, d["z"] >> 11)
+    left, making = ((bx, bz), (ax, az)) if d["b42"] & WAY_BACK else ((ax, az), (bx, bz))
+    way = -1 if d["b42"] & WAY_BACK else 1
+    # how far on from the centre of `c`, along the way it goes
+    past = lambda c: way * ((x - (c[0] << 11)) + (z - (c[1] << 11)))     # noqa: E731
+    if d["b43"] != 0:
+        if cell == left:
+            return way * (((fast * past(left)) >> 10) + 8)
+        d["b43"] = 0
+        return way * fast
+    if cell != making:
+        return way * fast
+    dx, dz = way * ((making[0] << 11) - x), way * ((making[1] << 11) - z)
+    if dx <= 0 and dz <= 0:
+        d["b42"] += -1 if d["b42"] & WAY_BACK else 1
+        d["b43"] = 1
+    return way * (((fast * (dx + dz)) >> 10) + 4)
+
+
+def roll(d, row, w):
+    """Opcode 0x55's arm on `d`."""
+    st = d["state"]
+    step = d["b3a"] << 3
+    tone = row["sound"] + 0x1F0
+    if st == 0:
+        if d["lock"] == 0:
+            _gone(d)
+            return
+        d["state"], d["scale"], d["ha"], d["b40"] = 1, 0x1000, 0, 0
+        w.sound(tone)
+    elif st == 1:
+        if d["lock"] == 0 and d["ha"] >= 0x1000 - step:
+            _gone(d)
+            return
+        d["ha"] = (d["ha"] + step) & 0xFFFF
+        if d["ha"] >= THE_END:
+            w.sound(tone)
+            d["ha"] &= 0xFFF
+        p = w.vertex(d, row["v16"])
+        mask = w.query([p[0], p[1] + ROLL_LOWER, p[2]], row["radius"], row["height"], QUERY)
+        if mask == 0:
+            d["b40"] = 0
+        elif d["b40"] == 0:
+            w.attack(mask, d["b39"], row["att"], p)
+        v = _roll_speed(d, row)
+        d["x" if d["b42"] & WAY_ACROSS else "z"] += v
+    elif st == 2:
+        d["ha"] = (d["ha"] + REST_STEP) & 0xFFFF
+        if d["ha"] >= THE_END:
+            d["ha"] = THE_END
+            if d["lock"] == 0xFF:
+                d["state"], d["scale"] = 3, 0
+    elif st == 3:
+        _back(d)
+
+
+def gate(d, row, w):
+    """Opcode 0x5a's arm on `d`."""
+    st = d["state"]
+    if st == 0:
+        if d["lock"] == 0:
+            d["state"], d["ha"] = 1, 0
+            return
+        wide, deep = d["b3d"], d["b3e"]
+        if d["yaw"] in (0x400, 0xC00):
+            wide, deep = deep, wide
+        if not w.rect(d["b39"], d["b3a"], wide, deep, d["y"]):
+            return
+        d["lock"], d["state"], d["ha"] = 0, 1, 0
+        w.sound(row["tone"])
+    elif st == 1:
+        if w.query([d["x"], d["y"], d["z"]], GATE_RADIUS, GATE_HEIGHT, GATE_FLAGS):
+            return
+        d["state"] = 2
+        w.stamp(d["b0"], d["b3b"], d["b3c"], d["b39"], d["b3a"], d["b3d"], d["b3e"],
+                s16(d["yaw"]) & 0xFFFFFFFF, GATE_MASK)
+        w.sound(row["tone"])
+    elif st == 2:
+        if d["ha"] < 0x800:
+            d["ha"] += 0x100
+        elif d["ha"] < THE_END:
+            d["ha"] += REST_STEP
+        else:
+            d["ha"], d["state"] = THE_END, GATE_DONE
+
+
 def step(d, row, w):
-    (swing if d["op"] == SWING_OP else pop)(d, row, w)
+    {SWING_OP: swing, POP_OP: pop, ROLL_OP: roll, GATE_OP: gate}[d["op"]](d, row, w)
 
 
 def point(md, d, vertex):
@@ -255,7 +404,8 @@ def record(m, k):
             "ha": m.rd(r + 0xA, 2), "b0": m.rd(r), "b1": m.rd(r + 1),
             "lock": m.rd(r + 0x38), "b39": m.rd(r + 0x39), "b3a": m.rd(r + 0x3A),
             "b3b": m.rd(r + 0x3B), "b3c": m.rd(r + 0x3C), "b3d": m.rd(r + 0x3D),
-            "b3e": m.rd(r + 0x3E), "b40": m.rd(r + 0x40),
+            "b3e": m.rd(r + 0x3E), "b40": m.rd(r + 0x40), "b42": m.rd(r + 0x42),
+            "b43": m.rd(r + 0x43),
             "x": s32(m.rd(r + 0x14, 4)), "y": s32(m.rd(r + 0x18, 4)), "z": s32(m.rd(r + 0x1C, 4)),
             "ax": m.rd(r + 0x24, 2), "yaw": m.rd(r + 0x26, 2), "az": m.rd(r + 0x28, 2),
             "scale": m.rd(r + SCALE, 2)}
@@ -267,7 +417,12 @@ def store(m, d):
     m.wr(r + 8, d["state"], 2)
     m.wr(r + 0xA, d["ha"], 2)
     m.wr(r + 1, d["b1"])
+    m.wr(r + 0x38, d["lock"])
     m.wr(r + 0x40, d["b40"])
+    m.wr(r + 0x42, d["b42"])
+    m.wr(r + 0x43, d["b43"])
+    m.wr(r + 0x14, d["x"] & 0xFFFFFFFF, 4)
+    m.wr(r + 0x1C, d["z"] & 0xFFFFFFFF, 4)
     for i in range(3):
         m.wr(r + SCALE + 2 * i, d["scale"], 2)
 
@@ -296,6 +451,9 @@ class World:
 
     def sound(self, s):
         self.log.append(("sound", s))
+
+    def stamp(self, *args):
+        self.log.append(("stamp", *args))
 
     def present(self, d, on, tile):
         """object_set_present (0x80044b40)."""
@@ -379,22 +537,39 @@ def run(lv, rng, frames, seen):
     cpu.hooks[COLLIDE_QUERY] = query
     cpu.hooks[ATTACK] = attack
     cpu.hooks[OBJECT_SOUND] = noise
+    cpu.hooks[STAMP_RECT] = lambda c: game.append(
+        ("stamp",) + tuple(c.r[4:8]) + tuple(c.rd(c.r[29] + o, 4) for o in range(0x10, 0x24, 4)))
     if rng.random() < 0.2:
         cpu.wr(FORCED, 2, 1)
     m = Mem(bytes(cpu.ram))
     rects = []
+    gates = []
     for k in slots:
         r = O(k)
         if cpu.rd(r + 4, 1) == POP_OP and cpu.rd(r + 0x3B, 1) < NEVER:
             rects.append((cpu.rd(r + 0x3B, 1), cpu.rd(r + 0x3C, 1), s32(cpu.rd(r + 0x18, 4))))
-    # a lock turned means animation 1, which only the models with an id have
-    signalled = [k for k in slots if cpu.rd(O(k, 4), 1) == POP_OP
-                 or models[cpu.rd(O(k, 6), 2)].nanim > 1]
+        if cpu.rd(r + 4, 1) == GATE_OP:
+            gates.append((cpu.rd(r + 0x39, 1), cpu.rd(r + 0x3A, 1), s32(cpu.rd(r + 0x18, 4))))
+            if rng.random() < 0.25:              # as a level come back to has it
+                cpu.wr(r + 0x38, 1, 0)
+                m.wr(r + 0x38, 0)
+    # a lock turned means animation 1, which only the models with an id have;
+    # 0x55 keeps to animation 0, and a gate has no id at all
+    signalled = [k for k in slots if cpu.rd(O(k, 4), 1) in (POP_OP, ROLL_OP)
+                 or (cpu.rd(O(k, 4), 1) != GATE_OP and models[cpu.rd(O(k, 6), 2)].nanim > 1)]
     alike = n = 0
     first = None
     for f in range(frames):
         if rects and rng.random() < 0.04:
             cx, cz, y = rng.choice(rects)
+            for a, v in ((PLAYER_POS, (cx << 11) + 0x400), (PLAYER_POS + 4, y),
+                         (PLAYER_POS + 8, (cz << 11) + 0x400)):
+                cpu.wr(a, 4, v)
+                m.wr(a, v, 4)
+        if gates and rng.random() < 0.02:        # its cells, and those a size the wrong way has
+            cx, cz, y = rng.choice(gates)
+            cx += rng.randrange(3)
+            cz += rng.randrange(3)
             for a, v in ((PLAYER_POS, (cx << 11) + 0x400), (PLAYER_POS + 4, y),
                          (PLAYER_POS + 8, (cz << 11) + 0x400)):
                 cpu.wr(a, 4, v)
@@ -453,9 +628,9 @@ def check(out=sys.stdout, runs=3, frames=300, seed=111):
             alike += a
             n += f
             first = first or why
-    print(f"opcodes 0x51 and 0x52, the game's own arms, object_vertex_point and model_vertex: {alike} of "
-          f"{n} frames over the 94 traps of four levels agree -- the calls in order and all of "
-          f"RAM but the stack; {len(seen)} states seen", file=out)
+    print(f"opcodes 0x51, 0x52, 0x55 and 0x5a, the game's own arms, object_vertex_point and "
+          f"model_vertex: {alike} of {n} frames over the 98 objects of four levels agree -- the "
+          f"calls in order and all of RAM but the stack; {len(seen)} states seen", file=out)
     if first:
         print(f"  first difference: {first}", file=out)
     return alike == n
@@ -491,9 +666,15 @@ class Scripted(World):
     def sound(self, s):
         self.log.append(["sound", s])
 
+    def stamp(self, *args):
+        self.log.append(["stamp", *args])
+
     def present(self, d, on, tile):
         self.log.append(["present", on, tile])
         d["scale"] = 0x1000 if on else 0
+
+
+LONG_RUN = 500               # frames: 0x55 reaches both ends of its run in them
 
 
 def export(out_dir, frames=80, seed=113):
@@ -508,23 +689,26 @@ def export(out_dir, frames=80, seed=113):
     for lv in (12, 15, 18):
         ld = objload.Load(lv)
         slots = [k for k, o in sorted(ld.recs.items()) if o["op"] in OPS]
-        for k in rng.sample(slots, min(12, len(slots))):
+        rare = [k for k in slots if ld.recs[k]["op"] in (ROLL_OP, GATE_OP)]
+        for k in rare + rng.sample(slots, min(12, len(slots))):
             o = ld.recs[k]
             t = o["tail"]
             d = {"slot": k, "op": o["op"], "type": o["type"], "state": 0, "ha": 0, "b0": o["b0"],
                  "b1": o["b1"], "lock": t[0], "b39": t[1], "b3a": t[2], "b3b": t[3], "b3c": t[4],
-                 "b3d": t[5], "b3e": t[6], "b40": t[8], "x": o["x"], "y": o["y"], "z": o["z"],
+                 "b3d": t[5], "b3e": t[6], "b40": t[8], "b42": t[10], "b43": t[11], "x": o["x"],
+                 "y": o["y"], "z": o["z"],
                  "ax": 0, "yaw": o["angles"][1] & 0xFFFF, "az": 0, "scale": o["scale"][0]}
             row = row_of(bytes(ld.rows[o["type"]]))
             run_ = {"d": dict(d), "row": row, "frames": []}
-            for _ in range(frames):
-                if rng.random() < 0.03:
+            for _ in range(LONG_RUN if k in rare else frames):
+                if rng.random() < 0.01:
                     d["lock"] = 0xFF if d["lock"] == 0 else 0
                 log = []
+                lock = d["lock"]
                 step(d, row, Scripted(rng, log))
-                run_["frames"].append({"lock": d["lock"], "calls": log,
-                                       "out": [d["state"], d["ha"], d["b1"], d["b40"],
-                                               d["scale"]]})
+                run_["frames"].append({"lock": lock, "calls": log,
+                                       "out": [d["state"], d["ha"], d["b1"], d["b40"], d["scale"],
+                                               d["lock"], d["b42"], d["b43"], d["x"], d["z"]]})
             runs.append(run_)
     import anim
     md = anim.load(level3d.lift_model(219, 0))
@@ -551,6 +735,14 @@ def show(out=sys.stdout):
             if o["op"] not in OPS:
                 continue
             t = o["tail"]
+            if o["op"] == ROLL_OP:
+                print(f"level {lv:2d} slot {k:3d} {o['op']:#x} ({t[3]}, {t[4]}) to ({t[5]}, {t[6]}) "
+                      f"type {o['type']} step {t[2]} way {t[10]} id {t[7]:#x}", file=out)
+                continue
+            if o["op"] == GATE_OP:
+                print(f"level {lv:2d} slot {k:3d} {o['op']:#x} ({o['x'] >> 11}, {o['z'] >> 11}) "
+                      f"type {o['type']} rectangle ({t[1]}, {t[2]}) {t[5]} by {t[6]}", file=out)
+                continue
             by = (f"free" if t[3] == FREE else "never" if t[3] == NEVER else f"{t[3]} by {t[4]}") \
                 if o["op"] == SWING_OP else \
                 ("free" if t[3] == FREE else "never" if t[3] == NEVER

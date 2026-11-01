@@ -3068,6 +3068,84 @@ rectangle -- it comes, its cell's tile goes; level 12, lever 126 -- 148, 165 and
 creature struck 300 to 87 and the player given nothing. Not in the port: the
 sounds, and `objects_forced_present`.
 
+### What rolls and what shuts: opcodes 0x55 and 0x5a
+
+Both on level 18, two of each, and both in `tools/traps.py`.
+
+**Opcode `0x55`** (`0x80049b40`, slots 43 and 125, type 222): something that
+rolls up and down between two cells, (41, 42) to (51, 42) and (63, 30) to
+(63, 38). The loader puts the lower cell first in `+0x3b`, `+0x3c` and leaves
+`+0x42` -- bit 1 the axis, bit 0 which way -- and `+0x43` 1. `+0x3a` in eights
+is the clock's step, the row's `+0x17` in sixteens its speed, 0x140 a frame.
+
+```
+state 0   +0x38 0: gone. Else state 1, the clock and +0x40 0, the scale 0x1000,
+          the type's sound (+0x16, plus 0x1f0)
+state 1   +0x38 0 with a step of the turn left: gone. The clock on by the step;
+          past its end the sound, & 0xfff. The strike, and the move
+gone      state 2, the scale 0, the clock 0
+state 2   the clock on 0x40; at 0xfff or more, 0xfff, and with +0x38 0xff state 3
+state 3   the clock back 0x40; under 0, 0 and state 0
+```
+
+So what levers 13 and 62 do (`+0x3f`, 0xca and 0xc8; FORMATS' note that they
+"do nothing yet" was the port's, not the game's) is take it **out of the
+world** at the end of a turn of its clock, wherever it is on its run, and bring
+it back there two passes of a 0x40 clock later. It is not stopped at an end.
+
+The strike asks vertex `row +0xc` of `collide_query`, **0x800 lower in the
+question only**: the point handed to actor_attack_player is the vertex. The
+model's origin is 0x1000 above the floor, its vertex 1 at 0x780 under that, so
+the question is a little over the floor (-8832 over -8704). And **`+0x40` is
+cleared here and never set**: unlike 0x51's and 0x52's strike there is no
+`sb` in this copy of the call, so it strikes every frame it touches.
+
+The move is `row +0x17 << 4` a frame, along z or (bit 1) across on x, negative
+with bit 0. In the cell it left, `+0x43` still 1, `(speed * how far past that
+cell's centre) >> 10`, plus 8; out of the cell `+0x43` goes to 0. In the cell
+it is making for, `(speed * how far short of the centre) >> 10` plus 4, and at
+the centre bit 0 turns over and `+0x43` is 1. It slows into an end and gathers
+speed out of it.
+
+**Opcode `0x5a`** (`0x800496b8`, slots 127 and 140, type 225): a gate. Open at
+the start -- the loader stamps the template at `+0x3b + +0x3d`, `+0x3c` over the
+rectangle `+0x39`, `+0x3a`, `+0x3d` by `+0x3e` -- and its model at clock 0.
+
+```
+state 0   +0x38 0: state 1, the clock 0.  The player in the rectangle (its two
+          sizes the other way round at a yaw of 0x400 or 0xc00): +0x38 0, state
+          1, the clock 0, the sound (row +0xf)
+state 1   collide_query(its place, 0x1130, 0xc80, 0xc0) answering: nothing. Else
+          state 2, stamp_rect of the template at +0x3b, +0x3c over the
+          rectangle, mask 0x2d, and the sound again
+state 2   the clock on 0x100 under 0x800, on 0x40 under 0xfff; then 0xfff, state 9
+```
+
+A rectangle at the two gates' yaw of 0xc00 is one cell by three, the gate's own
+in the middle. The two templates are level 18's cells (0..2, 0x4d) and (3..5,
+0x4d), whose tile is 0xfc -- nothing is drawn; it is the shapes that change (129,
+1, 129 to 21, 22, 21) and the model that comes down. Bit 0x40 of `collide_query`
+is `actor_in_range`, a creature dying or not. **But the question is asked only
+in a cell someone has marked**, and the player marks cells by 0x320 of where
+they stand: the gate shuts once the player is off its own cell, however near. A
+level come back to has `+0x38` 0, so state 0 goes straight to state 1 and the arm
+stamps it again -- that is how it stays shut, level_state_write keeping only
+the byte. A yaw that is not a quarter turn would read the two sizes off the
+stack (they are the arm's locals, left from another object); neither gate has one.
+
+**Checked against the game's own** with the rest (`tools/traps.py --check`, 3600
+of 3600 frames over the 98 objects of four levels). Seventeen models broken on
+purpose are caught, among them both of the speed's small constants, the turn's
+test, a latch set on the strike, a gate's sizes left unswapped and its `+0x38`
+left set. The first form of the check missed those last two: the lock turned at
+random shut a gate before the player was walked into it, so the check now
+walks into a gate's cells and those a wrong size would give. In the port:
+`KFTraps.roll` and `gate` (self-test, `traps`, 4200 of 4200), the node moved by
+`_draw_trap`; `collide_query`'s bit 0x40 in `effects.gd`. Run headless on level
+18: the player on 125's run took the strike with the thing 0x800 away; lever 13
+took it away at z 71296 and brought it back there; the gate shut when the player
+left its cell, its cells answering wall.
+
 ### What else levels 0 and 4 place
 
 * **Opcode `0x51`, level 0's four of type 219** (slots 209 to 212): a trap

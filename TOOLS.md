@@ -537,8 +537,9 @@ of 672** runs leave the model's calls and all of RAM but the stack.
 `godot/lake.gd` reproduces the model on **168 of 168** runs (`lakecheck.json`);
 `lake.json` is the seventeen words the switch reads, for the port.
 
-**`traps.py`** — the traps, opcodes `0x51` and `0x52`. FORMATS.md, "The traps".
-Without arguments every trap and how it starts. The check puts the models in
+**`traps.py`** — the traps, opcodes `0x51`, `0x52` and `0x55`, and level 18's
+gates, `0x5a`. FORMATS.md, "The traps" and "What rolls and what shuts". Without
+arguments every one and how it starts. The check puts the models in
 the machine's RAM, so `object_vertex_point` and `model_vertex` run as the game's.
 
 ```

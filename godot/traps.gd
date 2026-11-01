@@ -3,7 +3,9 @@ class_name KFTraps
 # comes up out of the floor for one run when the player steps into its
 # rectangle. A model that moves by its clock +0xa and one or two of its
 # vertices, each asked of collide_query every frame; what stands there is
-# struck once a meeting. tools/traps.py has it in prose.
+# struck once a meeting. Opcode 0x55 rolls between two cells and strikes every
+# frame it touches; 0x5a, a gate, shuts behind whoever walked in.
+# tools/traps.py has it in prose.
 #
 # Over dictionaries, not the game's bytes: forty-four of them run every frame
 # of levels 12, 15 and 18 from the moment the level comes in, and the port does
@@ -16,7 +18,9 @@ class_name KFTraps
 
 const SWING_OP := 0x51
 const POP_OP := 0x52
-const OPS := [SWING_OP, POP_OP]
+const ROLL_OP := 0x55
+const GATE_OP := 0x5A
+const OPS := [SWING_OP, POP_OP, ROLL_OP, GATE_OP]
 const QUERY := 0x90                    # the creatures and the player
 const NEVER := 0xFE
 const FREE := 0xFF
@@ -25,6 +29,14 @@ const REST_STEP := 0x40
 const SOUND := 0x1E
 const BIG_STEP_TYPE := 0xDE            # steps in sixteens, not fours; no 0x51 has it
 const NEAR := 0xA000                   # twenty cells: nearer, a trap's mesh is posed
+const WAY_BACK := 1                    # 0x55's +0x42
+const WAY_ACROSS := 2
+const ROLL_LOWER := 0x800              # the strike's question, this far below the vertex
+const GATE_RADIUS := 0x1130
+const GATE_HEIGHT := 0xC80
+const GATE_FLAGS := 0xC0
+const GATE_MASK := 0x2D                # shape, tile, rotation, fence
+const GATE_DONE := 9
 
 static var posed_cache := {}
 
@@ -174,12 +186,138 @@ static func pop(d: Dictionary, row: Dictionary, w: Dictionary) -> void:
 		_back(d)
 
 
+# @port helper -- 0x55's .L207: out of the world where it stands
+static func _gone(d: Dictionary) -> void:
+	d["state"] = 2
+	d["scale"] = 0
+	d["ha"] = 0
+
+
+# What 0x55 adds to its place this frame: the speed, but for the cell it
+# left, gathering it from the centre with +0x43 still 1, and the cell it is
+# making for, losing it to the centre, where +0x42's bit 0 turns over.
+# @port helper -- .L211's stretch of opcode 0x55's arm, split out of roll
+static func _roll_speed(d: Dictionary, row: Dictionary) -> int:
+	var fast := int(row["tile"]) << 4
+	var back := int(d["b42"]) & WAY_BACK != 0
+	var way := -1 if back else 1
+	var a := Vector2i(int(d["b3b"]), int(d["b3c"]))
+	var b := Vector2i(int(d["b3d"]), int(d["b3e"]))
+	var left := b if back else a
+	var making := a if back else b
+	var x := int(d["x"]) - 0x400
+	var z := int(d["z"]) - 0x400
+	var cell := Vector2i(int(d["x"]) >> 11, int(d["z"]) >> 11)
+	if int(d["b43"]) != 0:
+		if cell == left:
+			var past := way * ((x - (left.x << 11)) + (z - (left.y << 11)))
+			return way * (((fast * past) >> 10) + 8)
+		d["b43"] = 0
+		return way * fast
+	if cell != making:
+		return way * fast
+	var dx := way * ((making.x << 11) - x)
+	var dz := way * ((making.y << 11) - z)
+	if dx <= 0 and dz <= 0:
+		d["b42"] = int(d["b42"]) + (-1 if back else 1)
+		d["b43"] = 1
+	return way * (((fast * (dx + dz)) >> 10) + 4)
+
+
+# Opcode 0x55's arm; tools/traps.py roll. +0x40 is cleared here and never set:
+# it strikes every frame it touches.
+# @orig game:0x80049b40 object_interpreter+0x2b30  status:verified -- opcode 0x55's arm; tools/traps.py, the game's own over both of level 18's, the calls in order and all of RAM but the stack, the self-test this to it; the sounds not played
+static func roll(d: Dictionary, row: Dictionary, w: Dictionary) -> void:
+	var st := int(d["state"])
+	var step := int(d["b3a"]) << 3
+	var tone := int(row["sound"]) + 0x1F0
+	if st == 0:
+		if int(d["lock"]) == 0:
+			_gone(d)
+			return
+		d["state"] = 1
+		d["scale"] = 0x1000
+		d["ha"] = 0
+		d["b40"] = 0
+		w["sound"].call(tone)
+	elif st == 1:
+		if int(d["lock"]) == 0 and int(d["ha"]) >= 0x1000 - step:
+			_gone(d)
+			return
+		d["ha"] = (int(d["ha"]) + step) & 0xFFFF
+		if int(d["ha"]) >= THE_END:
+			w["sound"].call(tone)
+			d["ha"] = int(d["ha"]) & 0xFFF
+		var p: Array = w["vertex"].call(d, int(row["v16"]))
+		var mask: int = w["query"].call([p[0], int(p[1]) + ROLL_LOWER, p[2]], int(row["radius"]),
+			int(row["height"]), QUERY)
+		if mask == 0:
+			d["b40"] = 0
+		elif int(d["b40"]) == 0:
+			w["attack"].call(mask, int(d["b39"]), row["att"], p)
+		var v := _roll_speed(d, row)
+		var axis := "x" if int(d["b42"]) & WAY_ACROSS else "z"
+		d[axis] = int(d[axis]) + v
+	elif st == 2:
+		d["ha"] = (int(d["ha"]) + REST_STEP) & 0xFFFF
+		if int(d["ha"]) >= THE_END:
+			d["ha"] = THE_END
+			if int(d["lock"]) == 0xFF:
+				d["state"] = 3
+				d["scale"] = 0
+	elif st == 3:
+		_back(d)
+
+
+# Opcode 0x5a's arm; tools/traps.py gate.
+# @orig game:0x800496b8 object_interpreter+0x26a8  status:verified -- opcode 0x5a's arm; tools/traps.py, the game's own over both of level 18's gates, the calls in order and all of RAM but the stack, the self-test this to it; the sounds not played; a yaw other than a quarter turn reads the stack in the game and is 0x800's here, and no gate has one
+static func gate(d: Dictionary, row: Dictionary, w: Dictionary) -> void:
+	var st := int(d["state"])
+	if st == 0:
+		if int(d["lock"]) == 0:
+			d["state"] = 1
+			d["ha"] = 0
+			return
+		var wide := int(d["b3d"])
+		var deep := int(d["b3e"])
+		if int(d["yaw"]) == 0x400 or int(d["yaw"]) == 0xC00:
+			wide = int(d["b3e"])
+			deep = int(d["b3d"])
+		if not w["rect"].call(int(d["b39"]), int(d["b3a"]), wide, deep, int(d["y"])):
+			return
+		d["lock"] = 0
+		d["state"] = 1
+		d["ha"] = 0
+		w["sound"].call(int(row["tone"]))
+	elif st == 1:
+		if int(w["query"].call([int(d["x"]), int(d["y"]), int(d["z"])], GATE_RADIUS, GATE_HEIGHT,
+				GATE_FLAGS)) != 0:
+			return
+		d["state"] = 2
+		w["stamp"].call(int(d["b0"]), int(d["b3b"]), int(d["b3c"]), int(d["b39"]), int(d["b3a"]),
+			int(d["b3d"]), int(d["b3e"]), KFTicks.s16(int(d["yaw"])) & 0xFFFFFFFF, GATE_MASK)
+		w["sound"].call(int(row["tone"]))
+	elif st == 2:
+		if int(d["ha"]) < 0x800:
+			d["ha"] = int(d["ha"]) + 0x100
+		elif int(d["ha"]) < THE_END:
+			d["ha"] = int(d["ha"]) + REST_STEP
+		else:
+			d["ha"] = THE_END
+			d["state"] = GATE_DONE
+
+
 # @port helper -- the arm by the object's opcode
 static func step(d: Dictionary, row: Dictionary, w: Dictionary) -> void:
-	if int(d["op"]) == SWING_OP:
-		swing(d, row, w)
-	else:
-		pop(d, row, w)
+	match int(d["op"]):
+		SWING_OP:
+			swing(d, row, w)
+		POP_OP:
+			pop(d, row, w)
+		ROLL_OP:
+			roll(d, row, w)
+		GATE_OP:
+			gate(d, row, w)
 
 
 # The model's vertices at an animation and a clock. A frame of level 18 asks

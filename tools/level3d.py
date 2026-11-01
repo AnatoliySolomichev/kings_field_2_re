@@ -1304,7 +1304,8 @@ def build_levers(lv, load, grid, look, prims_of, rows, trap_rows):
         row = {"slot": k, "model": lift_model(o["type"], lv), "anim": o.get("b1", 0),
                "scale": o["scale"][0]}
         if o["op"] in traps.OPS:
-            row.update(traps.row_of(bytes(tr)), angles=[a & 0xFFFF for a in o["angles"]])
+            row.update(traps.row_of(bytes(tr)), angles=[a & 0xFFFF for a in o["angles"]],
+                       b42=o["tail"][10], b43=o["tail"][11])
             trap_rows.append(row)
         else:
             row["radius"] = struct.unpack_from("<H", tr, 4)[0]

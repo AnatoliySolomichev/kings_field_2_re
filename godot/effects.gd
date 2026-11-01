@@ -3820,7 +3820,7 @@ func move(radius: int, height: int, spin: int) -> int:
 # grid_mark (0x80033c4c) every cell from (x - 0x320) >> 11 to (x + 0x320) >> 11,
 # and z the same. A creature's marks are not kept, so a cell only a creature
 # marked does not let an effect there ask after the player or the objects.
-# @orig game:0x80033f38 collide_query  status:partial -- the tiles, the objects and the player, for an effect's 0xa1 and 1; the creatures (0x10, 0x40), their marks and the fence not asked
+# @orig game:0x80033f38 collide_query  status:partial -- the tiles, the objects, the creatures and the player, for an effect's 0xa1 and 1 and a trap's 0x90 and 0xc0; a creature's marks by its circle, and the fence not asked
 func collide_query(x: int, y: int, z: int, r: int, h: int, flags: int) -> int:
 	if coll == null:
 		return 0
@@ -3861,6 +3861,10 @@ func collide_query(x: int, y: int, z: int, r: int, h: int, flags: int) -> int:
 		return _kept(mask)
 	if flags & 0x10 and an and an.has_method("spot_taken"):
 		collide_actor = int(an.call("spot_taken", x, y, z, r, h & 0x0FFFFFFF))
+		if collide_actor != -1:
+			mask |= 0x10
+	if flags & 0x40 and collide_actor == -1 and an and an.has_method("in_range_of"):
+		collide_actor = int(an.call("in_range_of", x, y, z, r, h & 0x0FFFFFFF))
 		if collide_actor != -1:
 			mask |= 0x10
 	if flags & 0x20:

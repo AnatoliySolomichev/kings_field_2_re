@@ -159,7 +159,7 @@ var finds := {}
 var held_locks := {}               # slot -> {op, state, lock}: an object a pedestal or a key asks of
 var levers := []                   # the slots of opcodes 0x53, 0x56 and 0x58 (levers.gd)
 var lever_rows := {}               # slot -> lootNN.json's row, with its node and skin
-var traps := []                    # the slots of opcodes 0x51 and 0x52 (traps.gd)
+var traps := []                    # the slots of opcodes 0x51, 0x52, 0x55 and 0x5a (traps.gd)
 var trap_rows := {}                # slot -> what the arms read of its type, its nodes and skin
 var trap_world := {}               # what the arms ask of the world
 
@@ -1649,13 +1649,14 @@ func _trap_row(row: Dictionary, objs: Node) -> void:
 	held_locks[k] = {"slot": k, "op": int(f[10]), "type": int(f[2]), "state": int(f[18]), "ha": 0,
 		"b0": int(f[14]), "b1": int(row["anim"]), "lock": int(f[11]), "b39": int(f[12]),
 		"b3a": h3a & 0xFF, "b3b": h3a >> 8, "b3c": int(f[19]), "b3d": int(f[16]),
-		"b3e": int(f[20]), "b3f": int(f[17]), "b40": 0, "x": int(f[3]), "y": int(f[4]),
-		"z": int(f[5]), "ax": int(a[0]), "yaw": int(a[1]), "az": int(a[2]),
-		"scale": int(row["scale"])}
+		"b3e": int(f[20]), "b3f": int(f[17]), "b40": 0, "b42": int(row["b42"]),
+		"b43": int(row["b43"]), "x": int(f[3]), "y": int(f[4]), "z": int(f[5]),
+		"ax": int(a[0]), "yaw": int(a[1]), "az": int(a[2]), "scale": int(row["scale"])}
 	traps.append(k)
 	var r := {"v0": int(row["v0"]), "v1": int(row["v1"]), "v16": int(row["v16"]),
 		"radius": int(row["radius"]), "height": int(row["height"]), "att": row["att"],
-		"sound": int(row["sound"]), "tile": int(row["tile"]), "model": int(row["model"]),
+		"sound": int(row["sound"]), "tile": int(row["tile"]), "tone": int(row["tone"]),
+		"model": int(row["model"]),
 		"node": objs.find_child("l%03d" % k, true, false) if objs else null, "skin": {}}
 	var level_mesh := get_node_or_null("../Level")
 	r["tiles"] = level_mesh.find_child("t%03d" % k, true, false) if level_mesh else null
@@ -1665,7 +1666,7 @@ func _trap_row(row: Dictionary, objs: Node) -> void:
 
 
 # What the arms ask: player_in_rect, the vertex's point, collide_query and
-# actor_attack_player (effects.gd), and object_set_present.
+# actor_attack_player (effects.gd), object_set_present and stamp_rect (doors.gd).
 # @port engine -- the world handed to KFTraps
 func _trap_world() -> void:
 	var fx := get_node_or_null("../Effects")
@@ -1681,6 +1682,11 @@ func _trap_world() -> void:
 				fx.trap_hit(mask, att, pct, p),
 		"sound": func(_s: int) -> void:
 			pass,
+		"stamp": func(b0: int, sx: int, sz: int, dx: int, dz: int, w: int, h: int, ang: int,
+				mask: int) -> void:
+			var dn := get_node_or_null("../Doors")
+			if dn:
+				dn.stamp_rect(b0, sx, sz, dx, dz, w, h, ang, mask),
 		"present": _trap_present}
 
 
@@ -1692,7 +1698,7 @@ func _trap_present(d: Dictionary, on: int, _tile: int) -> void:
 	d["scale"] = 0x1000 if on != 0 else 0
 
 
-# Opcodes 0x51 and 0x52 a frame, in slot order among themselves.
+# The traps' arms a frame, in slot order among themselves.
 # @port engine -- the arms, and their models drawn
 func _traps() -> void:
 	for k in traps:
@@ -1714,6 +1720,8 @@ func _draw_trap(k: int, d: Dictionary) -> void:
 	if nd == null:
 		return
 	nd.visible = on
+	if int(d["op"]) == KFTraps.ROLL_OP:
+		nd.position = Vector3(float(d["x"]), -float(d["y"]), -float(d["z"])) / player.UNIT
 	if not on or absi(player.gx - int(d["x"])) > KFTraps.NEAR \
 			or absi(player.gz - int(d["z"])) > KFTraps.NEAR:
 		return
