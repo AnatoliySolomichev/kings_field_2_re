@@ -10,6 +10,7 @@
 --   KF_DUMP     "a b out": frames a..b's tables whole into `out`, through zstd
 --   KF_REPORT   where to write the report
 --   KF_EVENTS   where to write what happened (kfrec.lua), if anywhere
+--   KF_LIVE     where to write each frame for the port to show, if anywhere
 --
 -- The answer is written at PadRead's return, so the emulated pad stays idle and
 -- nothing about the buttons reaches the machine but the word the game reads.
@@ -63,6 +64,8 @@ end
 local ev_name = os.getenv('KF_EVENTS')
 local events = ev_name and ev_name ~= '' and io.open(ev_name, 'w') or nil
 
+local live_path = os.getenv('KF_LIVE')
+local shot_at = tonumber(os.getenv('KF_SHOT_AT') or '0')
 local running = false
 local frame, calls = frame0, calls0
 local rec = ffi.new('kf_frame')
@@ -118,6 +121,14 @@ frame_bp = PCSX.addBreakpoint(K.FRAME, 'Exec', 4, 'replay frame', function()
     end
     if dump_f and frame >= dump_a and frame <= dump_b then K.tables(dump_f) end
     if events then K.events(frame, events) end
+    if live_path then K.live(frame, live_path) end
+    if frame == shot_at then
+        local ss = PCSX.GPU.takeScreenShot()
+        local g = Support.File.open(os.getenv('KF_SHOT'), 'TRUNCATE')
+        g:writeMoveSlice(ss.data)
+        g:close()
+        print('shot ', ss.width, ss.height, tonumber(ss.bpp))
+    end
     if frame % 300 == 0 then
         report:write(string.format('at %d same %d\n', frame, same))
         report:flush()

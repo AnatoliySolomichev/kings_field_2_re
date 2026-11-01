@@ -216,3 +216,10 @@ const EYE_HEIGHT := 0x640            # 0x8002b370; 1600, and sync_player_pos add
 static func camera_pose(px: int, py: int, pz: int, bob: int,
 		crouch: int) -> Vector3i:
 	return Vector3i(px, (py + bob + crouch) - EYE_HEIGHT, pz)
+
+
+# The port started beside the emulator (emu/side.sh): the game's frames shown
+# from the first, nothing of its own running.
+# @port check -- the command line's --follow
+static func side_by_side() -> bool:
+	return "--follow" in OS.get_cmdline_user_args()

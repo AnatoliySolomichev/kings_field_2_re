@@ -79,6 +79,7 @@ var player: Node3D
 var marker: MeshInstance3D
 var flags: MeshInstance3D
 var compare := false
+var side := false                  # started beside the emulator (emu/side.sh)
 # The switches, kept while the world of another level loads (static: the
 # scene and this node go, the class stays).
 static var kept = null
@@ -115,6 +116,7 @@ var game_fps := 0.0
 
 func _ready() -> void:
 	player = get_node_or_null("../Player")
+	side = KFGame.side_by_side()
 	if kept is Array:                  # carried over from the level before
 		compare = bool(kept[0])
 		locked = bool(kept[1])
@@ -146,6 +148,16 @@ func _ready() -> void:
 	fm.cull_mode = BaseMaterial3D.CULL_DISABLED
 	flags.material_override = fm
 	add_child(flags)
+	if side:
+		compare = true
+
+
+# Beside the emulator with nothing coming: before the game, or in its menu.
+# @port check -- says so, on the comparison's own line
+func _hud_waiting() -> void:
+	var lab := get_node_or_null("../UI/Compare") as Label
+	if lab:
+		lab.text = "waiting for the game (title screen or menu)"
 
 
 func _unhandled_input(e: InputEvent) -> void:
@@ -221,7 +233,7 @@ func _read() -> Dictionary:
 	var f := FileAccess.open(LIVE, FileAccess.READ)
 	if f == null:
 		return {}
-	var parts := f.get_as_text().strip_edges().split(" ", false)
+	var parts := f.get_as_text().strip_edges().split(" ", true)
 	if parts.size() < 11:
 		return {}
 	var out := {
@@ -242,6 +254,13 @@ func _read() -> Dictionary:
 	# bp16's three tokens past the numbers: the swing, the doors, the creatures
 	for i in range(17, parts.size()):
 		var t: String = parts[i]
+		if t.begins_with("e="):        # the effects, hex and not numbers
+			var live := {}
+			for e in t.substr(2).split(";", false):
+				var kv := e.split(":")
+				live[int(kv[0])] = kv[1].hex_decode()
+			out["fx"] = live
+			continue
 		var rows := []
 		for e in t.substr(2).split(";", false):
 			var v := []
@@ -254,6 +273,8 @@ func _read() -> Dictionary:
 			out["doors"] = rows.filter(func(r): return r.size() == 5)
 		elif t.begins_with("a="):
 			out["actors"] = rows.filter(func(r): return r.size() == 9)
+		elif t.begins_with("o="):
+			out["objects"] = rows.filter(func(r): return r.size() == 12)
 	return out
 
 
@@ -263,6 +284,11 @@ func _process(_dt: float) -> void:
 		return
 	var cur := _read()
 	var why := _why_not(cur)
+	# Beside the emulator a menu stops the frames, and the port waits with it
+	if side and why != "":
+		KFGame.follow = not cur.is_empty()
+		_hud_waiting()
+		return
 	# The port's own creatures, doors and swing stand still while the game's
 	# are laid over them -- as long as there is a game to follow, on this level
 	KFGame.follow = compare and why == "" and cur.has("actors") \
@@ -308,6 +334,7 @@ func _process(_dt: float) -> void:
 	# the resting value near -190 and the reasoning was wrong -- a player looked
 	# up and the port looked down. The measurement was right and the inference
 	# from it was not, which is the difference between the two kinds of number.
+	player.facing = int(cur["ang"]) & 0xFFF
 	player.rotation.y = float(int(cur["ang"]) & 0xFFF) * TAU / 4096.0
 	var cam := player.get_node_or_null("Camera")
 	if cam:
@@ -384,6 +411,12 @@ func _follow(cur: Dictionary) -> void:
 	var act := get_node_or_null("../Actors")
 	if act and act.has_method("follow") and cur.has("actors"):
 		act.follow(cur["actors"])
+	var lt := get_node_or_null("../Loot")
+	if lt and cur.has("objects"):
+		lt.follow(cur["objects"])
+	var fx := get_node_or_null("../Effects")
+	if fx and cur.has("fx"):
+		fx.follow(cur["fx"])
 
 
 # The rungs. The controller turns and accelerates before it steps, so the facing

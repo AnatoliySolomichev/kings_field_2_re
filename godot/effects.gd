@@ -180,6 +180,9 @@ func clear() -> void:
 func _process(dt: float) -> void:
 	if KFGame.modal:                  # object_give's frames: they stand still
 		return
+	if KFGame.follow:                 # the game's own, laid in by ghost.gd
+		_draw_all()
+		return
 	acc = minf(acc + dt, 0.25)
 	while acc >= 1.0 / TICK_HZ:
 		acc -= 1.0 / TICK_HZ
@@ -3460,6 +3463,18 @@ func attack_hit(code: int, flags: int, kind: int, strength: int, stat: int, pct:
 		point, code & 0xF0000)
 	if not out.is_empty() and player and player.has_method("spell_struck"):
 		player.call("spell_struck", out, kind)
+
+
+# The game's live effects, byte for byte, while the port follows the emulator
+# (ghost.gd): {slot: its 76 bytes}. A slot not sent is free.
+# @port check -- the game's effects laid over the port's, for the comparison
+func follow(live: Dictionary) -> void:
+	for k in COUNT:
+		var s := k * STRIDE
+		if live.has(k):
+			put(s, live[k])
+		else:
+			m[s] = 0xFF
 
 
 # world_slide's second loop: every live slot not drawn with +8 & 0xc 0xc.

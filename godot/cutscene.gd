@@ -57,7 +57,7 @@ func _ready() -> void:
 		newgame = shell.overlay_arg2 == 0
 	var path := "res://opening/cutscene%02d.ogv" % SCENE
 	var has_card := ResourceLoader.exists("res://opening/loading.png")
-	if (not newgame or not ResourceLoader.exists(path)) and not has_card:
+	if KFGame.side_by_side() or ((not newgame or not ResourceLoader.exists(path)) and not has_card):
 		queue_free()
 		return
 	layer = 10

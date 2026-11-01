@@ -1424,6 +1424,16 @@ python3 tools/routines.py           each routine: how many calls, and a few
 
 ### Watching the two side by side
 
+**`./emu/side.sh`** is the whole of it: the emulator under `bp29.lua`, so the
+session is recorded, and the port beside it started with `--follow`, which stands
+where the game stands and shows the game's creatures, doors, objects and live
+effects from `live.txt`, with none of its own machines running. So what differs
+on the screen is how the two draw, and a note from the recorder (TOOLS.md, "A
+playthrough") says by slot what was there. A menu stops the frames and the port
+waits. A thing a creature drops, an object the port has no row for, is not shown.
+What follows is the older way, by hand, with `bp16.lua`, which compares the
+movement frame by frame.
+
 `emu/bp16.lua` also overwrites `out/godot/live.txt` once per game frame, and the
 Godot build reads it. Start the emulator with it, run the port, press **C**, and
 the game's own player stands in the port's world as a marker while the model

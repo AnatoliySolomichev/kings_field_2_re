@@ -156,6 +156,67 @@ function M.events(frame, out)
     end
 end
 
+-- A frame for the port to show (godot/ghost.gd), one line in live.txt: bp16's
+-- seventeen numbers and its w=, d= and a=, and two more. o= is every object in
+-- use: slot, opcode, state, clock, +0, +1, type, scale, x, y, z, yaw. e= is every
+-- live effect, slot:bytes in hex, the 76 of them as effects.gd keeps them.
+-- Written beside and renamed, because Godot reads on its own clock.
+local function s16(a)
+    local v = M.u16(a)
+    return v >= 0x8000 and v - 0x10000 or v
+end
+
+local function s32(a) return tonumber(ffi.cast('int32_t', w32(a))) end
+
+local function live_line(frame)
+    local doors, objs, acts, fx = {}, {}, {}, {}
+    for k = 0, 395 do
+        local r = 0x80191a5c + 68 * k
+        local op, typ = M.u8(r + 4), M.u16(r + 6)
+        if op == 1 then
+            doors[#doors + 1] = string.format('%d,1,%d,%d,%d', k, M.u16(r + 8), M.u16(r + 0x40), s16(r + 0x26))
+        elseif op >= 3 and op <= 5 then
+            doors[#doors + 1] = string.format('%d,%d,%d,%d,%d', k, op, M.u16(r + 8), M.u16(r + 0xa), M.u16(r + 0x2c))
+        elseif op == 2 then
+            doors[#doors + 1] = string.format('%d,2,%d,%d,%d', k, M.u16(r + 8), M.u16(r + 0xa), M.u8(r + 0x38))
+        end
+        if typ ~= 0xff then
+            objs[#objs + 1] = string.format('%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d', k, op, M.u16(r + 8),
+                M.u16(r + 0xa), M.u8(r), M.u8(r + 1), typ, M.u16(r + 0x2c), s32(r + 0x14), s32(r + 0x18),
+                s32(r + 0x1c), M.u16(r + 0x26))
+        end
+    end
+    for k = 0, 199 do
+        local a = 0x80185da8 + k * 0x88
+        if M.u8(a) ~= 0xff then
+            acts[#acts + 1] = string.format('%d,%d,%d,%d,%d,%d,%d,%d,%d', k, M.u8(a + 9), s32(a + 0x2c),
+                s32(a + 0x30), s32(a + 0x34), s16(a + 0x42), M.u8(a + 0xc), M.u16(a + 0x18), M.u16(a + 0x1a))
+        end
+    end
+    for k = 0, 127 do
+        local s = 0x801b80ec + k * 0x4c
+        if M.u8(s) ~= 0xff then
+            local h = {}
+            for i = 0, 0x4b do h[i + 1] = string.format('%02x', M.u8(s + i)) end
+            fx[#fx + 1] = k .. ':' .. table.concat(h)
+        end
+    end
+    return string.format('%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d w=%d,%d,%d d=%s a=%s o=%s e=%s\n',
+        frame, s32(0x801b25f0), s32(0x801b25f4), s32(0x801b25f8), s16(0x801b2612), M.u8(0x801b25e8),
+        s16(0x801b2656), s16(0x801b2648), s16(0x801b2646), M.u16(0x801b265c), M.u8(0x8018fad9),
+        s16(0x801b2610), s32(0x801c12e8), M.u16(0x801b24fc), M.u16(0x801b2500), M.u16(0x801b2502),
+        M.u16(0x801b2506), s16(0x801b25a4), M.u8(0x801b25ae), M.u8(0x801b25af),
+        table.concat(doors, ';'), table.concat(acts, ';'), table.concat(objs, ';'), table.concat(fx, ';'))
+end
+
+function M.live(frame, path)
+    local f = io.open(path .. '.tmp', 'w')
+    if not f then return end
+    f:write(live_line(frame))
+    f:close()
+    os.rename(path .. '.tmp', path)
+end
+
 -- The tables whole, for a replay asked to dump them: the regions in order.
 function M.tables(out)
     for _, g in ipairs(M.REGIONS) do

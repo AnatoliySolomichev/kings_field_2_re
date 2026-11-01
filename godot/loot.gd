@@ -1011,6 +1011,13 @@ func _exit_tree() -> void:
 
 # @port engine -- USE into _interact, the arms at 15 a second, and object_give's own frames while it runs
 func _process(dt: float) -> void:
+	if KFGame.follow:                  # the game's own objects: nothing runs here
+		for k in traps:
+			_draw_trap(k, held_locks[k])
+		for k in levers:
+			_draw_lever(k)
+		_draw()
+		return
 	# a level with nothing to open -- 25 and 27 -- still has its frame: the
 	# triggers, the level's code (_tick), USE on a creature
 	if not loaded and reading == null:
@@ -1705,6 +1712,41 @@ func _trap_world() -> void:
 # @orig game:0x80044b40 object_set_present  status:partial -- for a trap; the port's cells keep no tile, so the node stands for it
 func _trap_present(d: Dictionary, on: int, _tile: int) -> void:
 	d["scale"] = 0x1000 if on != 0 else 0
+
+
+# The game's objects while the port follows the emulator (ghost.gd), as
+# kfrec.lua sends them: slot, opcode, state, clock, +0, +1, type, scale, x, y, z,
+# yaw. A slot not sent is free in the game: gone.
+# @port check -- the game's objects laid over the port's, for the comparison
+func follow(list: Array) -> void:
+	var seen := {}
+	for e in list:
+		var k := int(e[0])
+		seen[k] = true
+		if rows.has(k):
+			var r: Dictionary = rows[k]
+			r["op"] = int(e[1])
+			r["state"] = int(e[2])
+			r["counter"] = int(e[3])
+			r["b0"] = int(e[4])
+			r["b1"] = int(e[5])
+			r["type"] = int(e[6])
+			r["pos"] = Vector3i(int(e[8]), int(e[9]), int(e[10]))
+		if held_locks.has(k) and (lever_rows.has(k) or trap_rows.has(k)):
+			var h: Dictionary = held_locks[k]
+			h["op"] = int(e[1])
+			h["state"] = int(e[2])
+			h["ha"] = int(e[3])
+			h["b0"] = int(e[4])
+			h["b1"] = int(e[5])
+			h["scale"] = int(e[7])
+			h["x"] = int(e[8])
+			h["y"] = int(e[9])
+			h["z"] = int(e[10])
+			h["yaw"] = int(e[11])
+	for k in rows:
+		if not seen.has(k):
+			rows[k]["type"] = GONE
 
 
 # The rest of a pad's arm: every pad's +0x40 1, and the warp (crossing.gd).

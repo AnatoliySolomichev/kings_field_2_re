@@ -44,6 +44,8 @@ local PACK_AFTER = 150            -- frames before a keyframe is packed: the emu
                                   -- writes files on a thread of its own, and a gzip
                                   -- started at once reads one half written
 local MARK = RUNS .. 'mark.txt'
+-- KF_LIVE set, as emu/side.sh sets it: each frame for the port to show as well.
+local LIVE = os.getenv('KF_LIVE') and (HERE .. '/../out/godot/live.txt') or nil
 
 PCSX.settings.emulator.Debug.Debug = true
 
@@ -159,6 +161,7 @@ frame_bp = PCSX.addBreakpoint(K.FRAME, 'Exec', 4, 'bp29 frame', function()
     frame = frame + 1
     K.fill(rec, frame, calls)
     frames_f:write(ffi.string(rec, ffi.sizeof(rec)))
+    if LIVE then K.live(frame, LIVE) end
     if frame % FLUSH_EVERY == 0 then
         pad_out()
         pads_f:flush()
