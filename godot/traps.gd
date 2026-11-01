@@ -4,8 +4,9 @@ class_name KFTraps
 # rectangle. A model that moves by its clock +0xa and one or two of its
 # vertices, each asked of collide_query every frame; what stands there is
 # struck once a meeting. Opcode 0x55 rolls between two cells and strikes every
-# frame it touches; 0x5a, a gate, shuts behind whoever walked in.
-# tools/traps.py has it in prose.
+# frame it touches; 0x5a, a gate, shuts behind whoever walked in; 0x32 strikes
+# nothing and only moves by a clock, its own or a creature's. tools/traps.py
+# has it in prose.
 #
 # Over dictionaries, not the game's bytes: forty-four of them run every frame
 # of levels 12, 15 and 18 from the moment the level comes in, and the port does
@@ -20,7 +21,8 @@ const SWING_OP := 0x51
 const POP_OP := 0x52
 const ROLL_OP := 0x55
 const GATE_OP := 0x5A
-const OPS := [SWING_OP, POP_OP, ROLL_OP, GATE_OP]
+const FOLLOW_OP := 0x32
+const OPS := [SWING_OP, POP_OP, ROLL_OP, GATE_OP, FOLLOW_OP]
 const QUERY := 0x90                    # the creatures and the player
 const NEVER := 0xFE
 const FREE := 0xFF
@@ -307,6 +309,20 @@ static func gate(d: Dictionary, row: Dictionary, w: Dictionary) -> void:
 			d["state"] = GATE_DONE
 
 
+# Opcode 0x32's arm; tools/traps.py follow: the clock a creature's +0x18 and
+# the u16 at +0x3c, or with the u16 at +0x3a 0xffff its own on by the u16 at
+# +0x38.
+# @orig game:0x8004b168 object_interpreter+0x4158  status:verified -- opcode 0x32's arm; tools/traps.py, the game's own over both, the calls in order and all of RAM but the stack, the self-test this to it
+static func follow(d: Dictionary, w: Dictionary) -> void:
+	if int(d["state"]) != 0:
+		return
+	var who := int(d["b3a"]) | (int(d["b3b"]) << 8)
+	if who != 0xFFFF:
+		d["ha"] = (int(w["actor_clock"].call(who)) + (int(d["b3c"]) | (int(d["b3d"]) << 8))) & THE_END
+	else:
+		d["ha"] = (int(d["ha"]) + (int(d["lock"]) | (int(d["b39"]) << 8))) & THE_END
+
+
 # @port helper -- the arm by the object's opcode
 static func step(d: Dictionary, row: Dictionary, w: Dictionary) -> void:
 	match int(d["op"]):
@@ -318,6 +334,8 @@ static func step(d: Dictionary, row: Dictionary, w: Dictionary) -> void:
 			roll(d, row, w)
 		GATE_OP:
 			gate(d, row, w)
+		FOLLOW_OP:
+			follow(d, w)
 
 
 # The model's vertices at an animation and a clock. A frame of level 18 asks

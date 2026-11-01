@@ -117,9 +117,10 @@ import movement                                                      # noqa: E40
 import triggers                                                      # noqa: E402
 from levelin import O, Mem                                           # noqa: E402
 
-SWING_OP, POP_OP, ROLL_OP, GATE_OP = 0x51, 0x52, 0x55, 0x5A
-OPS = (SWING_OP, POP_OP, ROLL_OP, GATE_OP)
-LEVELS = (0, 12, 15, 18)
+SWING_OP, POP_OP, ROLL_OP, GATE_OP, FOLLOW_OP = 0x51, 0x52, 0x55, 0x5A, 0x32
+OPS = (SWING_OP, POP_OP, ROLL_OP, GATE_OP, FOLLOW_OP)
+LEVELS = (0, 4, 12, 15, 18)
+ACTORS, ACTOR_STRIDE = 0x80185DA8, 0x88
 COLLIDE_QUERY, ATTACK = 0x80033F38, 0x800533E8
 OBJECT_SOUND, MODEL_PTR, STAMP_RECT = 0x8004482C, 0x800405E8, 0x800445B8
 OBJECT_TYPES = 0x8018FB3C
@@ -381,8 +382,20 @@ def gate(d, row, w):
             d["ha"], d["state"] = THE_END, GATE_DONE
 
 
+def follow(d, row, w):
+    """Opcode 0x32's arm on `d`."""
+    if d["state"] != 0:
+        return
+    who = d["b3a"] | (d["b3b"] << 8)
+    if who != 0xFFFF:
+        d["ha"] = (w.actor_clock(who) + (d["b3c"] | (d["b3d"] << 8))) & THE_END
+    else:
+        d["ha"] = (d["ha"] + (d["lock"] | (d["b39"] << 8))) & THE_END
+
+
 def step(d, row, w):
-    {SWING_OP: swing, POP_OP: pop, ROLL_OP: roll, GATE_OP: gate}[d["op"]](d, row, w)
+    {SWING_OP: swing, POP_OP: pop, ROLL_OP: roll, GATE_OP: gate,
+     FOLLOW_OP: follow}[d["op"]](d, row, w)
 
 
 def point(md, d, vertex):
@@ -454,6 +467,9 @@ class World:
 
     def stamp(self, *args):
         self.log.append(("stamp", *args))
+
+    def actor_clock(self, k):
+        return self.m.rd(ACTORS + ACTOR_STRIDE * k + 0x18, 2)
 
     def present(self, d, on, tile):
         """object_set_present (0x80044b40)."""
@@ -559,6 +575,8 @@ def run(lv, rng, frames, seen):
                  or (cpu.rd(O(k, 4), 1) != GATE_OP and models[cpu.rd(O(k, 6), 2)].nanim > 1)]
     alike = n = 0
     first = None
+    followers = [cpu.rd(O(k, 0x3A), 2) for k in slots if cpu.rd(O(k, 4), 1) == FOLLOW_OP
+                 and cpu.rd(O(k, 0x3A), 2) != 0xFFFF]
     for f in range(frames):
         if rects and rng.random() < 0.04:
             cx, cz, y = rng.choice(rects)
@@ -574,6 +592,12 @@ def run(lv, rng, frames, seen):
                          (PLAYER_POS + 8, (cz << 11) + 0x400)):
                 cpu.wr(a, 4, v)
                 m.wr(a, v, 4)
+        for k in followers:
+            if rng.random() < 0.3:               # the creature's clock runs on
+                a = ACTORS + ACTOR_STRIDE * k + 0x18
+                v = rng.randrange(0x10000)
+                cpu.wr(a, 2, v)
+                m.wr(a, v, 2)
         for k in signalled:
             if rng.random() < 0.006:             # as object_signal turns it
                 r = O(k)
@@ -628,8 +652,8 @@ def check(out=sys.stdout, runs=3, frames=300, seed=111):
             alike += a
             n += f
             first = first or why
-    print(f"opcodes 0x51, 0x52, 0x55 and 0x5a, the game's own arms, object_vertex_point and "
-          f"model_vertex: {alike} of {n} frames over the 98 objects of four levels agree -- the "
+    print(f"opcodes 0x51, 0x52, 0x55, 0x5a and 0x32, the game's own arms, object_vertex_point and "
+          f"model_vertex: {alike} of {n} frames over the 100 objects of five levels agree -- the "
           f"calls in order and all of RAM but the stack; {len(seen)} states seen", file=out)
     if first:
         print(f"  first difference: {first}", file=out)
@@ -669,6 +693,11 @@ class Scripted(World):
     def stamp(self, *args):
         self.log.append(["stamp", *args])
 
+    def actor_clock(self, k):
+        ans = self.rng.randrange(0x10000)
+        self.log.append(["actor", k, ans])
+        return ans
+
     def present(self, d, on, tile):
         self.log.append(["present", on, tile])
         d["scale"] = 0x1000 if on else 0
@@ -686,10 +715,10 @@ def export(out_dir, frames=80, seed=113):
     import level3d
     rng = random.Random(seed)
     runs = []
-    for lv in (12, 15, 18):
+    for lv in (4, 12, 15, 18):
         ld = objload.Load(lv)
         slots = [k for k, o in sorted(ld.recs.items()) if o["op"] in OPS]
-        rare = [k for k in slots if ld.recs[k]["op"] in (ROLL_OP, GATE_OP)]
+        rare = [k for k in slots if ld.recs[k]["op"] in (ROLL_OP, GATE_OP, FOLLOW_OP)]
         for k in rare + rng.sample(slots, min(12, len(slots))):
             o = ld.recs[k]
             t = o["tail"]
@@ -735,6 +764,10 @@ def show(out=sys.stdout):
             if o["op"] not in OPS:
                 continue
             t = o["tail"]
+            if o["op"] == FOLLOW_OP:
+                print(f"level {lv:2d} slot {k:3d} {o['op']:#x} ({o['x'] >> 11}, {o['z'] >> 11}) type "
+                      f"{o['type']} creature {t[2] | t[3] << 8:#x}", file=out)
+                continue
             if o["op"] == ROLL_OP:
                 print(f"level {lv:2d} slot {k:3d} {o['op']:#x} ({t[3]}, {t[4]}) to ({t[5]}, {t[6]}) "
                       f"type {o['type']} step {t[2]} way {t[10]} id {t[7]:#x}", file=out)

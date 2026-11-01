@@ -3215,6 +3215,51 @@ pad 1 to pad 5, held there; level 19's pad 85 unseen and dead till the death of
 slot 0x14 through entry 19; level 24's two turning, and 45 onto level 25. Not in
 the port: `actors_retire_marked`, which warp_to's copy has not either.
 
+### The plain with no end: opcode 0xea
+
+`0x8004a5b8`, four objects each on levels 25 and 27, type 289, drawn as nothing:
+strips of cells `+0x38`, `+0x39`, `+0x3a` by `+0x3b`, one cell deep and 0x50 long,
+at x 0x34 and 0x1b and at z 0x34 and 0x1b. The levels are one plain of 6400 cells
+alike. The player in a strip with its `+0x40` 0:
+
+```
+every 0xe7's +0x40 1
+grid_mark(the player, 0x320, -1)
+world_slide(s8 +0x3c << 11, 0, s8 +0x3d << 11)     24 cells back, -0x18 or +0x18
+grid_mark(the player, 0x320, 1)
+```
+
+and out of it, `+0x40` 0. So nobody leaves x and z of 0x1c..0x33, and the plain has
+no end. **`world_slide`** (`0x80046cb0`, named here; called from nowhere else)
+adds the three to the player, to every live effect (+0) but one drawn with
+`+8 & 0xc` 0xc, at `+0x18`, and to every creature in the table, at `+0x2c`: so
+what is near the player keeps its place by them, and nothing is seen to jump.
+The loop sets the `+0x40` of every **0xe7**, not of 0xea: the arm is a copy of
+0xe7's (`0x8004a120`, a rectangle that puts the player down elsewhere, as
+0xe8's does), which no level places.
+
+**Checked against the game's own** (`tools/warps.py --check`, `wrap_check`): the
+eight strips, GAME.EXE's own arm and `world_slide`, the player in and about each,
+128 effect slots and 200 creatures at random: **320 of 320 runs**, the calls in
+order and all of RAM but the stack, 48 of them sliding the world; twelve models
+broken on purpose are caught, among them a table a slot short. In the port:
+`KFWarps.wrap`, `loot.gd _slide`, `effects.gd slide` and `actors.gd slide`.
+`grid_mark` is not called: the port works its marks out from where things stand.
+Run headless on level 25: into x 0x34 and on at 0x1c, the low bits kept, its one
+creature 24 cells back with the player; at z 0x1b on at 0x33.
+
+### A clock of another's: opcode 0x32
+
+`0x8004b168`, level 4's slot 150 (type 306, at (29, 50), the cell creature 8 sleeps
+in) and level 18's 38 (type 241, at (16, 32)). It strikes nothing and stops
+nothing; it is a model with a clock, in state 0 only. With the u16 at `+0x3a` a
+creature's slot, the clock is that creature's `+0x18` -- its animation's -- plus
+the u16 at `+0x3c`, & 0xfff; with 0xffff, its own plus the u16 at `+0x38`. Both
+carry 0xffff there, so level 4's runs a tick behind its creature and level 18's
+back a tick a frame. In the port `KFTraps.follow`, a node `lNNN` like a trap's
+(self-test, `traps`; `tools/traps.py` counts them among its 4500 of 4500 frames over
+100 objects of five levels); what the two models are nobody has looked.
+
 ### What else levels 0 and 4 place
 
 * **Opcode `0x51`, level 0's four of type 219** (slots 209 to 212): a trap

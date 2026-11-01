@@ -3348,6 +3348,11 @@
   "kind": "code",
   "evidence": "(record, vertex, &out): model_vertex of the record's model at its +1 and clock +0xa, each axis by its scale +0x2c.., turned by vec_rotate with its angles, the yaw a half turn on, from its place. The traps' strike, as actor_vertex_point is a creature's; tools/traps.py holds its answers to the game's own, 3600 of 3600 frames"
  },
+ "0x80046cb0": {
+  "name": "world_slide",
+  "kind": "code",
+  "evidence": "(dx, dy, dz): added to the player, to every live effect but one drawn with +8 & 0xc 0xc at +0x18, and to every creature in the table at +0x2c. Its one caller is opcode 0xea's arm, which walks levels 25's and 27's plain back 24 cells so that it has no end. Not world_shift, which level_load calls and which moves the objects too. tools/warps.py wrap_check: 320 of 320 runs of the game's own, all of RAM but the stack"
+ },
  "0x800466e8": {
   "name": "key_test_all",
   "kind": "code",

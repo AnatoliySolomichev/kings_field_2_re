@@ -3131,6 +3131,12 @@ func _traps() -> bool:
 				mask: int) -> void:
 			if says.call(["stamp", b0, sx, sz, dx, dz, wd, h, ang, mask]).is_empty():
 				odd[0] = true,
+		"actor_clock": func(k: int) -> int:
+			var e: Array = says.call(["actor", k])
+			if e.is_empty():
+				odd[0] = true
+				return 0
+			return int(e[2]),
 		"present": func(d: Dictionary, on: int, tile: int) -> void:
 			if says.call(["present", on, tile]).is_empty():
 				odd[0] = true
@@ -3214,7 +3220,13 @@ func _warps() -> bool:
 				odd[0] = true
 			d["b40"] = 1,
 		"level": func() -> int:
-			return here[0]}
+			return here[0],
+		"slide": func(dx: int, dz: int) -> void:
+			var at: int = pos[0]
+			pos[0] = at + 1
+			var e: Array = (said[0] as Array)[at] if at < (said[0] as Array).size() else []
+			if e.size() < 3 or str(e[0]) != "slide" or int(e[1]) != dx or int(e[2]) != dz:
+				odd[0] = true}
 	for run in doc["runs"]:
 		var d := {}
 		for k in run["d"]:
@@ -3234,6 +3246,21 @@ func _warps() -> bool:
 				if first == "":
 					first = "slot %d: %s, python %s, %d of %d calls" % [int(d["slot"]), str(got),
 						str(want), int(pos[0]), (fr["calls"] as Array).size()]
+	for run in doc["strips"]:
+		var d := {}
+		for k in run["d"]:
+			d[k] = int(run["d"][k])
+		for fr in run["frames"]:
+			said[0] = fr["calls"]
+			pos[0] = 0
+			odd[0] = false
+			KFWarps.wrap(d, w)
+			n += 1
+			if int(d["b40"]) != int(fr["out"]) or odd[0] or pos[0] != (fr["calls"] as Array).size():
+				bad += 1
+				if first == "":
+					first = "strip %d: +0x40 %d, python %d, %d of %d calls" % [int(d["slot"]),
+						int(d["b40"]), int(fr["out"]), int(pos[0]), (fr["calls"] as Array).size()]
 	var pn := 0
 	for c in doc["plans"]:
 		var d := {}

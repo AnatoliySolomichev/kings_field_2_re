@@ -769,6 +769,15 @@ it would open:
   their sounds, and with them level 18's two 0x55s, which its levers 13 and 62
   take out of the world and bring back, and its two gates, 0x5a (FORMATS.md,
   "What rolls and what shuts").
+* **class 0xea and 0x32 -- read and in the port** (FORMATS.md, "The plain with no
+  end", "A clock of another's"): `tools/warps.py wrap_check`, 320 of 320 runs of
+  the game's own arm and world_slide. Of `object_interpreter`'s arms, against
+  every object every level places, what the port has no copy of: 0x08, 0x57,
+  0x59 and 0xe7, which no level places; 0x12 and 0x16, ten objects on levels 1
+  to 11, whose arm (0x8004b204) only keeps a timer at `+0x40` and whose reader is
+  not found; and, nothing for this port, 9 (a loader's frame, `tools/objload.py`),
+  0xe5 and 0xe9 (no arm), 0xe6 (a depth bias) and 0x1f (an ambient sound, with
+  0x0f handed to an entry 9 that is `jr $ra` on all but levels 2 and 7).
 * **class 0xeb, the pads -- read and in the port** (FORMATS.md, "The pads
   that carry the player"): 16 objects on seven levels, level 24's the way onto
   level 25, which nothing in the port reached before; `tools/warps.py`, 960 of

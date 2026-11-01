@@ -537,9 +537,9 @@ of 672** runs leave the model's calls and all of RAM but the stack.
 `godot/lake.gd` reproduces the model on **168 of 168** runs (`lakecheck.json`);
 `lake.json` is the seventeen words the switch reads, for the port.
 
-**`traps.py`** — the traps, opcodes `0x51`, `0x52` and `0x55`, and level 18's
-gates, `0x5a`. FORMATS.md, "The traps" and "What rolls and what shuts". Without
-arguments every one and how it starts. The check puts the models in
+**`traps.py`** — the traps, opcodes `0x51`, `0x52` and `0x55`, level 18's gates,
+`0x5a`, and `0x32`. FORMATS.md, "The traps", "What rolls and what shuts" and "A clock
+of another's". Without arguments every one and how it starts. The check puts the models in
 the machine's RAM, so `object_vertex_point` and `model_vertex` run as the game's.
 
 ```
@@ -548,12 +548,13 @@ python3 tools/traps.py --check     the models against the game's own arms
 python3 tools/traps.py --export D  trapcheck.json for the self-test
 ```
 
-**`warps.py`** — the pads that carry the player, opcode `0xeb`. FORMATS.md, "The
-pads that carry the player". Without arguments every pad and where it goes.
+**`warps.py`** — what carries the player: the pads, opcode `0xeb`, and the strips
+of the plain with no end, `0xea`. FORMATS.md, "The pads that carry the player" and
+"The plain with no end". Without arguments every pad and where it goes.
 
 ```
 python3 tools/warps.py             every pad and where it goes
-python3 tools/warps.py --check     the model against the game's own arm
+python3 tools/warps.py --check     the models against the game's own arms
 python3 tools/warps.py --export D  warpcheck.json for the self-test
 ```
 

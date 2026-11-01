@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""The pads that carry the player: opcode 0xeb.
+"""What carries the player: opcode 0xeb, the pads, and 0xea, the endless field.
 
     python3 tools/warps.py            every pad and where it goes
-    python3 tools/warps.py --check    the model against the game's own arm
+    python3 tools/warps.py --check    the models against the game's own arms
     python3 tools/warps.py --export D warpcheck.json for the self-test
 
 **Opcode `0xeb`** (`object_interpreter+0x32d0`, 0x8004a2e0): 16 objects of
@@ -39,6 +39,18 @@ So they are a network: 7 and 16; 16 and 17, twice; 8 and 19; 19 and 20; two
 pads of 20 into each other; and **24 into 25**, one way, the only way onto the
 last level.
 
+**Opcode `0xea`** (`object_interpreter+0x35a8`, 0x8004a5b8): levels 25 and 27,
+four each, the last levels' plain of 6400 alike cells. Each is a strip of cells
+`+0x38`, `+0x39`, `+0x3a` by `+0x3b` that walks the world back: on x at 0x34 and
+0x1b, on z at 0x34 and 0x1b, by 24 cells the other way, the s8s `+0x3c` and `+0x3d`.
+The player in it and `+0x40` 0: `world_slide` (0x80046cb0) of that many cells
+between grid_mark of the player's cells cleared and marked again. Out of it,
+`+0x40` 0. So the player never leaves x and z of 0x1c..0x33, and the field has no
+end. world_slide moves the player and, by as much, every live effect but those
+with `+8 & 0xc` 0xc, and every creature in the table, so nothing is seen to jump.
+The arm's loop sets `+0x40` 1 on every **0xe7** record, not its own -- the arm
+is a copy of 0xe7's, and level 25 and 27 place none, nor does any other level.
+
 **How it is held to the game.** The arm: GAME.EXE's own for every 0xeb record
 (`mipsrun.object_arm`), the player in and about the cell at heights about it,
 `+0x3f`, `+0x38`, `+0x40`, the view and the block in hand at random, the calls
@@ -56,7 +68,13 @@ import useitem                                                       # noqa: E40
 from levelin import O, Mem                                           # noqa: E402
 
 OP = 0xEB
+WRAP_OP, THE_OTHER_OP = 0xEA, 0xE7
 LEVELS = (7, 8, 16, 17, 19, 20, 24)
+WRAP_LEVELS = (25, 27)
+GRID_MARK = 0x80033C4C
+WORLD_SLIDE = 0x80046CB0
+EFFECTS, EFFECT_COUNT, EFFECT_STRIDE = 0x801B80EC, 128, 0x4C
+ACTORS, ACTOR_COUNT, ACTOR_STRIDE = 0x80185DA8, 200, 0x88
 NO_LEVEL = 0xFF
 BLOCK = 0x8018FAD8           # current_level_block
 TURNING_LEVEL = 24
@@ -152,8 +170,46 @@ def arm(m, k, calls):
             m.wr(r + 0x26, (m.rd(r + 0x26, 2) + t) & 0xFFFF, 2)
 
 
-def records(ram):
-    return [k for k in range(levelin.COUNT) if ram[O(k, 4) & levelin.MASK] == OP]
+def s8(v):
+    return v - 0x100 if v & 0x80 else v
+
+
+def slide(m, dx, dy, dz):
+    """world_slide (0x80046cb0): the player, every live effect not drawn with
+    +8 & 0xc 0xc, every creature."""
+    for i, d in enumerate((dx, dy, dz)):
+        m.wr(PLAYER_POS + 4 * i, (m.rd(PLAYER_POS + 4 * i, 4) + d) & 0xFFFFFFFF, 4)
+    for k in range(EFFECT_COUNT):
+        s = EFFECTS + EFFECT_STRIDE * k
+        if m.rd(s) != 0xFF and m.rd(s + 8) & 0xC != 0xC:
+            for i, d in enumerate((dx, dy, dz)):
+                m.wr(s + 0x18 + 4 * i, (m.rd(s + 0x18 + 4 * i, 4) + d) & 0xFFFFFFFF, 4)
+    for k in range(ACTOR_COUNT):
+        a = ACTORS + ACTOR_STRIDE * k
+        if m.rd(a) != 0xFF:
+            for i, d in enumerate((dx, dy, dz)):
+                m.wr(a + 0x2C + 4 * i, (m.rd(a + 0x2C + 4 * i, 4) + d) & 0xFFFFFFFF, 4)
+
+
+def wrap_arm(m, k, calls):
+    """Opcode 0xea's arm for the record in slot k over `m`."""
+    r = O(k)
+    if not triggers.player_in_rect(m, m.rd(r + 0x38), m.rd(r + 0x39), m.rd(r + 0x3A),
+                                   m.rd(r + 0x3B), s32(m.rd(r + 0x18, 4))):
+        m.wr(r + 0x40, 0)
+        return
+    if m.rd(r + 0x40) != 0:
+        return
+    for j in range(levelin.COUNT):
+        if m.rd(O(j, 4)) == THE_OTHER_OP:
+            m.wr(O(j, 0x40), 1)
+    calls.append(("grid_mark", m.rd(PLAYER_POS, 4), m.rd(PLAYER_POS + 8, 4), 0x320, 0xFFFFFFFF))
+    slide(m, s8(m.rd(r + 0x3C)) << 11, 0, s8(m.rd(r + 0x3D)) << 11)
+    calls.append(("grid_mark", m.rd(PLAYER_POS, 4), m.rd(PLAYER_POS + 8, 4), 0x320, 1))
+
+
+def records(ram, op=OP):
+    return [k for k in range(levelin.COUNT) if ram[O(k, 4) & levelin.MASK] == op]
 
 
 def hooks(cpu, calls):
@@ -209,6 +265,81 @@ def scene(rng, base, k):
     return cpu
 
 
+def compare(calls, game, m, cpu):
+    """What differs between the model's run and the game's, or None."""
+    if calls != game:
+        return next((f"calls: model {a}, game {b}" for a, b in zip(calls, game) if a != b),
+                    f"calls: model {len(calls)}, game {len(game)}")
+    a, b = m.ram, cpu.ram
+    for lo, hi in ((0, levelin.STACK_LO), (levelin.STACK_HI, len(a))):
+        if a[lo:hi] != b[lo:hi]:
+            i = next(i for i in range(lo, hi) if a[i] != b[i])
+            return (f"{0x80000000 | i:#x}: model {a[i]:#x}, game {b[i]:#x} "
+                    f"({levelin._where(0x80000000 | i)})")
+    return None
+
+
+def wrap_scene(rng, base, k):
+    """The machine with the player in and about strip k, and live effects and
+    creatures at random."""
+    import mipsrun
+    cpu = mipsrun.CPU(bytes(base.ram))
+    cpu.hooks.update(base.hooks)
+    r = O(k)
+    cx, cz = cpu.rd(r + 0x38, 1), cpu.rd(r + 0x39, 1)
+    w, h = cpu.rd(r + 0x3A, 1), cpu.rd(r + 0x3B, 1)
+    px = ((cx + rng.randrange(w + 2) - 1) << 11) + rng.randrange(0x800)
+    pz = ((cz + rng.randrange(h + 2) - 1) << 11) + rng.randrange(0x800)
+    py = s32(cpu.rd(r + 0x18, 4)) + rng.choice((0, 0, 0, 0x7FF, 0x801, -0xC81))
+    for a, v in ((PLAYER_POS, px), (PLAYER_POS + 4, py), (PLAYER_POS + 8, pz)):
+        cpu.wr(a, 4, v & 0xFFFFFFFF)
+    cpu.wr(r + 0x40, 1, rng.choice((0, 0, 0, 1, 0xFF)))
+    for n in range(0x80):                    # the tables' own sizes, not the model's
+        s = EFFECTS + EFFECT_STRIDE * n
+        cpu.wr(s, 1, rng.choice((0, 2, 0xFF, 0xFF)))
+        cpu.wr(s + 8, 1, rng.randrange(0x10))
+        for i in range(3):
+            cpu.wr(s + 0x18 + 4 * i, 4, rng.randrange(1 << 32))
+    for n in range(0xC8):
+        a = ACTORS + ACTOR_STRIDE * n
+        cpu.wr(a, 1, rng.choice((0, 1, 8, 0xFF, 0xFF)))
+        for i in range(3):
+            cpu.wr(a + 0x2C + 4 * i, 4, rng.randrange(1 << 32))
+    return cpu
+
+
+def wrap_check(out=sys.stdout, per_record=40, seed=139):
+    import mipsrun
+    rng = random.Random(seed)
+    alike = n = slid = 0
+    first = None
+    for lv in WRAP_LEVELS:
+        base = mipsrun.level_cpu(lv)
+        for k in records(base.ram, WRAP_OP):
+            for _ in range(per_record):
+                cpu = wrap_scene(rng, base, k)
+                m = Mem(bytes(cpu.ram))
+                calls, game = [], []
+                cpu.hooks[GRID_MARK] = lambda c, g=game: g.append(("grid_mark", *c.r[4:8]))
+                mipsrun.object_arm(cpu, k)
+                m.wr(CURRENT_OBJECT, O(k), 4)
+                m.wr(CURRENT_TYPE, OBJECT_TYPES + 24 * m.rd(O(k, 6), 2), 4)
+                wrap_arm(m, k, calls)
+                n += 1
+                slid += bool(calls)
+                why = compare(calls, game, m, cpu)
+                if why is None:
+                    alike += 1
+                elif first is None:
+                    first = f"level {lv} slot {k}: {why}"
+    print(f"opcode 0xea, the game's own arm and world_slide: {alike} of {n} runs over the 8 strips "
+          f"agree -- the calls in order and all of RAM but the stack; {slid} slid the world",
+          file=out)
+    if first:
+        print(f"  first difference: {first}", file=out)
+    return alike == n
+
+
 def check(out=sys.stdout, per_record=60, seed=131):
     import mipsrun
     rng = random.Random(seed)
@@ -230,18 +361,7 @@ def check(out=sys.stdout, per_record=60, seed=131):
                 n += 1
                 fired += bool(calls)
                 same += bool(calls) and m.rd(SPAWN_ANYWHERE) == 1
-                why = None
-                if calls != game:
-                    why = next((f"calls: model {a}, game {b}" for a, b in zip(calls, game)
-                                if a != b), f"calls: model {len(calls)}, game {len(game)}")
-                else:
-                    a, b = m.ram, cpu.ram
-                    for lo, hi in ((0, levelin.STACK_LO), (levelin.STACK_HI, len(a))):
-                        if a[lo:hi] != b[lo:hi]:
-                            i = next(i for i in range(lo, hi) if a[i] != b[i])
-                            why = (f"{0x80000000 | i:#x}: model {a[i]:#x}, game {b[i]:#x} "
-                                   f"({levelin._where(0x80000000 | i)})")
-                            break
+                why = compare(calls, game, m, cpu)
                 if why is None:
                     alike += 1
                 elif first is None:
@@ -268,6 +388,17 @@ class Scripted:
     def carry(self, d):
         self.log.append(["carry"])
         d["b40"] = 1
+
+    def slide(self, dx, dz):
+        self.log.append(["slide", dx, dz])
+
+
+def wrap_step(d, w):
+    """Opcode 0xea's arm on the port's dictionary."""
+    if not w.rect(d["lock"], d["b39"], d["b3a"], d["b3b"], d["y"]):
+        d["b40"] = 0
+    elif d["b40"] == 0:
+        w.slide(s8(d["b3c"]) << 11, s8(d["b3d"]) << 11)
 
 
 def step(d, w):
@@ -313,9 +444,24 @@ def export(out_dir, frames=24, seed=137):
                     pitch = rng.randrange(0x1000)
                     plans.append({"d": dict(d), "block": block, "pitch": pitch,
                                   "plan": plan(d, block, pitch)})
+    strips = []
+    for lv in WRAP_LEVELS:
+        ld = objload.Load(lv)
+        for k, o in sorted(ld.recs.items()):
+            if o["op"] != WRAP_OP:
+                continue
+            t = o["tail"]
+            d = {"slot": k, "lock": t[0], "b39": t[1], "b3a": t[2], "b3b": t[3], "b3c": t[4],
+                 "b3d": t[5], "b40": t[8], "y": o["y"]}
+            run = {"d": dict(d), "frames": []}
+            for _ in range(frames):
+                log = []
+                wrap_step(d, Scripted(rng, log, lv))
+                run["frames"].append({"calls": log, "out": d["b40"]})
+            strips.append(run)
     path = os.path.join(out_dir, "warpcheck.json")
     with open(path, "w") as fh:
-        json.dump({"runs": runs, "plans": plans}, fh, separators=(",", ":"))
+        json.dump({"runs": runs, "plans": plans, "strips": strips}, fh, separators=(",", ":"))
     return path
 
 
@@ -340,7 +486,7 @@ def main():
         print(export(a[a.index("--export") + 1]))
         return 0
     if "--check" in a:
-        return 0 if check() else 1
+        return 0 if check() and wrap_check() else 1
     show()
     return 0
 

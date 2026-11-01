@@ -1690,6 +1690,11 @@ func _trap_world() -> void:
 				dn.stamp_rect(b0, sx, sz, dx, dz, w, h, ang, mask),
 		"present": _trap_present,
 		"carry": _carry,
+		"slide": _slide,
+		"actor_clock": func(k: int) -> int:
+			var an := get_node_or_null("../Actors")
+			var a = an.actors[k] if an and k < an.actors.size() else null
+			return 0 if a == null else int(a.get("clock", 0)),
 		"level": func() -> int:
 			return int(KFGame.block[0]) if not KFGame.block.is_empty() else player._level()}
 
@@ -1714,6 +1719,21 @@ func _carry(d: Dictionary) -> void:
 		cr.warp(KFWarps.plan(d, KFGame.block, player.pitch))
 
 
+# world_slide: the player, and by as much every live effect and creature, so
+# that nothing is seen to jump. Its y is 0 from the one arm that calls it.
+# @orig game:0x80046cb0 world_slide  status:verified -- tools/warps.py wrap_check, the game's own over the 8 strips of levels 25 and 27 with effects and creatures at random, all of RAM but the stack; the self-test holds the arm's call to it, and this walked headless
+func _slide(dx: int, dz: int) -> void:
+	player.gx += dx
+	player.gz += dz
+	player._to_godot()
+	var fx := get_node_or_null("../Effects")
+	if fx:
+		fx.slide(dx, dz)
+	var an := get_node_or_null("../Actors")
+	if an:
+		an.slide(dx, dz)
+
+
 # The traps' and the pads' arms a frame, in slot order among themselves. A
 # pad's warp runs to its end inside the arm in the game, and the arms after it
 # meet the player where they came down; here it is frames of fading, so they
@@ -1728,6 +1748,8 @@ func _traps() -> void:
 			KFWarps.step(d, trap_world)
 			if KFGame.modal:
 				return
+		elif int(d["op"]) == KFWarps.WRAP_OP:
+			KFWarps.wrap(d, trap_world)
 		_draw_trap(k, d)
 
 

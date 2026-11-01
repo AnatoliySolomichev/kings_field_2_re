@@ -832,6 +832,19 @@ func _in_range(ax: int, ay: int, az: int, x: int, y: int, z: int, r: int,
 	return coll.in_range(ax, ay, az, x, y, z, r, top, own)
 
 
+# world_slide's last loop: every creature in the table. One not yet woken has
+# no place to move: _spawn gives it its home's.
+# @port helper -- world_slide's part in the creatures, whose marker loot.gd _slide carries
+func slide(dx: int, dz: int) -> void:
+	for k in SLOTS:
+		var a = actors[k]
+		if a == null or not a.has("px"):
+			continue
+		a["px"] = int(a["px"]) + dx
+		a["pz"] = int(a["pz"]) + dz
+		_place(k)
+
+
 # actor_in_range (0x8004d838), collide_query's flag 0x40: the first awake
 # creature, dying or not, in_range of the point at its radius + r, with its
 # height as the top and `own` the point's; -1 for none. It skips model 0x6e --

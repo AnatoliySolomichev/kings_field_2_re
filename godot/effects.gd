@@ -3462,6 +3462,16 @@ func attack_hit(code: int, flags: int, kind: int, strength: int, stat: int, pct:
 		player.call("spell_struck", out, kind)
 
 
+# world_slide's second loop: every live slot not drawn with +8 & 0xc 0xc.
+# @port helper -- world_slide's part in the effects, whose marker loot.gd _slide carries
+func slide(dx: int, dz: int) -> void:
+	for k in COUNT:
+		var s := k * STRIDE
+		if m[s] != 0xFF and m[s + 8] & 0xC != 0xC:
+			w32(s + 0x18, s32(s + 0x18) + dx)
+			w32(s + 0x20, s32(s + 0x20) + dz)
+
+
 # A trap's strike (object_interpreter's .L200), which has no spell record:
 # its four attacks and no effect, strength 0x1388, stat 5, the point. The mask
 # whole, as attack_hit's: the player and a creature at once strike neither.

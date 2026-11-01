@@ -1285,7 +1285,7 @@ def build_levers(lv, load, grid, look, prims_of, rows, trap_rows):
     import warps
     items = []
     for k, o in sorted(load.recs.items()):
-        pad = o["op"] == warps.OP and k not in FREED.get(lv, ())
+        pad = o["op"] in (warps.OP, warps.WRAP_OP) and k not in FREED.get(lv, ())
         if o["op"] not in levers.OPS + traps.OPS and not pad:
             continue
         tr = load.rows[o["type"]]

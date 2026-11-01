@@ -218,13 +218,13 @@ the equipment tables, against a RAM snapshot           3264/3264, 2112/2112, 16/
                                                        player_recalc_stats 483 of
                                                        483 values over 21 snapshots
 the conversation hooks, two readings of one table      23 of 23
-how much of the game the port has (portmap progress)   49.4% of the game's own
-                                                       code (game 49.7%, open
+how much of the game the port has (portmap progress)   49.5% of the game's own
+                                                       code (game 49.8%, open
                                                        46.7%, end 32.6%; partial at
                                                        half, the library left out)
-the port against the game, function by function        1001 of 1001 placed: 534
-                                                       reproduce the game, 467 the
-                                                       port's own; 608 markers and
+the port against the game, function by function        1007 of 1007 placed: 537
+                                                       reproduce the game, 470 the
+                                                       port's own; 611 markers and
                                                        1166 cited addresses, every
                                                        one resolving
 the object loader, against 13 snapshots                angles 4344/4352, scale and
@@ -379,13 +379,14 @@ every level's own entry 19 (tools/deaths.py)           calls in order and all of
 level 2's lake, against the game's own opcode 0x5f    672 of 672 runs, the calls
 and the level's entry 9 (tools/lake.py)                and all of RAM but the
                                                        stack
-the traps, against the game's own opcodes 0x51, 0x52, 3600 of 3600 frames over 98
-0x55 and 0x5a, object_vertex_point and model_vertex    objects of four levels, the
-(tools/traps.py)                                       calls and all of RAM but
+the traps, against the game's own opcodes 0x51, 0x52, 4500 of 4500 frames over 100
+0x55, 0x5a and 0x32, object_vertex_point and           objects of five levels, the
+model_vertex (tools/traps.py)                          calls and all of RAM but
                                                        the stack
-the pads, against the game's own opcode 0xeb       960 of 960 runs over all 16,
-(tools/warps.py)                                       the calls and all of RAM but
-                                                       the stack
+the pads and the plain with no end, against the      960 of 960 runs over all 16
+game's own opcodes 0xeb and 0xea and world_slide       pads, 320 of 320 over the 8
+(tools/warps.py)                                       strips, the calls and all of
+                                                       RAM but the stack
 the levers, the trees and the slabs, against the      7200 of 7200 frames over 45
 game's own opcodes 0x53, 0x56 and 0x58 and             objects of six levels, the
 object_signal (tools/levers.py)                        calls and all of RAM but
@@ -459,7 +460,7 @@ effects 1494 of 1494 runs, 27656 of 27656 frames · aims 300 of 300 · volleys 2
 the run 150129 of 150129 frames
 player_take_hit 300 of 300 · the status 40 of 40 runs, 6312 of 6312 frames
 casting 1200 of 1200 · the attacking arms 240 of 240 · creature hits 400 of 400
-use_item 624 of 624 · conversation hooks 360 of 360 · entry 5 168 of 168 · triggers 200 of 200 · give and take 224 of 224 · entry 1 120 of 120 · level_overlay_tick 48 of 48 · entry 19 208 of 208 · the scenes 448 of 448 · levers 754 of 754 · traps 4200 of 4200 · warps 436 of 436 · teleports 72 of 72 · the lake 168 of 168 · the ending 31 of 31 · warp_to 55 of 55 · seals 975 of 975 · fades 117 of 117
+use_item 624 of 624 · conversation hooks 360 of 360 · entry 5 168 of 168 · triggers 200 of 200 · give and take 224 of 224 · entry 1 120 of 120 · level_overlay_tick 48 of 48 · entry 19 208 of 208 · the scenes 448 of 448 · levers 754 of 754 · traps 5700 of 5700 · warps 628 of 628 · teleports 72 of 72 · the lake 168 of 168 · the ending 31 of 31 · warp_to 55 of 55 · seals 975 of 975 · fades 117 of 117
 carry-over 61 of 61 fields and the place
 ```
 

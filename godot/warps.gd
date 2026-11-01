@@ -1,17 +1,19 @@
 class_name KFWarps
-# The pads that carry the player: opcode 0xeb. A flat square on the floor of one
+# What carries the player. Opcode 0xeb, the pads: A flat square on the floor of one
 # cell whose record is a warp_to record but for the facing's size: +0x38 the
 # level, +0x39 and +0x3a the block's last two bytes, +0x3b, +0x3c the cell,
 # +0x3d the height in 128s, +0x3e the facing negated in 16ths. +0x3f 0 holds it
 # off, which the levels' own code does till a creature dies. Over the
 # dictionaries of godot/traps.gd; `w` is the world, loot.gd's -- rect, carry,
-# level -- and the warp itself crossing.gd's, which warp_to's plan drives.
-# tools/warps.py is the same in Python, held to the game's own arm; the
-# self-test holds this to it.
+# level, slide -- and the warp itself crossing.gd's, which warp_to's plan drives.
+# Opcode 0xea, the strips at the edges of levels 25's and 27's plain, walks the
+# whole world back 24 cells, so that the plain has no end. tools/warps.py is
+# the same in Python, held to the game's own arms; the self-test holds this to it.
 #
 # @exe game
 
 const OP := 0xEB
+const WRAP_OP := 0xEA
 const NO_LEVEL := 0xFF
 const TURNING_LEVEL := 24              # the only one that turns them
 const TURNS := {0x144: 0x80, 0x145: 0x100}
@@ -36,6 +38,21 @@ static func plan(d: Dictionary, block: Array, pitch: int) -> Dictionary:
 		"facing": (-(int(d["b3e"]) << 4)) & 0xFFF, "pitch": pitch, "answer": 0,
 		"out": [1, 0, 0x1000, 0x100], "back": [[1, 0x1000, 0x1000, 0], [1, 0x1000, 0, -0x100]],
 		"clear": false, "tilt": false}
+
+
+# Opcode 0xea's arm; tools/warps.py wrap_step. slide is world_slide. The arm's
+# loop over the records of 0xe7 is not here: no level places one.
+# @orig game:0x8004a5b8 object_interpreter+0x35a8  status:verified -- opcode 0xea's arm; tools/warps.py wrap_check, 320 of 320 runs of the game's own over the 8, the calls in order and all of RAM but the stack, the self-test this to it; grid_mark not called, the port's marks being worked out from where things stand
+static func wrap(d: Dictionary, w: Dictionary) -> void:
+	if not w["rect"].call(int(d["lock"]), int(d["b39"]), int(d["b3a"]), int(d["b3b"]), int(d["y"])):
+		d["b40"] = 0
+	elif int(d["b40"]) == 0:
+		w["slide"].call(_cells(int(d["b3c"])), _cells(int(d["b3d"])))
+
+
+# @port helper -- an s8 of cells, as the arm's lb and sll make it
+static func _cells(v: int) -> int:
+	return (v - 0x100 if v & 0x80 else v) << 11
 
 
 # Opcode 0xeb's arm; tools/warps.py step. carry is the rest of it: every
