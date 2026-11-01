@@ -24,9 +24,8 @@ extends Node3D
 # **B sends the same buttons to both.** The line carries the game's own decoded
 # button word, so with B on the port stops reading the keyboard and takes that
 # instead: one pair of hands in the emulator window drives the game and the copy
-# at once. It only works in that direction. Nothing here can press a button in
-# the emulator -- there is no input to inject through, which is why every
-# breakpoint script in this repository ends by asking a person to play.
+# at once. It only works in that direction: nothing here gives the emulator
+# buttons (a script of its own can: TOOLS.md, "A playthrough").
 #
 # B and C are worth having apart. With C on and locked, the port is reset to the
 # game's state every frame and the readout is a per-frame difference. With C off

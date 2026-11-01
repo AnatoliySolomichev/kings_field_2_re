@@ -891,6 +891,39 @@ checked. TOOLS.md has the five numbered things to do in the game; in short:
 * **the shop and the inn.** The arm of `script_interpreter` that runs when a
   talker's header `+0x12` is not `0xff`.
 
+## 11a. A playthrough as the test
+
+Every check so far holds one piece of the port to the game's code for that piece.
+What none can see is the pieces together: the pad that carried the player
+straight back (a warp the game runs inside one arm, the port over seventeen frames
+of fade) came out in a headless run, not a check. A recorded playthrough
+(TOOLS.md, "A playthrough") is the instrument for that, and it needs a person
+once. In order:
+
+1. **A ten-minute session** (PLAYTEST.md, B13) through the window, replayed with
+   none. Scripted sessions repeat; one played by hand with the sound on has not
+   been tried. Until that is done nobody should play twenty hours into it.
+2. **The tables against the Python models.** `playlog.py dump` gives real frames
+   of the game's own bytes, and tools/doors.py, traps.py, effects.py and the rest
+   already run on those bytes: one frame of the model from frame N's, set
+   beside frame N+1's. Real data, before anything in the port moves.
+3. **One frame in the port.** The port has no game_main: Player, Actors, Effects,
+   Doors, Loot and Crossing each run on a clock of their own, in the scene's
+   order, and the game's is objects, player, creatures, effects, the level. Until
+   one tick runs them in that order, a whole frame cannot be compared.
+4. **One generator.** actors.gd has its own, effects.gd, player.gd, levelup.gd
+   and loot.gd ask Godot's. They want one, the game's, its seed copied each frame
+   from `0x85ec`.
+5. **Locked, then free.** The port taken to the game's state, one frame run and
+   compared, for all the tables; then free from a save loaded in both.
+6. **The walkthrough.** Across a level change the two part: the game loads in the
+   background for about a hundred frames while the player walks on (which is why
+   nobody sees a seam), and the port does it on the trigger's frame; so the port
+   is put back in step at each crossing. The events of a session (`playlog.py
+   events`) are the script: walk the route, finish a creature the session killed
+   with the test key (by its slot, so never an NPC), take what was taken, and set
+   the flags, the pack and the levels side by side.
+
 ## 12. The port against the game
 
 Every function in `godot/` now says what it is in the game (AGENT.md, "The port

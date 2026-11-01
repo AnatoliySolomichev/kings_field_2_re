@@ -6513,8 +6513,7 @@ pcsx-redux -interpreter -lua_stdout -dofile emu/bp.lua -iso emu/kf2.cue -run
 `emu/bp.lua` sets the switch, arms the archive readers and logs archive, entry
 and return address for every hit to `out/lua_bp.log`.
 
-There is still no way to press a button, so anything needing input has to come
-from a person at the window.
+(This said that nothing could press a button. Withdrawn: TOOLS.md, "A playthrough".)
 
 ### Never `return false` from a breakpoint callback
 

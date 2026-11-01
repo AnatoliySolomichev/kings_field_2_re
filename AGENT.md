@@ -398,6 +398,10 @@ object_use_state and the overlay's entry 9             stack; 1440 of 1440
 a thing into the pack and out, against the game's     1680 of 1680 runs, the
 own give_item and take_item with every level's         answer, the calls and all
 entries 6 and 11 (tools/givetake.py)                   of RAM but the stack
+a session against its replay in another process,      5158 of 5159 frames across a
+rand's state, the player and every table's hash        level change; 659 of 659 from
+(tools/playlog.py)                                     a keyframe; 528 of 528 of a
+                                                       session recorded in the window
 the warp, against the game's own warp_to               280 of 280 runs, every
                                                        record, calls and fields
 what a change of level writes of the player, off       4 stores in 114 routines:
@@ -487,9 +491,11 @@ cells and the buttons. Whenever a finding wants a recording or a look, add it
 there (in Russian: it is written for the player-tester) as well as to BACKLOG.md,
 and take it out once its number is in "What is standing".
 
-* **Anything needing a controller.** Breakpoint scripts can be loaded into a
-  running emulator with `dofile(...)` from its Lua console, but nobody can press
-  a button from here. Say exactly where to walk and what to do, in cell
+* **Anything needing someone to play.** The emulator runs here with no window and
+  a script can press its buttons (TOOLS.md, "A playthrough"), so what wants only
+  a given button at a given moment can be run without anyone. Getting somewhere
+  in the game still takes a person, and a session they recorded can be played
+  back as often as wanted. Say exactly where to walk and what to do, in cell
   coordinates — the Godot build shows the cell under the player.
 * **Anything needing eyes on the game.** The level was exported mirrored left to
   right for a whole round trip. No map, no top-down render and no automated

@@ -614,22 +614,22 @@ The whole file is the port's own: **check** — the side-by-side comparison with
 
 | function | in the game | status |
 | --- | --- | --- |
-| [`_ready`](godot/ghost.gd#L117) | — port's own, *check* | |
-| [`_unhandled_input`](godot/ghost.gd#L152) | — port's own, *check* | |
-| [`_reset`](godot/ghost.gd#L198) | — port's own, *check* | |
-| [`_resync`](godot/ghost.gd#L209) | — port's own, *check* | |
-| [`_read`](godot/ghost.gd#L221) | — port's own, *check* | |
-| [`_process`](godot/ghost.gd#L261) | — port's own, *check* | |
-| [`_follow`](godot/ghost.gd#L375) | — port's own, *check*: the game's swing, doors and creatures laid over the port's | |
-| [`_advance`](godot/ghost.gd#L392) | — port's own, *check* | |
-| [`_flush`](godot/ghost.gd#L429) | — port's own, *check* | |
-| [`_notification`](godot/ghost.gd#L445) | — port's own, *check* | |
-| [`_redraw_flags`](godot/ghost.gd#L450) | — port's own, *check* | |
-| [`_why_not`](godot/ghost.gd#L472) | — port's own, *check* | |
-| [`_ago`](godot/ghost.gd#L489) | — port's own, *check* | |
-| [`_hud`](godot/ghost.gd#L499) | — port's own, *check* | |
-| [`_hud_text`](godot/ghost.gd#L506) | — port's own, *check*: the comparison's lines, on the screen's label | |
-| [`_exit_tree`](godot/ghost.gd#L553) | — port's own, *engine*: the scratch label goes with the node | |
+| [`_ready`](godot/ghost.gd#L116) | — port's own, *check* | |
+| [`_unhandled_input`](godot/ghost.gd#L151) | — port's own, *check* | |
+| [`_reset`](godot/ghost.gd#L197) | — port's own, *check* | |
+| [`_resync`](godot/ghost.gd#L208) | — port's own, *check* | |
+| [`_read`](godot/ghost.gd#L220) | — port's own, *check* | |
+| [`_process`](godot/ghost.gd#L260) | — port's own, *check* | |
+| [`_follow`](godot/ghost.gd#L374) | — port's own, *check*: the game's swing, doors and creatures laid over the port's | |
+| [`_advance`](godot/ghost.gd#L391) | — port's own, *check* | |
+| [`_flush`](godot/ghost.gd#L428) | — port's own, *check* | |
+| [`_notification`](godot/ghost.gd#L444) | — port's own, *check* | |
+| [`_redraw_flags`](godot/ghost.gd#L449) | — port's own, *check* | |
+| [`_why_not`](godot/ghost.gd#L471) | — port's own, *check* | |
+| [`_ago`](godot/ghost.gd#L488) | — port's own, *check* | |
+| [`_hud`](godot/ghost.gd#L498) | — port's own, *check* | |
+| [`_hud_text`](godot/ghost.gd#L505) | — port's own, *check*: the comparison's lines, on the screen's label | |
+| [`_exit_tree`](godot/ghost.gd#L552) | — port's own, *engine*: the scratch label goes with the node | |
 
 ### [`godot/held.gd`](godot/held.gd)
 

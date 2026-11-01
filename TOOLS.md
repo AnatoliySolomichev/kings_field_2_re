@@ -1470,9 +1470,9 @@ drives the game and the port at once, and the readout shows, every frame, which
 buttons are down, where the game's player is, where the port's is, and the
 difference between them.
 
-It works in that direction only. Nothing here can press a button *in* the
-emulator: there is no input to inject through, which is why every breakpoint
-script in this repository ends by asking a person to play.
+It works in that direction only: the port takes the emulator's buttons and never
+gives it any. (This said for a long time that nothing could press a button in
+the emulator. Nothing here did; the emulator could all along. See "A playthrough".)
 
 B and C answer different questions and are worth using apart. **C on, locked**
 resets the port to the game's whole state every frame, so each line of the
@@ -2112,10 +2112,10 @@ It watches **instructions, not memory**, on purpose. A write watchpoint's
 callback runs before the store lands, so reading memory there gives the value
 the byte *had*; the first version of this script did that and reported two
 `sb $zero` instructions as setting 1 and 2.
-There is no way to press a button from here, so anything needing input needs a
-person at the window. `POST /api/v1/lua` returns 404, so a script cannot be
-injected into a running emulator either — it has to be loaded from the
-emulator's own Lua console, or at startup.
+`POST /api/v1/lua` returns 404, so a script cannot be injected into a running
+emulator: it has to be loaded from the emulator's own Lua console, or at startup.
+A script can press buttons, though ("A playthrough", below); it was written here
+for a long time that nothing could, and nobody had looked.
 
 **`psxlive.py`** — reads RAM and VRAM over that API without disturbing the game.
 
@@ -2144,6 +2144,76 @@ straight from memory and stay right either way.
 **`bpwatch.py`**, **`bptest.py`** — breakpoint experiments driven from Python.
 
 ---
+
+## A playthrough, recorded and played back
+
+**The emulator runs with no window, and a script can work its pad.** Both were
+written off here for months without being tried. `emu/squashfs-root/AppRun -no-ui
+-interpreter -lua_stdout -dofile X.lua` runs the game headless at about one and a
+half times its speed, so anything scripted can be run from a terminal, with
+nobody at the machine; `PCSX.SIO0.slots[1].pads[1].setOverride(button)` and
+`clearOverride`, the buttons in `PCSX.CONSTS.PAD.BUTTON`, press a button on the
+emulated pad, and the word comes back out of PadRead as if a hand had. A
+breakpoint at PadRead's return can write `$v0` as well, which is what the replay
+does: it lands on the game's own call and not on the emulator's clock.
+
+**So one session is enough.** `emu/bp29.lua` is a flight recorder for whole
+playthroughs, and `tools/playlog.py` plays them back.
+
+```
+./emu/run.sh debug bp29.lua                  play; it records from the first frame of GAME.EXE
+python3 tools/playlog.py                     the sessions in out/run/
+python3 tools/playlog.py replay              the emulator, no window, the same buttons
+python3 tools/playlog.py replay --key 3      from keyframe 3
+python3 tools/playlog.py mark "text"         a note at the frame the recorder is on
+python3 tools/playlog.py notes               the notes
+python3 tools/playlog.py note 1              note 1: the place, the objects and the creatures
+                                             about it, by slot, and the picture as a PNG
+python3 tools/playlog.py dump A B            frames A..B's tables whole, into a .zst
+```
+
+**The game repeats.** That is what the rest stands on, and it was measured
+rather than assumed. From one snapshot, scripted words at PadRead, two runs in
+one process: 3000 of 3000 frames with rand's state, the vertical blanks, the
+player's place, the calls of PadRead, the creatures, the effects, the player, the
+grid and the state block alike, and the objects in 2999 (one frame's difference
+that does not last). Two sessions recorded in two processes, the same presses through the emulated
+pad, 5159 frames that walk from level 0 into level 4, back and in again: every
+field alike but the blanks on one frame and the object table's hash on another,
+which the next frame has back. A replay of one by a third process, 5158 of 5159
+frames; from its second keyframe, 659 of 659; of a session recorded in the
+emulator's window, sound off, replayed with none, 528 of 528. That one frame of
+the objects is not explained: the other session and its replay agree with each
+other there, and the blanks are the game's clock for some timers (`vblank_count`),
+so a timer set a blank apart is the likely reading, not a settled one. All of RAM
+does differ, by a few bytes to a hundred and fifty, all but a stray stack word
+in the sound library's voice tables about 0x8009e800, which follow the emulator's
+SPU thread. Nothing has been seen to come back from there into the game, and a
+replay that wandered would say so, frame and table, because it holds itself to
+the session. Not yet tried: a session played by hand with the sound on.
+
+A blank can land either side of `frame_limit`'s first instruction, so `vblank` is
+off by one on the odd frame and the next frame's wait takes it up. It is counted
+and not held against the frame.
+
+**What a session is.** `pad.bin` every word PadRead gave, `frames.bin` sixty bytes
+a frame, the place, rand's state and a hash of each table (`emu/kfrec.lua`), and
+`key-NNNN` the emulator's whole state with both memory cards every five minutes of
+game: 4 MB an hour and 1.8 MB a keyframe. The tables whole, 149 KB a frame, which
+zstd took to 1.5 KB on eleven frames, are not kept while playing: `dump` gets them
+from a replay, and it can get anything else in RAM the same way. Rand's state is at `0x85ec`, OpenBIOS's own place for
+it and not Sony's, so a session belongs to the BIOS it was played on.
+
+A note is a moment to come back to. The recorder's small window has a text field,
+a Note button and Pause; `playlog.py mark` does the same from a terminal, for
+when that window is not to hand. Either way the frame, all of RAM and the picture
+are kept, so `note` can say what was in front of the player by slot.
+
+Two things to know. A game frame is a pass of game_main's loop, and **a menu has
+none**: the frames stop while it is open and PadRead goes on being called,
+thousands of times, so a scripted run that wanders into the menu sits there
+for good, which looks like a hang. And the process is called `AppRun`, not
+`pcsx-redux`, which is the name to look for.
 
 ## How a finding usually goes
 
