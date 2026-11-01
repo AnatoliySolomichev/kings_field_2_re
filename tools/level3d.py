@@ -804,6 +804,7 @@ def build_objects_gltf(lv, out="out/godot"):
     import doors as doormod
     import levers as levermod
     import traps as trapmod
+    import warps as warpmod
     leaves = {}                         # a double door's partner -> its door
     for k, o in load.recs.items():
         if o["op"] in doormod.DOUBLE_OPS:
@@ -813,7 +814,8 @@ def build_objects_gltf(lv, out="out/godot"):
     for _k, o in sorted(load.recs.items()):
         if o["slot"] in loot:
             continue                    # a node of its own: build_loot
-        if o["op"] in doormod.GATE_OPS + levermod.OPS + trapmod.OPS:
+        if o["op"] in doormod.GATE_OPS + levermod.OPS + trapmod.OPS \
+                or (o["op"] == warpmod.OP and o["slot"] not in FREED.get(lv, ())):
             continue                    # a node of its own: build_lifts, build_levers
         # The game's own rule, read off load_object_placement and render_walk:
         # the opcode, the record's +0 against the view byte, and the scale.
@@ -1271,18 +1273,20 @@ def build_lifts(lv, load, grid, look, prims_of, rows):
 
 
 def build_levers(lv, load, grid, look, prims_of, rows, trap_rows):
-    """The levers, the trees, the slabs (tools/levers.py) and the traps
-    (tools/traps.py), one node each, `lNNN` by slot, and their rows: the slot,
-    the model and the animation as a lift door's -- a lever, a slab and a trap
-    move by the clock +0xa -- and the scale; a tree's row the radius its +0x38
-    takes the circle from, a trap's its angles and what the arms read of its
-    type. The vertices are the model's own, at scale 1: the node turns and
-    sizes them."""
+    """The levers, the trees, the slabs (tools/levers.py), the traps
+    (tools/traps.py) and the pads (tools/warps.py), one node each, `lNNN`
+    by slot, and their rows: the slot, the model and the animation as a lift
+    door's -- a lever, a slab and a trap move by the clock +0xa -- and the
+    scale; a tree's row the radius its +0x38 takes the circle from, a trap's
+    and a pad's its angles and what the arms read of its type. The vertices
+    are the model's own, at scale 1: the node turns and sizes them."""
     import levers
     import traps
+    import warps
     items = []
     for k, o in sorted(load.recs.items()):
-        if o["op"] not in levers.OPS + traps.OPS:
+        pad = o["op"] == warps.OP and k not in FREED.get(lv, ())
+        if o["op"] not in levers.OPS + traps.OPS and not pad:
             continue
         tr = load.rows[o["type"]]
         try:
@@ -1303,7 +1307,7 @@ def build_levers(lv, load, grid, look, prims_of, rows, trap_rows):
                           quaternion(_rot3(rx, ry + 0x800, rz))))
         row = {"slot": k, "model": lift_model(o["type"], lv), "anim": o.get("b1", 0),
                "scale": o["scale"][0]}
-        if o["op"] in traps.OPS:
+        if o["op"] in traps.OPS or pad:
             row.update(traps.row_of(bytes(tr)), angles=[a & 0xFFFF for a in o["angles"]],
                        b42=o["tail"][10], b43=o["tail"][11])
             trap_rows.append(row)
@@ -1731,7 +1735,7 @@ def project(lv, out="out/godot", start=(57, 4)):
                  "loot.gd", "messages.gd", "document.gd", "talk.gd", "info.gd", "menu.gd",
                  "crossing.gd", "card.gd", "levelstate.gd", "loadscreen.gd", "useitem.gd",
                  "levelin.gd", "triggers.gd", "ticks.gd", "lake.gd", "ending.gd", "deaths.gd", "scenes.gd",
-                 "teleports.gd", "levers.gd", "traps.gd"):
+                 "teleports.gd", "levers.gd", "traps.gd", "warps.gd"):
         shutil.copyfile(f"godot/{name}", f"{out}/{name}")
     try:
         import opening
@@ -1980,6 +1984,8 @@ def project(lv, out="out/godot", start=(57, 4)):
         levers.export(out)
         import traps
         traps.export(out)
+        import warps
+        warps.export(out)
     except Exception as e:                       # no snapshot, no teleport cases
         print(f"teleport cases skipped: {e}")
     print(f"godot project in {out}/ — player starts in cell ({cx},{cz})")
@@ -2025,7 +2031,7 @@ def verify(out="out/godot"):
         if line.startswith(("loaded:", "movement:", "steps:", "creature steps:",
                             "fences:",
                             "creature run:",
-                            "levels:", "use_item:", "warp_to:", "conversation hooks:", "entry 5:", "triggers:", "give and take:", "entry 1:", "level_overlay_tick:", "entry 19:", "the scenes:", "teleports:", "levers:", "traps:", "the lake:", "the ending:", "angles:",
+                            "levels:", "use_item:", "warp_to:", "conversation hooks:", "entry 5:", "triggers:", "give and take:", "entry 1:", "level_overlay_tick:", "entry 19:", "the scenes:", "teleports:", "levers:", "traps:", "warps:", "the lake:", "the ending:", "angles:",
                             "scripts:", "damage:", "equipment:", "player_recalc_stats:", "knock-back:", "weapon:", "animation:", "effects:", "lift doors:", "chests:", "seals:", "fades:", "carry-over:", "inscriptions:", "conversations:", "menus:", "routines:", "saves:", "level states:", "the run:", "player_take_hit:", "the status:", "casting:", "the attacking arms:", "creature hits:", "creature strikes:", "creature holds:", "FAIL", "  first",
                             "  level case", "  angle (", "  script level",
                             "  hit ")):

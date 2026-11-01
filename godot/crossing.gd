@@ -338,8 +338,9 @@ func _jump(plan: Dictionary) -> void:
 	player.pstate = 0
 	if int(plan.get("answer", 0)):
 		player.warped = 1                # 0x801b25ee, below record 0xc
-	player.tilt = [0, 0, 0]
-	player.tilt_vel = [0, 0, 0]
+	if bool(plan.get("tilt", true)):     # a pad leaves it (warps.gd)
+		player.tilt = [0, 0, 0]
+		player.tilt_vel = [0, 0, 0]
 	KFGame.block = (plan["block"] as Array).map(func(v): return int(v))
 	KFInfo.note("warp: level %d, cell (%d, %d), facing 0x%x, block %s" % [lv, at.x >> 11,
 		at.z >> 11, int(plan["facing"]), str(KFGame.block)])

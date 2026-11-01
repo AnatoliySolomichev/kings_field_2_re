@@ -3146,6 +3146,75 @@ walks into a gate's cells and those a wrong size would give. In the port:
 took it away at z 71296 and brought it back there; the gate shut when the player
 left its cell, its cells answering wall.
 
+### The pads that carry the player: opcode 0xeb
+
+`0x8004a2e0`, 16 objects, each a flat square 2816 across, its y 0, lying on the
+floor of one cell: what they look like is the model's texture, which nobody has
+looked at. (Earlier notes here called them stairs, for their calling `level_load`;
+nothing in the arm climbs.)
+`python3 tools/warps.py` lists them, and they are a network:
+
+```
+level  7 (17, 44)   <-> level 16 (2, 2)
+level 16 (71, 54)   <-> level 17 (38, 35)
+level 16 (15, 2)    <-> level 17 (68, 72)
+level  8 (6, 16)    <-> level 19 (15, 1)
+level 19 (36, 75)   <-> level 20 (15, 57)
+level 20 (2, 44)    <-> level 20 (39, 59)
+level 24 (7, 73)     -> level 25 (40, 35), the only way onto the last level
+```
+
+and three that go nowhere, `+0x38` 0xff: level 20's slots 2 and 4 and level 24's
+46, which turns over 45 at the same cell. **The record is one of warp_to's own
+(0x800130f0), a byte for a byte**: `+0x38` the level, `+0x39` and `+0x3a` the
+block's last two bytes, `+0x3b` and `+0x3c` the cell, `+0x3d` the height in 128s;
+only the facing is smaller, `+0x3e` negated, in 16ths.
+
+```
++0x3f 0                 nothing at all, this frame
++0x38 not 0xff          the player not in the object's own cell at its height
+                        (player_in_rect): +0x40 0.  In it, +0x40 0: every
+                        0xeb's +0x40 1, and the warp
+level 24                type 0x144 turns 0x80 a frame, 0x145 0x100
+```
+
+`+0x3f` is the switch the levels' own code holds: level 17's slot 63 by flag 0x52
+in its entry 5, level 19's 85 by flag 0x55 there and in entry 19, when the creature
+in slot 0x14 dies. Each writes `+0` with it, 0 or 2, so the pad is not drawn
+till it works. The loader leaves `+0x40` 1, so a player put down on one is not
+carried again till they have stepped off it.
+
+The warp is warp_to's, written out again, without its answer, its
+`screen_fade(0xff)` and its clearing of the tilt at 0x801b2618:
+`fade_frames(1, 0, 0x1000, 0x100)`, `actors_retire_marked`, `level_load` till
+nothing is under way, `object_trigger(L, L, L, -, -)` -- or `(-, -, L, -, -)` and
+spawn_anywhere 1 on the block in hand -- `level_load` again, `res_wait`, the
+player's state, 0x801b2620..0x801b2625 and the 8 bytes of view_angles from
+player_pitch; the cell's middle, the height, the facing and the view's yaw;
+`fade_frames(1, 0x1000, 0x1000, 0)`, `res_wait`, `fade_frames(1, 0x1000, 0,
+-0x100)`, and `object_trigger(-, -, -, +0x39, +0x3a)`.
+
+**Checked against the game's own** (`tools/warps.py --check`): every record of the
+seven levels, GAME.EXE's own arm, the player in and about the cell at heights
+about it, `+0x3f`, `+0x38`, every pad's `+0x40`, the view and the block in hand at
+random, `level_load` ending a change at once: **960 of 960 runs**, the calls in
+order and all of RAM but the stack; 120 of them carried the player, 45 on the
+block in hand. Fourteen models broken on purpose are caught.
+
+**In the port**: `godot/warps.gd` (the self-test, `warps`) on `godot/traps.gd`'s
+dictionaries, in `loot.gd _traps`; the warp is `crossing.gd warp`, which took
+warp_to's plan and takes this one with `clear` false and `tilt` false. Each pad
+is a node, `lNNN`, turned by its yaw and drawn while `+0` is not 0, but level 20's
+slot 2, which entry 7 frees and which stays `f002`. In the game the warp runs
+to its end inside the arm, so the arms after it meet the player where they came
+down; here it is frames of fading, so `_traps` stops there, or a pad further on
+would see the player gone and clear the `+0x40` that keeps it from carrying them
+straight back. Run headless: level 7's pad into level 16 and back again, not
+while the player stood on it and at once when they stepped off and on; level 20's
+pad 1 to pad 5, held there; level 19's pad 85 unseen and dead till the death of
+slot 0x14 through entry 19; level 24's two turning, and 45 onto level 25. Not in
+the port: `actors_retire_marked`, which warp_to's copy has not either.
+
 ### What else levels 0 and 4 place
 
 * **Opcode `0x51`, level 0's four of type 219** (slots 209 to 212): a trap

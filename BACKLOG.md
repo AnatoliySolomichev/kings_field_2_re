@@ -67,8 +67,8 @@ record names (FORMATS.md, "Walking from one level into the next";
 level's world (`worldNN.tscn`, for each level `tools/level3d.py` has built) and
 carries the player over (`godot/crossing.gd`); the comparison follows the game
 into it. Left: what the other bytes of the block (0, 2, 3, 4) choose, the
-level_state written for the level left, and the stairs (opcode 0xeb, which call
-`level_load` themselves).
+level_state written for the level left. The pads, opcode 0xeb, which call
+`level_load` themselves, are in (FORMATS.md, "The pads that carry the player").
 
 Still open underneath it: the per-level `FDAT.T` triples at `3n` are read by
 something we have not found, and a level change touches no archive at all, so
@@ -769,6 +769,10 @@ it would open:
   their sounds, and with them level 18's two 0x55s, which its levers 13 and 62
   take out of the world and bring back, and its two gates, 0x5a (FORMATS.md,
   "What rolls and what shuts").
+* **class 0xeb, the pads -- read and in the port** (FORMATS.md, "The pads
+  that carry the player"): 16 objects on seven levels, level 24's the way onto
+  level 25, which nothing in the port reached before; `tools/warps.py`, 960 of
+  960 runs of the game's own arm, all of RAM but the stack.
 * **classes 0x00 (12) and 0x1b (23) -- read and in the port** (FORMATS.md, "A
   double door"): opcode 1's arm across a doorway three cells wide, 0x1b's
   with a partner leaf swung the other way; `tools/doors.py double_step`,

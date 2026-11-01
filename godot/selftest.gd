@@ -377,6 +377,9 @@ func _init() -> void:
 	if not _traps():
 		quit(1)
 		return
+	if not _warps():
+		quit(1)
+		return
 	if not _teleports():
 		quit(1)
 		return
@@ -3172,6 +3175,77 @@ func _traps() -> bool:
 				if first == "":
 					first = "point %d: %s, python %s" % [pn, str(got), str(want)]
 	print("traps: %d of %d frames and points match tools/traps.py (%d points) -- the questions in order, the answers and every field" % [
+		n + pn - bad, n + pn, pn])
+	if bad > 0:
+		print("  first difference: " + first)
+	return bad == 0
+
+
+# The pads, godot/warps.gd against the frames tools/warps.py ran of its
+# model, which the game's own holds: the same questions, and the same fields
+# after each frame; and the warp's plans.
+func _warps() -> bool:
+	if not FileAccess.file_exists("res://warpcheck.json"):
+		print("warps: no cases to check against")
+		return true
+	var doc = JSON.parse_string(FileAccess.get_file_as_string("res://warpcheck.json"))
+	var n := 0
+	var bad := 0
+	var first := ""
+	var said := [[]]                   # held in an array: a lambda keeps its locals as they were
+	var pos := [0]
+	var odd := [false]
+	var here := [0]
+	var w := {
+		"rect": func(cx: int, cz: int, wd: int, h: int, y: int) -> bool:
+			var at: int = pos[0]
+			pos[0] = at + 1
+			var e: Array = (said[0] as Array)[at] if at < (said[0] as Array).size() else []
+			if e.size() < 7 or str(e[0]) != "rect" or int(e[1]) != cx or int(e[2]) != cz \
+					or int(e[3]) != wd or int(e[4]) != h or int(e[5]) != y:
+				odd[0] = true
+				return false
+			return int(e[6]) != 0,
+		"carry": func(d: Dictionary) -> void:
+			var at: int = pos[0]
+			pos[0] = at + 1
+			var e: Array = (said[0] as Array)[at] if at < (said[0] as Array).size() else []
+			if e.is_empty() or str(e[0]) != "carry":
+				odd[0] = true
+			d["b40"] = 1,
+		"level": func() -> int:
+			return here[0]}
+	for run in doc["runs"]:
+		var d := {}
+		for k in run["d"]:
+			d[k] = int(run["d"][k])
+		here[0] = int(run["level"])
+		for fr in run["frames"]:
+			d["b3f"] = int(fr["b3f"])
+			said[0] = fr["calls"]
+			pos[0] = 0
+			odd[0] = false
+			KFWarps.step(d, w)
+			var got := [int(d["b40"]), int(d["yaw"])]
+			var want := [int(fr["out"][0]), int(fr["out"][1])]
+			n += 1
+			if got != want or odd[0] or pos[0] != (fr["calls"] as Array).size():
+				bad += 1
+				if first == "":
+					first = "slot %d: %s, python %s, %d of %d calls" % [int(d["slot"]), str(got),
+						str(want), int(pos[0]), (fr["calls"] as Array).size()]
+	var pn := 0
+	for c in doc["plans"]:
+		var d := {}
+		for k in c["d"]:
+			d[k] = int(c["d"][k])
+		var got := KFWarps.plan(d, (c["block"] as Array).map(func(v): return int(v)), int(c["pitch"]))
+		pn += 1
+		if JSON.stringify(_norm(got)) != JSON.stringify(_norm(c["plan"])):
+			bad += 1
+			if first == "":
+				first = "plan of slot %d: %s, python %s" % [int(d["slot"]), str(got), str(c["plan"])]
+	print("warps: %d of %d frames and plans match tools/warps.py (%d plans) -- the questions in order, the answers and every field" % [
 		n + pn - bad, n + pn, pn])
 	if bad > 0:
 		print("  first difference: " + first)

@@ -159,7 +159,7 @@ var finds := {}
 var held_locks := {}               # slot -> {op, state, lock}: an object a pedestal or a key asks of
 var levers := []                   # the slots of opcodes 0x53, 0x56 and 0x58 (levers.gd)
 var lever_rows := {}               # slot -> lootNN.json's row, with its node and skin
-var traps := []                    # the slots of opcodes 0x51, 0x52, 0x55 and 0x5a (traps.gd)
+var traps := []                    # the slots of the traps (traps.gd) and the pads (warps.gd)
 var trap_rows := {}                # slot -> what the arms read of its type, its nodes and skin
 var trap_world := {}               # what the arms ask of the world
 
@@ -1649,7 +1649,7 @@ func _trap_row(row: Dictionary, objs: Node) -> void:
 	held_locks[k] = {"slot": k, "op": int(f[10]), "type": int(f[2]), "state": int(f[18]), "ha": 0,
 		"b0": int(f[14]), "b1": int(row["anim"]), "lock": int(f[11]), "b39": int(f[12]),
 		"b3a": h3a & 0xFF, "b3b": h3a >> 8, "b3c": int(f[19]), "b3d": int(f[16]),
-		"b3e": int(f[20]), "b3f": int(f[17]), "b40": 0, "b42": int(row["b42"]),
+		"b3e": int(f[20]), "b3f": int(f[17]), "b40": int(f[15]), "b42": int(row["b42"]),
 		"b43": int(row["b43"]), "x": int(f[3]), "y": int(f[4]), "z": int(f[5]),
 		"ax": int(a[0]), "yaw": int(a[1]), "az": int(a[2]), "scale": int(row["scale"])}
 	traps.append(k)
@@ -1661,12 +1661,13 @@ func _trap_row(row: Dictionary, objs: Node) -> void:
 	var level_mesh := get_node_or_null("../Level")
 	r["tiles"] = level_mesh.find_child("t%03d" % k, true, false) if level_mesh else null
 	trap_rows[k] = r
-	if not KFAnim.models.has(int(r["model"])):
+	if int(f[10]) in KFTraps.OPS and not KFAnim.models.has(int(r["model"])):
 		KFAnim.load_from("res://anim%02d.json" % player._level())
 
 
 # What the arms ask: player_in_rect, the vertex's point, collide_query and
-# actor_attack_player (effects.gd), object_set_present and stamp_rect (doors.gd).
+# actor_attack_player (effects.gd), object_set_present, stamp_rect (doors.gd),
+# and for a pad the warp and the block in hand.
 # @port engine -- the world handed to KFTraps
 func _trap_world() -> void:
 	var fx := get_node_or_null("../Effects")
@@ -1687,7 +1688,10 @@ func _trap_world() -> void:
 			var dn := get_node_or_null("../Doors")
 			if dn:
 				dn.stamp_rect(b0, sx, sz, dx, dz, w, h, ang, mask),
-		"present": _trap_present}
+		"present": _trap_present,
+		"carry": _carry,
+		"level": func() -> int:
+			return int(KFGame.block[0]) if not KFGame.block.is_empty() else player._level()}
 
 
 # object_set_present: the scale, and the cell's tile by its node (tNNN), which
@@ -1698,13 +1702,32 @@ func _trap_present(d: Dictionary, on: int, _tile: int) -> void:
 	d["scale"] = 0x1000 if on != 0 else 0
 
 
-# The traps' arms a frame, in slot order among themselves.
+# The rest of a pad's arm: every pad's +0x40 1, and the warp (crossing.gd).
+# @port engine -- opcode 0xeb's warp handed to the crossing, as warp_to's is
+func _carry(d: Dictionary) -> void:
+	for k in traps:
+		if int(held_locks[k]["op"]) == KFWarps.OP:
+			held_locks[k]["b40"] = 1
+	KFInfo.note("pad: slot %d into level %d" % [int(d["slot"]), int(d["lock"])])
+	var cr := get_node_or_null("../Crossing")
+	if cr:
+		cr.warp(KFWarps.plan(d, KFGame.block, player.pitch))
+
+
+# The traps' and the pads' arms a frame, in slot order among themselves. A
+# pad's warp runs to its end inside the arm in the game, and the arms after it
+# meet the player where they came down; here it is frames of fading, so they
+# wait: a pad further on would see the player gone and clear its own +0x40.
 # @port engine -- the arms, and their models drawn
 func _traps() -> void:
 	for k in traps:
 		var d: Dictionary = held_locks[k]
 		if int(d["op"]) in KFTraps.OPS:
 			KFTraps.step(d, trap_rows[k], trap_world)
+		elif int(d["op"]) == KFWarps.OP:
+			KFWarps.step(d, trap_world)
+			if KFGame.modal:
+				return
 		_draw_trap(k, d)
 
 
@@ -1718,6 +1741,10 @@ func _draw_trap(k: int, d: Dictionary) -> void:
 		(r["tiles"] as Node3D).visible = not on
 	var nd: Node3D = r["node"]
 	if nd == null:
+		return
+	if int(d["op"]) == KFWarps.OP:
+		nd.visible = on and int(d["b0"]) != 0
+		nd.quaternion = Quaternion(Vector3.UP, float(int(d["yaw"]) + 0x800) * TAU / 4096.0)
 		return
 	nd.visible = on
 	if int(d["op"]) == KFTraps.ROLL_OP:

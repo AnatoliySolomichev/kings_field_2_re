@@ -548,6 +548,15 @@ python3 tools/traps.py --check     the models against the game's own arms
 python3 tools/traps.py --export D  trapcheck.json for the self-test
 ```
 
+**`warps.py`** — the pads that carry the player, opcode `0xeb`. FORMATS.md, "The
+pads that carry the player". Without arguments every pad and where it goes.
+
+```
+python3 tools/warps.py             every pad and where it goes
+python3 tools/warps.py --check     the model against the game's own arm
+python3 tools/warps.py --export D  warpcheck.json for the self-test
+```
+
 **`levers.py`** — the levers, opcode `0x53`, and two of the things they move:
 level 5's trees, `0x56`, and level 13's slabs, `0x58`. FORMATS.md, "Levers".
 Without arguments every lever and what its signal reaches.

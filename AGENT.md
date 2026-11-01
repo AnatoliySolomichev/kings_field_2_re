@@ -222,10 +222,10 @@ how much of the game the port has (portmap progress)   49.4% of the game's own
                                                        code (game 49.7%, open
                                                        46.7%, end 32.6%; partial at
                                                        half, the library left out)
-the port against the game, function by function        997 of 997 placed: 532
-                                                       reproduce the game, 465 the
-                                                       port's own; 606 markers and
-                                                       1165 cited addresses, every
+the port against the game, function by function        1001 of 1001 placed: 534
+                                                       reproduce the game, 467 the
+                                                       port's own; 608 markers and
+                                                       1166 cited addresses, every
                                                        one resolving
 the object loader, against 13 snapshots                angles 4344/4352, scale and
                                                        position 4352/4352, opcode
@@ -383,6 +383,9 @@ the traps, against the game's own opcodes 0x51, 0x52, 3600 of 3600 frames over 9
 0x55 and 0x5a, object_vertex_point and model_vertex    objects of four levels, the
 (tools/traps.py)                                       calls and all of RAM but
                                                        the stack
+the pads, against the game's own opcode 0xeb       960 of 960 runs over all 16,
+(tools/warps.py)                                       the calls and all of RAM but
+                                                       the stack
 the levers, the trees and the slabs, against the      7200 of 7200 frames over 45
 game's own opcodes 0x53, 0x56 and 0x58 and             objects of six levels, the
 object_signal (tools/levers.py)                        calls and all of RAM but
@@ -456,7 +459,7 @@ effects 1494 of 1494 runs, 27656 of 27656 frames · aims 300 of 300 · volleys 2
 the run 150129 of 150129 frames
 player_take_hit 300 of 300 · the status 40 of 40 runs, 6312 of 6312 frames
 casting 1200 of 1200 · the attacking arms 240 of 240 · creature hits 400 of 400
-use_item 624 of 624 · conversation hooks 360 of 360 · entry 5 168 of 168 · triggers 200 of 200 · give and take 224 of 224 · entry 1 120 of 120 · level_overlay_tick 48 of 48 · entry 19 208 of 208 · the scenes 448 of 448 · levers 754 of 754 · traps 4200 of 4200 · teleports 72 of 72 · the lake 168 of 168 · the ending 31 of 31 · warp_to 55 of 55 · seals 975 of 975 · fades 117 of 117
+use_item 624 of 624 · conversation hooks 360 of 360 · entry 5 168 of 168 · triggers 200 of 200 · give and take 224 of 224 · entry 1 120 of 120 · level_overlay_tick 48 of 48 · entry 19 208 of 208 · the scenes 448 of 448 · levers 754 of 754 · traps 4200 of 4200 · warps 436 of 436 · teleports 72 of 72 · the lake 168 of 168 · the ending 31 of 31 · warp_to 55 of 55 · seals 975 of 975 · fades 117 of 117
 carry-over 61 of 61 fields and the place
 ```
 
