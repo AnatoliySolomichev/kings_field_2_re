@@ -3529,6 +3529,57 @@ several heights end the same way, and the snapshot does not say which creature
 it was. In the port, killing creature 27 leaves 18 gold in slot 350 and the key
 in 370, at rest with 75 and 68 on its floor.
 
+### What a barrel holds: each level's entry 0
+
+Barrels, crates and urns are objects of class 9 (600 in the game) and class
+`0x15` (10, type 298), on 23 levels. On the first frame opcode 9 (above, "The
+first frame does more") takes away the slot their `+0x3a` names -- `+0` and
+`+0x38` zeroed, so it is neither drawn nor to be taken. 117 of the 610 name a
+thing -- earth herbs (26), blood stones (18), moon stones (14), antidotes
+(11), gold coins (6), Silviera's key (5) and the rest -- and 493 nothing
+(`0xffff`).
+
+**What brings it back is the level's own code.** `object_interact`
+(`0x8005e2d0`), once `find_object` has nothing more to offer (`.L46`), ends by
+calling **the level's own entry 0** (`level_hooks + 0`, the `jalr` at
+`0x8005ea2c`) with the player's point (`0x1f4` up) and angles, and all 28
+levels have one, 129 to 160 instructions, walking `find_object` again with the
+same reach (`0x320`, `0x9c4`, within `0x200` of the facing). Level 0's
+(`0x801e83b0`):
+
+```
+each object offered: use_answer = 1; of class 9 or 0x15 with its +0x3c not 0 --
+  +0x3a names a slot whose type is not 0xff: that object's +0x38 = 0xff and
+      its +0 = the container's +0x40 (2 on every one), object_give(it) -- the
+      flight, the spin, USE to take -- then its +0 and +0x38 = 0 again, and
+      taken (its type 0xff), the container's +0x3a = 0xffff
+  else -- nothing in it, or taken: +0x3f under 0x23 announces +0x3f; then by
+      type 0xd4, 0xd5 (the barrels) and 0xf7 "Empty" (0x1a), 0xb7 0x1e,
+      0xf5 0xe, 0xba 0x22, 0xbe..0xc5 8
+```
+
+The others differ in the types they announce for -- twelve variants in all,
+seventeen levels sharing level 0's -- and level 9's begins with one thing more:
+once (story flag `0x36`), with the moonlight sword (`0x7d`) carried or the
+player's level at 50 or more, `key_test_all(0xf1)` lifts every "Sealed", as
+its entry 5 does when the level comes in.
+
+**Seen in the game**: a session played by hand (`out/run/20261102-123604`),
+replayed with write watchpoints on object 224, the earth herb in barrel 223
+on level 0. The loader's opcode 9 zeroed its `+0` and `+0x38` (`0x80048c68`,
+`0x80048c6c`). At frame 1817 the overlay writes `+0x38` at `0x801e8560` and
+`+0` = 2 at `0x801e8568`, `object_give`'s delay slot; the herb flies to the eye
+for 8 frames (its yaw up 189 a frame), spins (`0x40` a frame) until USE at
+frame 1836 (pack 104, 2 to 3), flies away, and at 1845 the overlay zeroes `+0`
+and `+0x38` (`0x801e8570`, `0x801e8578`) and writes `0xffff` at the barrel's
+`+0x3a` (`0x801e8580`). The note left there: "there should be an earth herb
+in this barrel" -- in the port beside it there was none.
+
+**In the port**: what a container holds is a node of its own, hidden
+(`tools/level3d.py loot_slots`), so the comparison beside the emulator shows
+it when the game does. The port's own `object_interact` calls no entry 0 yet
+(BACKLOG.md, section 5b').
+
 ### The menus, as they are drawn
 
 Every menu screen is built out of a few routines that file sprites and

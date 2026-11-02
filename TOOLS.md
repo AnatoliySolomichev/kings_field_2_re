@@ -1429,8 +1429,13 @@ session is recorded, and the port beside it started with `--follow`, which stand
 where the game stands and shows the game's creatures, doors, objects and live
 effects from `live.txt`, with none of its own machines running. So what differs
 on the screen is how the two draw, and a note from the recorder (TOOLS.md, "A
-playthrough") says by slot what was there. A menu stops the frames and the port
-waits. A thing a creature drops, an object the port has no row for, is not shown.
+playthrough") says by slot what was there. An object takes all three of the
+game's angles, so a thing taken spins as it does there; a slot the port has no
+row for -- a creature's drop, a key a level's code makes -- gets one off its
+type's template, at the game's scale; and what a barrel holds is a node of its
+own, shown when the game shows it. A menu stops the frames and the port
+waits.
+
 What follows is the older way, by hand, with `bp16.lua`, which compares the
 movement frame by frame.
 

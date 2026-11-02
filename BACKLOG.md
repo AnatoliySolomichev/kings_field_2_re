@@ -700,9 +700,19 @@ on the lid's path. Left:
   `+0x3b`), and type `0x85` on level 7 on the facing; and a call with no
   object, which spawns one in front of the player -- the overlays' way of
   giving things;
-* **what class 9 hides**: 24 things on level 0 are taken away on the first
-  frame by opcode 9, and nothing in GAME.EXE calls `object_mode` to bring
-  them back -- the level's own code, or a creature's death, presumably;
+* **the barrels, crates and urns** (classes 9 and `0x15`, 610 in the game,
+  117 holding a thing): what they hold is the level's own entry 0, which
+  `object_interact` calls last (FORMATS.md, "What a barrel holds"), seen in a
+  session played by hand. *This read "nothing in GAME.EXE calls object_mode to
+  bring them back -- the level's own code, or a creature's death, presumably";
+  the first half was right, and it is not object_mode.* Left: **every level's
+  entry 0 into a model** held to the overlays' own code (as `tools/ticks.py`
+  holds entry 1) **and into the port's `object_interact`** -- the port opens no
+  barrel; what one holds is a node of its own already, hidden, which the
+  comparison beside the emulator shows when the game does -- and level 9's
+  first lines: once (story flag `0x36`), with the moonlight sword (`0x7d`)
+  carried or the level at 50 or more, `key_test_all(0xf1)` lifts every
+  "Sealed", as its entry 5 does when the level comes in;
 * **a recording**: nothing here has been checked frame by frame against the
   game; a bp script on the lid's arm and on `object_give`'s loop would. The
   drops (FORMATS.md, "What a dying creature leaves") lie in three snapshots as

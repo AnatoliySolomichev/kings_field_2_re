@@ -274,7 +274,8 @@ func _read() -> Dictionary:
 		elif t.begins_with("a="):
 			out["actors"] = rows.filter(func(r): return r.size() == 9)
 		elif t.begins_with("o="):
-			out["objects"] = rows.filter(func(r): return r.size() == 12)
+			# twelve numbers, or fourteen with the X and Z angles
+			out["objects"] = rows.filter(func(r): return r.size() == 12 or r.size() == 14)
 	return out
 
 

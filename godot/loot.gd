@@ -1716,13 +1716,22 @@ func _trap_present(d: Dictionary, on: int, _tile: int) -> void:
 
 # The game's objects while the port follows the emulator (ghost.gd), as
 # kfrec.lua sends them: slot, opcode, state, clock, +0, +1, type, scale, x, y, z,
-# yaw. A slot not sent is free in the game: gone.
+# yaw, and the X and Z angles -- a thing taken flies to the eye and spins by
+# them. A slot not sent is free in the game: gone. A slot the port has no row
+# for -- a creature's drop, what a barrel gave -- gets one off its type's
+# template when the level has one, as a thing the level's record makes does
+# (_made), sized by the game's scale; made again if its type then changes.
 # @port check -- the game's objects laid over the port's, for the comparison
 func follow(list: Array) -> void:
 	var seen := {}
 	for e in list:
 		var k := int(e[0])
+		var typ := int(e[6])
 		seen[k] = true
+		if rows.has(k) and rows[k].has("baked") and int(rows[k]["type"]) != typ:
+			_unfollow(k)
+		if not rows.has(k) and not lever_rows.has(k) and not trap_rows.has(k):
+			_follow_row(k, typ)
 		if rows.has(k):
 			var r: Dictionary = rows[k]
 			r["op"] = int(e[1])
@@ -1730,8 +1739,12 @@ func follow(list: Array) -> void:
 			r["counter"] = int(e[3])
 			r["b0"] = int(e[4])
 			r["b1"] = int(e[5])
-			r["type"] = int(e[6])
+			r["type"] = typ
 			r["pos"] = Vector3i(int(e[8]), int(e[9]), int(e[10]))
+			if e.size() >= 14:
+				r["angles"] = [int(e[12]), int(e[11]), int(e[13])]
+			if r.has("baked"):
+				r["size"] = float(int(e[7])) / 4096.0 / float(r["baked"])
 		if held_locks.has(k) and (lever_rows.has(k) or trap_rows.has(k)):
 			var h: Dictionary = held_locks[k]
 			h["op"] = int(e[1])
@@ -1747,6 +1760,37 @@ func follow(list: Array) -> void:
 	for k in rows:
 		if not seen.has(k):
 			rows[k]["type"] = GONE
+
+
+# A row for slot k, which the game has filled with a thing of type typ, off the
+# template of the type (a drop's, or a key's): the node a copy of the
+# template's, whose vertices spawn_thing's doubling may have scaled (+3's 0x10),
+# which "baked" keeps for follow's size. Nothing when the level has none.
+# @port check -- the game's new objects given nodes, for the comparison
+func _follow_row(k: int, typ: int) -> void:
+	var tp: Dictionary = templates.get(typ, key_templates.get(typ, {}))
+	var tn = tp.get("node")
+	if tn == null:
+		return
+	var nd := (tn as Node3D).duplicate() as Node3D
+	nd.name = "k%03d" % k
+	(tn as Node3D).get_parent().add_child(nd)
+	rows[k] = {"slot": k, "cls": 0x40, "type": typ, "kind": 0, "count": 0, "reach": 0,
+		"top": 0, "c": 0, "e": 0, "lock": FREE, "b0": 0, "b1": 0x80, "inside": 0, "op": 0xFF,
+		"state": 0, "counter": 0, "vel": 0, "rest": 0, "angles": [0, 0, 0], "skin": {},
+		"model": 0, "link": 0, "pos": Vector3i.ZERO, "node": nd, "size": 1.0,
+		"baked": 2.0 if int(tp["row"].get("flags", 0)) & 0x10 else 1.0}
+	slots.append(k)
+	slots.sort()
+
+
+# @port check -- a row _follow_row made, and its node, gone
+func _unfollow(k: int) -> void:
+	var nd = rows[k].get("node")
+	if nd:
+		(nd as Node).queue_free()
+	rows.erase(k)
+	slots.erase(k)
 
 
 # The rest of a pad's arm: every pad's +0x40 1, and the warp (crossing.gd).
@@ -2701,8 +2745,9 @@ func _draw() -> void:
 			continue
 		var p: Vector3i = r["pos"]
 		var a: Array = r["angles"]
-		nd.transform = Transform3D(game_basis(int(a[0]), (int(a[1]) + 0x800) & 0xFFF, int(a[2])),
-			Vector3(p.x, -p.y, -p.z) / 1000.0)
+		var s := float(r.get("size", 1.0))
+		nd.transform = Transform3D(game_basis(int(a[0]), (int(a[1]) + 0x800) & 0xFFF, int(a[2])).scaled(
+			Vector3(s, s, s)), Vector3(p.x, -p.y, -p.z) / 1000.0)
 		if int(r["op"]) == 7:
 			if (r["skin"] as Dictionary).is_empty():
 				if not KFAnim.models.has(int(r["model"])):

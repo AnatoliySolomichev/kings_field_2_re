@@ -1786,7 +1786,7 @@
  "0x8018fae0": {
   "name": "level_hooks",
   "kind": "data",
-  "evidence": "a pointer to a structure of function pointers. level_load points it at 0x8007e4e4; level_overlay_tick calls its +4 once a frame and a script's 0xf4 opcode calls its +0x10. Whether it is the same table tools/overlay.py lists as the level's entry points is not established"
+  "evidence": "a pointer to the level overlay's table of entry points (tools/overlay.py: [0x8018fae0] read out of a running game is 0x801e830c, the table on the disc, ten of ten pointers alike). level_load points it at 0x8007e4e4 until a level comes in; level_overlay_tick calls its +4 (entry 1) once a frame, a script's 0xf4 opcode its +0x10 (entry 4), and object_interact its +0 (entry 0) last of all, the jalr at 0x8005ea2c: every level's entry 0 opens the barrels, crates and urns (classes 9 and 0x15), seen writing the earth herb's +0 and +0x38 on level 0 in a session played by hand"
  },
  "0x8002ab18": {
   "name": "player_take_hit",

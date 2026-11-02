@@ -947,6 +947,10 @@ def build_objects_gltf(lv, out="out/godot"):
 LOOT_OPS = (6, 7)        # the small chest's lid and the big chest (tools/chests.py)
 SEAL_OPS = (0x17, 0x1A)  # Orladin's seals and pedestals, which fade away (tools/seals.py)
 ITEM_CLASS = 0x40        # what object_give hands over
+# The barrels, crates and urns: what the slot at +0x3a names, opcode 9 hides on
+# the first frame, and each level's own entry 0 -- object_interact's last call
+# -- shows and hands over (FORMATS.md, "What a barrel holds")
+CONTAINER_CLASSES = (0x09, 0x15)
 
 
 def loot_slots(load):
@@ -955,7 +959,8 @@ def loot_slots(load):
     chests hide -- the slot each one's +0x3a names, hidden on their first
     frame and shown when they open -- and Orladin's seals and pedestals
     (opcodes 0x17 and 0x1a), which go, with what a seal holds (+0x3a) and
-    the key it raises (+0x3c)."""
+    the key it raises (+0x3c); and what a barrel, a crate or an urn holds
+    (classes 9 and 0x15, +0x3a), hidden from the first frame too."""
     out = set()
     for k, o in load.recs.items():
         if o["op"] in LOOT_OPS + SEAL_OPS:
@@ -964,6 +969,10 @@ def loot_slots(load):
                 inside = struct.unpack_from("<H", o["tail"], at)[0]
                 if inside in load.recs and load.recs[inside]["cls"] == ITEM_CLASS:
                     out.add(inside)
+        elif o["cls"] in CONTAINER_CLASSES:
+            inside = struct.unpack_from("<H", o["tail"], 2)[0]
+            if inside in load.recs and load.recs[inside]["cls"] == ITEM_CLASS:
+                out.add(inside)
         elif o["cls"] == ITEM_CLASS and load.drawn(o):
             out.add(k)
     return out

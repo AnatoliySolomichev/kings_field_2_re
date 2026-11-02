@@ -158,8 +158,9 @@ end
 
 -- A frame for the port to show (godot/ghost.gd), one line in live.txt: bp16's
 -- seventeen numbers and its w=, d= and a=, and two more. o= is every object in
--- use: slot, opcode, state, clock, +0, +1, type, scale, x, y, z, yaw. e= is every
--- live effect, slot:bytes in hex, the 76 of them as effects.gd keeps them.
+-- use: slot, opcode, state, clock, +0, +1, type, scale, x, y, z, yaw, and the X
+-- and Z angles (+0x24, +0x28), which a thing taken spins by. e= is every live
+-- effect, slot:bytes in hex, the 76 of them as effects.gd keeps them.
 -- Written beside and renamed, because Godot reads on its own clock.
 local function s16(a)
     local v = M.u16(a)
@@ -181,9 +182,9 @@ local function live_line(frame)
             doors[#doors + 1] = string.format('%d,2,%d,%d,%d', k, M.u16(r + 8), M.u16(r + 0xa), M.u8(r + 0x38))
         end
         if typ ~= 0xff then
-            objs[#objs + 1] = string.format('%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d', k, op, M.u16(r + 8),
-                M.u16(r + 0xa), M.u8(r), M.u8(r + 1), typ, M.u16(r + 0x2c), s32(r + 0x14), s32(r + 0x18),
-                s32(r + 0x1c), M.u16(r + 0x26))
+            objs[#objs + 1] = string.format('%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d', k, op,
+                M.u16(r + 8), M.u16(r + 0xa), M.u8(r), M.u8(r + 1), typ, M.u16(r + 0x2c), s32(r + 0x14),
+                s32(r + 0x18), s32(r + 0x1c), M.u16(r + 0x26), M.u16(r + 0x24), M.u16(r + 0x28))
         end
     end
     for k = 0, 199 do
