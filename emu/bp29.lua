@@ -250,5 +250,8 @@ function DrawImguiFrame()
     end
 end
 
+-- and a menu's frames, which have no game frame of their own, for the port to draw
+if LIVE then K.menu_arm(HERE .. '/../out/godot/menu.txt', function() return frame end) end
+
 quitting = PCSX.Events.createEventListener('Quitting', close_session)
 print('bp29: armed, waiting for GAME.EXE')

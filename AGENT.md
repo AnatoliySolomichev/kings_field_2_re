@@ -271,6 +271,12 @@ shop_buy and shop_sell over menu1                      runs, 5 of 5 aimed
 the inn, against the game's own and the levels' own   4 of 4 frames; 100 of 100
 night hooks run from their overlays                    runs; 24 of 24 heals
 the guide, against the game's own sub_80024f88        12 of 12 pages and frames
+the menus beside the emulator: the game's own calls   66 of 66 menu frames of a
+of its drawing routines, caught (kfrec.lua            session played by hand,
+menu_arm) and run through menu.gd's copies, against   primitive for primitive: the
+the frame the game drew                               main page and its status,
+                                                      the equipment's ten lines,
+                                                      the helm's list and prompt
 the spells unlocked, against every snapshot            21 of 21
 Silviera's key on a pedestal, silv1 and silv2          7 of 7
 the drops, against the snapshots                       5 of 5 lying as the fall leaves

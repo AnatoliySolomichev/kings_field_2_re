@@ -76,6 +76,10 @@ static var guide_require := PackedByteArray()
 # live.txt): the creatures, the doors and the swing are the game's, laid over
 # the port's every frame, and their own machines stand still.
 static var follow := false
+# A menu is up over a frame render_frame_bare drew -- both styles zeroed, so
+# neither the panel nor the compass is in it (menu.gd's _bare; hud.gd and
+# compass.gd stand down).
+static var bare := false
 # The level the world scene is of: set by whoever loads one (a crossing, the
 # comparison following the game); -1 until then, and the level the project was
 # built for stands in -- tools/level3d.py names it "King's Field II - level N".

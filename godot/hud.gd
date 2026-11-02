@@ -108,6 +108,7 @@ func _switch(to: int) -> void:
 
 # @port engine -- the numbers, every frame, and the records again when OPTION 2 has changed the style
 func _process(_dt: float) -> void:
+	visible = not KFGame.bare           # a menu over render_frame_bare's frame
 	if not doc.is_empty() and int(KFGame.display[0]) != style:
 		_switch(int(KFGame.display[0]))
 	_update()

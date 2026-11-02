@@ -1433,8 +1433,17 @@ playthrough") says by slot what was there. An object takes all three of the
 game's angles, so a thing taken spins as it does there; a slot the port has no
 row for -- a creature's drop, a key a level's code makes -- gets one off its
 type's template, at the game's scale; and what a barrel holds is a node of its
-own, shown when the game shows it. A menu stops the frames and the port
-waits.
+own, shown when the game shows it.
+
+**A menu** stops the game's frames, so `live.txt` stands still while one is up.
+Its frames go to `menu.txt` instead (`kfrec.lua menu_arm`): every drawing
+routine of the menus the port has a copy of is caught as the game calls it,
+with its arguments and the records it reads through them, and the port runs
+the same calls through `godot/menu.gd`'s copies (`follow`) over the game's held
+world. What the port has no copy of -- the thing's model turning, the guide,
+the maps, the record of conversations -- is not drawn there. A conversation
+itself is game frames (script_interpreter calls render_frame), so the world
+follows in it, but its text is not drawn beside the emulator yet.
 
 What follows is the older way, by hand, with `bp16.lua`, which compares the
 movement frame by frame.

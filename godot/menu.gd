@@ -1587,8 +1587,11 @@ static func order(o: Dictionary) -> Array:
 
 # @port engine -- the menu button opens it; its own frames at 15 a second while it is up
 func _process(dt: float) -> void:
+	_bare()
 	if data.is_empty() or player == null:
 		return
+	if state == "follow" or (state == "" and KFGame.follow):
+		return                          # the game's menu (follow), or the game's world
 	if state == "":
 		if KFPad.hit(KFPad.MENU_SLOT) and not KFGame.modal and _may_open():
 			_open()
@@ -1604,6 +1607,118 @@ func _process(dt: float) -> void:
 	latch |= KFPad.now & ~KFPad.prev
 	_build()
 	queue_redraw()
+
+
+# render_frame_bare (0x80030568), which sub_800305d8 calls before pause_menu and
+# script_interpreter before a shop or an inn: a frame with both styles zeroed
+# and put back after, so the menu stands over a world with no panel and no
+# compass -- the item menu's snapshot has none.
+# @orig game:0x80030568 render_frame_bare  status:partial -- the styles' zeroing, as KFGame.bare, which hud.gd and compass.gd read; the frame behind is the port's world, held
+func _bare() -> void:
+	KFGame.bare = state != ""
+
+
+# The game's menu frame while the port follows the emulator (ghost.gd), one
+# line of menu.txt as kfrec.lua's menu_arm writes it: the game frame, the menu
+# frame, K= the colours, then the drawing routines the game called, in order,
+# with what they were handed -- each run through this file's copy of it, so
+# what stands on the screen is how the port draws what the game drew. "" puts
+# it away.
+# @port check -- the game's menu calls run through the port's copies, for the comparison
+func follow(line: String) -> void:
+	if line == "":
+		if state == "follow":
+			state = ""
+			visible = false
+			ot = {}
+			queue_redraw()
+		return
+	if data.is_empty():
+		return
+	var o := {}
+	for t in line.split(" ", false).slice(2):
+		var body: String = t.substr(2)
+		var parts := body.split("|")
+		var v := _ints(parts[0])
+		match t.substr(0, 2):
+			"K=":
+				look = {"box": v[0], "text": v[1], "shadow": v[2], "pulse": v[3], "pulse2": v[4],
+					"confirm": v[5], "cancel": v[6], "semi": v[7], "bright": v[8]}
+			"S=":
+				status_page(o, look, {"exp": v[0], "level": v[1], "hp": v[2], "hp_max": v[3],
+					"mp": v[4], "mp_max": v[5], "stat": v[6], "wis": v[7], "working": v.slice(8, 13),
+					"paralyze": v[13], "curse": v[14], "slow": v[15], "poison": v[16], "dark": v[17],
+					"gold": v[18]})
+			"P=":
+				menu_page(o, look, v[0], v[1], v[2], v[3])
+			"L=":
+				panel(o, look, _list(parts), v[0])
+			"A=":
+				answers(o, look, _label(parts[1]), _label(parts[2]), v[0])
+			"G=":
+				gold_readout(o, look, v[0])
+			"O=":
+				options_page(o, look, v[0], v[1], v[2])
+			"D=":
+				display_values(o, look, Array(body.hex_decode()))
+			"V=":
+				sound_sliders(o, look, Array(body.hex_decode()))
+			"B=":
+				var lines := []
+				for p in parts.slice(1):
+					lines.append(_label(p))
+				message_box(o, look, v[0], lines, v[1], v[2], v[3], v[4], v[5])
+			"R=":
+				ratings_page(o, look, v.slice(0, 8), v.slice(8, 17))
+	ot = o
+	state = "follow"
+	visible = true
+	queue_redraw()
+
+
+# @port helper -- "1,2,3" as [1, 2, 3]; a field that is not a number (a title's hex) as 0
+static func _ints(s: String) -> Array:
+	var out := []
+	for x in s.split(","):
+		out.append(int(x) if x.is_valid_int() else 0)
+	return out
+
+
+# @port helper -- a label kfrec.lua sent, x/y/glyphs in hex, as [x, y, glyphs]
+static func _label(s: String) -> Array:
+	var p := s.split("/")
+	return [int(p[0]), int(p[1]), Array(p[2].hex_decode())]
+
+
+# A list record as kfrec.lua sent it, as panel takes one: the head's fields,
+# then a row/name/second name/count/cost for each row shown; the rows not shown
+# are not drawn, and stand empty.
+# @port helper -- ui_panel's record, out of menu.txt
+static func _list(parts: PackedStringArray) -> Dictionary:
+	var h := parts[0].split(",")
+	var n := int(h[6])
+	var names := []
+	var names2 := []
+	var counts := []
+	var costs := []
+	for k in n:
+		names.append([])
+		names2.append([])
+		counts.append(0xFF)
+		costs.append(-1)
+	for p in parts.slice(1):
+		var r := p.split("/")
+		var k := int(r[0])
+		if k < 0 or k >= n:
+			continue
+		names[k] = Array(r[1].hex_decode())
+		names2[k] = Array(r[2].hex_decode())
+		counts[k] = int(r[3])
+		costs[k] = int(r[4])
+	return {"tx": int(h[1]), "ty": int(h[2]), "title": Array(h[3].hex_decode()) if int(h[1]) != 0 else [],
+		"x": int(h[4]), "y": int(h[5]), "count": n, "rows": int(h[7]), "first": int(h[8]),
+		"sel": int(h[9]), "sel_row": int(h[10]), "length": int(h[11]), "qty": int(h[12]),
+		"gold": int(h[13]), "names": names, "names2": names2, "counts": counts, "costs": costs}
 
 
 # frame_begin (0x80026fe4): the chosen row's pulse goes round 0..0x5f, one a

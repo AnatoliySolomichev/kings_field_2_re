@@ -218,6 +218,138 @@ function M.live(frame, path)
     os.rename(path .. '.tmp', path)
 end
 
+-- The menus, for the port to draw beside the emulator (godot/menu.gd follow).
+-- A menu runs frames of its own -- frame_begin, its drawing, frame_end -- and
+-- none of game_main's, so live.txt stands still while one is up. Each of the
+-- drawing routines the port has a copy of is caught as it is entered, with its
+-- arguments and what it reads through them, and each menu frame is one line in
+-- `path`: the game frame it came after, the menu frame's count, K= the colours
+-- (gp+0x58 the boxes, +0x5c the text, +0x68 the shadow, +0x4c and +0x50 the
+-- pulses, +0x40 and +0x44 the confirm and cancel buttons, 0x801b25e4 the
+-- panel's switch, 0x801b25e1 the brightness), then the calls in the order made,
+-- which is the order the ordering table files them in:
+--
+--   S=  ui_status_page: what it reads -- experience, level, HP and its maximum,
+--       MP and its, the stat, 0x801b2530, the five skills, paralysis, curse,
+--       slowing, poison, dark, gold
+--   P=  sub_800252f4 (page, lines, chosen, legend)
+--   L=  ui_panel (list, mode): mode, the record's title (x, y, glyphs in hex,
+--       none when x is 0), x, y, count, rows, first, selection, its row, the
+--       names' length, the quantity (gp+0x48) and the gold; then |row/name/
+--       second name/count/cost for each row shown -- names length apart, second
+--       names 24, counts a byte, costs a word
+--   A=  sub_80025b24 (one, two, chosen): chosen|x/y/glyphs|x/y/glyphs
+--   G=  ui_gold, called by itself (menu_inn) and not from ui_panel's own
+--   O=  options_screen (action, movement, row)
+--   D=  ui_display_values: its five bytes
+--   V=  sub_80024a78: its three bytes
+--   B=  sub_8001eb3c (title, lines, n, x, y, w, h, legend): title, x, y, w, h,
+--       legend, then |x/y/glyphs a line, 28 bytes apart
+--   R=  ui_ratings_page: the eight offense ratings, the eight defense ones and
+--       the resistance (0x801b2538, 0x801b254a, 0x801b255a)
+--
+-- What the port has no copy of -- the thing's model turning, the guide, the
+-- maps, a conversation's pages -- is not sent, and is not drawn there.
+local GP = 0x8009c214
+local function hex(a, n)
+    local t = {}
+    for i = 0, n - 1 do t[i + 1] = string.format('%02x', M.u8(a + i)) end
+    return table.concat(t)
+end
+local function glyphs(a)
+    local n = 0
+    while n < 24 and M.u8(a + n) ~= 0xff do n = n + 1 end
+    return hex(a, math.min(n + 1, 24))
+end
+local function label(a) return string.format('%d/%d/%s', s16(a), s16(a + 2), glyphs(a + 4)) end
+
+local menu_calls, menu_frames = {}, 0
+local MENU_DRAW = {
+    [0x800227ec] = function()
+        local w = {}
+        for i = 0, 4 do w[i + 1] = M.u16(0x801b2526 + 2 * i) end
+        return string.format('S=%d,%d,%d,%d,%d,%d,%d,%d,%s,%d,%d,%d,%d,%d,%d', w32(0x801b24e4),
+            M.u8(0x801b24f0), M.u16(0x801b24fc), M.u16(0x801b24fa), M.u16(0x801b2500),
+            M.u16(0x801b24fe), M.u16(0x801b2524), M.u16(0x801b2530), table.concat(w, ','),
+            s16(0x801b2568), s16(0x801b255e), s16(0x801b2566), s16(0x801b255c), s16(0x801b2562),
+            w32(0x801b2534))
+    end,
+    [0x800252f4] = function(r)
+        return string.format('P=%d,%d,%d,%d', r.a0, r.a1, r.a2, r.a3)
+    end,
+    [0x80025468] = function(r)
+        local s = r.a0
+        local tx = s16(s)
+        local first, rows, count, len = M.u8(s + 0x20), M.u8(s + 0x1f), M.u8(s + 0x1e), M.u8(s + 0x23)
+        local names, names2, counts, costs = w32(s + 0x24), w32(s + 0x28), w32(s + 0x2c), w32(s + 0x30)
+        local out = {string.format('L=%d,%d,%d,%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d', r.a1, tx, s16(s + 2),
+            tx ~= 0 and glyphs(s + 4) or '', M.u8(s + 0x1c), M.u8(s + 0x1d), count, rows, first,
+            M.u8(s + 0x21), M.u8(s + 0x22), len, w32(GP + 0x48), w32(0x801b2534))}
+        for k = first, math.min(first + rows, count) - 1 do
+            out[#out + 1] = string.format('%d/%s/%s/%d/%d', k, hex(names + k * len, len),
+                bit.band(r.a1, 0xfff) == 3 and hex(names2 + 24 * k, 24) or '', M.u8(counts + k),
+                s32(costs + 4 * k))
+        end
+        return table.concat(out, '|')
+    end,
+    [0x80025b24] = function(r)
+        return string.format('A=%d|%s|%s', r.a2, label(r.a0), label(r.a1))
+    end,
+    [0x80025e80] = function(r)
+        -- ui_panel's and ui_quantity's own calls are drawn by the port's panel
+        if r.ra >= 0x80025468 and r.ra < 0x80025b24 or r.ra >= 0x80025db8 and r.ra < 0x80025e80 then
+            return nil
+        end
+        return string.format('G=%d', w32(0x801b2534))
+    end,
+    [0x80023fd4] = function(r) return string.format('O=%d,%d,%d', r.a0, r.a1, r.a2) end,
+    [0x800246bc] = function(r) return 'D=' .. hex(r.a0, 5) end,
+    [0x80024a78] = function(r) return 'V=' .. hex(r.a0, 3) end,
+    [0x8001eb3c] = function(r)
+        local out = {string.format('B=%d,%d,%d,%d,%d,%d', r.a0, r.a3, s32(r.sp + 0x10),
+            s32(r.sp + 0x14), s32(r.sp + 0x18), s32(r.sp + 0x1c))}
+        for i = 0, math.min(r.a2, 8) - 1 do out[#out + 1] = label(r.a1 + 28 * i) end
+        return table.concat(out, '|')
+    end,
+    [0x80023300] = function()
+        local v = {}
+        for i = 0, 7 do v[i + 1] = M.u16(0x801b2538 + 2 * i) end
+        for i = 0, 8 do v[i + 9] = M.u16(0x801b254a + 2 * i) end
+        return 'R=' .. table.concat(v, ',')
+    end,
+}
+
+-- Arms the breakpoints; `frame_of` answers the game frame the session is on.
+function M.menu_arm(path, frame_of)
+    kf_menu_bps = {}
+    local function bp(a, fn) kf_menu_bps[#kf_menu_bps + 1] = PCSX.addBreakpoint(a, 'Exec', 4, 'kf menu', fn) end
+    bp(0x80026fe4, function()
+        if M.in_game() then menu_calls = {} end
+    end)
+    for a, fn in pairs(MENU_DRAW) do
+        bp(a, function()
+            if not M.in_game() then return end
+            local g = PCSX.getRegisters().GPR.n
+            local t = fn({a0 = g.a0, a1 = g.a1, a2 = g.a2, a3 = g.a3, sp = g.sp, ra = g.ra})
+            if t then menu_calls[#menu_calls + 1] = t end
+        end)
+    end
+    bp(0x800270f8, function()
+        if not M.in_game() then return end
+        menu_frames = menu_frames + 1
+        local f = io.open(path .. '.tmp', 'w')
+        if not f then return end
+        f:write(string.format('%d %d K=%d,%d,%d,%d,%d,%d,%d,%d,%d', frame_of(), menu_frames,
+            bit.band(w32(GP + 0x58), 0xff), bit.band(w32(GP + 0x5c), 0xff),
+            bit.band(w32(GP + 0x68), 0xff), w32(GP + 0x4c), w32(GP + 0x50), w32(GP + 0x40),
+            w32(GP + 0x44), M.u8(0x801b25e4), M.u8(0x801b25e1)))
+        for _, t in ipairs(menu_calls) do f:write(' ', t) end
+        f:write('\n')
+        f:close()
+        os.rename(path .. '.tmp', path)
+    end)
+end
+
 -- The tables whole, for a replay asked to dump them: the regions in order.
 function M.tables(out)
     for _, g in ipairs(M.REGIONS) do

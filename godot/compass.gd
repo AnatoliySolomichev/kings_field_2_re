@@ -68,6 +68,7 @@ func _pick(to: int) -> void:
 
 # @port engine -- runs _swing at the game's 15 frames a second, and redraws; the record again when OPTION 2 has changed the style
 func _process(dt: float) -> void:
+	visible = not KFGame.bare           # a menu over render_frame_bare's frame
 	if not doc.is_empty() and int(KFGame.display[1]) != style:
 		_pick(int(KFGame.display[1]))
 	if rec.is_empty() or player == null:

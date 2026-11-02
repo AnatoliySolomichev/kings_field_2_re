@@ -10,7 +10,8 @@
 --   KF_DUMP     "a b out": frames a..b's tables whole into `out`, through zstd
 --   KF_REPORT   where to write the report
 --   KF_EVENTS   where to write what happened (kfrec.lua), if anywhere
---   KF_LIVE     where to write each frame for the port to show, if anywhere
+--   KF_LIVE     where to write each frame for the port to show, if anywhere;
+--               a menu's frames go to menu.txt beside it (kfrec.lua menu_arm)
 --
 -- The answer is written at PadRead's return, so the emulated pad stays idle and
 -- nothing about the buttons reaches the machine but the word the game reads.
@@ -68,6 +69,9 @@ local live_path = os.getenv('KF_LIVE')
 local shot_at = tonumber(os.getenv('KF_SHOT_AT') or '0')
 local running = false
 local frame, calls = frame0, calls0
+if live_path and live_path ~= '' then
+    K.menu_arm(live_path:gsub('[^/]*$', 'menu.txt'), function() return frame end)
+end
 local rec = ffi.new('kf_frame')
 local same, diffs = 0, {}
 local fieldbad = {}

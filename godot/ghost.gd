@@ -62,6 +62,7 @@ extends Node3D
 # would spoil the point of the ladder.
 
 const LIVE := "res://live.txt"
+const MENU := "res://menu.txt"      # a menu's frames, which live.txt does not get (kfrec.lua menu_arm)
 const UNIT := 1000.0
 const MARKERS := 64
 # **live.txt is only news while something is rewriting it.** Nothing deletes it
@@ -152,12 +153,39 @@ func _ready() -> void:
 		compare = true
 
 
-# Beside the emulator with nothing coming: before the game, or in its menu.
+# Beside the emulator with nothing coming: before the game, or in a screen of
+# its own the port does not draw.
 # @port check -- says so, on the comparison's own line
 func _hud_waiting() -> void:
 	var lab := get_node_or_null("../UI/Compare") as Label
 	if lab:
-		lab.text = "waiting for the game (title screen or menu)"
+		lab.text = "waiting for the game (title screen, or a screen the port does not draw)"
+
+
+# A menu up in the game: menu.txt's line came after the frame live.txt has --
+# no game frame since the menu opened -- and lately. Handed to menu.gd, which
+# draws it with its copies of the routines that drew it; the game's world stands
+# behind it as the game holds it. False, and the menu put away, when none is up.
+# @port check -- the game's menu laid over the port's world
+func _menu(cur: Dictionary) -> bool:
+	var m := get_node_or_null("../UI/Menu")
+	if m == null or not m.has_method("follow"):
+		return false
+	var line := ""
+	if FileAccess.file_exists(MENU):
+		var t := FileAccess.get_file_as_string(MENU).strip_edges()
+		var age := int(Time.get_unix_time_from_system()) - FileAccess.get_modified_time(MENU)
+		if t != "" and age <= STALE and int(t.get_slice(" ", 0)) >= int(cur.get("f", -1)):
+			line = t
+	m.follow(line)
+	if line == "":
+		return false
+	KFGame.follow = not cur.is_empty()
+	var lab := get_node_or_null("../UI/Compare") as Label
+	if lab:
+		lab.text = "the game's menu, frame %s, drawn by the port's copies of its routines" % \
+			line.get_slice(" ", 1)
+	return true
 
 
 func _unhandled_input(e: InputEvent) -> void:
@@ -285,7 +313,9 @@ func _process(_dt: float) -> void:
 		return
 	var cur := _read()
 	var why := _why_not(cur)
-	# Beside the emulator a menu stops the frames, and the port waits with it
+	# Beside the emulator a menu stops the game's frames and sends its own
+	if side and _menu(cur):
+		return
 	if side and why != "":
 		KFGame.follow = not cur.is_empty()
 		_hud_waiting()
