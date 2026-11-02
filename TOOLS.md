@@ -2219,6 +2219,14 @@ a Note button and Pause; `playlog.py mark` does the same from a terminal, for
 when that window is not to hand. Either way the frame, all of RAM and the picture
 are kept, so `note` can say what was in front of the player by slot.
 
+A note in Russian is kept whole, as UTF-8, but the field shows it as question
+marks: this PCSX-Redux (ImGui 1.91.5) builds its font atlas with Latin only,
+unless its language is Ukrainska, the one locale of its table that asks for the
+Cyrillic range. So the window draws the note again under the field, and the last
+note under the buttons, with NanoVG from the emulator's own Noto Sans, which has
+the letters (tried in a window: the line in Cyrillic, at ImGui's size). The
+three notes typed blind on 2026-11-02 were whole in `notes.txt` all along.
+
 Two things to know. A game frame is a pass of game_main's loop, and **a menu has
 none**: the frames stop while it is open and PadRead goes on being called,
 thousands of times, so a scripted run that wanders into the menu sits there

@@ -27,6 +27,14 @@
 -- Or from a terminal: python3 tools/playlog.py mark "text". Its window is
 -- ImGui's, so it is only there with a display; the terminal's way needs none.
 --
+-- A note in Russian goes to notes.txt whole, as UTF-8, but the field shows it as
+-- question marks: this PCSX-Redux (ImGui 1.91.5) puts Latin only into its font
+-- atlas unless the emulator's language is Ukrainska, the one locale of its
+-- table that asks for Cyrillic. So the window draws the note again under the
+-- field with NanoVG, which draws any letter the font file has, from the
+-- emulator's own Noto Sans. Configuration, the language Ukrainska, would put
+-- the letters into the field itself, and the emulator's menus into Ukrainian.
+--
 -- Load a save state in the emulator and the timeline is another: the time goes
 -- back, and the recorder starts a new session of its own. Saving and loading on
 -- the game's own memory card is all inside the one.
@@ -46,6 +54,7 @@ local PACK_AFTER = 150            -- frames before a keyframe is packed: the emu
 local MARK = RUNS .. 'mark.txt'
 -- KF_LIVE set, as emu/side.sh sets it: each frame for the port to show as well.
 local LIVE = os.getenv('KF_LIVE') and (HERE .. '/../out/godot/live.txt') or nil
+local FONT = HERE .. '/squashfs-root/usr/share/pcsx-redux/fonts/NotoSans-Regular.ttf'
 
 PCSX.settings.emulator.Debug.Debug = true
 
@@ -57,6 +66,7 @@ local rec = ffi.new('kf_frame')
 local pair = ffi.new('uint32_t[2]')
 local paused, note_text, said = false, '', ''
 local to_pack, pack_at
+local font                      -- NanoVG's id for FONT, made at first use; -1 if it could not be
 
 local function pad_out()
     if run > 0 then
@@ -127,10 +137,10 @@ local function take_note(text)
         h:write(string.format('%d %d %d\n', ss.width, ss.height, tonumber(ss.bpp)))
         h:close()
     end
-    notes_f:write(string.format('%d\t%d\t%d\t%s\n', nnotes, frame, calls,
-        text:gsub('[\r\n\t]', ' ')))
+    local line = text:gsub('[\r\n\t]', ' ')
+    notes_f:write(string.format('%d\t%d\t%d\t%s\n', nnotes, frame, calls, line))
     notes_f:flush()
-    said = string.format('note %d, frame %d', nnotes, frame)
+    said = string.format('note %d, frame %d: %s', nnotes, frame, line)
     print('bp29: ' .. said)
 end
 
@@ -174,6 +184,37 @@ frame_bp = PCSX.addBreakpoint(K.FRAME, 'Exec', 4, 'bp29 frame', function()
     end
 end)
 
+-- A line with letters past ASCII, which ImGui's font here draws as question
+-- marks (the header): its room is kept in the window, and NanoVG draws the text
+-- into it once ImGui has drawn the frame. The two size a font differently --
+-- ImGui by its ascent less its descent, this NanoVG by the em -- so the size is
+-- ImGui's scaled by how wide each makes one Latin line of the same font.
+local SAMPLE = 'The quick brown fox jumps over the lazy dog'
+local function wide_line(text)
+    if not text:find('[\128-\255]') or not (nvg and nvg.queueNvgRender) then
+        imgui.TextUnformatted(text)
+        return
+    end
+    local cx, cy = imgui.GetCursorPos()
+    local wx, wy = imgui.GetWindowPos()
+    local vp = imgui.extra.getViewportPos(imgui.extra.getCurrentViewportId())
+    local x, y, size = cx + wx - vp.x, cy + wy - vp.y, imgui.GetFontSize()
+    local want = imgui.CalcTextSize(SAMPLE)
+    imgui.Dummy(1, size)
+    nvg:queueNvgRender(function()
+        pcall(function()
+            if font == nil then font = nvg:createFont('kf2note', FONT) end
+            if font < 0 then return end
+            nvg:fontFaceId(font)
+            nvg:fontSize(size)
+            nvg:fontSize(size * want / nvg:textBounds(0, 0, SAMPLE))
+            nvg:textAlign(nvg.Align.LEFT + nvg.Align.TOP)
+            nvg:fillColor(nvg.Color.New(1, 1, 1, 1))
+            nvg:text(x, y, text)
+        end)
+    end)
+end
+
 -- The small window. An error in it costs the window and not the recording, and
 -- End is called whatever happens, or ImGui takes the emulator's own windows with it.
 local function window()
@@ -186,6 +227,7 @@ local function window()
     end
     local changed, t = imgui.extra.InputText('##note', note_text)
     if changed then note_text = t end
+    if note_text:find('[\128-\255]') then wide_line(note_text) end
     if imgui.Button('Note') then
         take_note(note_text)
         note_text = ''
@@ -195,7 +237,7 @@ local function window()
         paused = not paused
         if paused then PCSX.pauseEmulator() else PCSX.resumeEmulator() end
     end
-    if said ~= '' then imgui.TextUnformatted(said) end
+    if said ~= '' then wide_line(said) end
 end
 
 local told = false
